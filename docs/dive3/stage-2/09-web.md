@@ -60,7 +60,7 @@ About 1 minute. It builds on T16.4.
 
 This file gives the app its Hebrew and English text with no library, and nearly all of it is the two catalogues. `he` is the source of truth. `MessageKey` is the set of keys in `he`, and `en` is a `Record<MessageKey, string>`, so a missing English string fails the type check. A key built from a template string escapes that check, and `hasMessage` tests such a key at runtime. `t` fills `{placeholders}`. When the current language lacks a key, `t` falls back to the Hebrew text, then to the key itself. `I18nProvider` stores the choice under `bault.locale` and sets `lang` and `dir` on the `html` element, so nothing reloads.
 
-The provider calls `localStorage` without a `try`, unlike `theme.tsx` and `routing.ts`. Where the browser blocks storage, that call throws. The provider sits outside the `ErrorBoundary`, so nothing catches the error, and the visitor sees a blank page.
+The provider wraps both of its `localStorage` calls in a `try`, as `theme.tsx` and `routing.ts` do. Where the browser blocks storage, the app opens in Hebrew and a switch of language lasts for the rest of the visit. This matters because the provider sits outside the `ErrorBoundary`, so an error it threw would leave the visitor a blank page.
 
 #### `apps/web/src/shared/theme.tsx`, `apps/web/src/shared/hooks.ts`
 
