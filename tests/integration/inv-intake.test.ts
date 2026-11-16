@@ -86,11 +86,6 @@ describe('INV intake & custody', () => {
     const storage = await collector.get(`/vault/items/${lot.id}/storage`);
     expect(storage.status).toBe(200);
     expect(storage.body.nextChargeAt).toBeNull();
-
-    const watch = (await collector.get('/vault/break-even')).body as {
-      items: { itemId: string; projectedYearMinor: number }[];
-    };
-    expect(watch.items.find((i) => i.itemId === lot.id)?.projectedYearMinor).toBe(0);
   });
 
   it('records a correction in change history and relocates with source + destination', async () => {

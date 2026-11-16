@@ -2741,11 +2741,6 @@ input[type='search'] {
     align-items: center;
     gap: var(--sp-2) var(--sp-3);
   }
-
-  .card-grid--register .watch {
-    grid-column: 2;
-    align-items: flex-start;
-  }
 }
 
 
@@ -4304,10 +4299,6 @@ textarea[aria-invalid='true'] {
   transition: inline-size var(--dur) var(--ease);
 }
 
-.proportion--watch > span {
-  background: var(--amber-mark);
-}
-
 .proportion--over > span,
 .yield-bar--dead > span {
   background: var(--oxblood-mark);
@@ -4434,42 +4425,6 @@ textarea[aria-invalid='true'] {
   font-size: var(--fs-sm);
   line-height: var(--lh-snug);
   unicode-bidi: plaintext;
-}
-
-.watch {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  min-width: 0;
-}
-
-.watch-line {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: var(--sp-2);
-  max-width: 100%;
-  font-size: var(--fs-caption);
-  line-height: var(--lh-snug);
-  color: var(--ink-2);
-  text-align: end;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.watch .proportion {
-  inline-size: 100%;
-}
-
-.watch-amount {
-  direction: ltr;
-  unicode-bidi: isolate;
-  font-variant-numeric: tabular-nums;
-  font-size: var(--fs-base);
-  color: var(--ink);
-  font-weight: var(--fw-medium);
 }
 
 .steps {
