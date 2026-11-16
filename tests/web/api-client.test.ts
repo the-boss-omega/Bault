@@ -64,7 +64,7 @@ describe('api client — failure classification', () => {
   it('treats the dev proxy 503 envelope as unreachable too', async () => {
     stubFetch(() =>
       jsonResponse(503, {
-        error: { code: 'api_unreachable', message: 'The Bault API is unavailable at http://127.0.0.1:3000.' },
+        error: { code: 'api_unreachable', message: 'The Card Embassy API is unavailable at http://127.0.0.1:3000.' },
       }),
     );
 

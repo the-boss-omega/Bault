@@ -83,7 +83,7 @@ const FIRST_RUN = [
   '587',
   'mailer-user',
   SECRETS.smtp,
-  'Bault <noreply@bault.example>',
+  'Card Embassy <noreply@bault.example>',
   'Bault LLC',
   '123456789',
   '021000021',

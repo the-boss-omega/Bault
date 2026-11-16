@@ -60,7 +60,7 @@ const SUBJECTS: Record<string, string> = {
   swap_proposed: 'Somebody proposed a swap',
   swap_completed: 'Your swap is complete',
   transfer_completed: 'Your transfer is complete',
-  buyout_quoted: 'Bault has quoted you for your collectible',
+  buyout_quoted: 'Card Embassy has quoted you for your collectible',
   custom_request_raised: 'We have your custom request',
   custom_request_quoted: 'Your custom request has been priced',
   custom_request_declined: 'We cannot do that one',
@@ -91,5 +91,5 @@ const SUBJECTS: Record<string, string> = {
 };
 
 export function eventSubject(eventType: string): string {
-  return SUBJECTS[eventType] ?? 'An update on your Bault vault';
+  return SUBJECTS[eventType] ?? 'An update on your Card Embassy vault';
 }

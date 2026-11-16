@@ -139,7 +139,7 @@ describe('opening an escrow deal, as a slip', () => {
     await user.type(screen.getByLabelText('Their username'), 'golden');
     expect(within(lineOf(slip, 'Other side')).getByText('@golden')).toBeInTheDocument();
 
-    await user.click(screen.getByLabelText('The other side has no Bault account'));
+    await user.click(screen.getByLabelText('The other side has no Card Embassy account'));
     expect(lineOf(slip, 'Other side')).toHaveTextContent('—');
     await user.type(screen.getByLabelText('Their name'), 'Dana Levi');
     await user.type(screen.getByLabelText('Their email'), 'dana@example.com');

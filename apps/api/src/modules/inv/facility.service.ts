@@ -65,7 +65,7 @@ export class FacilityService {
       code: f.code,
       name: f.name,
       role: f.role,
-      careOf: `Bault C/O ${account.username}`,
+      careOf: `Card Embassy C/O ${account.username}`,
       lines: [f.line1, f.line2].filter((l): l is string => Boolean(l && l.trim())),
       city: f.city,
       region: f.region,

@@ -47,13 +47,13 @@ export function checkDeal(input: {
   if (!hasAccount && !hasExternal) {
     problems.push({
       field: 'counterparty',
-      message: 'Name the other side — either their Bault username, or a name and an email.',
+      message: 'Name the other side — either their Card Embassy username, or a name and an email.',
     });
   }
   if (hasAccount && hasExternal) {
     problems.push({
       field: 'counterparty',
-      message: 'Name the other side once: a Bault account or an outside contact, not both.',
+      message: 'Name the other side once: a Card Embassy account or an outside contact, not both.',
     });
   }
 
@@ -62,7 +62,7 @@ export function checkDeal(input: {
     if (buyerIsExternal) {
       problems.push({
         field: 'settlement',
-        message: 'The buyer has no Bault vault to put it in. Choose "ship to the buyer" instead.',
+        message: 'The buyer has no Card Embassy vault to put it in. Choose "ship to the buyer" instead.',
       });
     }
   }

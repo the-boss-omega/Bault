@@ -359,8 +359,9 @@ describe('the words the product uses', () => {
       'landing.price.intake',
     ]);
 
+    // The product's own name has the word in it, and calls nothing a card.
     const strays = Object.entries(en)
-      .filter(([key, value]) => !allowed.has(key) && /\bcards?\b/i.test(value))
+      .filter(([key, value]) => !allowed.has(key) && /\bcards?\b/i.test(value.replace(/Card Embassy/g, '')))
       .map(([key]) => key);
     expect(strays).toEqual([]);
   });

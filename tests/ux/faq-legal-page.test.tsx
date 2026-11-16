@@ -48,9 +48,9 @@ beforeEach(() => {
 });
 
 describe('FAQ & Legal', () => {
-  it('shows Bault’s own FAQ, with no other company in it', async () => {
+  it('shows Card Embassy’s own FAQ, with no other company in it', async () => {
     renderAt('#/faq/faq');
-    expect(await screen.findByText('What is Bault?')).toBeInTheDocument();
+    expect(await screen.findByText('What is Card Embassy?')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/ship\s*my\s*cards/i);
     expect(screen.getByText(/answers, last checked against the product/i)).toBeInTheDocument();
   });

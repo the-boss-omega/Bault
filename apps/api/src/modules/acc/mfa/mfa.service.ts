@@ -20,7 +20,7 @@ import { base32Encode, generateTotpSecret, matchTotp, otpauthUri } from './totp'
 
 const CHALLENGE_TTL_MINUTES = 5;
 const CHALLENGE_MAX_FAILURES = 5;
-const ISSUER = 'Bault';
+const ISSUER = 'Card Embassy';
 
 export type SecondFactorProof = { code: string } | { recoveryCode: string };
 

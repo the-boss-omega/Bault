@@ -56,7 +56,7 @@ export function billableActions(): BillableAction[] {
     ),
     ...CONSIGNMENT_CHANNELS.map((channel) =>
       ofAmount(
-        action(channelFeeAction(channel.key), 'fallback_rule', 'dis/consignment.service.ts', `Bault's commission on a ${channel.key} consignment sale.`, 'marketplace_fee'),
+        action(channelFeeAction(channel.key), 'fallback_rule', 'dis/consignment.service.ts', `Card Embassy's commission on a ${channel.key} consignment sale.`, 'marketplace_fee'),
         'the sale price',
       ),
     ),

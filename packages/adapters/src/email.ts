@@ -98,9 +98,9 @@ function frame(section: string, preheader: string): string {
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${PAGE}"><tr><td align="center" style="padding:28px 12px">`,
     `<table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;background:${PAPER};border:1px solid ${RULE};border-radius:4px;border-collapse:separate">`,
     `<tr><td style="border-radius:4px 4px 0 0;overflow:hidden">${foil(4)}</td></tr>`,
-    `<tr><td style="padding:26px 32px 0"><span style="font:700 22px/1 ${SERIF};color:${INK}">Bault</span></td></tr>`,
+    `<tr><td style="padding:26px 32px 0"><span style="font:700 22px/1 ${SERIF};color:${INK}">Card Embassy</span></td></tr>`,
     `<tr><td style="padding:22px 32px 28px">${section}</td></tr>`,
-    `<tr><td style="padding:16px 32px 22px;border-top:1px solid ${RULE};font:11px/1.6 ${MONO};letter-spacing:0.04em;color:${INK_3}">Bault — collectibles vault and marketplace. Facilities in New Jersey and Delaware. Settled in USD.</td></tr>`,
+    `<tr><td style="padding:16px 32px 22px;border-top:1px solid ${RULE};font:11px/1.6 ${MONO};letter-spacing:0.04em;color:${INK_3}">Card Embassy — collectibles vault and marketplace. Facilities in New Jersey and Delaware. Settled in USD.</td></tr>`,
     '</table>',
     '</td></tr></table>',
     '</div>',
@@ -122,9 +122,9 @@ export function renderEmail(template: string, variables: Record<string, string>)
         {
           kicker: 'ADDRESS CONFIRMATION',
           heading: 'Confirm your email address',
-          body: 'Your Bault account has been created and is waiting on one thing: confirming this address. Follow the link below to activate it and sign in.',
+          body: 'Your Card Embassy account has been created and is waiting on one thing: confirming this address. Follow the link below to activate it and sign in.',
           action: 'Confirm email address',
-          footer: 'The link is valid for 24 hours and can be used once. If you did not create a Bault account, ignore this message and nothing will happen.',
+          footer: 'The link is valid for 24 hours and can be used once. If you did not create a Card Embassy account, ignore this message and nothing will happen.',
         },
         link,
       );
@@ -133,7 +133,7 @@ export function renderEmail(template: string, variables: Record<string, string>)
         {
           kicker: 'PASSWORD RESET',
           heading: 'Reset your password',
-          body: 'Somebody asked to reset the password on this Bault account. Follow the link below to choose a new one.',
+          body: 'Somebody asked to reset the password on this Card Embassy account. Follow the link below to choose a new one.',
           action: 'Choose a new password',
           footer: 'The link is valid for 1 hour and can be used once. If you did not ask for this, ignore this message — your current password stays in force.',
         },
@@ -145,7 +145,7 @@ export function renderEmail(template: string, variables: Record<string, string>)
           kicker: 'FROM YOUR VAULT',
           heading: variables.heading ?? 'An update on your vault',
           body: variables.message ?? '',
-          action: 'Open Bault',
+          action: 'Open Card Embassy',
           footer:
             variables.footer ??
             'You are receiving this because email is switched on for this kind of update. You can turn it off, per event or all at once, in Notifications → Preferences.',

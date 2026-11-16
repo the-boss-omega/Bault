@@ -126,6 +126,13 @@ describe('the otpauth:// URI an authenticator scans', () => {
     expect(uri.searchParams.get('digits')).toBe('6');
     expect(uri.searchParams.get('period')).toBe('30');
   });
+
+  it('spells an issuer of two words with a space, not a plus, in the label and in the parameter', () => {
+    const raw = otpauthUri({ issuer: 'Card Embassy', account: 'eldar', secret: Buffer.alloc(20, 1) });
+    expect(raw).toMatch(/^otpauth:\/\/totp\/Card%20Embassy:eldar\?/);
+    expect(raw).toContain('issuer=Card%20Embassy');
+    expect(raw).not.toContain('+');
+  });
 });
 
 describe('the secret at rest (AES-256-GCM)', () => {

@@ -136,19 +136,19 @@
       "actionType": "consignment_fee:card_show",
       "percent": "10%",
       "billingTrigger": "per_event",
-      "description": "Bault commission on a card-show consignment sale"
+      "description": "Card Embassy commission on a card-show consignment sale"
     },
     {
       "actionType": "consignment_fee:auction_house",
       "percent": "1%",
       "billingTrigger": "per_event",
-      "description": "Bault commission on an auction-house consignment sale"
+      "description": "Card Embassy commission on an auction-house consignment sale"
     },
     {
       "actionType": "consignment_fee:ebay_partner",
       "percent": "1%",
       "billingTrigger": "per_event",
-      "description": "Bault commission on an eBay partner consignment sale"
+      "description": "Card Embassy commission on an eBay partner consignment sale"
     },
     {
       "actionType": "grading_fee:psa_value",
@@ -244,7 +244,7 @@
       "actionType": "show_pickup",
       "fixed": "$15.00",
       "billingTrigger": "per_event",
-      "description": "Collect your cards in person at a show Bault is attending"
+      "description": "Collect your cards in person at a show Card Embassy is attending"
     },
     {
       "actionType": "membership:folio",

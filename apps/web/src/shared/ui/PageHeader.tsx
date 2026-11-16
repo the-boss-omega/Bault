@@ -76,7 +76,7 @@ export function MobileBar({ title, onOpenMenu }: { title: string; onOpenMenu: ()
         <IconMenu />
       </IconButton>
       <span className="rail-mark" aria-hidden="true">
-        B
+        C
       </span>
       <span className="mobile-bar-title">{title}</span>
     </div>
