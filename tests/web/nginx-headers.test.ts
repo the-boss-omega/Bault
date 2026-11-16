@@ -82,6 +82,21 @@ describe('web nginx security headers', () => {
     expect(conf).not.toMatch(/Strict-Transport-Security/i);
   });
 
+  it('runs no PayPal script and frames no PayPal page: a cash-in by PayPal leaves for paypal.com and comes back', () => {
+    const headers = code(read(WEB, 'nginx-security-headers.conf'));
+    const csp = headers.match(/Content-Security-Policy "([^"]+)"/)![1]!;
+    const directive = (name: string) => csp.split(';').map((d) => d.trim()).find((d) => d.startsWith(`${name} `));
+    expect(directive('script-src')).toBe("script-src 'self'");
+    expect(directive('connect-src')).toBe("connect-src 'self'");
+    expect(directive('frame-src')).toBeUndefined();
+    expect(directive('child-src')).toBeUndefined();
+    expect(directive('default-src')).toBe("default-src 'self'");
+    expect(csp).not.toMatch(/paypal/i);
+
+    const index = read(WEB, 'index.html');
+    expect(index).not.toMatch(/paypal/i);
+  });
+
   it("appends to X-Forwarded-For rather than replacing it with the proxy's own address", () => {
     const api = locations(conf).find(({ head }) => head.startsWith('location /api/'))!;
     expect(api.body).toMatch(/proxy_set_header\s+X-Forwarded-For\s+\$proxy_add_x_forwarded_for;/);

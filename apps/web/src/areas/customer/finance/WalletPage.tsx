@@ -16,6 +16,7 @@ import {
 } from '../../../shared/walletRequests';
 import { WalletRequestForm } from './WalletRequestForms';
 import { TopUpPanel } from './MoneyPanels';
+import { paypalReturnFromSearch } from '../../../shared/paypalCheckout';
 import { InTransit, StatementSlip } from './StatementSlip';
 import {
   Button,
@@ -121,7 +122,14 @@ const RANGES = [
 export function WalletPage() {
   const { t, locale } = useI18n();
   const route = useRoute();
-  const { goTab, openRecord, closeRecord } = useNavigation(route);
+  const { goTab, openRecord, closeRecord, setParams } = useNavigation(route);
+  const paypalParam = route.params.paypal ?? '';
+  const paymentParam = route.params.payment ?? '';
+  const paypalReturn = useMemo(
+    () => paypalReturnFromSearch(new URLSearchParams({ paypal: paypalParam, payment: paymentParam }).toString()),
+    [paypalParam, paymentParam],
+  );
+  const clearPayPalReturn = useCallback(() => setParams({ paypal: null, payment: null }), [setParams]);
 
   const [balance, setBalance] = useState<Money | null>(null);
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
@@ -243,7 +251,13 @@ export function WalletPage() {
 
       {tab === 'cash-in' && (
         <TabPanel tab="cash-in">
-          <TopUpPanel onError={setError} onStatus={setStatus} onChanged={() => void load()} />
+          <TopUpPanel
+            onError={setError}
+            onStatus={setStatus}
+            onChanged={() => void load()}
+            paypalReturn={paypalReturn}
+            onPayPalReturnHandled={clearPayPalReturn}
+          />
 
           <Panel title={t('wallet.cashIn.title')} subtitle={t('wallet.cashIn.subtitle')}>
             <WalletRequestForm

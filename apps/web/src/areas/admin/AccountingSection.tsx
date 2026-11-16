@@ -15,6 +15,8 @@ export interface AccountingSummary {
     refundsMinor: number;
     cashOutFeesReturnedMinor: number;
     carrierCostOnShippingChargesMinor: number;
+    /** PayPal's fees on cash-ins credited in the month: Bault's cost, beside revenue and not off it. */
+    cashInProviderFeesMinor?: number;
   };
   customerMoney: {
     inMinor: number;
@@ -261,6 +263,13 @@ function SummaryView({ summary, locale }: { summary: AccountingSummary; locale: 
           {t('admin.accounting.summary.carrier', {
             amount: formatUsd(summary.revenue.carrierCostOnShippingChargesMinor),
           })}{' '}
+          {(summary.revenue.cashInProviderFeesMinor ?? 0) > 0 && (
+            <>
+              {t('admin.accounting.summary.providerFees', {
+                amount: formatUsd(summary.revenue.cashInProviderFeesMinor ?? 0),
+              })}{' '}
+            </>
+          )}
           {t('admin.accounting.summary.platform', { amount: formatUsd(held.platformAccountMinor) })}
         </p>
       </section>

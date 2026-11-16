@@ -4,6 +4,7 @@ import App from './App';
 import { I18nProvider } from './shared/i18n';
 import { ThemeProvider } from './shared/theme';
 import { ErrorBoundary } from './shared/ui/ErrorBoundary';
+import { adoptPayPalReturn } from './shared/paypalCheckout';
 import './index.css';
 import './theme.css';
 import './slab.css';
@@ -19,6 +20,8 @@ try {
   localStorage.removeItem('bault.railPinned');
 } catch {
 }
+
+adoptPayPalReturn();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

@@ -108,6 +108,37 @@ describe('admin accounting', () => {
     expect(screen.getByText(/\$15\.00 in payouts returned/)).toBeInTheDocument();
   });
 
+  it('shows PayPal\'s fees on cash-ins as Bault\'s cost, beside revenue', async () => {
+    const user = userEvent.setup();
+    get.mockResolvedValueOnce({
+      month: '2026-10',
+      currency: 'USD',
+      byType: [],
+      revenue: {
+        totalMinor: 0,
+        lines: [],
+        refundsMinor: 0,
+        cashOutFeesReturnedMinor: 0,
+        carrierCostOnShippingChargesMinor: 0,
+        cashInProviderFeesMinor: 224,
+      },
+      customerMoney: { inMinor: 5_000, outMinor: 0, payoutsReturnedMinor: 0, reversedMinor: 0, netMinor: 5_000 },
+      balancesHeld: {
+        asOf: '2026-10-15T00:00:00.000Z',
+        customerTotalMinor: 5_000,
+        owedToCustomersMinor: 5_000,
+        owedByCustomersMinor: 0,
+        accountsWithBalance: 1,
+        platformAccountMinor: 0,
+      },
+      note: '',
+    });
+    renderIn(<AccountingSection onError={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /show summary/i }));
+
+    expect(await screen.findByText(/PayPal's fees on cash-ins, which Bault pays and the collector does not: \$2\.24/)).toBeInTheDocument();
+  });
+
   it('runs the reconciliation and lists each difference', async () => {
     const user = userEvent.setup();
     get.mockResolvedValueOnce({
