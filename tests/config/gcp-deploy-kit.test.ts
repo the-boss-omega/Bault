@@ -6,6 +6,7 @@ import { delimiter, join } from 'node:path';
 
 const ROOT = join(__dirname, '..', '..');
 const CONFIGURE = join(ROOT, 'infra', 'gcp', 'configure.sh');
+const PROVISION = join(ROOT, 'infra', 'gcp', 'provision.sh');
 const WATCHDOG = join(ROOT, 'infra', 'ops', 'watchdog.sh');
 
 const SECRETS = {
@@ -62,13 +63,31 @@ BACKUP_DIR=/var/backups/bault
 BACKUP_RETAIN_DAYS=14
 BACKUP_AGE_RECIPIENT=CHANGE_ME_your_age_public_key
 BACKUP_UPLOAD=rclone:backup:bault-backups-x-bault-backups/nightly
-RCLONE_CONFIG_BACKUP_TYPE=s3
+RCLONE_CONFIG_BACKUP_TYPE='google cloud storage'
+RCLONE_CONFIG_BACKUP_BUCKET_POLICY_ONLY=true
+RCLONE_CONFIG_BACKUP_NO_CHECK_BUCKET=true
+`;
+
+// The S3 remote an older provision.sh wrote, with a key of its own for the
+// backups bucket. Ubuntu's rclone sends an ACL with every S3 upload, which a
+// bucket with uniform access refuses.
+const OLD_RCLONE = `RCLONE_CONFIG_BACKUP_TYPE=s3
 RCLONE_CONFIG_BACKUP_PROVIDER=Other
 RCLONE_CONFIG_BACKUP_ENDPOINT=https://storage.googleapis.com
 RCLONE_CONFIG_BACKUP_REGION=auto
 RCLONE_CONFIG_BACKUP_ACCESS_KEY_ID=GOOGBACKUPKEY
 RCLONE_CONFIG_BACKUP_SECRET_ACCESS_KEY=${SECRETS.backupHmac}
 `;
+const OLD_PROVISIONED = PROVISIONED.replace(/^RCLONE_CONFIG_BACKUP_[\s\S]*$/m, OLD_RCLONE);
+const S3_KEYS = ['ACCESS_KEY_ID', 'ENDPOINT', 'PROVIDER', 'REGION', 'SECRET_ACCESS_KEY'].map(
+  (k) => `RCLONE_CONFIG_BACKUP_${k}`,
+);
+const GCS_REMOTE = {
+  BACKUP_UPLOAD: 'rclone:backup:bault-backups-x-bault-backups/nightly',
+  RCLONE_CONFIG_BACKUP_TYPE: 'google cloud storage',
+  RCLONE_CONFIG_BACKUP_BUCKET_POLICY_ONLY: 'true',
+  RCLONE_CONFIG_BACKUP_NO_CHECK_BUCKET: 'true',
+};
 
 // The answers, in the order the first run asks.
 const FIRST_RUN = [
@@ -104,6 +123,30 @@ function envFile(path: string): Record<string, string> {
     out[m[1]!] = /^'.*'$/.test(raw) ? raw.slice(1, -1) : raw;
   }
   return out;
+}
+
+/** The keys of each "# /etc/bault/<name>.env" section, and of the lines above them as "head". */
+function sectionKeys(text: string): Record<string, string[]> {
+  const out: Record<string, string[]> = { head: [] };
+  let current = 'head';
+  for (const line of text.split('\n')) {
+    const section = /^# \/etc\/bault\/(\w+)\.env$/.exec(line);
+    if (section) out[(current = section[1]!)] = [];
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(line);
+    if (m) out[current]!.push(m[1]!);
+  }
+  return out;
+}
+
+/** A variable as the nightly job sees it, after `set -a && . backup.env`. */
+function sourced(path: string, key: string): string {
+  const script = 'set -a && . "$1" && printf %s "${!2-unset}"';
+  const r = spawnSync('bash', ['-c', script, 'sourced', path, key], {
+    env: { PATH: process.env.PATH ?? '' },
+    encoding: 'utf8',
+  });
+  expect(r.status, r.stderr).toBe(0);
+  return r.stdout;
 }
 
 describe('infra/gcp/configure.sh', () => {
@@ -213,6 +256,226 @@ describe('infra/gcp/configure.sh', () => {
   it('deletes the provision file only when told yes', () => {
     expect(configure([...FIRST_RUN.slice(0, -1), 'y']).status).toBe(0);
     expect(existsSync(provisioned)).toBe(false);
+  });
+
+  it("writes backups through rclone's own Cloud Storage backend, with no key, as the nightly job reads it", () => {
+    expect(configure(FIRST_RUN).status).toBe(0);
+    const backup = join(envDir, 'backup.env');
+    const written = envFile(backup);
+    expect(written).toMatchObject(GCS_REMOTE);
+    const remote = Object.keys(written).filter((k) => k.startsWith('RCLONE_CONFIG_BACKUP_'));
+    expect(remote).toHaveLength(3);
+    expect(sourced(backup, 'RCLONE_CONFIG_BACKUP_TYPE')).toBe('google cloud storage');
+    expect(sourced(backup, 'BACKUP_UPLOAD')).toBe(GCS_REMOTE.BACKUP_UPLOAD);
+  });
+
+  it('writes the Cloud Storage remote, and not the S3 key, from an older provision file', () => {
+    writeFileSync(provisioned, OLD_PROVISIONED, { mode: 0o600 });
+    const r = configure(FIRST_RUN);
+    expect(r.status, r.output).toBe(0);
+    const backup = join(envDir, 'backup.env');
+    expect(envFile(backup)).toMatchObject(GCS_REMOTE);
+    expect(readFileSync(backup, 'utf8')).not.toMatch(
+      /GOOGBACKUPKEY|BackupHmacSecret|_ENDPOINT=|_PROVIDER=/,
+    );
+  });
+
+  // A server set up before the backups moved off the S3 API holds the old remote
+  // and key. A rerun replaces them, from a new provision file, from the old one
+  // kept in a password manager, or with the provision file long deleted.
+  it.each([
+    ['a new provision file', PROVISIONED],
+    ['the old provision file', OLD_PROVISIONED],
+    ['no provision file', null],
+  ])('takes the S3 remote and key of an older setup out of backup.env, given %s', (_, from) => {
+    expect(configure(FIRST_RUN).status).toBe(0);
+    const backup = join(envDir, 'backup.env');
+    const current = readFileSync(backup, 'utf8').replace(/^RCLONE_CONFIG_BACKUP_.*\n/gm, '');
+    writeFileSync(backup, current + OLD_RCLONE, { mode: 0o600 });
+    const before = envFile(backup);
+    if (from === null) rmSync(provisioned);
+    else writeFileSync(provisioned, from, { mode: 0o600 });
+
+    const r = configure(['n']);
+    expect(r.status, r.output).toBe(0);
+    expect(r.output).not.toMatch(/age public key|PayPal client/);
+    expect(r.output).toContain(`removed from backup.env: ${S3_KEYS.join(' ')}`);
+    expect(r.output).not.toContain(SECRETS.backupHmac);
+
+    const after = envFile(backup);
+    expect(after).toMatchObject(GCS_REMOTE);
+    for (const key of S3_KEYS) expect(after, key).not.toHaveProperty(key);
+    const kept = ['DIRECT_DATABASE_URL', 'BACKUP_DIR', 'BACKUP_RETAIN_DAYS', 'BACKUP_AGE_RECIPIENT'];
+    for (const key of kept) expect(after[key], key).toBe(before[key]);
+    expect(statSync(backup).mode & 0o777).toBe(0o600);
+
+    const again = configure(['n']);
+    expect(again.output).not.toContain('removed from backup.env');
+  });
+});
+
+describe('infra/gcp/provision.sh', () => {
+  let scratch: string;
+  let stub: string;
+  let out: string;
+  const IMAGES_SECRET = 'images/Hmac+SecretFromGoogle';
+  const DISABLE =
+    'gcloud resource-manager org-policies disable-enforce iam.disableServiceAccountKeyCreation --project=bault-prod-x';
+
+  const calls = () => readFileSync(join(stub, 'calls'), 'utf8').trimEnd().split('\n');
+  const imagesBindings = () =>
+    calls().filter((c) =>
+      c.startsWith('storage buckets add-iam-policy-binding gs://bault-prod-x-bault-images '),
+    );
+
+  beforeEach(() => {
+    scratch = mkdtempSync(join(tmpdir(), 'bault-provision-'));
+    stub = join(scratch, 'stub');
+    mkdirSync(stub);
+    out = join(scratch, 'bault-gcp.env');
+    const bin = join(scratch, 'bin');
+    mkdirSync(bin);
+    // A gcloud for an empty pair of projects: nothing exists, everything it is
+    // asked to make is made. Files in $STUB set the organisation's key policy,
+    // how often IAM refuses the custom role as missing, and a refused HMAC key.
+    writeFileSync(
+      join(bin, 'gcloud'),
+      `#!/bin/bash
+printf '%s\\n' "$*" >> "$STUB/calls"
+case " $* " in
+  *" auth list "*) echo operator@example.org ;;
+  *" projects describe "*) ;;
+  *" org-policies describe "*) cat "$STUB/key-policy" 2> /dev/null || true ;;
+  *" add-iam-policy-binding "*baultObjectPutGet*)
+    left="$(cat "$STUB/role-refusals" 2> /dev/null || echo 0)"
+    if [ "$left" -gt 0 ]; then
+      echo $((left - 1)) > "$STUB/role-refusals"
+      echo "ERROR: (gcloud.storage.buckets.add-iam-policy-binding) HTTPError 400: Role (projects/bault-prod-x/roles/baultObjectPutGet) does not exist in the resource's hierarchy." >&2
+      exit 1
+    fi ;;
+  *" hmac create "*)
+    if [ -e "$STUB/hmac-refused" ]; then
+      echo "ERROR: (gcloud.storage.hmac.create) HTTPError 412: Request violates constraint 'constraints/iam.disableServiceAccountKeyCreation'" >&2
+      exit 1
+    fi
+    printf 'GOOG1IMAGESKEY\\t%s\\n' "$STUB_SECRET" ;;
+  *"--format=value(address)"*) echo 34.1.2.3 ;;
+  *"--format=value(connectionName)"*) echo bault-prod-x:us-east4:bault-db ;;
+  *"--format=value(ipAddresses[0].ipAddress)"*) echo 10.30.0.3 ;;
+  *" describe "*) exit 1 ;;
+esac
+exit 0
+`,
+    );
+    chmodSync(join(bin, 'gcloud'), 0o755);
+    process.env.PROVISION_PATH = `${bin}${delimiter}${process.env.PATH ?? ''}`;
+  });
+  afterEach(() => rmSync(scratch, { recursive: true, force: true }));
+
+  function provision() {
+    const r = spawnSync(
+      'bash',
+      [
+        PROVISION,
+        ...['--project', 'bault-prod-x', '--backup-project', 'bault-backups-x'],
+        ...['--admin-ip', '35.235.240.0/20', '--out', out],
+      ],
+      {
+        cwd: scratch,
+        env: {
+          PATH: process.env.PROVISION_PATH ?? '',
+          HOME: scratch,
+          STUB: stub,
+          STUB_SECRET: IMAGES_SECRET,
+          BAULT_IAM_PAUSE: '0',
+        },
+        encoding: 'utf8',
+        timeout: 60_000,
+      },
+    );
+    return { status: r.status, output: `${r.stdout}\n${r.stderr}` };
+  }
+
+  it('lets the server add backups as itself, makes one key, for the images, and prints no secret', () => {
+    const r = provision();
+    expect(r.status, r.output).toBe(0);
+    expect(r.output).not.toContain(IMAGES_SECRET);
+
+    const all = calls();
+    expect(all.join('\n'), 'a backups account or its key').not.toMatch(
+      /bault-backups@|service-accounts create bault-backups/,
+    );
+    expect(all.filter((c) => c.startsWith('storage hmac create'))).toEqual([
+      'storage hmac create bault-images@bault-prod-x.iam.gserviceaccount.com --project=bault-prod-x --format=value(metadata.accessId,secret)',
+    ]);
+    expect(all).toContain(
+      'storage buckets add-iam-policy-binding gs://bault-backups-x-bault-backups --member=serviceAccount:bault-vm@bault-prod-x.iam.gserviceaccount.com --role=roles/storage.objectCreator --format=none',
+    );
+    const backupsBucket = all.find((c) =>
+      c.startsWith('storage buckets create gs://bault-backups-x-bault-backups '),
+    );
+    expect(backupsBucket).toContain('--uniform-bucket-level-access');
+    expect(backupsBucket).toContain('--retention-period=30d');
+
+    const written = readFileSync(out, 'utf8');
+    expect(statSync(out).mode & 0o777).toBe(0o600);
+    expect(written).toContain(`STORAGE_SECRET_KEY=${IMAGES_SECRET}`);
+    expect(sectionKeys(written), 'the PROVISIONED fixture above is out of step').toEqual(
+      sectionKeys(PROVISIONED),
+    );
+    const backup = join(scratch, 'backup-section.env');
+    writeFileSync(backup, written.slice(written.indexOf('# /etc/bault/backup.env')));
+    expect(envFile(backup)).toMatchObject(GCS_REMOTE);
+    expect(sourced(backup, 'RCLONE_CONFIG_BACKUP_TYPE')).toBe('google cloud storage');
+  });
+
+  it('waits for IAM to see the role it has just made', () => {
+    writeFileSync(join(stub, 'role-refusals'), '2');
+    const r = provision();
+    expect(r.status, r.output).toBe(0);
+    expect(r.output.match(/IAM does not see it yet/g)).toHaveLength(2);
+    expect(imagesBindings()).toHaveLength(3);
+  });
+
+  it('stops after a bounded wait, saying to run it again, when IAM never sees it', () => {
+    writeFileSync(join(stub, 'role-refusals'), '100');
+    const r = provision();
+    expect(r.status).toBe(1);
+    expect(imagesBindings()).toHaveLength(18);
+    expect(r.output).toContain("does not exist in the resource's hierarchy");
+    expect(r.output).toMatch(/still refused after 18 tries\. .*run this again in a few minutes/);
+    expect(existsSync(out)).toBe(false);
+  });
+
+  it('stops before it makes anything when the organisation forbids keys, with the command that allows one', () => {
+    writeFileSync(join(stub, 'key-policy'), 'True\n');
+    const r = provision();
+    expect(r.status).toBe(1);
+    expect(r.output).toContain(DISABLE);
+    const changes = calls().filter((c) => / (create|enable|connect|add-iam-policy-binding) /.test(` ${c} `));
+    expect(changes).toEqual([]);
+  });
+
+  it('explains the same when the policy could not be read and Google refuses the key', () => {
+    writeFileSync(join(stub, 'hmac-refused'), '');
+    const r = provision();
+    expect(r.status).toBe(1);
+    expect(r.output).toContain('HTTPError 412');
+    expect(r.output).toContain(DISABLE);
+    expect(existsSync(out)).toBe(false);
+  });
+
+  it('does not stop for the policy when it already holds the images key', () => {
+    const saved = `STORAGE_ACCESS_KEY=GOOG1SAVEDKEY\nSTORAGE_SECRET_KEY=${IMAGES_SECRET}\n`;
+    writeFileSync(out, saved, { mode: 0o600 });
+    writeFileSync(join(stub, 'key-policy'), 'True\n');
+    const r = provision();
+    expect(r.status, r.output).toBe(0);
+    expect(calls().filter((c) => c.startsWith('storage hmac create'))).toEqual([]);
+    expect(envFile(out)).toMatchObject({
+      STORAGE_ACCESS_KEY: 'GOOG1SAVEDKEY',
+      STORAGE_SECRET_KEY: IMAGES_SECRET,
+    });
   });
 });
 
