@@ -246,6 +246,11 @@ What it checks, in order:
   account. Either sends Bault the event that returns the money.
 
 Still by hand, because nothing outside the server can drive them:
+- with `PAYPAL_CHECKOUT_ENABLED=true`, a cash-in by PayPal checkout: pay $10
+  from a sandbox personal account and once more by "Debit or Credit Card" with
+  one of PayPal's sandbox test cards, see each credited once, and see the
+  webhook's `PAYMENT.CAPTURE.COMPLETED` delivered in the PayPal app's webhook
+  events;
 - the verify and reset emails landed in the inbox, not in spam;
 - Sentry shows the forged webhook (a `WebhookVerificationError`);
 - a label refused at dispatch, re-rated from the shipment drawer;

@@ -6,7 +6,7 @@
 
 About 1 minute. It builds on T16.1 and T16.4.
 
-These two files start the app. `index.html` sets `lang="he"` and `dir="rtl"` before any script runs, so the first paint is Hebrew and right to left. It links `favicon-32.png` and `apple-touch-icon.png`, the B that the rail shows, from the repo-root `assets` folder, which Vite serves as its public folder. `main.tsx` removes the retired `bault.railPinned` key. It then nests `StrictMode`, `ThemeProvider`, `I18nProvider`, `ErrorBoundary` and `App`, outermost first. The error boundary sits inside the providers, so a crash screen still shows in the viewer's theme and direction.
+These two files start the app. `index.html` sets `lang="he"` and `dir="rtl"` before any script runs, so the first paint is Hebrew and right to left. It links `favicon-32.png` and `apple-touch-icon.png`, the B that the rail shows, from the repo-root `assets` folder, which Vite serves as its public folder. `main.tsx` removes the retired `bault.railPinned` key. `adoptPayPalReturn` turns PayPal's return to `/?paypal=...&payment=...` into the cash-in tab's hash address before the app renders, because the app is a hash router. It then nests `StrictMode`, `ThemeProvider`, `I18nProvider`, `ErrorBoundary` and `App`, outermost first. The error boundary sits inside the providers, so a crash screen still shows in the viewer's theme and direction.
 
 #### `apps/web/vite.config.ts`, `apps/web/proxy-target.ts`
 
@@ -148,7 +148,7 @@ This page shows the collector's balance, ledger and cash requests. The tabs are 
 
 About 1.5 minutes. It builds on T8.6, T8.7, T6.5 and T1.4.
 
-These panels top up the wallet and request cash in or out. `TopUpPanel` pays with `POST /finance/checkout`, sending `amountMinor`, `route` and `idempotencyKey`. A retry with the same route and amount reuses the key, so the API replays the first answer. After an `unreachable` or `server` error the key is kept, because the card may have been charged. An answer, or any other refusal, clears it. Never mint a new key for a retry, because that turns one top-up into two charges. `CashOutQuotePanel` shows what will land, from `GET /finance/cash-out-quote`.
+These panels top up the wallet and request cash in or out. `TopUpPanel` pays with `POST /finance/checkout`, sending `amountMinor`, `route` and `idempotencyKey`. A retry with the same route and amount reuses the key, so the API replays the first answer. After an `unreachable` or `server` error the key is kept, because the card may have been charged. An answer, or any other refusal, clears it. Never mint a new key for a retry, because that turns one top-up into two charges. A route with `checkout: 'paypal'` instead opens an order with `POST /finance/checkout/paypal`, under the same key rules, and leaves the app for PayPal's approval page through `leaveForPayPal`. `isPayPalApproveUrl` in `shared/paypalCheckout.ts` allows only https on PayPal's two hosts, or this app's own origin for the sandbox. Back from PayPal, `WalletPage` passes the return to the panel, which captures or cancels it once and clears it from the address. PayPal's script is never loaded, so the CSP needs no PayPal origin. `CashOutQuotePanel` shows what will land, from `GET /finance/cash-out-quote`.
 
 `WalletRequestForm` serves both directions and posts `/finance/wallet-requests`. It says that submitting moves no money, since an admin approves and completes each request, as T1.4 explains. `validateDraft` and `findOpenDuplicate` run first, and the server checks both again.
 

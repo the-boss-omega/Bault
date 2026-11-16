@@ -14,8 +14,8 @@ Run it again at any time: it keeps every value already set, and asks again
 only for a value that is missing, or one named with --change.
 
   --from <file>     provision.sh's output (default ~/bault-gcp.env)
-  --change <name>   ask again for a key, or a group: domain, paypal, easypost,
-                    smtp, bank, age. Repeatable.
+  --change <name>   ask again for a key, or a group: domain, paypal, checkout,
+                    easypost, smtp, bank, age. Repeatable.
 EOF
 }
 
@@ -169,6 +169,7 @@ hostname_ok() {
     || { say "  a host name in lower case, such as app.example.org"; return 1; }
 }
 paypal_env_ok() { case "$1" in sandbox|live) return 0 ;; *) say "  sandbox or live"; return 1 ;; esac; }
+true_or_false() { case "$1" in true|false) return 0 ;; *) say "  true or false"; return 1 ;; esac; }
 easypost_ok() { [[ "$1" =~ ^EZ[AT]K[A-Za-z0-9]+$ ]] || { say "  an EasyPost key starts EZTK (test) or EZAK (live)"; return 1; }; }
 smtp_port_ok() {
   case "$1" in
@@ -257,6 +258,16 @@ if placeholder "$paypal_id" || wanted - paypal; then
   set_prod PAYPAL_CLIENT_SECRET "$ANSWER"
   ask "PayPal webhook ID" 0 "" nonempty
   set_prod PAYPAL_WEBHOOK_ID "$ANSWER"
+fi
+[ -n "$(file_get "$PROD" PAYPAL_CHECKOUT_ENABLED)" ] || set_prod PAYPAL_CHECKOUT_ENABLED false
+if wanted PAYPAL_CHECKOUT_ENABLED checkout; then
+  say ""
+  say "Cash-in by PayPal checkout: a collector pays by PayPal or by card on PayPal's page,"
+  say "and the wallet is credited when PayPal confirms it. Before turning it on, subscribe"
+  say "the webhook above, in the PayPal app, to CHECKOUT.ORDER.APPROVED and to"
+  say "PAYMENT.CAPTURE.COMPLETED, .PENDING, .DENIED, .DECLINED, .REFUNDED and .REVERSED."
+  ask "Take cash-ins through PayPal checkout (true or false)" 0 "$(file_get "$PROD" PAYPAL_CHECKOUT_ENABLED)" true_or_false
+  set_prod PAYPAL_CHECKOUT_ENABLED "$ANSWER"
 fi
 [ -z "$(file_get "$PROD" PAYPAL_FF_HANDLE)" ] \
   || say "warning: PAYPAL_FF_HANDLE is set. Friends-and-family payments for goods break PayPal's terms; leave it empty."

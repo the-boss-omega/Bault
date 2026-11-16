@@ -172,8 +172,12 @@ although the proxy needs none. It generates `MFA_ENCRYPTION_KEY`, and asks for:
 Secrets are read without echo, and nothing it prints holds one. It ends with a
 check of every value production refuses to start without, and offers to delete
 `~/bault-gcp.env`. Run it again whenever you like: it keeps what is set, and
-`--change smtp` (or `domain`, `paypal`, `easypost`, `bank`, `age`) asks for one
-group again. Then, in Cloud Shell, keep the file in your password manager (⋮ →
+`--change smtp` (or `domain`, `paypal`, `checkout`, `easypost`, `bank`, `age`)
+asks for one group again. `--change checkout` turns on cash-in by PayPal
+checkout (`PAYPAL_CHECKOUT_ENABLED`, off until then): first subscribe the same
+PayPal webhook to `CHECKOUT.ORDER.APPROVED` and to `PAYMENT.CAPTURE.COMPLETED`,
+`PENDING`, `DENIED`, `DECLINED`, `REFUNDED` and `REVERSED`, then restart the
+API. Then, in Cloud Shell, keep the file in your password manager (⋮ →
 Download) and delete it there too: `shred -u ~/bault-gcp.env`. Copy
 `/etc/bault/production.env` into the password manager as well: losing
 `MFA_ENCRYPTION_KEY` locks every authenticator out.
