@@ -65,7 +65,7 @@ async function main(): Promise<void> {
 
   await pool.query(`TRUNCATE TABLE
     user_account, verification_token, login_session, login_attempt,
-    mfa_factor, mfa_recovery_code, mfa_challenge,
+    mfa_factor, mfa_recovery_code, mfa_challenge, mfa_email_code,
     item, bin, item_image, custody_event, item_change_history, bin_transfer, batch,
     listing, "transaction", offer, swap_proposal, house_listing, house_order,
     ledger_record, external_payment, charge, withdrawal,

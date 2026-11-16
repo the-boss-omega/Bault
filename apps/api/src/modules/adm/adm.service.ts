@@ -55,6 +55,7 @@ export class AdmService {
         status: userAccount.status,
         intakeId: userAccount.intakeId,
         mfaEnabled: sql<boolean>`exists (select 1 from mfa_factor f where f.user_id = ${userAccount.id}::text and f.enabled_at is not null)`,
+        mfaMethod: sql<'totp' | 'email' | null>`(select f.method from mfa_factor f where f.user_id = ${userAccount.id}::text and f.enabled_at is not null)`,
         autoSuspended: sql<boolean>`${userAccount.autoSuspendedAt} is not null`,
       })
       .from(userAccount)

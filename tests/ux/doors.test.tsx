@@ -87,7 +87,7 @@ async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light')
 
 const noop = () => {};
 
-function door(which: 'signIn' | 'signUp' | 'forgot' | 'mfa' | 'reset' | 'verify') {
+function door(which: 'signIn' | 'signUp' | 'forgot' | 'mfa' | 'mfaEmail' | 'reset' | 'verify') {
   switch (which) {
     case 'signIn':
       return <SignInPage onSignedIn={noop} onGoToSignUp={noop} onGoToForgotPassword={noop} />;
@@ -96,7 +96,16 @@ function door(which: 'signIn' | 'signUp' | 'forgot' | 'mfa' | 'reset' | 'verify'
     case 'forgot':
       return <ForgotPasswordPage onGoToSignIn={noop} />;
     case 'mfa':
-      return <SecondFactorForm challengeToken="t" onSignedIn={noop} onRestart={noop} />;
+      return <SecondFactorForm challenge={{ challengeToken: 't' }} onSignedIn={noop} onRestart={noop} />;
+    case 'mfaEmail':
+      // An emailed code, just sent: the button for another is held, and the wait is said beside it.
+      return (
+        <SecondFactorForm
+          challenge={{ challengeToken: 't', method: 'email', codeSent: true, sentTo: 'r•••@bault.dev', resendAfterSeconds: 60 }}
+          onSignedIn={noop}
+          onRestart={noop}
+        />
+      );
     case 'reset':
       return <ResetPasswordPage />;
     case 'verify':
@@ -177,7 +186,7 @@ describe('a door', () => {
 });
 
 describe.skipIf(!browser)('a door, in a browser', () => {
-  const WHICH = ['signIn', 'signUp', 'forgot', 'mfa'] as const;
+  const WHICH = ['signIn', 'signUp', 'forgot', 'mfa', 'mfaEmail'] as const;
 
   for (const theme of ['dark', 'light'] as const) {
     it(`is paper in the ${theme} theme, with the paper's controls on it, and its one button is the ink`, async () => {

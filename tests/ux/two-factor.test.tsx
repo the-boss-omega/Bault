@@ -117,7 +117,16 @@ describe('signing in with a second factor', () => {
   });
 });
 
-const OFF = { enabled: false, pending: false, required: false, recoveryCodesRemaining: 0 };
+const OFF = {
+  enabled: false,
+  pending: false,
+  method: null,
+  pendingMethod: null,
+  methods: ['email', 'totp'],
+  email: 'red@bault.dev',
+  required: false,
+  recoveryCodesRemaining: 0,
+};
 const CODES = Array.from({ length: 10 }, (_, i) => `aaaa-bbbb-${String(i).padStart(4, '0')}`);
 
 describe('the account-security screen', () => {
@@ -132,8 +141,9 @@ describe('the account-security screen', () => {
       secret: 'JBSWY3DPEHPK3PXP',
       qrCode: 'data:image/svg+xml;base64,PHN2Zy8+',
     });
-    await user.click(await screen.findByRole('button', { name: /set up two-factor sign-in/i }));
-    expect(post).toHaveBeenCalledWith('/auth/mfa/setup');
+    await user.click(await screen.findByRole('radio', { name: /authenticator app/i }));
+    await user.click(screen.getByRole('button', { name: /set up two-factor sign-in/i }));
+    expect(post).toHaveBeenCalledWith('/auth/mfa/setup', { method: 'totp' });
 
     const qr = await screen.findByRole('img', { name: /qr code/i });
     expect(qr).toHaveAttribute('src', 'data:image/svg+xml;base64,PHN2Zy8+');
@@ -146,7 +156,7 @@ describe('the account-security screen', () => {
     post.mockResolvedValueOnce({ status: 'enabled', recoveryCodes: CODES, otherSessionsEnded: 0 });
     get.mockResolvedValue({ enabled: true, pending: false, required: false, recoveryCodesRemaining: 10 });
     await user.click(turnOn);
-    expect(post).toHaveBeenLastCalledWith('/auth/mfa/confirm', { code: '654321', password: 'hunter22' });
+    expect(post).toHaveBeenLastCalledWith('/auth/mfa/confirm', { method: 'totp', code: '654321', password: 'hunter22' });
 
     expect(await screen.findByRole('heading', { name: /save your recovery codes/i })).toBeInTheDocument();
     for (const c of CODES) expect(screen.getByText(c)).toBeInTheDocument();
@@ -195,6 +205,223 @@ describe('the account-security screen', () => {
     await user.click(screen.getByRole('button', { name: /make new codes/i }));
     expect(post).toHaveBeenCalledWith('/auth/mfa/recovery-codes', { code: '135790' });
     expect(await screen.findByText(CODES[9]!)).toBeInTheDocument();
+  });
+});
+
+const EMAIL_ON = { ...OFF, enabled: true, method: 'email', recoveryCodesRemaining: 8 };
+
+describe('emailed codes on the account-security screen', () => {
+  it('offers emailed codes first and chosen, and the app beside them, each said in a line', async () => {
+    get.mockResolvedValue(OFF);
+    const { TwoFactorPanel } = await panel();
+    renderIn(<TwoFactorPanel />);
+    const email = await screen.findByRole('radio', { name: /email me a code/i });
+    const app = screen.getByRole('radio', { name: /authenticator app/i });
+    expect(email).toBeChecked();
+    expect(app).not.toBeChecked();
+    expect(screen.getByRole('group', { name: /how should bault ask/i })).toBeInTheDocument();
+    expect(screen.getByText(/red@bault\.dev/)).toBeInTheDocument();
+  });
+
+  it('enrols by email: a code to the address, then the password and the code, then the recovery codes', async () => {
+    const user = userEvent.setup();
+    get.mockResolvedValue(OFF);
+    const { TwoFactorPanel } = await panel();
+    renderIn(<TwoFactorPanel />);
+
+    post.mockResolvedValueOnce({ method: 'email', email: 'red@bault.dev', resendAfterSeconds: 60 });
+    get.mockResolvedValue({ ...OFF, pending: true, pendingMethod: 'email' });
+    await user.click(await screen.findByRole('button', { name: /set up two-factor sign-in/i }));
+    expect(post).toHaveBeenCalledWith('/auth/mfa/setup', { method: 'email' });
+
+    expect(await screen.findByText(/we emailed a 6-digit code to red@bault\.dev/i)).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /qr code/i })).toBeNull();
+    const code = screen.getByLabelText(/code from the email/i);
+    expect(code).toHaveAttribute('autocomplete', 'one-time-code');
+    expect(code).toHaveAttribute('inputmode', 'numeric');
+    expect(screen.getByRole('button', { name: /send a new code/i })).toBeDisabled();
+
+    await user.type(code, '012 345');
+    await user.type(screen.getByLabelText(/^password$/i), 'hunter22');
+    post.mockResolvedValueOnce({ status: 'enabled', recoveryCodes: CODES, otherSessionsEnded: 0 });
+    get.mockResolvedValue({ ...EMAIL_ON, recoveryCodesRemaining: 10 });
+    await user.click(screen.getByRole('button', { name: /^turn on$/i }));
+    expect(post).toHaveBeenLastCalledWith('/auth/mfa/confirm', { method: 'email', code: '012345', password: 'hunter22' });
+
+    expect(await screen.findByRole('heading', { name: /save your recovery codes/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: /i have saved these codes/i }));
+    await user.click(screen.getByRole('button', { name: /^done$/i }));
+    expect(await screen.findByText(/a code we email to red@bault\.dev/i)).toBeInTheDocument();
+  });
+
+  it('comes back to the code, not the choice, when a setup by email was left half done', async () => {
+    const user = userEvent.setup();
+    get.mockResolvedValue({ ...OFF, pending: true, pendingMethod: 'email' });
+    const { TwoFactorPanel } = await panel();
+    renderIn(<TwoFactorPanel />);
+
+    expect(await screen.findByLabelText(/code from the email/i)).toBeInTheDocument();
+    const resend = screen.getByRole('button', { name: /send a new code/i });
+    expect(resend).toBeEnabled();
+    post.mockResolvedValueOnce({ status: 'code_sent', email: 'red@bault.dev', resendAfterSeconds: 60 });
+    await user.click(resend);
+    expect(post).toHaveBeenCalledWith('/auth/mfa/email/code');
+    expect(await screen.findByText(/a new code is on its way to red@bault\.dev/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send a new code/i })).toBeDisabled();
+    expect(screen.getByText(/you can ask for another code in \d+ s/i)).toBeInTheDocument();
+  });
+
+  it('says why a new code was refused', async () => {
+    const user = userEvent.setup();
+    get.mockResolvedValue({ ...OFF, pending: true, pendingMethod: 'email' });
+    const { TwoFactorPanel } = await panel();
+    renderIn(<TwoFactorPanel />);
+    post.mockRejectedValueOnce(new MockApiError('client', 429, 'Wait 42 seconds before asking for another code.', 'rate_limited'));
+    await user.click(await screen.findByRole('button', { name: /send a new code/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/wait 42 seconds/i);
+  });
+
+  it('says where the codes go once it is on, and turns it off with the password and a code mailed for it', async () => {
+    const user = userEvent.setup();
+    get.mockResolvedValue(EMAIL_ON);
+    const { TwoFactorPanel } = await panel();
+    renderIn(<TwoFactorPanel />);
+    expect(await screen.findByText(/a code we email to red@bault\.dev/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^turn off$/i }));
+    post.mockResolvedValueOnce({ status: 'code_sent', email: 'red@bault.dev', resendAfterSeconds: 60 });
+    await user.click(screen.getByRole('button', { name: /email me a code/i }));
+    expect(post).toHaveBeenCalledWith('/auth/mfa/email/code');
+    await user.type(screen.getByLabelText(/^password$/i), 'hunter2-long');
+    await user.type(await screen.findByLabelText(/code from the email/i), '246810');
+    post.mockResolvedValueOnce({ status: 'disabled' });
+    get.mockResolvedValue(OFF);
+    await user.click(screen.getByRole('button', { name: /turn off two-factor sign-in/i }));
+    expect(post).toHaveBeenLastCalledWith('/auth/mfa/disable', { password: 'hunter2-long', code: '246810' });
+    expect(await screen.findByRole('button', { name: /set up two-factor sign-in/i })).toBeInTheDocument();
+  });
+
+  it('replaces the recovery codes for a code mailed for it', async () => {
+    const user = userEvent.setup();
+    get.mockResolvedValue(EMAIL_ON);
+    const { TwoFactorPanel } = await panel();
+    renderIn(<TwoFactorPanel />);
+    await user.click(await screen.findByRole('button', { name: /new recovery codes/i }));
+    post.mockResolvedValueOnce({ status: 'code_sent', email: 'red@bault.dev', resendAfterSeconds: 60 });
+    await user.click(screen.getByRole('button', { name: /email me a code/i }));
+    await user.type(await screen.findByLabelText(/code from the email/i), '135790');
+    post.mockResolvedValueOnce({ recoveryCodes: CODES });
+    await user.click(screen.getByRole('button', { name: /make new codes/i }));
+    expect(post).toHaveBeenLastCalledWith('/auth/mfa/recovery-codes', { code: '135790' });
+    expect(await screen.findByText(CODES[9]!)).toBeInTheDocument();
+  });
+
+  it('offers only the app to a role that must use it', async () => {
+    const user = userEvent.setup();
+    get.mockResolvedValue({ ...OFF, required: true, methods: ['totp'] });
+    const { TwoFactorPanel } = await panel();
+    renderIn(<TwoFactorPanel />);
+    const setup = await screen.findByRole('button', { name: /set up two-factor sign-in/i });
+    expect(screen.queryByRole('radio', { name: /email me a code/i })).toBeNull();
+    post.mockResolvedValueOnce({ otpauthUri: 'otpauth://totp/x', secret: 'JBSWY3DPEHPK3PXP', qrCode: 'data:image/svg+xml;base64,PHN2Zy8+' });
+    await user.click(setup);
+    expect(post).toHaveBeenCalledWith('/auth/mfa/setup', { method: 'totp' });
+  });
+
+  it('tells a member of staff whose codes come by email that the role needs the app, and sets the app up', async () => {
+    const user = userEvent.setup();
+    get.mockResolvedValue({ ...EMAIL_ON, required: true, methods: ['totp'] });
+    const { TwoFactorPanel } = await panel();
+    renderIn(<TwoFactorPanel />);
+    expect(await screen.findByText(/your role signs in with an authenticator app/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^turn off$/i })).toBeNull();
+    post.mockResolvedValueOnce({ otpauthUri: 'otpauth://totp/x', secret: 'JBSWY3DPEHPK3PXP', qrCode: 'data:image/svg+xml;base64,PHN2Zy8+' });
+    await user.click(screen.getByRole('button', { name: /set up an authenticator app/i }));
+    expect(post).toHaveBeenCalledWith('/auth/mfa/setup', { method: 'totp' });
+    expect(await screen.findByRole('img', { name: /qr code/i })).toBeInTheDocument();
+  });
+});
+
+const EMAIL_CHALLENGE = {
+  status: 'mfa_required',
+  challengeToken: 'tok-9',
+  expiresAt: '2099-01-01T00:00:00.000Z',
+  method: 'email',
+  codeSent: true,
+  sentTo: 'r•••@bault.dev',
+  resendAfterSeconds: 0,
+};
+
+async function reachEmailStep(user: ReturnType<typeof userEvent.setup>, challenge: Record<string, unknown> = EMAIL_CHALLENGE) {
+  const onSignedIn = vi.fn();
+  post.mockResolvedValueOnce(challenge);
+  renderIn(<SignInPage onSignedIn={onSignedIn} onGoToSignUp={() => {}} onGoToForgotPassword={() => {}} />);
+  await user.click(screen.getByRole('button', { name: /^sign in$/i }));
+  await screen.findByRole('heading', { name: /two-factor sign-in/i });
+  return onSignedIn;
+}
+
+describe('signing in with an emailed code', () => {
+  it('says where the code went, takes it, and signs in', async () => {
+    const user = userEvent.setup();
+    const onSignedIn = await reachEmailStep(user);
+    expect(screen.getByText(/we emailed a 6-digit code to r•••@bault\.dev/i)).toBeInTheDocument();
+    const code = screen.getByLabelText(/code from the email/i);
+    expect(code).toHaveAttribute('autocomplete', 'one-time-code');
+    expect(code).toHaveAttribute('inputmode', 'numeric');
+    await user.type(code, '123 456');
+    post.mockResolvedValueOnce({ id: 'u1', role: 'user', mfaEnrollmentRequired: false });
+    await user.click(screen.getByRole('button', { name: /^verify$/i }));
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalled());
+    expect(post).toHaveBeenLastCalledWith('/auth/login/mfa', { challengeToken: 'tok-9', code: '123456' });
+  });
+
+  it('sends a new code on request, says so, and makes the next request wait', async () => {
+    const user = userEvent.setup();
+    await reachEmailStep(user);
+    post.mockResolvedValueOnce({ status: 'code_sent', sentTo: 'r•••@bault.dev', resendAfterSeconds: 60 });
+    await user.click(screen.getByRole('button', { name: /send a new code/i }));
+    expect(post).toHaveBeenLastCalledWith('/auth/login/mfa/resend', { challengeToken: 'tok-9' });
+    const said = await screen.findByText(/a new code is on its way to r•••@bault\.dev/i);
+    expect(said.closest('[role="status"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /send a new code/i })).toBeDisabled();
+    expect(screen.getByText(/you can ask for another code in \d+ s/i)).toBeInTheDocument();
+  });
+
+  it('says a spent code is spent and stays on the step, so a new one can be asked for', async () => {
+    const user = userEvent.setup();
+    await reachEmailStep(user);
+    post.mockRejectedValueOnce(
+      new MockApiError('unauthenticated', 401, 'This code was entered wrongly too many times. Send a new code.', 'mfa_code_expired'),
+    );
+    await user.type(screen.getByLabelText(/code from the email/i), '000000');
+    await user.click(screen.getByRole('button', { name: /^verify$/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/send a new code/i);
+    expect(screen.getByRole('heading', { name: /two-factor sign-in/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send a new code/i })).toBeEnabled();
+  });
+
+  it('says why a new code was refused, and sends a timed-out sign-in back to the password', async () => {
+    const user = userEvent.setup();
+    await reachEmailStep(user);
+    post.mockRejectedValueOnce(new MockApiError('client', 429, 'A code was sent less than a minute ago. Wait 42 seconds.', 'rate_limited'));
+    await user.click(screen.getByRole('button', { name: /send a new code/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/wait 42 seconds/i);
+
+    post.mockRejectedValueOnce(new MockApiError('unauthenticated', 401, 'expired', 'mfa_challenge_expired'));
+    await user.click(screen.getByRole('button', { name: /send a new code/i }));
+    expect(await screen.findByText(/timed out/i)).toBeInTheDocument();
+    expect(document.querySelector('input[type="password"]')).not.toBeNull();
+  });
+
+  it('says when no code could be sent, and still offers a recovery code', async () => {
+    const user = userEvent.setup();
+    await reachEmailStep(user, { ...EMAIL_CHALLENGE, codeSent: false, sentTo: null, resendAfterSeconds: 0 });
+    expect(screen.getByText(/we did not send a code just now/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /use a recovery code/i }));
+    expect(screen.getByLabelText(/^recovery code$/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /use the emailed code/i }));
+    expect(screen.getByLabelText(/code from the email/i)).toBeInTheDocument();
   });
 });
 

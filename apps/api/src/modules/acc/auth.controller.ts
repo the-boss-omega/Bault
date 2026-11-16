@@ -25,6 +25,7 @@ import {
   LoginDto,
   LoginMfaDto,
   RegisterDto,
+  ResendCodeDto,
   ResetPasswordDto,
   TokenDto,
 } from './acc.dto';
@@ -82,7 +83,8 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.login(dto.identifier, dto.password, this.origin(req));
     if (result.kind === 'challenge') {
-      return { status: 'mfa_required', challengeToken: result.challengeToken, expiresAt: result.expiresAt };
+      const { kind: _kind, ...challenge } = result;
+      return { status: 'mfa_required', ...challenge };
     }
     const { user, rawToken, expiresAt } = result;
     req.user = user;
@@ -98,7 +100,7 @@ export class AuthController {
     const hasCode = typeof dto.code === 'string' && dto.code.trim() !== '';
     const hasRecovery = typeof dto.recoveryCode === 'string' && dto.recoveryCode.trim() !== '';
     if (hasCode === hasRecovery) {
-      throw AppError.validation('Send either the code from your authenticator app or a recovery code — one of them.');
+      throw AppError.validation('Send either a code (from your authenticator app or your email) or a recovery code — one of them.');
     }
     const { user, rawToken, expiresAt } = await this.auth.completeSecondFactor(
       dto.challengeToken,
@@ -107,7 +109,16 @@ export class AuthController {
     );
     req.user = user;
     this.setSessionCookie(res, rawToken, expiresAt);
-    return { id: user.id, role: user.role, mfaEnrollmentRequired: false };
+    return { id: user.id, role: user.role, mfaEnrollmentRequired: this.mfa.mustEnrol(user) };
+  }
+
+  @Public()
+  @AuthBucket(CREDENTIAL_ROUTE)
+  @Post('login/mfa/resend')
+  @HttpCode(202)
+  async resendCode(@Body() dto: ResendCodeDto) {
+    const { sentTo, resendAfterSeconds } = await this.auth.resendSignInCode(dto.challengeToken);
+    return { status: 'code_sent', sentTo, resendAfterSeconds };
   }
 
   @AllowWithoutMfa()

@@ -22,7 +22,8 @@ export class MfaEnrollmentGuard implements CanActivate {
     const user = ctx.switchToHttp().getRequest<Request>().user;
     if (!user) return true;
     if (!this.policy.requiredRoles.includes(user.role)) return true;
-    if (user.mfaEnabled === true) return true;
+    // Emailed codes are a collector's second factor; a role that requires one requires the authenticator app.
+    if (user.mfaEnabled === true && user.mfaMethod !== 'email') return true;
 
     throw new AppError(
       ErrorCode.MFA_ENROLLMENT_REQUIRED,

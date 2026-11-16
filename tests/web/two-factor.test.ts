@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mustEnrolSecondFactor, typedCode } from '../../apps/web/src/shared/twoFactor';
+import { mustEnrolSecondFactor, secondsLeft, typedCode } from '../../apps/web/src/shared/twoFactor';
 
 describe('who is held on the enrolment screen', () => {
   it('trusts the sign-in response until the profile has answered', () => {
@@ -13,6 +13,22 @@ describe('who is held on the enrolment screen', () => {
     expect(mustEnrolSecondFactor({ mfaRequired: true, mfaEnabled: true })).toBe(false);
     expect(mustEnrolSecondFactor({ mfaRequired: false, mfaEnabled: false })).toBe(false);
     expect(mustEnrolSecondFactor({ mfaEnrollmentRequired: true, mfaRequired: true, mfaEnabled: true })).toBe(false);
+  });
+
+  it('holds a member of staff whose second factor is emailed codes, which their role does not accept', () => {
+    expect(mustEnrolSecondFactor({ mfaRequired: true, mfaEnabled: true, mfaMethod: 'email' })).toBe(true);
+    expect(mustEnrolSecondFactor({ mfaRequired: true, mfaEnabled: true, mfaMethod: 'totp' })).toBe(false);
+    expect(mustEnrolSecondFactor({ mfaRequired: false, mfaEnabled: true, mfaMethod: 'email' })).toBe(false);
+  });
+});
+
+describe('the wait before another code can be asked for', () => {
+  it('counts whole seconds down to nothing', () => {
+    expect(secondsLeft(10_000, 0)).toBe(10);
+    expect(secondsLeft(10_000, 9_001)).toBe(1);
+    expect(secondsLeft(10_000, 10_000)).toBe(0);
+    expect(secondsLeft(10_000, 20_000)).toBe(0);
+    expect(secondsLeft(null, 0)).toBe(0);
   });
 });
 

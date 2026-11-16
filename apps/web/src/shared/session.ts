@@ -11,6 +11,7 @@ export interface SessionProfile {
   fullName: string;
   nameReviewRequired: boolean;
   mfaEnabled: boolean;
+  mfaMethod?: 'totp' | 'email' | null;
   mfaRequired: boolean;
 }
 

@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { NAME_PART_MAX, USERNAME_MAX, USERNAME_MIN } from '../../shared/names';
 
 const trimmed = () =>
@@ -73,13 +73,32 @@ export class LoginMfaDto {
   recoveryCode?: string;
 }
 
+export class ResendCodeDto {
+  @IsString()
+  @MaxLength(128)
+  challengeToken!: string;
+}
+
 export class MfaCodeDto {
   @IsString()
   @MaxLength(32)
   code!: string;
 }
 
+const MFA_METHODS = ['totp', 'email'] as const;
+
+/** No method is the authenticator app, as it was before emailed codes, for the clients that name none. */
+export class SetupMfaDto {
+  @IsOptional()
+  @IsIn(MFA_METHODS)
+  method?: (typeof MFA_METHODS)[number];
+}
+
 export class ConfirmMfaDto {
+  @IsOptional()
+  @IsIn(MFA_METHODS)
+  method?: (typeof MFA_METHODS)[number];
+
   @IsString()
   password!: string;
 

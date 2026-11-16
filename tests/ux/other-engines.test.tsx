@@ -178,7 +178,7 @@ describe.each(engines.map((e) => e.name))('in %s', (name) => {
         render(
           <I18nProvider>
             <AuthShell>
-              <SecondFactorForm challengeToken="x" onSignedIn={() => {}} onRestart={() => {}} />
+              <SecondFactorForm challenge={{ challengeToken: 'x' }} onSignedIn={() => {}} onRestart={() => {}} />
             </AuthShell>
           </I18nProvider>,
         );

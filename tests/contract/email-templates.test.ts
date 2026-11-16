@@ -82,3 +82,31 @@ describe('the account emails a collector receives first', () => {
     expect(html).toContain('&lt;d&gt;');
   });
 });
+
+describe('the two-factor code mail', () => {
+  it('puts the code where it is read first, in plain English, with nothing to click', () => {
+    const { html, text } = renderEmail('mfa_email_code', { code: '204816', purpose: 'sign_in', minutes: '10' });
+    expect(text).toContain('204816');
+    expect(text).toMatch(/10 minutes/);
+    expect(text).toMatch(/did not just try to sign in/i);
+    expect(html).toContain('204816');
+    expect(html).not.toContain('lang="he"');
+    expect(html).not.toMatch(/<a\s/);
+    expect(html).not.toMatch(/<style|<link|<script|<img|@font-face|@import|url\(/i);
+    // The code is set in the reader's own monospace, large, so a six is not read as an eight.
+    expect(html).toMatch(/<p[^>]*font:[^"]*monospace[^"]*"[^>]*>204816<\/p>/);
+    expect(html).toContain('#15130f');
+  });
+
+  it('says what a settings code is for, and what to do when it was not asked for', () => {
+    const { text } = renderEmail('mfa_email_code', { code: '000123', purpose: 'settings', minutes: '10' });
+    expect(text).toContain('000123');
+    expect(text).toMatch(/two-factor/i);
+    expect(text).toMatch(/change your password/i);
+  });
+
+  it('escapes what it is given', () => {
+    const { html } = renderEmail('mfa_email_code', { code: '<b>1</b>', purpose: 'sign_in', minutes: '10' });
+    expect(html).not.toContain('<b>1</b>');
+  });
+});

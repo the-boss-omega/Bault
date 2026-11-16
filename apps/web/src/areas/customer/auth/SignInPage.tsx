@@ -5,12 +5,10 @@ import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primi
 import type { SessionUser } from './AuthPage';
 import { DEMO_USERS } from './demoUsers';
 import { AuthCard } from './AuthCard';
-import { SecondFactorForm } from './SecondFactorForm';
+import { SecondFactorForm, type SecondFactorChallenge } from './SecondFactorForm';
 
-interface MfaChallenge {
+interface MfaChallenge extends SecondFactorChallenge {
   status: 'mfa_required';
-  challengeToken: string;
-  expiresAt: string;
 }
 
 function isChallenge(body: SessionUser | MfaChallenge): body is MfaChallenge {
@@ -72,7 +70,7 @@ export function SignInPage({
   if (challenge) {
     return (
       <SecondFactorForm
-        challengeToken={challenge.challengeToken}
+        challenge={challenge}
         onSignedIn={onSignedIn}
         onRestart={(reason) => {
           setChallenge(null);
