@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useI18n, useT, type Locale } from '../i18n';
+import { useI18n, useT } from '../i18n';
 import { formatDayHeading, formatTime } from '../money';
 import { byDay } from '../notifications';
 import { NotificationMark } from './NotificationMark';
@@ -10,7 +10,6 @@ import {
   IconBell,
   IconChevronDown,
   IconChevronRight,
-  IconGlobe,
   IconMenu,
   IconMonitor,
   IconMoon,
@@ -269,66 +268,6 @@ export function ThemeToggle() {
         <IconSun />
       )}
     </IconButton>
-  );
-}
-
-export function LanguageSwitcher() {
-  const t = useT();
-  const { locale, setLocale } = useI18n();
-  const [open, setOpen] = useState(false);
-  const ref = usePopover(open, () => setOpen(false));
-
-  const options: { value: Locale; label: string }[] = [
-    { value: 'he', label: 'עברית' },
-    { value: 'en', label: 'English' },
-  ];
-  const current = options.find((o) => o.value === locale);
-
-  return (
-    <div className="pop-wrap" ref={ref}>
-      <IconButton
-        label={t('app.switchLanguageLabel')}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className={open ? 'is-on' : ''}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <IconGlobe />
-        <span className="lang-code" aria-hidden="true">
-          {locale.toUpperCase()}
-        </span>
-      </IconButton>
-
-      {open && (
-        <div className="pop" role="menu" aria-label={t('app.switchLanguageLabel')}>
-          <div className="menu-head">
-            <p className="menu-name">{t('menu.language')}</p>
-            <p className="menu-sub">{current?.label ?? locale}</p>
-          </div>
-          <div className="menu-sep" />
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              role="menuitemradio"
-              aria-checked={option.value === locale}
-              className={`menu-item${option.value === locale ? ' is-on' : ''}`}
-              dir={option.value === 'he' ? 'rtl' : 'ltr'}
-              onClick={() => {
-                setLocale(option.value);
-                setOpen(false);
-              }}
-            >
-              <IconGlobe />
-              {option.label}
-              {option.value === locale && (
-                <span className="menu-item-note">{t('menu.languageCurrent')}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

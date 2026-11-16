@@ -1,7 +1,7 @@
 @import './fonts.css';
 
 :root {
-  --font-ui: 'IBM Plex Sans', 'IBM Plex Sans Hebrew', system-ui, sans-serif;
+  --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --font-display: 'Frank Ruhl Libre', Georgia, 'Times New Roman', serif;
 
@@ -961,22 +961,6 @@ time,
   box-shadow: none;
 }
 
-.lang-code {
-  position: absolute;
-  inset-block-end: 4px;
-  inset-inline-end: 4px;
-  font-size: var(--fs-micro);
-  font-weight: var(--fw-semibold);
-  letter-spacing: 0.04em;
-  line-height: 1;
-  color: var(--text-2);
-  pointer-events: none;
-}
-
-.icon-btn:has(.lang-code) svg {
-  transform: translateY(-2px);
-}
-
 .bell-badge {
   position: absolute;
   inset-block-start: 4px;
@@ -1385,7 +1369,6 @@ time,
 .link-more svg {
   width: 16px;
   height: 16px;
-  transform: scaleX(var(--dir));
 }
 
 .control {
@@ -1589,8 +1572,7 @@ input[type='search'] {
   margin-block-start: var(--sp-5);
 }
 
-/* A price is typed left to right, so its sign stands before the figure on the left in either language
-   (the figure is an island on a Hebrew page, and the sign belongs to it). */
+/* A price is typed left to right, its sign before the figure, on the left. */
 .money-input {
   position: relative;
   display: flex;
@@ -2159,7 +2141,7 @@ input[type='search'] {
   box-shadow: var(--shadow-overlay);
   overscroll-behavior: contain;
   /* The entrance and exit are in motion.css; this is the side it comes from. */
-  --drawer-from: calc(24px * var(--dir));
+  --drawer-from: 24px;
 }
 
 .drawer--sheet {
@@ -2573,7 +2555,6 @@ input[type='search'] {
 
 .skel {
   border-radius: var(--r-xs);
-  /* design-lint-allow: a skeleton shimmer: it reads as waiting whichever way round it sweeps */
   background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%);
   background-size: 400% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
@@ -2859,10 +2840,6 @@ input[type='search'] {
   font-size: var(--fs-xl);
   font-weight: 700;
   letter-spacing: 0;
-}
-
-.auth-brand .pop-wrap {
-  margin-inline-start: auto;
 }
 
 .auth-card {
@@ -3174,7 +3151,7 @@ input[type='search'] {
      once it has slid out (the delay is the slide), and visible again the instant it opens. */
   .rail {
     width: min(280px, 82vw);
-    transform: translateX(calc(-100% * var(--dir)));
+    transform: translateX(-100%);
     box-shadow: var(--shadow-rail);
     visibility: hidden;
     transition: transform var(--dur-lg) var(--ease-out), visibility 0s linear var(--dur-lg);
@@ -4238,7 +4215,6 @@ textarea[aria-invalid='true'] {
 .skel,
 .skel-block,
 .skel-metric {
-  /* design-lint-allow: a skeleton shimmer: it reads as waiting whichever way round it sweeps */
   background: linear-gradient(
     90deg,
     var(--surface-2) 0%,

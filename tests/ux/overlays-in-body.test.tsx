@@ -79,7 +79,7 @@ describe('overlays are drawn into the body, whatever they were asked from', () =
     const room = dialog.closest('.lightbox');
     expect(room?.parentElement).toBe(document.body);
 
-    // The name is its own island, so a Hebrew page does not read "… Rayquaza 2005".
+    // The name is its own island, so a name somebody typed keeps its own order in the line.
     const name = within(dialog).getByRole('heading', { level: 4 });
     expect(name.querySelector('bdi')).toHaveAttribute('dir', 'auto');
     // The serial is a code, left to right.

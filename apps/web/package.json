@@ -2,7 +2,7 @@
   "name": "@bault/web",
   "version": "0.1.0",
   "private": true,
-  "description": "Bault web SPA (React + Vite). Hebrew-primary, full RTL. Three role-scoped areas.",
+  "description": "Bault web SPA (React + Vite). Three role-scoped areas.",
   "type": "module",
   "scripts": {
     "dev": "vite",

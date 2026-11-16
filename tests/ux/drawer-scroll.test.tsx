@@ -185,7 +185,7 @@ describe('the body of a drawer that scrolls can be reached from the keyboard', (
 });
 
 describe.skipIf(!browser)('the body of a drawer that scrolls, in a browser', () => {
-  async function inBrowser(width: number, locale: 'en' | 'he' = 'en'): Promise<Page> {
+  async function inBrowser(width: number): Promise<Page> {
     const html = document.body.innerHTML;
     // axe wants a page that has its own context.
     const context = await browser!.newContext({
@@ -194,7 +194,7 @@ describe.skipIf(!browser)('the body of a drawer that scrolls, in a browser', () 
     });
     const page = await context.newPage();
     await page.setContent(
-      `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${CSS}</style></head>` +
+      `<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${CSS}</style></head>` +
         `<body>${html}</body></html>`,
     );
     return page;

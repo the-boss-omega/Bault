@@ -338,7 +338,7 @@ function ReconciliationView({ recon, locale }: { recon: Reconciliation; locale: 
                 <tr key={`${m.kind}:${m.paymentId ?? ''}:${m.ledgerId ?? ''}`} className="is-alert">
                   <td data-label={t('admin.accounting.col.problem')}>
                     <IconAlert /> <code dir="ltr">{m.kind}</code>
-                    <span className="hint" lang="en" dir="ltr">
+                    <span className="hint" dir="ltr">
                       {' '}
                       {m.detail}
                     </span>
@@ -369,7 +369,7 @@ function ReconciliationView({ recon, locale }: { recon: Reconciliation; locale: 
             {recon.pending.map((p) => (
               <li key={p.paymentId}>
                 <span className="ltr-run">{p.username ?? '—'}</span> · {formatUsd(p.amount)} ·{' '}
-                <span lang="en" dir="ltr">
+                <span dir="ltr">
                   {p.detail}
                 </span>
               </li>

@@ -42,8 +42,8 @@ Nine rules. Each of them was written against something the audit found; seven ar
 
 ### The serial is the identity
 Every item view opens with **photograph → serial → status**, in that order. Serials are Geist Mono,
-never truncated, always copyable (`user-select: all`), and always laid out left-to-right even inside
-a Hebrew sentence. The catalogue description is the item's *name*; `type_class` is a classification
+never truncated, always copyable (`user-select: all`), and always laid out left-to-right as a run of
+its own (`dir="ltr"`). The catalogue description is the item's *name*; `type_class` is a classification
 and belongs on a quiet line, not in the title. The slab label repeats the serial as a *drawing* (CSS
 from a data attribute), so a serial is in the document once, where the page prints it.
 
@@ -108,14 +108,12 @@ once as the page opens and then rests. `prefers-reduced-motion: reduce` removes 
 smooth scrolling that a script asks for, and nothing is ever hidden *waiting* for an animation that
 will not run.
 
-### Two scripts, one rhythm
-The same type scale in both languages. Layout mirrors through logical properties. The few things
-logical properties cannot turn around (a gradient's angle, a transform origin, a background position,
-a chevron, the side a drawer slides from) multiply by one token, `--dir`; the one thing a number
-cannot say, the edge a block that takes the direction of its own text hangs from, is its twin,
-`--text-start` (`left` or `right`). Both are declared once in `theme.css`; **no other rule may ask
-which way the page reads**. The display face carries both
-scripts. **Any screen that looks worse in one language is not done.**
+### One language, one rhythm
+The product is written in English and read left to right. Its words live in one catalogue
+(`shared/i18n.tsx`) and reach the screen through `t()`, so a sentence is written once. The
+stylesheets are written in logical properties (`margin-inline-start`, not `margin-left`), one way
+throughout. What a person types (a name, a message, an address) may be in any script, so it keeps
+its own direction (section 9).
 
 ---
 
@@ -123,21 +121,18 @@ scripts. **Any screen that looks worse in one language is not done.**
 
 | Face | Weights | Job |
 | --- | --- | --- |
-| **Frank Ruhl Libre** | 500–700 (variable) | Display, **both scripts**: page titles, section headings, lead figures, the wordmark. Hebrew display and the wordmark set at 700 |
-| **Geist** | 400–600 (variable) | Latin UI, body copy |
-| **IBM Plex Sans Hebrew** | 400 / 500 / 600 | Hebrew UI and body (hebrew subset only), and the Hebrew in any mono label (Geist Mono has no Hebrew, so it is second in `--font-mono`) |
-| **Geist Mono** | 400–600 (variable) | Codes: serials, bins, parcels, tickets, barcodes. Also the small caps labels (kickers, `§` marks, breadcrumbs), set in the UI face in Hebrew, which has no capitals |
+| **Frank Ruhl Libre** | 500–700 (variable) | Display: page titles, section headings, lead figures, the wordmark. The wordmark is set at 700 |
+| **Geist** | 400–600 (variable) | UI, body copy |
+| **Geist Mono** | 400–600 (variable) | Codes: serials, bins, parcels, tickets, barcodes. Also the small caps labels (kickers, `§` marks, breadcrumbs) |
 
-Self-hosted from `assets/fonts`, subset to `latin` / `latin-ext` / `hebrew`, `font-display: swap`.
-Geist, Geist Mono and Frank Ruhl Libre are variable fonts: **one file per subset and one `@font-face`
-covering the weight range**. Regenerate with `node scripts/fetch-fonts.mjs`, which also removes files
-nothing produces. The Latin UI face, the Hebrew UI face and the display face (both scripts) are
-preloaded in `index.html`; the rest arrive through `unicode-range`.
+Self-hosted from `assets/fonts`, subset to `latin` / `latin-ext`, `font-display: swap`. All three are
+variable fonts: **one file per subset and one `@font-face` covering the weight range**. Regenerate with
+`node scripts/fetch-fonts.mjs`, which also removes files nothing produces. The UI face and the display
+face are preloaded in `index.html`; the rest arrive through `unicode-range`. Text in a script none of
+them covers (a name somebody typed in Hebrew or Arabic, say) is drawn in the reader's own system face.
 
 **Why a serif.** The kit's grotesque is the right voice for controls and the wrong voice for a house
-that keeps people's property: a catalogue, a ledger and a deed are all set in a serif. Frank Ruhl
-Libre ships a Latin companion drawn for its Hebrew, so a Hebrew headline and an English one share a
-skeleton, a stroke contrast and a vertical rhythm by construction.
+that keeps people's property: a catalogue, a ledger and a deed are all set in a serif.
 
 **Codes are mono; figures are not.** Mono does real work on a serial (fixed advance, slashed zero,
 unambiguous `1/l/I`). Money, dates and counts are set in the UI face, or in the display face when they
@@ -154,8 +149,7 @@ face draws as part of an object (the marks and wordmarks, a listing's price, a m
 numeral, the charge stamp, the statement's operators) is 20, 24, 26, 30, 34, 38 or 112 px.
 
 Line height: `--lh-tight` 1.15 (display), `--lh-snug` 1.35, `--lh-normal` 1.5. Display headings set at
-1.0–1.1; Hebrew display gets an extra 0.05. **Tracking is Latin-only**: Hebrew display tracking is 0
-(`:lang(he)`).
+1.0–1.1.
 
 Weights: 400 / 500 / 600 in the UI; 500 and 700 in the display face.
 
@@ -165,10 +159,9 @@ Weights: 400 / 500 / 600 in the UI; 500 and 700 in the display face.
 - Decimal alignment in a column is `text-align: end` + tabular figures.
 
 ### Currency
-Money renders as `$1,234.56` in **both** locales. USD is the only settlement currency, a collector
-comparing a Bault price to a price guide is comparing the same string, and a ledger column that
-changes shape when somebody switches language is a column two people cannot read together. Dates are
-locale-formatted through `Intl.DateTimeFormat`.
+Money renders as `$1,234.56`. USD is the only settlement currency, and a collector comparing a Bault
+price to a price guide is comparing the same string. Dates are formatted through `Intl.DateTimeFormat`
+in `en-US`, as the money is.
 
 ---
 
@@ -363,8 +356,8 @@ pieces. Each keeps the old markup's contracts and message keys.
   statement's total is) — beside the entry count. A perforated stub carries a barcode and the house
   mark. Money asked for and not yet moved is two dashed slips and one sentence (`InTransit`). On a
   phone the ledger is a list of lines (type, what it was for, amount, the balance after it, the
-  date). The figures are isolated left to right inside cells that read the page's way, so in Hebrew
-  they hang from the same edge as their names.
+  date). The figures are isolated left to right inside cells that read the page's way, so they hang
+  from the same edge as their names.
 - **Membership — tier cards.** An outlined ordinal, the tier's name and price in the display face, the
   four allowances that matter most (from the same figures as the schedule), and the action; the foil
   trim marks the tier you are on. The full schedule sits under the cards (on a phone, one small stack
@@ -403,11 +396,10 @@ pieces. Each keeps the old markup's contracts and message keys.
   runs on past the last. Each place says how many, in the display face, and what it means; under them
   is how long the oldest has waited and since when. A figure that has not arrived is a dash.
 - **Notifications — a register in days.** The same register as the item's history, under a heading
-  per day on a dashed rule ("today · Tuesday, October 27", from the browser's own tables, so in the
-  page's language and with no message of ours). An entry is stamped with its time; one about a card
-  shows the card in its case with its serial in mono, the rest carry the kind of thing they are in a
-  tile the width of the case; what it says is a sentence the API wrote in English, its own island, so
-  its full stop stays at its end. The bell's menu is the same register in small: a heading per day,
+  per day on a dashed rule ("today · Tuesday, October 27", from the browser's own tables, with no
+  message of ours). An entry is stamped with its time; one about a card shows the card in its case with
+  its serial in mono, the rest carry the kind of thing they are in a tile the width of the case; what it
+  says is a sentence the API wrote, its own island, so a name in it keeps its order. The bell's menu is the same register in small: a heading per day,
   the mark, the kind, two lines of what it says and the time. A day's list is named by its heading and
   is not a landmark.
 - **Drawers about a sum — the tag** (`DrawerTag`). An escrow deal, a wallet request and a ledger entry
@@ -453,7 +445,7 @@ pieces. Each keeps the old markup's contracts and message keys.
   written for a list (`Email:`) loses its colon on a tag, which has a leader. The forms that have no slip
   is the Bault store's listing, which is still the kit's fields in a column. Whatever a person
   types as free text (a name, a subject, a message, an address) takes the direction of what is typed
-  (`dir="auto"`), so an English sentence in a Hebrew page keeps its full stop where it belongs.
+  (`dir="auto"`), so a sentence typed in a script that is read from the right keeps its order.
 - **What can be asked for on a card — a menu and a slip.** The item's drawer lists what the warehouse can
   do for it as a menu of rows (`btn--row`): photography, grading, a video, an inspection, consignment, a
   buy-out, something else, and the donation in red, each with its price at its end. A request that has a
@@ -578,8 +570,8 @@ pieces. Each keeps the old markup's contracts and message keys.
   work in hand, not filed with what is closed. A line leads with a mark for the way the money goes (down
   into the wallet for cash in, up and out of it for cash out; decoration, the words say it), the number
   as the link that opens it, what it is for (the funding source, or who is to be paid), whose it is,
-  the sum, the date with how long ago while it waits (the browser's own words for it, so Hebrew has its
-  *שלשום*), and where it stands; what needs a decision has the amber on its edge, a payout that failed
+  the sum, the date with how long ago while it waits (the browser's own words for it, *yesterday*,
+  *3 days ago*), and where it stands; what needs a decision has the amber on its edge, a payout that failed
   the red. The filters are named in the open and cleared by a button that is there only when something
   is set; a filter that leaves nothing says so and offers to clear it, and a desk that has no requests
   says that. On a phone a request is a card (its number and its sum, whose it is and where it stands,
@@ -625,7 +617,7 @@ pieces. Each keeps the old markup's contracts and message keys.
   is its twin. The weakest of the zones that earn is marked in the amber and in a word (*Lowest*, in the
   text's own ink: the amber is only the key to it), and none is where they earn the same or only one earns.
   The marks are thin (16 px), square at the zero and rounded at the end they grow toward. It reads from the
-  end its zero is at (from the right, in Hebrew, with its scale), and on a phone the name is above the bar,
+  end its zero is at, the left, and on a phone the name is above the bar,
   which then has the width, and the scale is left to the values beside the bars. In forced colours the bars
   (a background, which the system does not draw) are drawn in its text and the weakest in its highlight. Where
   nothing has been earned there is no chart: the table has the zeros.
@@ -693,11 +685,9 @@ foot (4 px), a danger button a dashed line, a ghost a dotted one, and a switch t
 
 ### The emails (`renderEmail`, in `packages/adapters`)
 The account emails (the address to confirm, the password to reset) and the update on a vault are one
-slip of paper on the room's grey: foil along the top edge, the wordmark, and for each language a kicker,
-a heading in the serif, the sentence, one ink button with a strip of foil at its foot, the link a button
-hides on a line of its own (left to right in either language) and the fine print. The two languages are
-one slip with a tear line between them, the Hebrew first and read right to left; a Hebrew kicker is not
-spaced out as capitals are. It is made for a mail client and not a browser: every style inline, every
+slip of paper on the room's grey, in English: foil along the top edge, the wordmark, a kicker in spaced
+capitals, a heading in the serif, the sentence, one ink button with a strip of foil at its foot, the link
+a button hides on a line of its own and the fine print. It is made for a mail client and not a browser: every style inline, every
 layout a table, the foil a row of five coloured cells (a gradient is not promised), the button a cell
 with a colour of its own (a client that drops styles still draws it), the reader's own fonts (no web
 font is loaded or named) and a preheader for the inbox. The hues are `--foil-*` and the paper inks of
@@ -718,10 +708,9 @@ scroller inside a scroller takes the thumb. Outside a label, in a list of cards 
 `ItemPick` is a row.
 
 ### Numeric columns
-A column of figures hangs from one edge, header and figures alike. The figures are left to right
-(`td.num`), so their decimals line up at the right-hand edge in either language, and the header
-(`th.td-end`, `th.num`) is set the same way; read in the page's direction, in Hebrew it hangs from the
-other edge and the word sits a column away from the numbers it names.
+A column of figures hangs from one edge, header and figures alike: the figures (`td.num`) line up their
+decimals at the right-hand edge, and the header (`th.td-end`, `th.num`) is set at the same edge, so the
+word sits over the numbers it names.
 
 ### Status
 `.pill` / `.badge` / `.status-badge`: an LED (7 px, the semantic colour, a soft halo) and the state in
@@ -780,54 +769,34 @@ stands on in the drawer; `.offer` is a membership tier's card.
 
 ---
 
-## 9. Two scripts
+## 9. Direction
 
-- Direction comes from `<html dir>`, written by `I18nProvider`. Layout uses only `inline-start`,
-  `inline-end`, `margin-inline`, `padding-block`, `border-inline-start`. Things logical properties
-  cannot express read `--dir` (1 or −1): gradient angles (`calc(90deg * var(--dir))`), transform
-  origins, background positions, the chevron flip, the drawer's and the rail's offscreen offset.
-  `--text-start` (`left` or `right`) is its twin for one case: a block that takes the direction of its
-  own text (`unicode-bidi: plaintext`, a name in whatever language it was typed in) keeps that text's
-  characters in order, and `text-align: start` would then hang it from *that text's* edge, which on a
-  Hebrew page puts an English name at the wrong side of the column; `text-align: var(--text-start)`
-  hangs it from the page's. `[dir='rtl']` and `:dir(rtl)` appear only in `theme.css`, where both are set.
-- `scripts/design-lint.mjs` (section 14) fails on physical properties, on four-value shorthands that
-  name a right and a left, on corners that are not mirrored, on `float` and `clear`, and on `left` /
-  `right` keywords, angles and horizontal moves that point the same way in both languages, standing in
-  for the slop detector the brief assumed.
-- **LTR islands inside RTL** are mandatory for: serials, bin/parcel/ticket codes, tracking numbers,
-  amounts, catalogue descriptions, and any free-text string coming back from the API in English. All
-  of them go through `.serial`, `.code-inline`, `.amount`, `.ltr-run` or a `<bdi dir="ltr">` inside a
-  block that keeps the page's direction (so the run is isolated but its label still sits at the start
-  edge). What a sender wrote (a parcel's contents) sets its own direction (`unicode-bidi: plaintext`).
-  A code too long for its line breaks after a colon (`<Code>` leaves a place for it), so `service_fee:` is
-  on one line and `condition_inspection` on the next; inside a word only when a part is longer than the line.
+- The page is English and is read left to right. `index.html` says `lang="en"` and sets no `dir`, and
+  nothing changes either: there is no choice of language, so nothing is stored for one (`main.tsx` clears
+  the `bault.locale` key an earlier version kept).
+- The stylesheets use only logical properties: `inline-start`, `inline-end`, `margin-inline`,
+  `padding-block`, `border-inline-start`. `scripts/design-lint.mjs` (section 14) fails on physical
+  properties, on four-value shorthands that name a right and a left, on corners that are not mirrored,
+  and on `float` and `clear`, so a rule is written one way wherever it is.
+- What a person typed may be in any script, and keeps its own order. Free text in a field is
+  `dir="auto"`; a name set into a sentence is a `<bdi dir="auto">` in markup, or `isolate()` (in
+  `money.ts`) in a string that goes through `t()`. A block that takes the direction of its own text
+  (`unicode-bidi: plaintext`: a parcel's contents, a message, a name) would hang from that text's edge
+  with `text-align: start`; `text-align: var(--text-start)` (`theme.css`, `left`) hangs it from the page's.
+- Codes are runs of their own: serials, bin/parcel/ticket codes, tracking numbers and amounts go through
+  `.serial`, `.code-inline`, `.amount`, `.ltr-run` or a `<bdi dir="ltr">`, so a code beside a name somebody
+  typed keeps its characters in order. A code too long for its line breaks after a colon (`<Code>` leaves a
+  place for it), so `service_fee:` is on one line and `condition_inspection` on the next; inside a word only
+  when a part is longer than the line.
 - **`unicode-bidi: plaintext` goes on a block, not on a flex or grid container.** The words of a flex
-  container are in a box of their own that takes none of its `unicode-bidi` (the property is not inherited),
-  so Firefox reads "2021 Pokémon" in the page's direction and draws the year at the wrong end: the register
-  link is an `inline-block` with a 24px line (`tests/ux/other-engines.test.tsx` asks it in every engine).
-- **A date is not an island.** A locale-formatted date reads in the page's direction (`.date`, which
-  is `unicode-bidi: plaintext`), so its day, month and year keep the order the language gives them; a
-  `dir="ltr"` around one reads `27 2026 באוק׳`. A figure inside a phrase (`$39.00` before "a month", a
-  weight, `10 g`, in the total of a parcel) is isolated where it stands (`isolateLtr()` in `money.ts`), so
-  the phrase keeps its own order: in a right-to-left line the space between a figure and its unit takes
-  the line's direction, and "10 g" is drawn "g 10"; a version, "2026-10-draft-1", is drawn "draft-1-2026-10". A
-  cell that holds only a pill, a date or a code is set `unicode-bidi: normal`, or it would fall back
-  to left to right and hang from the wrong edge. A select shows the chosen option the way that option
-  reads (`option { unicode-bidi: plaintext }`), so an English address on a Hebrew page starts at its
-  beginning instead of being cut off at it.
-- **English on a Hebrew page is marked as English.** The guides, the answers of the FAQ and the legal text are
-  written in English only. Each passage is `lang="en" dir="ltr"` (`ENGLISH`, in `areas/customer/help/english.ts`),
-  so that it is read as English and set from the left: a sentence of English in a right-to-left paragraph has the
-  full stop that ends it drawn at the start of the line (`.Confirm your email address…`), and a screen reader reads
-  it in Hebrew. A block of it is left-aligned, as the FAQ's answers are; a title or a summary on a card is an inline
-  island and stays at the edge the card starts at.
-- **Icons that flip**: chevrons, back/forward arrows, the "view all" caret — anything expressing
-  *direction of travel through the interface*. **Icons that do not flip**: the external-link arrow
-  (it means "leaves this site", not "goes right"), clocks, checkmarks, the camera, the box.
-- The globe control is one component in one logical position in both directions.
-- Hebrew has no capitals and Geist Mono has no Hebrew glyphs: mono labels are set in the UI face,
-  without tracking, under `:lang(he)`.
+  container are in a box of their own that takes none of its `unicode-bidi` (the property is not inherited):
+  the register link is an `inline-block` with a 24px line.
+- **A date is not a code.** It is formatted text (`.date`), never `dir="ltr"`. A cell that holds only a
+  pill, a date or a code is set `unicode-bidi: normal`, so it reads the page's way. A select shows the
+  chosen option the way that option reads (`option { unicode-bidi: plaintext }`), so an address typed in a
+  script that is read from the right starts at its beginning instead of being cut off at it.
+- **Icons point the way the interface is travelled**: a chevron, a forward arrow and the "view all" caret
+  point right, toward what comes next. The external-link arrow means "leaves this site", not "goes right".
 
 ---
 
@@ -908,26 +877,26 @@ like.
 | --- | --- | --- |
 | Contrast of every pair the interface draws text or a boundary in, in both themes (table in section 4) | `design-lint` reads `theme.css` | `pnpm test:web` (CI) and by hand |
 | The two dark blocks stay one theme; the buttons' colour pairs (the primary's label on it, its edge against the page, danger's red on its wash, the paper's and the room's primaries) | `design-lint` | same |
-| Physical properties (including `float`, `clear`, four-value shorthands that name a side, corners that are not mirrored); `left`/`right` keywords, angles and horizontal moves that point one way in both languages; any `[dir]` / `:dir()` outside `theme.css`; a block that takes its own text's direction and is aligned to `start` | `design-lint` | same |
+| Physical properties (including `float`, `clear`, four-value shorthands that name a side, corners that are not mirrored); a block that takes its own text's direction and is aligned to `start` | `design-lint` | same |
 | Every colour literal in the layers is a named token (pure black and white shades excepted); every radius is from the family, with no arithmetic on a token | `design-lint` | same |
 | Every padding, margin, gap and inset in `index.css` (after its token block) and in the layers is on the 4 px grid, with no `em` that is not declared (section 6); a font size in `index.css` is a step of the scale or relative (section 3) | `design-lint` | same |
-| In a component: no physical utility class or inline style, no colour written into a style (the stylesheets name every colour; a glyph made white for a bar that was dark was gone on the light one), no timer that never stops, and no date (made by `toLocale…`, `Intl.DateTimeFormat` or the app's own formatter) forced left to right (section 9) | `design-lint` | same |
+| In a component: no physical utility class or inline style, no colour written into a style (the stylesheets name every colour; a glyph made white for a bar that was dark was gone on the light one), and no timer that never stops | `design-lint` | same |
 | A rule that paints the paper or the room names its focus ring; a rule for what is drawn on paper uses a paper ink, not a colour of the theme's | `design-lint` | same |
 | Every infinite animation, spelled however, is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
-| What the other engines draw that Chromium does not (a chosen option longer than a phone does not widen the page in Safari's engine; the page of the second factor, whose code is set large, is no wider than a phone in Firefox's; a name that begins with a number is drawn as it is written in a Hebrew register); and the whole audit below, in either engine (`--engine firefox` or `webkit`; where an engine has no phone it is a narrow window with touch) | `tests/ux/other-engines.test.tsx` (each engine that is installed; the others are skipped), `pnpm design:screens --engine firefox` / `webkit` | `pnpm test:ux`, `pnpm design:screens` |
+| What the other engines draw that Chromium does not (a chosen option longer than a phone does not widen the page in Safari's engine; the page of the second factor, whose code is set large, is no wider than a phone in Firefox's); and the whole audit below, in either engine (`--engine firefox` or `webkit`; where an engine has no phone it is a narrow window with touch) | `tests/ux/other-engines.test.tsx` (each engine that is installed; the others are skipped), `pnpm design:screens --engine firefox` / `webkit` | `pnpm test:ux`, `pnpm design:screens` |
 | Every record a screen opens, looked at as the screen it then is and not only as the list that opens it (a guide's steps, a question's answer, a ticket, a parcel, a shipment, a transaction, a request, an account, an item, a facility): the first of each is opened (`visitRecord`), and a run says which kinds it did not reach. The steps of a guide were drawn with every full stop at the wrong end of their line for as long as nobody opened one | `scripts/design-screens.mjs`; `tests/web/design-screens-records.test.ts` reads the app's source for the kinds it opens and fails until the audit's list says the same | `pnpm design:screens`, `pnpm test:web` |
-| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (once what has focus has come to rest, since focus scrolls it into view smoothly where motion is allowed; the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price, version or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), and in either language a kicker that says its heading again, on every screen (each looked at from its top, as a visitor arrives at it), with the drawers, menus and photograph a visitor opens opened first (and, for the manager, an account, an item and a wallet request in the drawers they are changed in); the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
-| The buttons as they are drawn: each label against its own face, each edge (the face where it is filled, the line where it is outlined) against what it stands on, each target (24 px always, 44 px where the pointer is a finger), on the page, the paper and the room; and every other button (a crumb, a tab, the link that opens a line of a roll) its 24 px, wide as well as tall (three letters of Hebrew are 18 px), and that its words are in it, not drawn on the control beside it (a tab that is let shrink below its word draws the word on the next tab); each is measured where it comes to rest, after the transitions that are still in flight have ended | `auditButtons` in `scripts/lib/audit-checks.mjs`, run on every screen by `pnpm design:screens`, and on one of every kind, in both themes and both languages, by `tests/ux/buttons-in-a-browser.test.tsx` | `pnpm design:screens`, `pnpm test:ux` |
-| The menu of what can be asked for on a card and the slips of its forms: a row is named for what it is and described by what it does, a form takes the menu's place and the keyboard goes with it and comes back, each slip writes what is typed (and a dash for what is not), the tiles of an inspection, a slip the width of its fields, a row's words starting where the page starts and its chevron turning, a finger-high row read and edged in both themes and both languages | `tests/ux/service-forms.test.tsx` | `pnpm test:ux` |
+| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (once what has focus has come to rest, since focus scrolls it into view smoothly where motion is allowed; the first 40 keyboard stops of each screen, at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and a kicker that says its heading again, on every screen (each looked at from its top, as a visitor arrives at it), with the drawers, menus and photograph a visitor opens opened first (and, for the manager, an account, an item and a wallet request in the drawers they are changed in); the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
+| The buttons as they are drawn: each label against its own face, each edge (the face where it is filled, the line where it is outlined) against what it stands on, each target (24 px always, 44 px where the pointer is a finger), on the page, the paper and the room; and every other button (a crumb, a tab, the link that opens a line of a roll) its 24 px, wide as well as tall (a word of two or three letters is narrower than that), and that its words are in it, not drawn on the control beside it (a tab that is let shrink below its word draws the word on the next tab); each is measured where it comes to rest, after the transitions that are still in flight have ended | `auditButtons` in `scripts/lib/audit-checks.mjs`, run on every screen by `pnpm design:screens`, and on one of every kind, in both themes, by `tests/ux/buttons-in-a-browser.test.tsx` | `pnpm design:screens`, `pnpm test:ux` |
+| The menu of what can be asked for on a card and the slips of its forms: a row is named for what it is and described by what it does, a form takes the menu's place and the keyboard goes with it and comes back, each slip writes what is typed (and a dash for what is not), the tiles of an inspection, a slip the width of its fields, a row's words starting where the page starts and its chevron pointing along the line, a finger-high row read and edged in both themes | `tests/ux/service-forms.test.tsx` | `pnpm test:ux` |
 | An escrow deal and a shared parcel as slips (each fact written as it is typed, a dash for what is not known, the parcel as a tag with a line for each collector), and the question put to the assistant (a slip each way, the answer printed on its paper, the composer as paper in both themes) | `tests/ux/more-slips.test.tsx` | `pnpm test:ux` |
 | The warehouse's benches: the docket writes what is scanned and typed (the shelf read back, the pick list ticked), an Enter from a scanner goes on and then does it, the outcome is said on the docket and cleared by the next scan, a refused parcel keeps what was typed, the docket is paper in both themes, the foot does not change the docket's height, the fields have their room beside it | `tests/ux/benches.test.tsx` | `pnpm test:ux` |
-| The wallet-requests desk: the groups and their order, the money in each, a line's marks and age, a desk with nothing to decide, the named filters and what they ask the server, a request opened by its address and everything on its tag, what the next step does said for every status, the steps in the foot (the way on first, the danger last), what a step came to said in the drawer and not behind it, the keyboard kept in the dialog when the button that was pressed is removed and returned to the line that was opened (in another group by now), the roll and the drawer without a flag in both themes and both languages, a request a card on a phone, a long account number whole under its name | `tests/ux/wallet-desk.test.tsx` | `pnpm test:ux` |
-| The Bault store: the slip a product is written on (what is typed, a blank where nothing is, a code said not to be known yet, copies that are not a count refused and said so, the photograph looked for only once the name has stopped changing), what was refused kept, a tag each named by its own name, the stock saved by a button or Enter and not by leaving the field or when it is the same or not a count, what the stock now is where a save was refused, on and off sale, in Hebrew; paper in both themes and languages, the slip beside the fields or between them and the button, three tags to a row and one to a phone | `tests/ux/store-listing.test.tsx` | `pnpm test:ux` |
-| The facilities: the roll (a line to each, the stand-in addresses named, no field in a line), a facility opened by its address and a new one blank, the address as a customer is given it written as it is typed (and equal to the lines the product gives once it is saved), a stand-in street written over before anything is saved, only what a facility lets change sent, a forwarding facility's two settings and the primary facilities in use it may forward to, a tax rate as a percentage kept as hundredths of one, what the server refused kept and said in the drawer, in use and out of use; the roll and the drawer in a browser in both themes and languages without a flag | `tests/ux/facilities.test.tsx`, `tests/web/facilities.test.ts`, `tests/integration/adm-facilities.test.ts` (the server: who may, the codes and the countries, the rules that keep customers a way in) | `pnpm test:ux`, `pnpm test:web`, `pnpm test:integration` |
-| The yield chart: the scale (round whole-dollar steps from zero, a ceiling that holds the largest), the zones worst first and those with nothing last, every value beside its bar, each bar to the scale, the weakest marked in a colour and a word and none where they are equal, nothing drawn where nothing was earned; the bars thin, rounded at the end they grow toward, from the end the zero is at and the scale with them (both languages), the name above the bar on a phone, the bars still drawn in forced colours, no flag from the audit in both themes | `tests/ux/yield-chart.test.tsx` | `pnpm test:ux` |
+| The wallet-requests desk: the groups and their order, the money in each, a line's marks and age, a desk with nothing to decide, the named filters and what they ask the server, a request opened by its address and everything on its tag, what the next step does said for every status, the steps in the foot (the way on first, the danger last), what a step came to said in the drawer and not behind it, the keyboard kept in the dialog when the button that was pressed is removed and returned to the line that was opened (in another group by now), the roll and the drawer without a flag in both themes, a request a card on a phone, a long account number whole under its name | `tests/ux/wallet-desk.test.tsx` | `pnpm test:ux` |
+| The Bault store: the slip a product is written on (what is typed, a blank where nothing is, a code said not to be known yet, copies that are not a count refused and said so, the photograph looked for only once the name has stopped changing), what was refused kept, a tag each named by its own name, the stock saved by a button or Enter and not by leaving the field or when it is the same or not a count, what the stock now is where a save was refused, on and off sale; paper in both themes, the slip beside the fields or between them and the button, three tags to a row and one to a phone | `tests/ux/store-listing.test.tsx` | `pnpm test:ux` |
+| The facilities: the roll (a line to each, the stand-in addresses named, no field in a line), a facility opened by its address and a new one blank, the address as a customer is given it written as it is typed (and equal to the lines the product gives once it is saved), a stand-in street written over before anything is saved, only what a facility lets change sent, a forwarding facility's two settings and the primary facilities in use it may forward to, a tax rate as a percentage kept as hundredths of one, what the server refused kept and said in the drawer, in use and out of use; the roll and the drawer in a browser in both themes without a flag | `tests/ux/facilities.test.tsx`, `tests/web/facilities.test.ts`, `tests/integration/adm-facilities.test.ts` (the server: who may, the codes and the countries, the rules that keep customers a way in) | `pnpm test:ux`, `pnpm test:web`, `pnpm test:integration` |
+| The yield chart: the scale (round whole-dollar steps from zero, a ceiling that holds the largest), the zones worst first and those with nothing last, every value beside its bar, each bar to the scale, the weakest marked in a colour and a word and none where they are equal, nothing drawn where nothing was earned; the bars thin, rounded at the end they grow toward, from the end the zero is at and the scale with them, the name above the bar on a phone, the bars still drawn in forced colours, no flag from the audit in both themes | `tests/ux/yield-chart.test.tsx` | `pnpm test:ux` |
 | The pricing check: the verdict and the figure on the sheet (covered is what has a price of its own and what needs none), what is missing before what falls back, the red and the amber on the edge, a note where nothing is wrong, a rule the code never reads named, what is fine folded and shut (opened by Enter and by Space), the sheet as paper and beside what is wrong where there is room, an action a card on a phone, the audit clean with the folds open and shut | `tests/ux/pricing-coverage.test.tsx` | `pnpm test:ux` |
-| What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls (every control in an account's and an item's drawer, run through the same function the page runs when a field takes focus); the month's statement, every form with its slip (beside the fields on a wide window with the button under them, between the fields and the button on a phone, in both languages; a pricing rule and a dispute among them; an address being edited at the width where its fields were squeezed), the security tab (its fields no wider than the password's), the shipment and the sign-in log are where they should be at their widths; a register's time hangs from the edge the page starts at, in Hebrew too; a case file is cut at three lines; a rate card's heading that is a code breaks at its colon and never inside a word, at both widths and in both languages; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
+| What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls (every control in an account's and an item's drawer, run through the same function the page runs when a field takes focus); the month's statement, every form with its slip (beside the fields on a wide window with the button under them, between the fields and the button on a phone; a pricing rule and a dispute among them; an address being edited at the width where its fields were squeezed), the security tab (its fields no wider than the password's), the shipment and the sign-in log are where they should be at their widths; a register's time hangs from the edge the page starts at; a case file is cut at three lines; a rate card's heading that is a code breaks at its colon and never inside a word, at both widths; the first frame, before the application starts, is in the visitor's theme, and in English; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
 
@@ -946,13 +915,13 @@ here.
 | File | Holds |
 | --- | --- |
 | `index.css` | The first-edition stylesheet: tokens, shell, every component's structure |
-| `theme.css` | The kit's variables (paste target), the mapping onto Bault's tokens (incl. `--focus-color`, `--control-border`, the radius family), `--dir` and `--text-start`, and Bault's own: foil, paper, the room, easing |
+| `theme.css` | The kit's variables (paste target), the mapping onto Bault's tokens (incl. `--focus-color`, `--control-border`, the radius family), `--text-start`, and Bault's own: foil, paper, the room, easing |
 | `fonts.css` | Generated by `scripts/fetch-fonts.mjs`: one `@font-face` per variable subset |
 | `slab.css` | The slab, its sheen, its idle breathing, small-slab rules, the lightbox |
 | `components.css` | Focus, fields, selects, the scan field, panels, status LEDs, tables, tabs, overlays, `.money-label`, the card picker |
 | `buttons.css` | Every button: `.btn` and its variants, the row of a menu, `.icon-btn`, the header's capsule of them, the spinner, the paper's and the room's own, what forced colours draw |
 | `landing.css` | The public page |
-| `app.css` | Grain, the shell (rail, page head, language switch, avatar), figures and statistics, the sign-in stage, details |
+| `app.css` | Grain, the shell (rail, page head, avatar), figures and statistics, the sign-in stage, details |
 | `gallery.css` | The gallery, the item drawer's stage, loading and empty states, the register, filters |
 | `screens.css` | The statement, tier cards, bid, trade and listing slips, parcel labels, the shelf map, the departures, the notifications register, the drawer tag and the form that has one, address labels, the key card and the recovery sheet, case files, the rate card, the fee statement, the month's statement, the rolls, the doors, the service menu and the tiles of a choice |
 | `motion.css` | Transitions and keyframes shared by all of the above, the reduced-motion switch, and what forced colours draw in place of the foil |

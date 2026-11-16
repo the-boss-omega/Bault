@@ -64,9 +64,7 @@ afterAll(async () => {
   await browser?.close();
 });
 
-type Locale = 'en' | 'he';
-
-async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light'): Promise<Page> {
+async function inBrowser(width: number, theme: 'dark' | 'light'): Promise<Page> {
   const html = document.body.innerHTML;
   const context = await browser!.newContext({
     viewport: { width, height: 1000 },
@@ -76,7 +74,7 @@ async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light')
   });
   const page = await context.newPage();
   await page.setContent(
-    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
+    `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
   );
   return page;
 }
@@ -144,7 +142,6 @@ beforeEach(() => {
   onMsg.mockReset();
   onError.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
   get.mockImplementation(async (path: string) =>
     path === '/marketplace/house/manage' ? PRODUCTS : [],
   );
@@ -433,45 +430,29 @@ describe('the products in the store, a tag each', () => {
     expect(await screen.findByText('The store is empty')).toBeInTheDocument();
     expect(document.querySelector('.tag-grid')).toBeNull();
   });
-
-  it('are read in Hebrew with the name in an island of its own, so an English name keeps its order', async () => {
-    localStorage.setItem('bault.locale', 'he');
-    render(wrap());
-    await screen.findByRole('heading', { name: /^מוצרים בחנות \(/ });
-    await waitFor(() => expect(document.querySelectorAll('.tag-grid > li').length).toBe(3));
-    const name = screen.getAllByText('2011 Pokémon Call of Legends — Rayquaza #SL10/95', {
-      selector: 'bdi',
-    })[0]!;
-    expect(name).toHaveAttribute('dir', 'auto');
-    expect(name.closest('.drawer-tag-title')).not.toBeNull();
-    expect(document.querySelector('.request-slip .drawer-tag')).toHaveAccessibleName('מוצר בחנות');
-  });
 });
 
 describe.skipIf(!browser)('the store, in a browser', () => {
   for (const theme of ['dark', 'light'] as const) {
-    for (const locale of ['en', 'he'] as const) {
-      it(`is read, reached and drawn without a flag, on paper: ${theme}, ${locale}, desktop and phone`, async () => {
-        localStorage.setItem('bault.locale', locale);
-        render(wrap());
-        await waitFor(() => expect(document.querySelectorAll('.tag-grid > li').length).toBe(3));
-        for (const width of [1280, 390]) {
-          const page = await inBrowser(width, locale, theme);
-          const paper = await page.$$eval('.drawer-tag', (tags) =>
-            tags.map((el) => {
-              const style = getComputedStyle(el);
-              return `${style.backgroundColor} ${style.color}`;
-            }),
-          );
-          expect(new Set(paper)).toEqual(new Set(['rgb(243, 239, 230) rgb(21, 19, 15)']));
-          expect(paper).toHaveLength(4);
-          expect(await audit.auditButtons(page)).toEqual([]);
-          const flags = await audit.audit(page);
-          expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
-          await page.context().close();
-        }
-      });
-    }
+    it(`is read, reached and drawn without a flag, on paper: ${theme}, desktop and phone`, async () => {
+      render(wrap());
+      await waitFor(() => expect(document.querySelectorAll('.tag-grid > li').length).toBe(3));
+      for (const width of [1280, 390]) {
+        const page = await inBrowser(width, theme);
+        const paper = await page.$$eval('.drawer-tag', (tags) =>
+          tags.map((el) => {
+            const style = getComputedStyle(el);
+            return `${style.backgroundColor} ${style.color}`;
+          }),
+        );
+        expect(new Set(paper)).toEqual(new Set(['rgb(243, 239, 230) rgb(21, 19, 15)']));
+        expect(paper).toHaveLength(4);
+        expect(await audit.auditButtons(page)).toEqual([]);
+        const flags = await audit.audit(page);
+        expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
+        await page.context().close();
+      }
+    });
   }
 
   it('puts the slip beside the fields on a wide window and between the fields and the button on a phone', async () => {
@@ -479,7 +460,7 @@ describe.skipIf(!browser)('the store, in a browser', () => {
     await waitFor(() => expect(document.querySelectorAll('.tag-grid > li').length).toBe(3));
     const box = (sel: string) =>
       `(() => { const b = document.querySelector('${sel}').getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right }; })()`;
-    const wide = await inBrowser(1280, 'en', 'dark');
+    const wide = await inBrowser(1280, 'dark');
     const w = {
       fields: (await wide.evaluate(box('.request-form-fields'))) as Record<string, number>,
       slip: (await wide.evaluate(box('.request-slip'))) as Record<string, number>,
@@ -489,7 +470,7 @@ describe.skipIf(!browser)('the store, in a browser', () => {
     expect(w.actions.top).toBeGreaterThanOrEqual(w.fields.bottom - 1);
     await wide.context().close();
 
-    const phone = await inBrowser(390, 'en', 'dark');
+    const phone = await inBrowser(390, 'dark');
     const p = {
       fields: (await phone.evaluate(box('.request-form-fields'))) as Record<string, number>,
       slip: (await phone.evaluate(box('.request-slip'))) as Record<string, number>,
@@ -519,12 +500,12 @@ describe.skipIf(!browser)('the store, in a browser', () => {
           };
         }),
       );
-    const wide = await inBrowser(1280, 'en', 'dark');
+    const wide = await inBrowser(1280, 'dark');
     const row = await tops(wide);
     expect(new Set(row.map((r) => r.top)).size).toBe(1);
     expect(row.every((r) => r.below)).toBe(true);
     await wide.context().close();
-    const phone = await inBrowser(390, 'en', 'dark');
+    const phone = await inBrowser(390, 'dark');
     const column = await tops(phone);
     expect(new Set(column.map((r) => r.left)).size).toBe(1);
     expect(new Set(column.map((r) => r.top)).size).toBe(3);

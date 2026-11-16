@@ -80,7 +80,6 @@ beforeEach(() => {
   post.mockReset();
   patch.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
 });
 
 async function disputes() {

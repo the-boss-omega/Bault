@@ -7,14 +7,13 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 /**
  * The audit (scripts/lib/audit-checks.mjs) looks at pages in a real browser. These are its detectors, shown
- * pages with a mistake planted in them and pages without: a reviewer's synthetic cases found that the first
- * edition of the Hebrew check missed wrapped text, English names with a year in front, negative amounts and
- * runs that are split across elements, and that nothing looked at a focus ring a box cut off.
+ * pages with a mistake planted in them and pages without: a reviewer's synthetic cases found that nothing
+ * looked at a focus ring a box cut off.
  */
 const BROWSER = '/opt/pw-browsers/chromium';
 
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
-  inspect: (page: Page, locale: string, width: number) => Promise<{ flags: string[] }>;
+  inspect: (page: Page, width: number) => Promise<{ flags: string[] }>;
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
   auditForced: (page: Page) => Promise<string[]>;
   auditTheme: (page: Page, expected: string) => Promise<string[]>;
@@ -29,13 +28,11 @@ try {
 
 const FONT = "body { font: 16px/1.4 'Noto Sans', 'DejaVu Sans', Arial, sans-serif; margin: 16px; }";
 
-async function hebrewPage(body: string, css = ''): Promise<Page> {
+async function englishPage(body: string, css = ''): Promise<Page> {
   const page = await browser!.newPage({ viewport: { width: 900, height: 600 } });
-  await page.setContent(`<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><style>${FONT} ${css}</style><body>${body}</body></html>`);
+  await page.setContent(`<!doctype html><html lang="en"><meta charset="utf-8"><style>${FONT} ${css}</style><body>${body}</body></html>`);
   return page;
 }
-
-const flagsOf = async (page: Page) => (await audit.inspect(page, 'he', 1440)).flags.filter((f) => /out of order|wrong way round|no island/.test(f));
 
 describe.skipIf(!browser)('the audit sees what it exists to see', () => {
   afterAll(async () => {
@@ -44,17 +41,17 @@ describe.skipIf(!browser)('the audit sees what it exists to see', () => {
 
   describe('an icon drawn larger than text', () => {
     const CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><path d="m9.5 6 6 6-6 6" /></svg>';
-    const iconFlags = async (page: Page) => (await audit.inspect(page, 'he', 1440)).flags.filter((f) => /^an icon drawn larger/.test(f));
+    const iconFlags = async (page: Page) => (await audit.inspect(page, 1440)).flags.filter((f) => /^an icon drawn larger/.test(f));
 
     it('a chevron that has been given no size, beside a link', async () => {
-      const page = await hebrewPage(`<div style="width: 500px"><a href="#">פתיחה ${CHEVRON}</a></div>`);
-      expect((await iconFlags(page)).join()).toMatch(/an icon drawn larger than text: \d+x\d+ beside "פתיחה"/);
+      const page = await englishPage(`<div style="width: 500px"><a href="#">Open ${CHEVRON}</a></div>`);
+      expect((await iconFlags(page)).join()).toMatch(/an icon drawn larger than text: \d+x\d+ beside "Open"/);
       await page.close();
     });
 
     it('the same chevron at the size of a letter, and a large picture that is not an icon', async () => {
-      const page = await hebrewPage(
-        `<div style="width: 500px"><a href="#">פתיחה ${CHEVRON.replace('<svg ', '<svg width="16" height="16" ')}</a>` +
+      const page = await englishPage(
+        `<div style="width: 500px"><a href="#">Open ${CHEVRON.replace('<svg ', '<svg width="16" height="16" ')}</a>` +
           `<svg role="img" aria-label="a barcode" width="300" height="120" viewBox="0 0 10 4"><rect width="10" height="4" /></svg></div>`,
       );
       expect(await iconFlags(page)).toEqual([]);
@@ -64,135 +61,39 @@ describe.skipIf(!browser)('the audit sees what it exists to see', () => {
 
   describe('an id on screen', () => {
     const ID = '1e7a2e35-1fbd-4871-b4c9-17b5fc69d9ef';
-    const idFlags = async (page: Page) => (await audit.inspect(page, 'he', 1440)).flags.filter((f) => /^id on screen/.test(f));
+    const idFlags = async (page: Page) => (await audit.inspect(page, 1440)).flags.filter((f) => /^id on screen/.test(f));
 
     it('an id that has got into a sentence', async () => {
-      const page = await hebrewPage(`<p>הבקשה ${ID} אושרה</p>`);
+      const page = await englishPage(`<p>Request ${ID} was approved</p>`);
       expect(await idFlags(page)).toEqual([`id on screen: ${ID}`]);
       await page.close();
     });
 
     it('an id that is a record\'s own number, alone in the face of a code beside its label, is what it is there to be', async () => {
-      const page = await hebrewPage(`<dl><dt>מזהה רשומה</dt><dd><code dir="ltr">${ID}</code></dd></dl>`);
+      const page = await englishPage(`<dl><dt>Record id</dt><dd><code>${ID}</code></dd></dl>`);
       expect(await idFlags(page)).toEqual([]);
       await page.close();
     });
 
     it('but not one in a code that is part of a sentence', async () => {
-      const page = await hebrewPage(`<p>הבקשה <code dir="ltr">${ID} was approved</code></p>`);
+      const page = await englishPage(`<p>Request <code>${ID} was approved</code></p>`);
       expect(await idFlags(page)).toEqual([`id on screen: ${ID}`]);
-      await page.close();
-    });
-  });
-
-  describe('an English phrase or a figure drawn out of order on a Hebrew page', () => {
-    it('an English name with a year in front, which the bidirectional algorithm sends to the other end', async () => {
-      const page = await hebrewPage('<p>הכרטיס 2011 Pokémon Call of Legends נמכר</p>');
-      expect((await flagsOf(page)).join()).toMatch(/out of order.*2011 Pokémon/);
-      await page.close();
-    });
-
-    it('the same name once it is wrapped over two lines', async () => {
-      const page = await hebrewPage('<p id="p" style="width: 230px">הכרטיס 2011 Pokémon Call of Legends Rayquaza נמכר</p>');
-      // It does wrap: it is taller than one line.
-      expect(await page.$eval('#p', (el) => el.getBoundingClientRect().height)).toBeGreaterThan(30);
-      expect((await flagsOf(page)).join()).toMatch(/out of order/);
-      await page.close();
-    });
-
-    it('the same name with its words split across elements', async () => {
-      const page = await hebrewPage('<p>הכרטיס <b>2011</b> <i>Pokémon Call</i> of Legends נמכר</p>');
-      expect((await flagsOf(page)).join()).toMatch(/out of order/);
-      await page.close();
-    });
-
-    it('an English sentence that ends the paragraph, whose full stop is drawn at its start', async () => {
-      const page = await hebrewPage('<p>Password must be at least 8 characters.</p>');
-      expect((await flagsOf(page)).join()).toMatch(/out of order.*Password/);
-      await page.close();
-    });
-
-    it('a negative amount whose minus is drawn after the figure', async () => {
-      const page = await hebrewPage('<p>השעיה אוטומטית מתחת ל -$20.00 לחשבון</p>');
-      expect((await flagsOf(page)).join()).toMatch(/a sign after its figure/);
-      await page.close();
-    });
-
-    it('an address in a sentence, whose leading "#/" and "?" are drawn at the wrong end of it', async () => {
-      const page = await hebrewPage('<p>הקישור לחנות שלכם: #/marketplace/store?seller=red</p>');
-      expect((await flagsOf(page)).join()).toMatch(/out of order.*#\/marketplace/);
-      await page.close();
-    });
-
-    it('a version whose numbers and word swap places, in a list and in a sentence', async () => {
-      const page = await hebrewPage(
-        '<p>גרסת התנאים בתוקף 2026-10-draft-1</p><p>אני מסכים (גרסה 2026-10-draft-1).</p>',
-      );
-      expect((await flagsOf(page)).join()).toMatch(/out of order.*2026-10-draft-1/);
-      await page.close();
-    });
-
-    it('lets through what is set in an island, a code, or the text that is its own language', async () => {
-      const page = await hebrewPage(
-        [
-          '<p>הכרטיס <bdi dir="auto">2011 Pokémon Call of Legends</bdi> נמכר</p>',
-          '<p>הקישור לחנות שלכם: \u2066#/marketplace/store?seller=red\u2069</p>',
-          '<p>גרסת התנאים בתוקף \u20662026-10-draft-1\u2069</p><p>אני מסכים (גרסה \u20662026-10-draft-1\u2069).</p>',
-          '<p>הפנו ל־<bdi dir="ltr">@red</bdi> את הבקשה</p>',
-          '<p>השעיה אוטומטית מתחת ל <span dir="ltr" style="unicode-bidi: isolate">-$20.00</span> לחשבון</p>',
-          '<p>קוד <bdi dir="ltr">SN-CL10-0005</bdi> · 27 באוק׳ 2026</p>',
-          '<p><bdi dir="auto">Password must be at least 8 characters.</bdi></p>',
-          '<p style="unicode-bidi: plaintext">Password must be at least 8 characters.</p>',
-          '<p dir="ltr">An English paragraph that is a left-to-right block, ending with a full stop.</p>',
-          '<p>הכרטיס נמכר ב־27/10/2026 תמורת $1,200.00 בלבד.</p>',
-          // A Hebrew sentence that ends in an English word ends at its left, and its full stop is the sentence's.
-          '<p>הוסיפו את הכרטיס לכספת של Bault.</p>',
-          // A name set into the string with isolate marks (what t() carries) is its own run.
-          '<p>הכרטיס \u20682011 Pokémon Call of Legends\u2069 ← \u2068Raw\u2069 נמכר</p>',
-          // Text for a screen reader is a pixel wide: where its characters sit means nothing.
-          '<p style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">פתח את 2011 Pokémon Call of Legends</p>',
-        ].join(''),
-      );
-      expect(await flagsOf(page)).toEqual([]);
       await page.close();
     });
   });
 
   describe('a kicker that says its heading again', () => {
     it('is flagged, and is not when the line over the heading says something else', async () => {
-      const page = await hebrewPage(
-        '<form class="auth-card"><div class="auth-slip"><p class="auth-kicker">אימות דו־שלבי</p><h2>אימות דו־שלבי</h2></div></form>',
+      const page = await englishPage(
+        '<form class="auth-card"><div class="auth-slip"><p class="auth-kicker">Two-step sign-in</p><h2>Two-step sign-in</h2></div></form>',
       );
-      expect((await audit.inspect(page, 'he', 1440)).flags.join()).toMatch(/a kicker that says its heading again: "אימות דו־שלבי"/);
+      expect((await audit.inspect(page, 1440)).flags.join()).toMatch(/a kicker that says its heading again: "two-step sign-in"/);
       await page.close();
-      const fine = await hebrewPage(
-        '<form class="auth-card"><div class="auth-slip"><p class="auth-kicker">שלב שני</p><h2>אימות דו־שלבי</h2></div></form>',
+      const fine = await englishPage(
+        '<form class="auth-card"><div class="auth-slip"><p class="auth-kicker">Second step</p><h2>Two-step sign-in</h2></div></form>',
       );
-      expect((await audit.inspect(fine, 'he', 1440)).flags.filter((flag) => /kicker/.test(flag))).toEqual([]);
+      expect((await audit.inspect(fine, 1440)).flags.filter((flag) => /kicker/.test(flag))).toEqual([]);
       await fine.close();
-    });
-  });
-
-  describe('a cell that reads the page’s way with English text nothing isolates', () => {
-    const table = (cell: string) => `<table><tr><td>${cell}</td></tr></table>`;
-    const sentence = 'Second leg, charged only to parcels sent to a foreign address.';
-
-    it('is flagged', async () => {
-      const page = await hebrewPage(table(sentence), 'td { unicode-bidi: normal; }');
-      expect((await flagsOf(page)).join()).toMatch(/English text in a Hebrew cell/);
-      await page.close();
-    });
-
-    it('is not, once it is in an island or the cell takes its text’s direction', async () => {
-      for (const [cell, css] of [
-        [`<bdi dir="auto">${sentence}</bdi>`, 'td { unicode-bidi: normal; }'],
-        [sentence, 'td { unicode-bidi: plaintext; }'],
-        [`<span dir="ltr">${sentence}</span>`, 'td { unicode-bidi: normal; }'],
-      ] as const) {
-        const page = await hebrewPage(table(cell), css);
-        expect(await flagsOf(page)).toEqual([]);
-        await page.close();
-      }
     });
   });
 

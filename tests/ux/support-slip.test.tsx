@@ -36,7 +36,6 @@ beforeEach(() => {
   get.mockReset();
   post.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
   get.mockImplementation(async (path: string) => {
     if (path === '/support/tickets') return TICKETS;
     const one = TICKETS.find((x) => path === `/support/tickets/${x.id}`);

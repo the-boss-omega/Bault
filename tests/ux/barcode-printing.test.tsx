@@ -84,7 +84,7 @@ describe('printing a whole intake run', () => {
   });
 
   it('skips a payload it cannot encode rather than printing it blank', () => {
-    printBarcodes([{ value: 'SN-GOOD-0001' }, { value: 'ראיקוואזה' }]);
+    printBarcodes([{ value: 'SN-GOOD-0001' }, { value: 'レックウザ' }]);
 
     expect(printCalls).toBe(1);
     expect(printed.match(/class="label/g)).toHaveLength(1);
@@ -95,7 +95,7 @@ describe('printing a whole intake run', () => {
     printBarcodes([]);
     expect(printCalls).toBe(0);
 
-    printBarcodes([{ value: 'ראיקוואזה' }]);
+    printBarcodes([{ value: 'レックウザ' }]);
     expect(printCalls).toBe(0);
   });
 });

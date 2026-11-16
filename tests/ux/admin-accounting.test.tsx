@@ -21,10 +21,6 @@ function renderIn(ui: React.ReactElement) {
 
 beforeEach(() => {
   get.mockReset();
-  try {
-    localStorage.setItem('bault.locale', 'en');
-  } catch {
-  }
 });
 
 describe('admin accounting', () => {

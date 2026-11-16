@@ -86,7 +86,7 @@ describe('a facility’s code', () => {
   it('is two to eight letters, digits or hyphens, beginning with a letter or a digit', () => {
     for (const code of ['NJ', 'DE', 'NJ2', 'ZT-1', 'A1B2C3D4'])
       expect(CODE_PATTERN.test(code), code).toBe(true);
-    for (const code of ['N', '', '-NJ', 'NJ 2', 'NJ_2', 'ABCDEFGHI', 'נג'])
+    for (const code of ['N', '', '-NJ', 'NJ 2', 'NJ_2', 'ABCDEFGHI', 'НЖ'])
       expect(CODE_PATTERN.test(code), code).toBe(false);
   });
 });
