@@ -143,7 +143,7 @@ export class VaultService {
     if (!(await this.hasHeld(userId, itemId))) {
       throw AppError.notFound('Item not found in your vault');
     }
-    return this.inventory.itemTimeline(itemId);
+    return this.inventory.collectorTimeline(userId, itemId);
   }
 
   private async hasHeld(userId: string, itemId: string): Promise<boolean> {

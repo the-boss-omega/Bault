@@ -80,3 +80,42 @@ describe('A1 the vault item card a collector reads', () => {
     expect((staff.body as unknown[]).length).toBeGreaterThan(history.length);
   });
 });
+
+describe('A2 the vault item timeline a collector reads', () => {
+  it('covers only the caller’s holding and leaves out shelves, corrections and moves', async () => {
+    const operator = await signIn(SEED.operator);
+    const admin = await signIn(SEED.admin);
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+    const item = await intakeFor(operator, SEED.collector2, { description: 'Timeline across owners' });
+    const bins = (await operator.get('/custody/bins')).body as { id: string }[];
+    const otherBin = bins.find((b) => b.id !== item.binId)!.id;
+
+    expect((await admin.patch(`/admin/items/${item.id}`, { holdFlag: true })).status).toBe(200);
+    expect((await admin.patch(`/admin/items/${item.id}`, { holdFlag: false })).status).toBe(200);
+    expect((await admin.patch(`/admin/items/${item.id}`, { conditionGrade: 'PSA 7' })).status).toBe(200);
+    expect((await operator.post(`/custody/items/${item.id}/relocate`, { binId: otherBin })).status).toBe(201);
+    expect((await admin.patch(`/admin/items/${item.id}`, { ownerId: await userIdOf(red) })).status).toBe(200);
+    expect((await admin.patch(`/admin/items/${item.id}`, { holdFlag: true })).status).toBe(200);
+
+    const mine = await red.get(`/vault/items/${item.id}/timeline`);
+    expect(mine.status).toBe(200);
+    expectWithout(mine.body, ['fromBin', 'toBin', 'ruling', 'field']);
+    const kinds = (mine.body as { kind: string }[]).map((e) => e.kind).sort();
+    expect(kinds).toEqual(['hold_placed', 'ownership_transfer']);
+
+    const before = await golden.get(`/vault/items/${item.id}/timeline`);
+    expect(before.status).toBe(200);
+    const theirs = (before.body as { kind: string }[]).map((e) => e.kind);
+    expect(theirs).toContain('intake');
+    expect(theirs).toContain('hold_released');
+    expect(theirs).toContain('ownership_transfer');
+    expect(theirs.filter((k) => ['correction', 'bin_transfer', 'relocate'].includes(k))).toEqual([]);
+    expect(theirs.filter((k) => k === 'hold_placed')).toHaveLength(1);
+
+    const staff = await operator.get(`/custody/items/${item.id}/timeline`);
+    const staffKinds = (staff.body as { kind: string }[]).map((e) => e.kind);
+    expect(staffKinds).toEqual(expect.arrayContaining(['correction', 'bin_transfer', 'relocate', 'intake']));
+    expectWith(staff.body, ['toBin', 'field']);
+  });
+});
