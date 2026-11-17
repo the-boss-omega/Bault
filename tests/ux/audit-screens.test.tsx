@@ -352,6 +352,7 @@ describe('the words the product uses', () => {
     const allowed = new Set([
       'money.route.card',
       'money.routeDesc.card',
+      'money.routeDescPaypal.card',
       'wallet.request.funding.card',
       'itemClass.trading_card',
       'itemClass.oversized_card',

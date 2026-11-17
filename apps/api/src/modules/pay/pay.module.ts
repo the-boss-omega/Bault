@@ -8,6 +8,7 @@ import { WithdrawalService } from './withdrawal.service';
 import { WalletRequestService } from './wallet-request.service';
 import { CheckoutService } from './checkout.service';
 import { ChargebackService } from './chargeback.service';
+import { PayPalCheckoutService } from './paypal-checkout.service';
 import { PayController } from './pay.controller';
 import { WalletRequestController } from './wallet-request.controller';
 
@@ -16,6 +17,7 @@ import { WalletRequestController } from './wallet-request.controller';
   controllers: [PayController, WalletRequestController],
   providers: [
     CheckoutService,
+    PayPalCheckoutService,
     ChargebackService,
     LedgerService,
     WalletService,

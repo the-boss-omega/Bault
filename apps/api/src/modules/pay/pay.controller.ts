@@ -11,6 +11,7 @@ import { WithdrawalService } from './withdrawal.service';
 import { WalletRequestService } from './wallet-request.service';
 import { CheckoutService } from './checkout.service';
 import { ChargebackService } from './chargeback.service';
+import { PayPalCheckoutService } from './paypal-checkout.service';
 import { Roles } from '../sec/roles.decorator';
 
 class TopupDto {
@@ -32,6 +33,12 @@ class CheckoutDto {
   @IsOptional() @IsString() @MaxLength(200) paymentMethodToken?: string;
 }
 
+class PayPalCheckoutDto {
+  @IsInt() @Min(1) amountMinor!: number;
+  @IsString() route!: string;
+  @IsString() @MaxLength(120) idempotencyKey!: string;
+}
+
 class ChargebackDto {
   @IsString() @MaxLength(500) reason!: string;
   @IsOptional() @IsString() @MaxLength(140) providerCaseRef?: string;
@@ -47,6 +54,7 @@ export class PayController {
     private readonly withdrawals: WithdrawalService,
     private readonly requests: WalletRequestService,
     private readonly checkout: CheckoutService,
+    private readonly paypalCheckout: PayPalCheckoutService,
     private readonly chargebacks: ChargebackService,
   ) {}
 
@@ -58,6 +66,21 @@ export class PayController {
   @Post('finance/checkout')
   pay(@CurrentUser() user: AuthUser, @Body() dto: CheckoutDto) {
     return this.checkout.checkout(user.id, dto);
+  }
+
+  @Post('finance/checkout/paypal')
+  startPayPalCheckout(@CurrentUser() user: AuthUser, @Body() dto: PayPalCheckoutDto) {
+    return this.paypalCheckout.start(user.id, dto);
+  }
+
+  @Post('finance/checkout/paypal/:paymentId/capture')
+  capturePayPalCheckout(@CurrentUser() user: AuthUser, @Param('paymentId') paymentId: string) {
+    return this.paypalCheckout.capture(user.id, paymentId);
+  }
+
+  @Post('finance/checkout/paypal/:paymentId/cancel')
+  cancelPayPalCheckout(@CurrentUser() user: AuthUser, @Param('paymentId') paymentId: string) {
+    return this.paypalCheckout.cancel(user.id, paymentId);
   }
 
   @Get('finance/payments')

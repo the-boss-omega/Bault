@@ -253,6 +253,28 @@ describe('infra/gcp/configure.sh', () => {
     expect(rest).toEqual(restBefore);
   });
 
+  it('leaves cash-in by PayPal checkout off, and turns it on only when asked with --change checkout', async () => {
+    expect(configure(FIRST_RUN).status).toBe(0);
+    const before = envFile(join(envDir, 'production.env'));
+    expect(before.PAYPAL_CHECKOUT_ENABLED).toBe('false');
+
+    const r = configure(['yes', 'true', 'n'], '--change', 'checkout');
+    expect(r.status, r.output).toBe(0);
+    expect(r.output).toContain('PAYMENT.CAPTURE.COMPLETED');
+    expect(r.output).toContain('true or false');
+    const after = envFile(join(envDir, 'production.env'));
+    expect(after.PAYPAL_CHECKOUT_ENABLED).toBe('true');
+    const { PAYPAL_CHECKOUT_ENABLED: _on, ...rest } = after;
+    const { PAYPAL_CHECKOUT_ENABLED: _off, ...restBefore } = before;
+    expect(rest).toEqual(restBefore);
+
+    vi.resetModules();
+    const { loadEnv } = await import('../../packages/config/src/env');
+    const env = loadEnv({ ...after, ...envFile(join(envDir, 'api.env')) } as NodeJS.ProcessEnv);
+    expect(env.PAYPAL_CHECKOUT_ENABLED).toBe(true);
+    expect(env.PAYMENT_PROVIDER).toBe('paypal');
+  });
+
   it('deletes the provision file only when told yes', () => {
     expect(configure([...FIRST_RUN.slice(0, -1), 'y']).status).toBe(0);
     expect(existsSync(provisioned)).toBe(false);

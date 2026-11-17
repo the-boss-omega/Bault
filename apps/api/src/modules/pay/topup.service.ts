@@ -15,6 +15,7 @@ import type { PaymentAdapter } from '@bault/adapters';
 import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
 import { externalPayment } from './pay.schema';
 import { WalletRequestService } from './wallet-request.service';
+import { PayPalCheckoutService, isCheckoutEvent } from './paypal-checkout.service';
 
 @Injectable()
 export class TopupService {
@@ -25,6 +26,7 @@ export class TopupService {
     @Inject(PAYMENT_ADAPTER) private readonly payment: PaymentAdapter,
     private readonly ledger: LedgerService,
     private readonly walletRequests: WalletRequestService,
+    private readonly checkouts: PayPalCheckoutService,
     @Optional() @Inject(EXCEPTION_REPORTER) private readonly report: ExceptionReporter = reportException,
   ) {}
 
@@ -95,6 +97,7 @@ export class TopupService {
       .limit(1);
     if (existing) return { outcome: 'duplicate' };
 
+    if (isCheckoutEvent(event.type)) return { outcome: await this.checkouts.applyEvent(event) };
     return { outcome: await this.walletRequests.applyPayoutEvent(event) };
   }
 }

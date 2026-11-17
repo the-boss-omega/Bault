@@ -39,6 +39,9 @@ export const ledgerRecord = pgTable(
     interestDailyUnique: uniqueIndex('ledger_record_interest_daily_unique')
       .on(t.userId, t.referenceId)
       .where(sql`${t.type} = 'interest'`),
+    oneCreditPerPayment: uniqueIndex('ledger_record_one_credit_per_payment')
+      .on(t.referenceId)
+      .where(sql`${t.type} = 'credit_topup' AND ${t.referenceType} = 'external_payment'`),
     byOccurred: index('ledger_record_occurred_idx').on(t.occurredAt, t.id),
     amountPositive: check('ledger_record_amount_positive', sql`${t.amount} > 0`),
   }),
@@ -54,6 +57,8 @@ export const externalPayment = pgTable('external_payment', {
   amount: amountMinor().notNull(),
   currency: currency().notNull(),
   externalRef: text('external_ref'),
+  captureRef: text('capture_ref'),
+  providerFeeMinor: amountMinor('provider_fee_minor'),
   webhookEventId: text('webhook_event_id'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

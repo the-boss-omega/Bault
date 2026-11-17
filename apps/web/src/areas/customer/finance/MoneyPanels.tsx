@@ -5,6 +5,7 @@ import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { Button, EmptyState, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { IconAlert, IconWallet } from '../../../shared/ui/icons';
+import { isPayPalApproveUrl, leaveForPayPal, type PayPalReturn } from '../../../shared/paypalCheckout';
 
 interface BankInstructions {
   accountName: string | null;
@@ -22,7 +23,22 @@ interface FundingRoute {
   feeBps: number;
   description: string;
   available: boolean;
+  /** `paypal`: paid on PayPal's page and captured on return. `direct` (or absent): settled in one call. */
+  checkout?: 'paypal' | 'direct' | null;
   instructions: BankInstructions | { handle: string } | null;
+}
+
+interface PayPalCheckoutStarted {
+  paymentId: string;
+  approveUrl: string | null;
+  status: string;
+  amountMinor: number;
+}
+
+interface PayPalCheckoutCaptured {
+  paymentId: string;
+  status: 'succeeded' | 'pending';
+  amountMinor: number;
 }
 
 interface RouteCatalogue {
@@ -35,10 +51,15 @@ export function TopUpPanel({
   onError,
   onStatus,
   onChanged,
+  paypalReturn = null,
+  onPayPalReturnHandled,
 }: {
   onError: (m: string | null) => void;
   onStatus: (m: string | null) => void;
   onChanged: () => void;
+  /** The collector is back from PayPal's page for this payment. */
+  paypalReturn?: PayPalReturn | null;
+  onPayPalReturnHandled?: () => void;
 }) {
   const { t } = useI18n();
   const [catalogue, setCatalogue] = useState<RouteCatalogue | null>(null);
@@ -63,7 +84,41 @@ export function TopUpPanel({
     })();
   }, [onError]);
 
+  const finished = useRef<string | null>(null);
+  useEffect(() => {
+    if (!paypalReturn) return;
+    const id = `${paypalReturn.outcome}:${paypalReturn.paymentId}`;
+    if (finished.current === id) return;
+    finished.current = id;
+    const base = `/finance/checkout/paypal/${encodeURIComponent(paypalReturn.paymentId)}`;
+    void (async () => {
+      setBusy(true);
+      try {
+        if (paypalReturn.outcome === 'cancelled') {
+          await api.post(`${base}/cancel`, {});
+          onError(null);
+          onStatus(t('money.paypalCancelled'));
+          return;
+        }
+        onStatus(t('money.paypalCapturing'));
+        const result = await api.post<PayPalCheckoutCaptured>(`${base}/capture`, {});
+        onError(null);
+        onStatus(
+          result.status === 'succeeded' ? t('money.paid', { amount: formatUsd(result.amountMinor) }) : t('money.paypalPending'),
+        );
+        onChanged();
+      } catch (e) {
+        onStatus(null);
+        onError((e as Error).message);
+      } finally {
+        setBusy(false);
+        onPayPalReturnHandled?.();
+      }
+    })();
+  }, [paypalReturn, onError, onStatus, onChanged, onPayPalReturnHandled, t]);
+
   const chosen = catalogue?.routes.find((r) => r.key === route);
+  const viaPayPal = chosen?.checkout === 'paypal';
   const cents = dollarsToCents(amount);
   const withinLimits =
     catalogue !== null &&
@@ -71,14 +126,58 @@ export function TopUpPanel({
     cents >= catalogue.limits.minMinor &&
     cents <= catalogue.limits.maxMinor;
 
-  async function pay() {
-    if (cents === null) return;
+  function attemptKey(amountCents: number): string {
     const current = attempt.current;
     const key =
-      current && current.route === route && current.cents === cents
+      current && current.route === route && current.cents === amountCents
         ? current.key
         : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    attempt.current = { key, route, cents };
+    attempt.current = { key, route, cents: amountCents };
+    return key;
+  }
+
+  async function payWithPayPal() {
+    if (cents === null) return;
+    const key = attemptKey(cents);
+    setBusy(true);
+    try {
+      const started = await api.post<PayPalCheckoutStarted>('/finance/checkout/paypal', {
+        amountMinor: cents,
+        route,
+        idempotencyKey: key,
+      });
+      if (!started.approveUrl) {
+        attempt.current = null;
+        if (started.status === 'succeeded') {
+          onError(null);
+          onStatus(t('money.paid', { amount: formatUsd(started.amountMinor) }));
+          setAmount('');
+          onChanged();
+        } else {
+          onStatus(null);
+          onError(t('money.notTaken'));
+        }
+        return;
+      }
+      if (!isPayPalApproveUrl(started.approveUrl, window.location.origin)) {
+        attempt.current = null;
+        onStatus(null);
+        onError(t('money.paypalNotSafe'));
+        return;
+      }
+      leaveForPayPal(started.approveUrl);
+    } catch (e) {
+      const unknown = e instanceof ApiError && (e.kind === 'unreachable' || e.kind === 'server');
+      if (!unknown) attempt.current = null;
+      onError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pay() {
+    if (cents === null) return;
+    const key = attemptKey(cents);
     setBusy(true);
     try {
       const result = await api.post<{ status: string; amountMinor: number; replayed: boolean }>(
@@ -141,7 +240,7 @@ export function TopUpPanel({
                 <StatusBadge tone={chosen.instant ? 'success' : 'warning'} plain>
                   {chosen.instant ? t('money.instant') : t('money.reviewed')}
                 </StatusBadge>{' '}
-                {t(`money.routeDesc.${chosen.key}` as MessageKey)}
+                {t(`${viaPayPal ? 'money.routeDescPaypal' : 'money.routeDesc'}.${chosen.key}` as MessageKey)}
               </p>
             )}
 
@@ -188,11 +287,11 @@ export function TopUpPanel({
                     variant="primary"
                     icon={<IconWallet />}
                     disabled={busy || !withinLimits}
-                    onClick={() => void pay()}
+                    onClick={() => void (viaPayPal ? payWithPayPal() : pay())}
                   >
-                    {t('money.payNow')}
+                    {viaPayPal ? t('money.continueToPaypal') : t('money.payNow')}
                   </Button>
-                  <span className="field-hint">{t('money.instantHint')}</span>
+                  <span className="field-hint">{viaPayPal ? t('money.paypalHint') : t('money.instantHint')}</span>
                 </div>
               </div>
             </>
