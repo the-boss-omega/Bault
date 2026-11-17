@@ -6,21 +6,11 @@ const USD = new Intl.NumberFormat('en-US', {
 });
 
 /**
- * A figure set into a sentence that reads the other way keeps its own direction: a
- * left-to-right isolate (LRI … PDI), invisible where the sentence is also left to right.
- * It is for a figure that is part of a phrase ("$39.00 a month"); a figure on its own
- * is an `Amount`, and a code is a `Code` or a `Serial`.
- */
-export function isolateLtr(text: string): string {
-  return `\u2066${text}\u2069`;
-}
-
-/**
  * A name set into a sentence keeps its own order: a first-strong isolate (FSI … PDI) takes the
- * direction of the name's first letter, so an English card name ("2011 Pokémon Call of Legends")
- * is read left to right inside a Hebrew sentence instead of being drawn "Call of Legends 2011",
- * and a full stop after it is the sentence's. Invisible where the sentence reads the same way.
- * For a name in a string that goes through `t()`; in markup, a `<bdi dir="auto">` does the same.
+ * direction of the name's first letter, so a name somebody typed in a script that is read from the
+ * right stays a run of its own and a full stop after it is the sentence's. Invisible where the name
+ * reads the same way as the sentence. For a name in a string that goes through `t()`; in markup, a
+ * `<bdi dir="auto">` does the same.
  */
 export function isolate(text: string): string {
   return `\u2068${text}\u2069`;
@@ -55,11 +45,15 @@ export function centsToDollars(minorUnits: number): string {
   return ((minorUnits ?? 0) / 100).toFixed(2);
 }
 
+/** The tag `Intl` formats a date in, for each language the product is written in: English, the American way, as its money is. */
+const INTL_LOCALE: Record<string, string> = { en: 'en-US' };
+const intlLocale = (locale: string) => INTL_LOCALE[locale] ?? 'en-US';
+
 export function formatDateTime(iso: string | null | undefined, locale: string): string {
   if (!iso) return '—';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat(locale === 'he' ? 'he-IL' : 'en-US', {
+  return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: 'long',
     timeStyle: 'short',
   }).format(date);
@@ -69,12 +63,10 @@ export function formatDate(iso: string | null | undefined, locale: string): stri
   if (!iso) return '—';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso.slice(0, 10);
-  return new Intl.DateTimeFormat(locale === 'he' ? 'he-IL' : 'en-US', {
+  return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: 'medium',
   }).format(date);
 }
-
-const intlLocale = (locale: string) => (locale === 'he' ? 'he-IL' : 'en-US');
 
 /** The time of day, and nothing else: "6:08 AM", "06:08". */
 export function formatTime(iso: string | null | undefined, locale: string): string {
@@ -92,9 +84,9 @@ export function dayKey(iso: string | null | undefined): string {
 }
 
 /**
- * How long ago a moment was, in the words of the page's language from the browser's own tables ("today",
- * "3 days ago", "2 weeks ago"). Nothing here is a message of ours, so there is no plural to get wrong: a count
- * of days in Hebrew is "לפני יומיים" and "לפני 3 ימים", and ours would have said "3 day".
+ * How long ago a moment was, in words from the browser's own tables ("today", "yesterday", "3 days ago",
+ * "2 weeks ago"). Nothing here is a message of ours, so there is no plural to get wrong: ours would have
+ * said "1 days".
  */
 export function formatAge(iso: string, locale: string, now: Date = new Date()): string {
   const date = new Date(iso);
@@ -108,8 +100,8 @@ export function formatAge(iso: string, locale: string, now: Date = new Date()): 
 }
 
 /**
- * The heading of a day in a register: the day's own words where there are any ("today", "yesterday", in the
- * language of the page, from the browser's own tables) and the date. Nothing here is a message of ours.
+ * The heading of a day in a register: the day's own words where there are any ("today", "yesterday", from
+ * the browser's own tables) and the date. Nothing here is a message of ours.
  */
 export function formatDayHeading(iso: string, locale: string, now: Date = new Date()): string {
   const date = new Date(iso);

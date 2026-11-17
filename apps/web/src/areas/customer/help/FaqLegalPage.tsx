@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { bpsToPercent, formatDate, formatUsd, isolateLtr } from '../../../shared/money';
+import { bpsToPercent, formatDate, formatUsd } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
@@ -13,7 +13,6 @@ import {
 } from '../../../shared/ui/primitives';
 import { IconAsk, IconChevronDown, IconDownload, IconLegal, IconPrint, IconSearch } from '../../../shared/ui/icons';
 import { Amount } from '../../../shared/ui/Serial';
-import { ENGLISH } from './english';
 import { FAQ, type FaqAvailability, type FaqBlock, type FaqEntry } from './faqContent';
 import { IntakePolicyPanel } from './IntakePolicyPanel';
 import { LEGAL_DOCUMENTS } from './legalContent';
@@ -354,7 +353,7 @@ function FaqItem({
           <span className="faq-chevron" aria-hidden="true">
             <IconChevronDown />
           </span>
-          <span className="faq-q-text" {...ENGLISH}>
+          <span className="faq-q-text">
             {entry.question}
           </span>
           <StatusBadge tone={AVAILABILITY_TONE[entry.availability]} plain>
@@ -370,14 +369,14 @@ function FaqItem({
         className="faq-a"
         hidden={!open}
       >
-        <p className={`faq-note faq-note--${entry.availability}`} {...ENGLISH}>
+        <p className={`faq-note faq-note--${entry.availability}`}>
           <strong>
             {t(AVAILABILITY_NOTE[entry.availability])}
           </strong>{' '}
           {entry.baultNote}
         </p>
 
-        <div className="faq-source-answer" {...ENGLISH}>
+        <div className="faq-source-answer">
           {entry.blocks.map((block, i) => (
             <FaqBlockView key={i} block={block} />
           ))}
@@ -494,7 +493,7 @@ function LegalPanel() {
         {doc.draft && <DraftBanner doc={doc} />}
         <p className="hint">
           {t('legal.lastUpdated', { date: formatDate(doc.lastUpdated, locale) })}
-          {doc.version && <> · {t('legal.version', { version: isolateLtr(doc.version) })}</>}
+          {doc.version && <> · {t('legal.version', { version: doc.version })}</>}
         </p>
 
         {LEGAL_DOCUMENTS.length > 1 && (
@@ -507,7 +506,7 @@ function LegalPanel() {
                 aria-pressed={d.id === docId}
                 onClick={() => setDocId(d.id)}
               >
-                <span {...ENGLISH}>{d.title}</span>
+                <span>{d.title}</span>
               </button>
             ))}
           </div>
@@ -527,8 +526,8 @@ function LegalPanel() {
         <div className="legal-body">
           <nav className="legal-toc" aria-label={t('legal.tocLabel')}>
             <h3 className="legal-toc-title">{t('legal.toc')}</h3>
-            {/* The headings are the document's, in its language, and carry their own numbers. */}
-            <ol {...ENGLISH}>
+            {/* The headings are the document's, and carry their own numbers. */}
+            <ol>
               {doc.sections.map((section) => (
                 <li key={section.id}>
                   <a href={`#legal-${section.id}`}>{section.heading}</a>
@@ -537,7 +536,7 @@ function LegalPanel() {
             </ol>
           </nav>
 
-          <div className="legal-text" {...ENGLISH}>
+          <div className="legal-text">
             {sections.length === 0 ? (
               <EmptyState title={t('legal.noMatches')} icon={<IconLegal />} />
             ) : (
@@ -592,8 +591,7 @@ function CurrentFiguresPanel() {
     };
   }, []);
 
-  // A figure on its own is an Amount, drawn left to right whatever the page reads: the suspension
-  // threshold is negative, and in Hebrew a bare "-$20.00" is drawn with its minus after the number.
+  // A figure on its own is an Amount, set as every amount is.
   const rows: Array<[string, ReactNode]> = terms
     ? [
         [t('legal.figures.graceDays'), t('legal.figures.days', { days: terms.debt.graceDays })],
@@ -629,8 +627,7 @@ function CurrentFiguresPanel() {
             floor: formatUsd(terms.escrow.minimumValueMinor),
           }),
         ],
-        // A version is a code (2026-10-draft-1): in a right-to-left line its numbers and its word swap places.
-        [t('legal.figures.termsVersion'), isolateLtr(terms.termsVersion)],
+        [t('legal.figures.termsVersion'), terms.termsVersion],
       ]
     : [];
 

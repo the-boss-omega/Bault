@@ -23,7 +23,6 @@ beforeEach(() => {
   get.mockReset();
   post.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
   get.mockImplementation(async (path: string) => {
     if (path === '/vault/items') return MINE;
     if (path === '/marketplace/collectors/golden') return { id: 'u2', username: 'golden', firstName: 'Golden', lastName: 'Marsh' };

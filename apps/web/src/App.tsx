@@ -15,7 +15,6 @@ import { NavigationRail, type NavDestination } from './shared/ui/NavigationRail'
 import { useScrollableRegions } from './shared/ui/useScrollableRegions';
 import {
   AccountPill,
-  LanguageSwitcher,
   MobileBar,
   NotificationBell,
   PageHeader,
@@ -151,9 +150,9 @@ const AUTH_ROUTES: Record<string, AuthMode> = {
 const LANDING_ROUTES = ['', 'welcome'];
 
 export default function App() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const route = useRoute();
-  useScrollableRegions(locale);
+  useScrollableRegions();
   const [boot, setBoot] = useState<BootState>({ status: 'loading' });
 
   const loadSession = useCallback(async () => {
@@ -399,7 +398,6 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
                 />
                 <span className="ph-controls">
                   <ThemeToggle />
-                  <LanguageSwitcher />
                   {!suspended && (
                     <NotificationBell
                       items={notifications.items}

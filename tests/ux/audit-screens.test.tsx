@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const post = vi.fn();
@@ -330,9 +330,8 @@ describe('visual weight', () => {
   });
 });
 
-describe('changing language before signing in', () => {
-  it('is an icon with a menu, not the name of the other language', async () => {
-    const user = userEvent.setup();
+describe('the page before signing in', () => {
+  it('offers no choice of language: the product has one', async () => {
     const { AuthShell } = await import('../../apps/web/src/areas/customer/auth/AuthPage');
     renderIn(
       <AuthShell>
@@ -340,16 +339,8 @@ describe('changing language before signing in', () => {
       </AuthShell>,
     );
 
-    expect(screen.queryByRole('button', { name: 'עברית' })).toBeNull();
-
-    const trigger = screen.getByRole('button', { name: /switch language/i });
-    expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
-
-    await user.click(trigger);
-    const menu = await screen.findByRole('menu');
-    expect(within(menu).getByRole('menuitemradio', { name: /English/ })).toBeInTheDocument();
-    expect(within(menu).getByRole('menuitemradio', { name: /עברית/ })).toBeInTheDocument();
-    expect(within(menu).getByRole('menuitemradio', { checked: true })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /language/i })).toBeNull();
+    expect(screen.queryByRole('menuitemradio')).toBeNull();
   });
 });
 

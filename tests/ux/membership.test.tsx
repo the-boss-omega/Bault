@@ -77,16 +77,14 @@ describe('the membership screen', () => {
     }
   });
 
-  it('sets the price phrase so that the figure keeps its direction inside a sentence that may read the other way', async () => {
+  it('sets the price as a phrase, the figure and what it is for, and not as one block of figures', async () => {
     answer();
     renderPage();
 
     const joins = await screen.findAllByRole('button', { name: /^join$/i });
     const price = joins[0]!.closest('.offer')!.querySelector('.offer-price')!;
-    // Not one left-to-right block (that would put the amount on the wrong side of "per month" in Hebrew): the
-    // phrase follows the page, and the amount alone is isolated, by a left-to-right isolate and its terminator.
     expect(price.classList.contains('amount')).toBe(false);
-    expect(price.textContent).toBe('\u2066$39.00\u2069 a month');
+    expect(price.textContent).toBe('$39.00 a month');
   });
 
   it('confirms before charging, and says what recurring means', async () => {

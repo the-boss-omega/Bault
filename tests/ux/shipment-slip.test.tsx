@@ -63,7 +63,6 @@ beforeEach(() => {
   get.mockReset();
   post.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
   get.mockImplementation(async (path: string) => {
     if (path === '/shipping/countries') return COUNTRIES;
     if (path === '/shipping/services') return CATALOGUE;

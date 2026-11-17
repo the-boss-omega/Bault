@@ -11,8 +11,8 @@ const { ThemeProvider, useTheme } = await import('../../apps/web/src/shared/them
 
 function page() {
   const root = document.documentElement;
-  root.setAttribute('lang', 'he');
-  root.setAttribute('dir', 'rtl');
+  root.setAttribute('lang', 'en');
+  root.removeAttribute('dir');
   root.setAttribute('data-theme', 'dark');
   document.head.querySelector('meta[name="theme-color"]')?.remove();
   const meta = document.createElement('meta');
@@ -49,30 +49,35 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('the page opens in the theme and language it was left in, before anything is drawn', () => {
-  it('light and English: the attributes and the browser chrome are set by the head script', () => {
+describe('the page opens in the theme it was left in, before anything is drawn', () => {
+  it('light: the attribute and the browser chrome are set by the head script', () => {
     const { root, meta } = page();
     localStorage.setItem('bault.theme', 'light');
-    localStorage.setItem('bault.locale', 'en');
 
     boot();
 
     expect(root).toHaveAttribute('data-theme', 'light');
-    expect(root).toHaveAttribute('lang', 'en');
-    expect(root).toHaveAttribute('dir', 'ltr');
     expect(meta).toHaveAttribute('content', '#ffffff');
   });
 
-  it('dark and Hebrew stay as the page says', () => {
+  it('dark stays as the page says', () => {
     const { root, meta } = page();
     localStorage.setItem('bault.theme', 'dark');
-    localStorage.setItem('bault.locale', 'he');
 
     boot();
 
     expect(root).toHaveAttribute('data-theme', 'dark');
-    expect(root).toHaveAttribute('dir', 'rtl');
     expect(meta).toHaveAttribute('content', '#0a0a0a');
+  });
+
+  it('a language stored before the product had one is not read: the page stays English and left to right', () => {
+    const { root } = page();
+    localStorage.setItem('bault.locale', 'he');
+
+    boot();
+
+    expect(root).toHaveAttribute('lang', 'en');
+    expect(root).not.toHaveAttribute('dir');
   });
 
   it('the system choice leaves the theme to the system, and the chrome follows it', () => {
@@ -90,14 +95,12 @@ describe('the page opens in the theme and language it was left in, before anythi
     expect(light.meta).toHaveAttribute('content', '#ffffff');
   });
 
-  it('with nothing stored the page keeps its own defaults, dark and Hebrew', () => {
+  it('with nothing stored the page keeps its own default, dark', () => {
     const { root, meta } = page();
 
     boot();
 
     expect(root).toHaveAttribute('data-theme', 'dark');
-    expect(root).toHaveAttribute('lang', 'he');
-    expect(root).toHaveAttribute('dir', 'rtl');
     expect(meta).toHaveAttribute('content', '#0a0a0a');
   });
 
@@ -120,7 +123,7 @@ describe('the page opens in the theme and language it was left in, before anythi
     expect(INDEX.indexOf('/theme-boot.js')).toBeLessThan(INDEX.indexOf('/src/main.tsx'));
     expect(head.indexOf('/theme-boot.js')).toBeLessThan(head.indexOf('rel="preload"'));
     // And the page's own defaults are the ones the script leaves alone.
-    expect(INDEX).toMatch(/<html lang="he" data-theme="dark" dir="rtl">/);
+    expect(INDEX).toMatch(/<html lang="en" data-theme="dark">/);
   });
 });
 

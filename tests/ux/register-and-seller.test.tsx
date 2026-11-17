@@ -65,7 +65,7 @@ describe('the item sheet’s register', () => {
   }
 
   async function register(): Promise<HTMLElement> {
-    const heading = await screen.findByRole('heading', { name: /item history|היסטוריית פריט/i });
+    const heading = await screen.findByRole('heading', { name: /item history/i });
     const column = heading.parentElement as HTMLElement;
     await waitFor(() => expect(within(column).getAllByRole('listitem').length).toBe(TIMELINE.length));
     return column;
@@ -82,20 +82,6 @@ describe('the item sheet’s register', () => {
     expect(text).toContain('Shelved in BIN-AAAA1111 · A');
     expect(text).not.toMatch(UUID);
     expect(text).not.toMatch(/cents/);
-  });
-
-  it('reads in Hebrew on a Hebrew page, and the entries are not forced left to right', async () => {
-    localStorage.setItem('bault.locale', 'he');
-    window.location.hash = '#/vault?item=i1';
-    get.mockImplementation(vaultApi);
-    renderIn(<VaultPage />);
-    const column = await register();
-    const text = column.textContent!.replace(/[⁨⁩]/g, '');
-    expect(text).toContain('BIN-AAAA1111 · A ← BIN-BBBB2222 · B');
-    expect(text).not.toMatch(/Shelved|Moved|recorded|cents/);
-    for (const entry of column.querySelectorAll('.register-entry')) {
-      expect(entry.classList.contains('ltr-run')).toBe(false);
-    }
   });
 
   it('says a frozen card is frozen, without the machine’s note as its reason', async () => {

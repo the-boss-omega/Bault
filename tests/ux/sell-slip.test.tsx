@@ -31,7 +31,6 @@ beforeEach(() => {
   post.mockReset();
   post.mockResolvedValue({});
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
 });
 
 function sell() {

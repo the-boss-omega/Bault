@@ -210,7 +210,7 @@ const COOKIE_NOTICE: LegalDocument = {
   id: 'cookie-notice',
   title: 'Cookie notice',
   provenance: 'legal.provenance.draft',
-  lastUpdated: '2026-10-15',
+  lastUpdated: '2026-11-16',
   downloadPath: null,
   draft: true,
   version: TERMS_VERSION,
@@ -226,7 +226,7 @@ const COOKIE_NOTICE: LegalDocument = {
       'storage',
       '2. Preferences kept in your browser',
       'A few preferences are kept in your browser’s local storage, not in cookies. They never leave your device on their own and are not sent to Bault with your requests:',
-      '  bault.locale                 the language you chose\n  bault.theme                  light or dark appearance\n  bault.tab                    the last section you had open\n  bault.notificationsSeenAt    when you last looked at your notifications',
+      '  bault.theme                  light or dark appearance\n  bault.tab                    the last section you had open\n  bault.notificationsSeenAt    when you last looked at your notifications',
       'Clearing your browser’s site data removes them; the app then uses its defaults.',
     ),
     section(
@@ -327,7 +327,7 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
       {
         "id": "notice",
         "heading": "Notice",
-        "body": "This application bundles these fonts, served from /fonts:\n\n  Geist, Geist Mono\n    Copyright 2023 The Geist Project Authors\n    (https://github.com/vercel/geist-font)\n\n  Frank Ruhl Libre\n    Copyright 2015 The Frank Ruhl Libre Project Authors\n    (https://github.com/fontef/frankruhllibre)\n\n  IBM Plex Sans Hebrew\n    Copyright © 2017 IBM Corp. with Reserved Font Name \"Plex\"\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttps://openfontlicense.org\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------"
+        "body": "This application bundles these fonts, served from /fonts:\n\n  Geist, Geist Mono\n    Copyright 2023 The Geist Project Authors\n    (https://github.com/vercel/geist-font)\n\n  Frank Ruhl Libre\n    Copyright 2015 The Frank Ruhl Libre Project Authors\n    (https://github.com/fontef/frankruhllibre)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttps://openfontlicense.org\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------"
       },
       {
         "id": "preamble",

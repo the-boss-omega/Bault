@@ -65,7 +65,6 @@ beforeEach(() => {
   get.mockReset();
   patch.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
   get.mockImplementation(async (path: string) =>
     path === '/admin/users' ? USERS : path === '/admin/items' ? ITEMS : [],
   );
@@ -177,16 +176,6 @@ describe('an item, opened', () => {
     const typed = within(card).getByText('Type').nextElementSibling as HTMLElement;
     expect(typed).toHaveTextContent('tradng_card');
     expect(typed.querySelector('.code-inline')).not.toBeNull();
-  });
-
-  it('names the type in Hebrew too', async () => {
-    localStorage.setItem('bault.locale', 'he');
-    window.location.hash = '#/admin/items?item=A';
-    items();
-    const drawer = await screen.findByRole('dialog');
-    const card = within(drawer).getByRole('region', { name: 'SN-A-0001' });
-    expect(card).toHaveTextContent('כרטיס אספנות');
-    expect(card).not.toHaveTextContent('trading_card');
   });
 
   it('prints the barcode and shows the photograph from under the card, not from the paper', async () => {

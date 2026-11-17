@@ -122,7 +122,7 @@ describe('the published intake policy', () => {
   it('says it is loading rather than rendering an empty table', () => {
     get.mockReturnValue(new Promise(() => {}));
     renderIn(<IntakePolicyPanel />);
-    expect(screen.getByText(/loading|טוען/i)).toBeInTheDocument();
+    expect(screen.getByText(/loading/i)).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 });

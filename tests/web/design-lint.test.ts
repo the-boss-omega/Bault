@@ -100,18 +100,6 @@ describe('design-lint', () => {
       expect(r.out).toContain("must declare color-scheme: dark");
     });
 
-    it('a [dir=rtl] branch outside theme.css', () => {
-      const r = withChange((d) => appendFileSync(join(d, 'landing.css'), "\n[dir='rtl'] .x { margin-inline: 0; }\n"));
-      expect(r.out).toContain('direction branch');
-    });
-
-    it('a left or right keyword in a transform origin or gradient', () => {
-      const r = withChange((d) =>
-        appendFileSync(join(d, 'app.css'), '\n.x { transform-origin: left center; }\n.y { background: linear-gradient(to right, red, blue); }\n'),
-      );
-      expect(r.out.match(/physical keyword/g)?.length).toBeGreaterThanOrEqual(2);
-    });
-
     it('a border radius that is not from the family', () => {
       const r = withChange((d) => appendFileSync(join(d, 'screens.css'), '\n.x { border-radius: 7px; }\n'));
       expect(r.out).toContain('hardcoded radius 7px');
@@ -206,7 +194,6 @@ describe('design-lint', () => {
           join(d, 'index.css'),
           [
             '.a { margin-left: 4px; }',
-            "[dir='rtl'] .b { margin-inline: 0; }",
             '.c { border-radius: 7px; }',
             '.d { box-shadow: 0 2px 4px #123456; }',
             '.e { color: #123abc; }',
@@ -220,7 +207,6 @@ describe('design-lint', () => {
       );
       expect(r.status).toBe(1);
       expect(r.out).toContain('physical property');
-      expect(r.out).toContain('direction branch');
       expect(r.out).toContain('hardcoded radius');
       expect(r.out).toContain('hardcoded shadow');
       expect(r.out).toContain('raw colour #123abc');
@@ -238,24 +224,6 @@ describe('design-lint', () => {
         );
         appendFileSync(join(d, 'screens.css'), '\n.e { font: 500 112px/1 var(--font-display); font-size: 11.5px; }\n');
       });
-      expect(r.out).toContain('design-lint: clean');
-    });
-
-    it('a date forced left to right, which a Hebrew page draws the wrong way round', () => {
-      const r = withChange((d) =>
-        writeFileSync(join(d, 'probe.tsx'), 'export const A = () => (\n  <span className="hint" dir="ltr">\n    {formatDate(x, locale)}\n  </span>\n);\n'),
-      );
-      expect(r.status).toBe(1);
-      expect(r.out).toContain('a date forced left to right');
-    });
-
-    it('lets a serial be an island and a date stand in the direction of the page', () => {
-      const r = withChange((d) =>
-        writeFileSync(
-          join(d, 'probe.tsx'),
-          'export const A = () => (\n  <p>\n    <bdi dir="ltr">{serial}</bdi> · <span className="date">{formatDate(x, locale)}</span>\n    <input dir="ltr" value={formatDate(x, locale)} />\n  </p>\n);\n',
-        ),
-      );
       expect(r.out).toContain('design-lint: clean');
     });
 
@@ -338,12 +306,6 @@ describe('design-lint', () => {
       ['corners that are not mirrored', 'landing.css', '.x { border-radius: var(--r-lg) 0 0 var(--r-lg); }', /corners that are not mirrored/],
       ['space in rem', 'screens.css', '.x { padding: 0.3rem; }', /off the 4px grid/],
       ['space in em', 'screens.css', '.x { margin-block-start: 0.5em; }', /glyph's own size/],
-      ['an angle that points one way', 'gallery.css', '.x { background: linear-gradient(90deg, var(--card), var(--muted)); }', /points one way/],
-      ['a conic angle that points one way', 'gallery.css', '.x { background: conic-gradient(from 30deg, var(--card), var(--muted)); }', /points one way/],
-      ['a move that goes the same way in both languages', 'motion.css', '.x { transform: translateX(12px); }', /goes the same way in both languages/],
-      ['a three-dimensional move', 'motion.css', '.x { transform: translate3d(-100%, 0, 0); }', /goes the same way in both languages/],
-      ['the translate property', 'motion.css', '.x { translate: 8px 0; }', /goes the same way in both languages/],
-      ['a position that names a side', 'app.css', '.x { background: url(a.png) no-repeat right center; }', /names left or right/],
       ['a loop spelled with its longhand', 'slab.css', '.x { animation-name: wobble; animation-duration: 2s; animation-iteration-count: infinite; }', /unlisted infinite animation "wobble"/],
       ['a loop with no name beside its count', 'slab.css', '.x { animation-iteration-count: infinite; }', /no animation-name beside it/],
       ['a loop that is second in a list', 'slab.css', '.x { animation: slab-breathe 7s linear infinite, wobble 2s linear infinite; }', /unlisted infinite animation "wobble"/],
@@ -392,14 +354,6 @@ describe('design-lint', () => {
       expect(r.out).toContain('physical property');
       expect(r.out).toContain('raw colour #123abc');
       expect(r.out).toContain('unlisted infinite animation "wobble"');
-    });
-
-    it('a date made another way and forced left to right', () => {
-      for (const call of ['d.toLocaleDateString(locale)', 'new Intl.DateTimeFormat(locale).format(d)', 'd.toLocaleTimeString(locale)']) {
-        const r = planted('probe.tsx', `export const A = () => (\n  <span dir="ltr">\n    {${call}}\n  </span>\n);\n`);
-        expect(r.status).toBe(1);
-        expect(r.out).toContain('a date forced left to right');
-      }
     });
 
     it('a timer that never stops', () => {

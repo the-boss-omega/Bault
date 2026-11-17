@@ -25,7 +25,7 @@ describe('username: unique, permanent, normalized', () => {
   });
 
   it('rejects anything outside it', () => {
-    for (const name of ['ab', 'a'.repeat(USERNAME_MAX + 1), 'has space', 'Upper', 'mail@host', 'שם']) {
+    for (const name of ['ab', 'a'.repeat(USERNAME_MAX + 1), 'has space', 'Upper', 'mail@host', 'имя']) {
       expect(isValidUsername(name)).toBe(false);
     }
   });
@@ -44,7 +44,7 @@ describe('name parts: first and last, validated', () => {
   });
 
   it('accepts real names in any script', () => {
-    for (const part of ['Red', 'Ashwood', 'אנה', 'محمد', 'Ferreira-Silva', "O'Brien", 'van der Berg']) {
+    for (const part of ['Red', 'Ashwood', 'Анна', 'محمد', 'Ferreira-Silva', "O'Brien", 'van der Berg']) {
       expect(isValidNamePart(normalizeNamePart(part))).toBe(true);
     }
   });

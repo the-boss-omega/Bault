@@ -16,7 +16,6 @@ beforeEach(() => {
   get.mockReset();
   get.mockImplementation(async () => null);
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
 });
 
 const QUOTE = {

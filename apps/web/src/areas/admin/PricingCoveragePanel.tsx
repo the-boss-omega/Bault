@@ -285,7 +285,7 @@ function CoverageLine({ row }: { row: Row }) {
         {row.rule ? ruleValue(row.rule) : '—'}
       </td>
       <td data-label={t('admin.coverage.col.note')} className="coverage-cell--note">
-        <span className="hint" lang="en" dir="ltr">
+        <span className="hint" dir="ltr">
           {row.description}
         </span>
       </td>

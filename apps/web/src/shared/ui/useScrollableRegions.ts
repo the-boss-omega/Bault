@@ -32,10 +32,9 @@ function nameOf(el: HTMLElement): string | null {
  * side, a window made wider, a drawer opening beside it).
  *
  * It is done from outside the tables because there are a score of them, written one by
- * one, and none of them knows how wide its room will be. `language` is only there to
- * run the check again when the words change, so a name is never left in the old one.
+ * one, and none of them knows how wide its room will be.
  */
-export function useScrollableRegions(language: string): void {
+export function useScrollableRegions(): void {
   useEffect(() => {
     if (typeof MutationObserver === 'undefined') return;
     let frame = 0;
@@ -75,7 +74,7 @@ export function useScrollableRegions(language: string): void {
           el.removeAttribute('aria-label');
           delete el.dataset.scrollable;
         }
-        // The name is read again on every pass, so a change of language reaches it.
+        // The name is read again on every pass, so a heading that changes reaches it.
         if (el.dataset.scrollable === 'true' && el.getAttribute('role') === 'region' && name) {
           el.setAttribute('aria-label', name);
         }
@@ -127,5 +126,5 @@ export function useScrollableRegions(language: string): void {
       document.removeEventListener('focusin', reveal);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [language]);
+  }, []);
 }

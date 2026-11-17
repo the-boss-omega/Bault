@@ -206,24 +206,11 @@ describe('what is on a shelf', () => {
     ).toEqual(['Close']);
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(slot).toHaveFocus();
+    await waitFor(() => expect(slot).toHaveFocus());
     expect(
       get.mock.calls.every(
         ([path]) => typeof path === 'string' && path.startsWith('/custody/bins/b1/items'),
       ),
     ).toBe(true);
-  });
-
-  it('is read in Hebrew in the same order, with its numbers left to right', async () => {
-    localStorage.setItem('bault.locale', 'he');
-    get.mockResolvedValueOnce(shelfOf(BINS[0]!, ITEMS));
-    const user = userEvent.setup();
-    renderFloor();
-    await user.click(screen.getByRole('button', { name: /BIN-AAAA1111/ }));
-    const dialog = await screen.findByRole('dialog', { name: 'BIN-AAAA1111' });
-    expect(within(dialog).getByRole('region', { name: 'פריטים על המדף' })).toHaveTextContent('2');
-    const rows = await within(dialog).findAllByRole('listitem');
-    expect(rows[0]).toHaveTextContent('SN-CL10-0005');
-    expect(within(rows[0]!).getByText('SN-CL10-0005')).toHaveAttribute('dir', 'ltr');
   });
 });

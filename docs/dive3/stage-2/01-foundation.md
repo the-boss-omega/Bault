@@ -96,7 +96,7 @@ In `EasyPostShippingAdapter`, `getRates` creates an EasyPost shipment, with cust
 
 About 1.5 minutes. It builds on T14.4.
 
-This file builds and sends Bault's mail. `EmailAdapter.send` takes a template and its variables. `renderEmail` builds each message as text and escaped HTML in the product's ink and custody green. `email_verification` and `password_reset` come in Hebrew first and then English, each half in its own direction. `notification_event` is English and carries the worker's sentence.
+This file builds and sends Bault's mail. `EmailAdapter.send` takes a template and its variables. `renderEmail` builds each message as text and escaped HTML in the product's ink and custody green. `email_verification`, `password_reset` and `notification_event` are each one English message, and the last carries the worker's sentence.
 
 `ConsoleEmailAdapter` prints the message variables to the server log, link included. So a reset link lands in the log, where any reader can use it. That is why production refuses console email. `SmtpEmailAdapter` sends through nodemailer with `requireTLS`. It skips `verify()`, so the API boots while the mail server is down.
 
@@ -136,13 +136,13 @@ This is `pnpm tunnel`, which shows the built app to outsiders through a public l
 
 About 1 minute. It builds on T16.5.
 
-This script checks `apps/web/src/index.css` and the web sources against the rules in `DESIGN.md`. It flags physical properties, which break the right-to-left layout. It also flags off-scale pixel sizes, a hard-coded radius or shadow, raw colours and misused mono. It finds the token block by the `Application shell` banner comment. A `design-lint-allow:` comment exempts its own line and the two after it, so those CSS comments change what it reports. Nothing runs the script, CI included.
+This script checks `apps/web/src/index.css` and the web sources against the rules in `DESIGN.md`. It flags physical properties, since the stylesheets are written in logical ones throughout. It also flags off-scale pixel sizes, a hard-coded radius or shadow, raw colours and misused mono. It finds the token block by the `Application shell` banner comment. A `design-lint-allow:` comment exempts its own line and the two after it, so those CSS comments change what it reports. Nothing runs the script, CI included.
 
 #### `scripts/fetch-fonts.mjs`
 
 About 1 minute. It builds on T16.4 and T16.5.
 
-This script downloads the four font families from Google Fonts. It keeps the `KEEP` subsets, which are Latin, Latin Extended and Hebrew, and IBM Plex Sans Hebrew keeps only Hebrew. It writes `assets/fonts/` and `apps/web/src/fonts.css`. You run it by hand, and the output is committed, so builds never need the network.
+This script downloads the three font families from Google Fonts, Geist, Geist Mono and Frank Ruhl Libre. It keeps the `KEEP` subsets, which are Latin and Latin Extended. It writes `assets/fonts/` and `apps/web/src/fonts.css`. You run it by hand, and the output is committed, so builds never need the network.
 
 #### `scripts/remove-test-users.mjs`
 

@@ -104,7 +104,7 @@ describe('the notifications, a register', () => {
 
     const [first] = screen.getAllByRole('list');
     const when = entriesOf(first!)[0]!.querySelector('.date');
-    // A date with Hebrew words in it is not a left-to-right island: forcing it puts the year in the middle.
+    // A date is not set apart as a code is: it reads the way its own words do.
     expect(when).not.toHaveAttribute('dir');
     expect(screen.getAllByRole('heading', { level: 3 })[0]!.querySelector('.date')).not.toHaveAttribute('dir');
 

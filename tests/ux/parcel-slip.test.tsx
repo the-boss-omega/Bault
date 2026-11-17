@@ -22,7 +22,6 @@ beforeEach(() => {
   get.mockReset();
   post.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
   get.mockImplementation(async (path: string) => (path === '/me/inbound-addresses' ? FACILITIES : []));
   post.mockResolvedValue({ code: 'PKG-TEST0001' });
 });

@@ -36,14 +36,13 @@ Options:
   --base-url <url>   use a web app already running there instead of starting one
   --out <dir>        where the images and index.html go (default design-screens)
   --personas <list>  anonymous,collector,seller,suspended,operator,admin (default all)
-  --locales <list>   he,en (default both)
   --widths <list>    390,1440 (default both)
   --theme <name>     dark or light (default dark, the product's default). The choice is
                      stored the way the app's own switch stores it, so this is the
                      theme the pages render, not only the browser's preference
   --axe              also run axe-core's WCAG 2.x A and AA rules (contrast, names,
                      labels, ARIA) on every screen, and walk the keyboard focus order
-                     of every screen, in both languages and at both widths, to measure
+                     of every screen, at both widths, to measure
                      every focus ring against what is behind it and to see whether
                      the box it sits in cuts it off (axe does not check focus
                      indicators); what it finds is listed as flags
@@ -71,14 +70,12 @@ transaction, a request) is opened and captured as a screen of its own, named <sc
 (--only record asks for those alone), and the run says which kinds of record it did not reach.
 
 Open <out>/index.html when it finishes. Screens with automatic flags (an id,
-cents, an enum name or English words on a Hebrew page, an English phrase, a date,
-a price or a figure drawn out of order on a Hebrew page, English text in a Hebrew
-cell that nothing isolates, a page that is not in the theme it was asked for, sideways
-scrolling or content cut off at the edge at phone width, a menu, a drawer or the
-photograph that is off screen, does not cover what it should or cannot be clicked,
-a console error, a failed API call or, with --axe, an accessibility violation or a
-focus ring that is absent, faint or cut off) are listed first. The emails are looked
-at the same way, as the two-language messages they are.`;
+cents, an enum name, a kicker that says its heading again, an icon drawn larger than
+text, a page that is not in the theme it was asked for, sideways scrolling or content
+cut off at the edge at phone width, a menu, a drawer or the photograph that is off
+screen, does not cover what it should or cannot be clicked, a console error, a failed
+API call or, with --axe, an accessibility violation or a focus ring that is absent,
+faint or cut off) are listed first. The emails are looked at the same way.`;
 
 const PERSONAS = {
   anonymous: { login: null },
@@ -152,7 +149,6 @@ function parseArgs(argv) {
     baseUrl: null,
     out: 'design-screens',
     personas: Object.keys(PERSONAS),
-    locales: ['he', 'en'],
     widths: [390, 1440],
     theme: 'dark',
     axe: false,
@@ -180,7 +176,6 @@ function parseArgs(argv) {
     else if (flag === '--base-url') out.baseUrl = value();
     else if (flag === '--out') out.out = value();
     else if (flag === '--personas') out.personas = list();
-    else if (flag === '--locales') out.locales = list();
     else if (flag === '--widths') out.widths = list().map(Number);
     else if (flag === '--theme') out.theme = value();
     else if (flag === '--axe') out.axe = true;
@@ -196,9 +191,6 @@ function parseArgs(argv) {
   }
   for (const p of out.personas) {
     if (!PERSONAS[p]) throw new Error(`Unknown persona "${p}". Known: ${Object.keys(PERSONAS).join(', ')}`);
-  }
-  for (const l of out.locales) {
-    if (l !== 'he' && l !== 'en') throw new Error(`Unknown locale "${l}"`);
   }
   if (out.widths.some((w) => !Number.isInteger(w) || w < 320)) throw new Error('--widths takes whole pixel widths');
   if (out.theme !== 'light' && out.theme !== 'dark') throw new Error('--theme is light or dark');
@@ -313,7 +305,7 @@ function launchOptions(engine, browserPath) {
  * The context a page is looked at in. At phone width it is a phone's: a mobile viewport with touch, where the
  * engine has one (Firefox's does not exist, so there it is the narrow window alone).
  */
-function contextOptions(state, width, locale, { motion, forced = false }) {
+function contextOptions(state, width, { motion, forced = false }) {
   const mobile = width < 800;
   return {
     viewport: { width, height: mobile ? 844 : 900 },
@@ -323,7 +315,7 @@ function contextOptions(state, width, locale, { motion, forced = false }) {
     colorScheme: state.opts.theme,
     reducedMotion: motion ? 'no-preference' : 'reduce',
     forcedColors: forced ? 'active' : 'none',
-    locale: locale === 'he' ? 'he-IL' : 'en-US',
+    locale: 'en-US',
   };
 }
 
@@ -409,22 +401,18 @@ async function settle(page) {
  * off the edge of a phone). A static capture sees none of this: an entrance that is still in flight, or a
  * box that moves what is fixed inside it, only shows when the thing is opened.
  */
-async function auditOverlays(state, browser, persona, locale, width) {
-  const context = await browser.newContext(contextOptions(state, width, locale, { motion: true }));
-  await context.addInitScript(
-    ([l, t]) => {
-      try {
-        globalThis.localStorage.setItem('bault.locale', l);
-        globalThis.localStorage.setItem('bault.theme', t);
-      } catch {}
-    },
-    [locale, state.opts.theme],
-  );
+async function auditOverlays(state, browser, persona, width) {
+  const context = await browser.newContext(contextOptions(state, width, { motion: true }));
+  await context.addInitScript((t) => {
+    try {
+      globalThis.localStorage.setItem('bault.theme', t);
+    } catch {}
+  }, state.opts.theme);
   const page = await context.newPage();
   const record = async (name, flags) => {
-    const file = `${slug(`${persona}-${name}`)}-${locale}-${width}.png`;
+    const file = `${slug(`${persona}-${name}`)}-${width}.png`;
     await page.screenshot({ path: join(state.outDir, file) });
-    state.shots.push({ name: `${persona}-${name}`, persona, locale, width, file, title: name, flags });
+    state.shots.push({ name: `${persona}-${name}`, persona, width, file, title: name, flags });
     process.stdout.write(flags.length ? '!' : '.');
   };
   // Where something that is open actually is: on screen, as large as it should be, and the thing under a
@@ -467,7 +455,7 @@ async function auditOverlays(state, browser, persona, locale, width) {
     await open(page, `${state.baseUrl}/#/vault`);
     await settle(page);
 
-    // The header's menus: the language, the notifications, the account.
+    // The header's menus: the notifications, the account.
     const triggers = [];
     for (const handle of await page.$$('[aria-haspopup]')) if (await handle.isVisible()) triggers.push(handle);
     for (let index = 0; index < triggers.length; index += 1) {
@@ -514,7 +502,7 @@ async function auditOverlays(state, browser, persona, locale, width) {
       await page.keyboard.press('Escape');
     }
   } catch (error) {
-    state.shots.push({ name: `${persona}-overlays`, persona, locale, width, file: '', title: 'overlays', flags: [`the overlay pass failed: ${error.message.slice(0, 140)}`] });
+    state.shots.push({ name: `${persona}-overlays`, persona, width, file: '', title: 'overlays', flags: [`the overlay pass failed: ${error.message.slice(0, 140)}`] });
   } finally {
     await context.close();
   }
@@ -530,16 +518,16 @@ async function capture(state, page, name, ctx) {
   // Every screen is looked at from its top, as a visitor arrives at it: a page that has been left scrolled (by the
   // one before it) has its sticky bar over its header, and a target that is under the bar is "partially obscured".
   await page.evaluate(() => globalThis.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
-  const file = `${slug(name)}-${ctx.locale}-${ctx.width}.png`;
+  const file = `${slug(name)}-${ctx.width}.png`;
   await page.screenshot({ path: join(state.outDir, file), fullPage: true });
-  const found = await inspect(page, ctx.locale, ctx.width);
+  const found = await inspect(page, ctx.width);
   const accessibility = state.opts.axe ? await audit(page, { forced: state.opts.forced }) : [];
   if (state.opts.axe) accessibility.push(...(await auditFocus(page, state.opts.focusStops)));
   if (ctx.forced) accessibility.push(...(await auditForced(page)));
   const theme = await auditTheme(page, state.opts.theme);
   const buttons = await auditButtons(page);
   const flags = [...found.flags, ...theme, ...buttons, ...accessibility, ...ctx.problems.splice(0)];
-  state.shots.push({ name, persona: ctx.persona, locale: ctx.locale, width: ctx.width, file, title: found.title, flags });
+  state.shots.push({ name, persona: ctx.persona, width: ctx.width, file, title: found.title, flags });
   process.stdout.write(flags.length ? '!' : '.');
 }
 
@@ -651,21 +639,17 @@ async function visitQueueTicket(state, page, ctx) {
   await capture(state, page, `${ctx.persona}-support-ticket`, ctx);
 }
 
-async function runPersona(state, browser, persona, locale, width) {
+async function runPersona(state, browser, persona, width) {
   const context = await browser.newContext(
-    contextOptions(state, width, locale, { motion: state.opts.motion, forced: state.opts.forced }),
+    contextOptions(state, width, { motion: state.opts.motion, forced: state.opts.forced }),
   );
-  await context.addInitScript(
-    ([l, t]) => {
-      try {
-        globalThis.localStorage.setItem('bault.locale', l);
-        globalThis.localStorage.setItem('bault.theme', t);
-      } catch {}
-    },
-    [locale, state.opts.theme],
-  );
+  await context.addInitScript((t) => {
+    try {
+      globalThis.localStorage.setItem('bault.theme', t);
+    } catch {}
+  }, state.opts.theme);
   const page = await context.newPage();
-  const ctx = { persona, locale, width, problems: [], expected: [], forced: state.opts.forced };
+  const ctx = { persona, width, problems: [], expected: [], forced: state.opts.forced };
   page.on('console', (msg) => {
     if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource')) {
       ctx.problems.push(`console: ${msg.text().slice(0, 160)}`);
@@ -697,7 +681,7 @@ async function runPersona(state, browser, persona, locale, width) {
       const session = await signIn(page, persona, state.opts, state.secrets);
       await open(page, `${state.baseUrl}/#/${session?.mfaEnrollmentRequired ? '' : 'profile/security'}`);
       await capture(state, page, `${persona}-two-factor-enrolment`, ctx);
-      const start = page.getByRole('button', { name: /^(Set up two-factor sign-in|הגדרת אימות דו־שלבי)$/ }).first();
+      const start = page.getByRole('button', { name: /^Set up two-factor sign-in$/ }).first();
       if (await start.isEnabled({ timeout: 5000 }).catch(() => false)) {
         await start.click();
         await page.waitForSelector('img[src^="data:image/svg+xml"]', { timeout: 10000 }).catch(() => {});
@@ -728,7 +712,7 @@ async function runPersona(state, browser, persona, locale, width) {
     await context.close();
   }
   if (persona !== 'anonymous' && state.opts.overlays && (!state.opts.only || state.opts.only === 'overlay')) {
-    await auditOverlays(state, browser, persona, locale, width);
+    await auditOverlays(state, browser, persona, width);
   }
 }
 
@@ -749,13 +733,11 @@ async function captureEmails(state, browser) {
       const email = renderEmail(template, { link });
       // The harness is a document with a language and a title, so that what the audit says is about the message.
       await page.setContent(`<!doctype html><html lang="en"><meta charset="utf-8"><title>${email.subject ?? template}</title><body style="margin:0;background:#ffffff">${email.html}</body></html>`);
-      const file = `${name}-he-en-${width}.png`;
+      const file = `${name}-${width}.png`;
       await page.screenshot({ path: join(state.outDir, file), fullPage: true });
-      // Both languages are in the one message by design, so what is looked for is the layout and, in the
-      // Hebrew, the order of what is drawn; not English words on a Hebrew page.
-      const found = await inspect(page, 'mixed', width);
+      const found = await inspect(page, width);
       const accessibility = state.opts.axe ? await audit(page, { forced: state.opts.forced }) : [];
-      state.shots.push({ name, persona: 'email', locale: 'he+en', width, file, title: template, flags: [...found.flags, ...accessibility] });
+      state.shots.push({ name, persona: 'email', width, file, title: template, flags: [...found.flags, ...accessibility] });
       await context.close();
       process.stdout.write('.');
     }
@@ -776,11 +758,11 @@ function contactSheet(shots) {
   const flagged = ordered.filter(([, list]) => list.some((s) => s.flags.length)).length;
   const sections = ordered
     .map(([name, list]) => {
-      const flags = [...new Set(list.flatMap((s) => s.flags.map((f) => `${s.locale} ${s.width}: ${f}`)))];
+      const flags = [...new Set(list.flatMap((s) => s.flags.map((f) => `${s.width}: ${f}`)))];
       const figures = list
         .map(
           (s) =>
-            `<figure><a href="${esc(s.file)}"><img loading="lazy" src="${esc(s.file)}" alt="${esc(`${name} ${s.locale} ${s.width}`)}"></a><figcaption>${esc(s.locale)} · ${s.width}px</figcaption></figure>`,
+            `<figure><a href="${esc(s.file)}"><img loading="lazy" src="${esc(s.file)}" alt="${esc(`${name} ${s.width}`)}"></a><figcaption>${s.width}px</figcaption></figure>`,
         )
         .join('');
       const flagList = flags.length ? `<ul class="flags">${flags.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : '';
@@ -832,11 +814,9 @@ async function main() {
   try {
     for (const file of ['index.html', 'shots.json']) rmSync(join(outDir, file), { force: true });
     for (const persona of opts.personas) {
-      for (const locale of opts.locales) {
-        for (const width of opts.widths) {
-          process.stdout.write(`\n${persona} ${locale} ${width} `);
-          await runPersona(state, browser, persona, locale, width);
-        }
+      for (const width of opts.widths) {
+        process.stdout.write(`\n${persona} ${width} `);
+        await runPersona(state, browser, persona, width);
       }
     }
     process.stdout.write('\nemails ');

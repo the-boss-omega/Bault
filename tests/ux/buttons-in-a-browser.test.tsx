@@ -51,10 +51,8 @@ afterAll(async () => {
   await browser?.close();
 });
 
-type Locale = 'en' | 'he';
 interface Mode {
   width?: number;
-  locale?: Locale;
   theme?: 'dark' | 'light';
   /** A fingertip, as a phone has: touch, and a coarse pointer. */
   touch?: boolean;
@@ -64,7 +62,6 @@ interface Mode {
 /** What jsdom has now, in a browser with the real stylesheets, as a visitor in this mode has it. */
 async function inBrowser({
   width = 1100,
-  locale = 'en',
   theme = 'dark',
   touch = false,
   forced = false,
@@ -79,7 +76,7 @@ async function inBrowser({
     forcedColors: forced ? 'active' : 'none',
   });
   await page.setContent(
-    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${CSS}</style></head>` +
+    `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${CSS}</style></head>` +
       `<body>${html}</body></html>`,
   );
   return page;
@@ -287,14 +284,12 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
     }
 
     for (const theme of ['dark', 'light'] as const) {
-      for (const locale of ['en', 'he'] as const) {
-        it(`every button is read, edged and large enough on the page, on paper and in the room: ${theme}, ${locale}`, async () => {
-          render(grounds);
-          const page = await inBrowser({ theme, locale });
-          expect(await audit.auditButtons(page)).toEqual([]);
-          await page.close();
-        });
-      }
+      it(`every button is read, edged and large enough on the page, on paper and in the room: ${theme}`, async () => {
+        render(grounds);
+        const page = await inBrowser({ theme });
+        expect(await audit.auditButtons(page)).toEqual([]);
+        await page.close();
+      });
     }
 
     for (const theme of ['dark', 'light'] as const) {
@@ -509,39 +504,34 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
   });
 
   describe('a control that is not a Button', () => {
-    // Home, Market and Browse are three letters in Hebrew: 19, 21 and 20 pixels of text, and a target is 24.
+    // A word of two or three letters is narrower than a target, which is 24 pixels.
     const header = (
       <I18nProvider>
         <PageHeader
-          title="שוק"
+          title="Up"
           crumbs={[
-            { label: 'בית', onClick: () => {} },
-            { label: 'שוק', onClick: () => {} },
-            { label: 'עיון' },
+            { label: 'Up', onClick: () => {} },
+            { label: 'In', onClick: () => {} },
+            { label: 'All' },
           ]}
           actions={null}
         />
         <ContextTabs
-          label="חלקים"
+          label="Parts"
           active="browse"
           onSelect={() => {}}
           tabs={[
-            { key: 'browse', label: 'עיון' },
-            { key: 'sell', label: 'מכירה' },
+            { key: 'browse', label: 'All' },
+            { key: 'sell', label: 'Out' },
           ]}
         />
       </I18nProvider>
     );
 
-    for (const [locale, width] of [
-      ['he', 1440],
-      ['he', 390],
-      ['en', 390],
-    ] as const) {
-      it(`a crumb and a tab are 24px wide and tall whatever the word is: ${locale}, ${width}px`, async () => {
-        localStorage.setItem('bault.locale', locale);
+    for (const width of [1440, 390]) {
+      it(`a crumb and a tab are 24px wide and tall whatever the word is: ${width}px`, async () => {
         render(header);
-        const page = await inBrowser({ locale, width });
+        const page = await inBrowser({ width });
         const boxes = await page.$$eval('.breadcrumb button, .ctx-tab', (els) =>
           els.map((el) => ({
             word: el.textContent,
@@ -561,9 +551,8 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
     }
 
     it('a crumb that is widened to be a target does not move its word: the first is still where the title starts', async () => {
-      localStorage.setItem('bault.locale', 'he');
       render(header);
-      const page = await inBrowser({ locale: 'he', width: 1440 });
+      const page = await inBrowser({ width: 1440 });
       const { title, crumb } = await page.evaluate(() => {
         const text = (el: Element) => {
           const range = document.createRange();
@@ -571,8 +560,8 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
           return range.getBoundingClientRect();
         };
         return {
-          title: text(document.querySelector('.page-title')!).right,
-          crumb: text(document.querySelector('.breadcrumb button')!).right,
+          title: text(document.querySelector('.page-title')!).left,
+          crumb: text(document.querySelector('.breadcrumb button')!).left,
         };
       });
       expect(Math.abs(title - crumb)).toBeLessThanOrEqual(1);
@@ -580,19 +569,19 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
     });
   });
 
-  describe('in Hebrew', () => {
-    it('the glyph is at the start of the line, which is the right, and the label follows it to the left', async () => {
+  describe('a glyph and a long label', () => {
+    it('the glyph is at the start of the line, and the label follows it', async () => {
       render(
         <Button id="b" icon={<svg id="g" width="16" height="16" aria-hidden="true" />}>
-          בקשת הפקדה
+          Request a deposit
         </Button>,
       );
-      const page = await inBrowser({ locale: 'he' });
+      const page = await inBrowser();
       const glyphBox = await page.$eval('#g', (el) => el.getBoundingClientRect().toJSON());
       const labelBox = await page.$eval('#b .btn-label', (el) =>
         el.getBoundingClientRect().toJSON(),
       );
-      expect(glyphBox.left).toBeGreaterThanOrEqual(labelBox.right - 1);
+      expect(glyphBox.right).toBeLessThanOrEqual(labelBox.left + 1);
       await page.close();
     });
 
@@ -600,11 +589,11 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
       render(
         <div id="box" style={{ width: 240 }}>
           <Button id="b" block variant="primary">
-            שליחת בקשת הפקדה ואישור התנאים של הוואלט
+            Send the deposit request and accept the wallet’s terms
           </Button>
         </div>,
       );
-      const page = await inBrowser({ locale: 'he', width: 320 });
+      const page = await inBrowser({ width: 320 });
       const { scroll, client } = await page.$eval('#b', (el) => ({
         scroll: el.scrollWidth,
         client: el.clientWidth,

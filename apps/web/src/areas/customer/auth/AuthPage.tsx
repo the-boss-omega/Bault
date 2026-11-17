@@ -1,5 +1,4 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
 import { useMotionReady } from '../../../shared/ui/useLandingMotion';
 import { CardSlab } from '../../../shared/CardPhoto';
 import { Serial } from '../../../shared/ui/Serial';
@@ -92,8 +91,6 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
             B
           </span>
           <span className="auth-brand-word">Bault</span>
-
-          <LanguageSwitcher />
         </div>
 
         {children}
