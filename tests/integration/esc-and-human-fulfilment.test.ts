@@ -416,10 +416,17 @@ describe('ESC escrow and human fulfilment', () => {
       id: string;
       open: boolean;
       feeMinor: number;
-      booked: number;
     }>;
     const show = shows.find((s) => s.open)!;
     expect(show).toBeTruthy();
+    const bookedAt = async (eventId: string) =>
+      (
+        await sql<{ n: number }>(
+          `SELECT count(*)::int AS n FROM shipment WHERE pickup_event_id = $1 AND status <> 'cancelled'`,
+          [eventId],
+        )
+      )[0]!.n;
+    const bookedBefore = await bookedAt(show.id);
 
     const before = await balanceOf(collector);
     const booked = await collector.post('/shipping/pickup', {
@@ -430,8 +437,7 @@ describe('ESC escrow and human fulfilment', () => {
     expect(booked.body.fulfilmentMethod).toBe('show_pickup');
     expect(await balanceOf(collector)).toBe(before - show.feeMinor);
 
-    const after = (await collector.get('/shipping/pickup/shows')).body as Array<{ id: string; booked: number }>;
-    expect(after.find((s) => s.id === show.id)!.booked).toBe(show.booked + 1);
+    expect(await bookedAt(show.id)).toBe(bookedBefore + 1);
 
     const handed = await operator.post(`/shipping/shipments/${booked.body.id}/hand-over`, {
       scannedItemIds: [card.id],

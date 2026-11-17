@@ -510,3 +510,41 @@ describe('A9 the pricing rule table', () => {
     expect((await red.get('/pricing/list')).status).toBe(200);
   });
 });
+
+describe('A10 inbound parcels, addresses and show calendars as a collector reads them', () => {
+  it('leaves out warehouse queue, facility and show internals', async () => {
+    const red = await signIn(SEED.collector);
+    const operator = await signIn(SEED.operator);
+
+    const workflow = await red.get('/parcels/workflow/status');
+    expect(workflow.status).toBe(200);
+    expectWithout(workflow.body, ['unclaimed']);
+    expectWith(workflow.body, ['awaitingOpen', 'awaitingProcessing']);
+    expectWith((await operator.get('/parcels/workflow/status')).body, ['unclaimed']);
+
+    const addresses = await red.get('/me/inbound-addresses');
+    expectWithout(addresses.body, ['facilityId', 'phone']);
+    expectWith(addresses.body, ['code', 'name', 'careOf', 'lines']);
+    const registered = await red.post('/me/parcels', {
+      facilityCode: (addresses.body as { code: string }[])[0]!.code,
+      trackingNumber: `VIEWS-${Date.now()}`,
+    });
+    expect(registered.status).toBe(201);
+
+    const parcels = await red.get('/me/parcels');
+    expectWithout(parcels.body, ['facilityCode', 'facilityId', 'ownerId']);
+    expectWith(parcels.body, ['code', 'status', 'facilityName']);
+
+    const SHOW_DROPPED = ['capacity', 'booked', 'notes', 'active', 'pickupEnabled', 'pickupCapacity', 'partnerFeeNote', 'updatedAt'];
+    const shows = await red.get('/shipping/pickup/shows');
+    expect(shows.status).toBe(200);
+    expectWithout(shows.body, SHOW_DROPPED);
+    if ((shows.body as unknown[]).length > 0) {
+      expectWith(shows.body, ['id', 'name', 'venue', 'startsAt', 'requestDeadline', 'feeMinor', 'remaining', 'open']);
+    }
+    const channels = await red.get('/services/consignment/channels');
+    expect(channels.status).toBe(200);
+    expectWithout(channels.body, [...SHOW_DROPPED, 'createdAt']);
+    expectWith(channels.body.channels, ['key', 'label', 'minAskingMinor', 'requiresEvent']);
+  });
+});

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from '../integration/helpers/http';
+import { sql } from '../integration/helpers/db';
 
 type Res = Awaited<ReturnType<Client['post']>>;
 
@@ -333,11 +334,18 @@ describe('concurrency: money races', () => {
       id: string;
       open: boolean;
       feeMinor: number;
-      booked: number;
       remaining: number | null;
     }>;
     const show = shows.find((s) => s.open);
     expect(show).toBeTruthy();
+    const bookedAt = async (eventId: string) =>
+      (
+        await sql<{ n: number }>(
+          `SELECT count(*)::int AS n FROM shipment WHERE pickup_event_id = $1 AND status <> 'cancelled'`,
+          [eventId],
+        )
+      )[0]!.n;
+    const bookedBefore = await bookedAt(show!.id);
     const copies = Math.min(5, show!.remaining ?? 5);
     expect(copies).toBeGreaterThanOrEqual(2);
 
@@ -348,11 +356,9 @@ describe('concurrency: money races', () => {
       ),
     );
     const after = await balanceOf(collector);
-    const bookedAfter = ((await collector.get('/shipping/pickup/shows')).body as Array<{ id: string; booked: number }>).find(
-      (s) => s.id === show!.id,
-    )!.booked;
+    const bookedAfter = await bookedAt(show!.id);
 
-    expect({ wins: wins(res), charged: before - after, newBookings: bookedAfter - show!.booked }).toEqual({
+    expect({ wins: wins(res), charged: before - after, newBookings: bookedAfter - bookedBefore }).toEqual({
       wins: 1,
       charged: show!.feeMinor,
       newBookings: 1,

@@ -394,7 +394,10 @@ export class DisController {
 
   @Get('consignment/channels')
   async channels() {
-    return { channels: CONSIGNMENT_CHANNELS, events: await this.consignment.listEvents() };
+    return {
+      channels: CONSIGNMENT_CHANNELS.map(({ partnerFeeNote: _partnerFeeNote, ...channel }) => channel),
+      events: await this.consignment.collectorEvents(),
+    };
   }
 
   @Post('buyout')

@@ -236,7 +236,7 @@ export class ShpController {
 
   @Get('pickup/shows')
   pickupShows() {
-    return this.human.pickupShows();
+    return this.human.collectorPickupShows();
   }
 
   @Post('pickup')
