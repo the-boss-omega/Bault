@@ -15,7 +15,7 @@
     "@bault/config": "workspace:*",
     "@sentry/node": "10.75.3",
     "pg": "^8.13.1",
-    "pg-boss": "^10.1.5"
+    "pg-boss": "^12.38.0"
   },
   "devDependencies": {
     "@types/pg": "^8.11.10",
