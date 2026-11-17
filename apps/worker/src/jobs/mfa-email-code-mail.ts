@@ -88,7 +88,7 @@ export async function sendMfaEmailCode(
   );
   await mailer.send({
     to: code.email,
-    subject: code.purpose === 'sign_in' ? 'Your Bault sign-in code' : 'Your Bault confirmation code',
+    subject: code.purpose === 'sign_in' ? 'Your Card Embassy sign-in code' : 'Your Card Embassy confirmation code',
     template: 'mfa_email_code',
     variables: { code: digits, purpose: code.purpose, minutes: String(EMAIL_CODE_TTL_MINUTES) },
   });

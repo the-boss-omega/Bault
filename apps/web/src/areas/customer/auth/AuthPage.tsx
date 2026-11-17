@@ -1,5 +1,4 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
 import { useMotionReady } from '../../../shared/ui/useLandingMotion';
 import { CardSlab } from '../../../shared/CardPhoto';
 import { Serial } from '../../../shared/ui/Serial';
@@ -90,11 +89,9 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
       <div className="auth-box">
         <div className="auth-brand">
           <span className="rail-mark" aria-hidden="true">
-            B
+            C
           </span>
-          <span className="auth-brand-word">Bault</span>
-
-          <LanguageSwitcher />
+          <span className="auth-brand-word">Card Embassy</span>
         </div>
 
         {children}

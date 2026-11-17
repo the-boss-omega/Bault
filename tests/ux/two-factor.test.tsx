@@ -219,7 +219,7 @@ describe('emailed codes on the account-security screen', () => {
     const app = screen.getByRole('radio', { name: /authenticator app/i });
     expect(email).toBeChecked();
     expect(app).not.toBeChecked();
-    expect(screen.getByRole('group', { name: /how should bault ask/i })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /how should card embassy ask/i })).toBeInTheDocument();
     expect(screen.getByText(/red@bault\.dev/)).toBeInTheDocument();
   });
 

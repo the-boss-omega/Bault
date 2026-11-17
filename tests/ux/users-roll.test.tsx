@@ -55,7 +55,6 @@ beforeEach(() => {
   get.mockReset();
   patch.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
   get.mockImplementation(async (path: string) => (path === '/admin/users' ? USERS : []));
   window.location.hash = '#/admin/users';
 });

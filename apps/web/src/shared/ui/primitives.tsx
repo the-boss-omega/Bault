@@ -486,11 +486,11 @@ export function ContextTabs({
   const count = tabs.length;
   const labels = tabs.map((t) => t.label).join('\u0000');
 
-  // Position the gliding indicator under the active tab. Offsets are measured
-  // from the inline-start edge, so the same maths serves LTR and RTL. A tab's
-  // width changes when the webfont arrives, when the language changes and when
-  // the bar is resized, so it is measured again for each of those; measuring
-  // once would leave the indicator where the fallback font put the tab.
+  // Position the gliding indicator under the active tab, measured from the
+  // strip's start. A tab's width changes when the webfont arrives, when its
+  // label changes and when the bar is resized, so it is measured again for each
+  // of those; measuring once would leave the indicator where the fallback font
+  // put the tab.
   useLayoutEffect(() => {
     const list = listRef.current;
     if (!list) return;
@@ -500,8 +500,7 @@ export function ContextTabs({
       if (!live || !tab) return;
       const l = list.getBoundingClientRect();
       const t = tab.getBoundingClientRect();
-      const rtl = document.documentElement.dir === 'rtl';
-      const x = rtl ? t.right - l.right : t.left - l.left;
+      const x = t.left - l.left;
       list.style.setProperty('--tab-x', `${x + list.scrollLeft}px`);
       list.style.setProperty('--tab-w', `${t.width}px`);
       list.dataset.ready = 'true';
@@ -536,12 +535,9 @@ export function ContextTabs({
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const index = tabs.findIndex((t) => t.key === active);
     if (index < 0) return;
-    const rtl = document.documentElement.dir === 'rtl';
-    const forward = rtl ? 'ArrowLeft' : 'ArrowRight';
-    const back = rtl ? 'ArrowRight' : 'ArrowLeft';
     let next: number | null = null;
-    if (event.key === forward) next = (index + 1) % tabs.length;
-    else if (event.key === back) next = (index - 1 + tabs.length) % tabs.length;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
     else if (event.key === 'Home') next = 0;
     else if (event.key === 'End') next = tabs.length - 1;
     if (next === null) return;

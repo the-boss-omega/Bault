@@ -62,9 +62,7 @@ afterAll(async () => {
   await browser?.close();
 });
 
-type Locale = 'en' | 'he';
-
-async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light'): Promise<Page> {
+async function inBrowser(width: number, theme: 'dark' | 'light'): Promise<Page> {
   const html = document.body.innerHTML;
   const context = await browser!.newContext({
     viewport: { width, height: 900 },
@@ -74,7 +72,7 @@ async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light')
   });
   const page = await context.newPage();
   await page.setContent(
-    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
+    `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
   );
   return page;
 }
@@ -86,8 +84,7 @@ const ZONES = [
   { label: 'TA / V', revenueMinor: 241000, perSlotMonthMinor: 120500, occupied: 2, shelves: 2 },
 ];
 
-function chart(locale: Locale, rows = ZONES) {
-  localStorage.setItem('bault.locale', locale);
+function chart(rows = ZONES) {
   return render(
     <I18nProvider>
       <YieldChart rows={rows} title="Yield" subtitle="Per zone" />
@@ -134,7 +131,7 @@ describe('the scale: round steps from a zero', () => {
 
 describe('the chart, as a list of zones', () => {
   it('is named by its title, and is a list a screen reader reads a zone at a time', () => {
-    const { container } = chart('en');
+    const { container } = chart();
     const figure = screen.getByRole('figure', { name: /Yield/ });
     expect(figure).toBeInTheDocument();
     const list = container.querySelector('ul.chart-rows')!;
@@ -144,12 +141,12 @@ describe('the chart, as a list of zones', () => {
   });
 
   it('lists the worst first, the zones that earn from the least up and those with nothing on their shelves last', () => {
-    const { container } = chart('en');
+    const { container } = chart();
     expect(rowsOf(container).map(nameOf)).toEqual(['NJ / B', 'NJ / A', 'TA / V', 'NJ / O']);
   });
 
   it('writes every value at the end of its bar, so that the table beneath it is its twin and nothing is behind a hover', () => {
-    const { container } = chart('en');
+    const { container } = chart();
     const values = rowsOf(container).map(
       (r) => r.querySelector('.chart-value .amount')?.textContent,
     );
@@ -158,7 +155,7 @@ describe('the chart, as a list of zones', () => {
   });
 
   it('draws each bar to the scale, from zero: a bar is its value over the ceiling of the axis', () => {
-    const { container } = chart('en');
+    const { container } = chart();
     // Per slot-month: the largest is 1,205.00 and the ceiling of the axis is 1,500.00.
     const ratios = rowsOf(container).map((r) =>
       Number((r.querySelector('.chart-track') as HTMLElement).style.getPropertyValue('--ratio')),
@@ -168,7 +165,7 @@ describe('the chart, as a list of zones', () => {
   });
 
   it('marks the weakest of the zones that earn, in a colour and in a word, and no other', () => {
-    const { container } = chart('en');
+    const { container } = chart();
     const marked = container.querySelectorAll('.chart-bar--mark');
     expect(marked).toHaveLength(1);
     const row = marked[0]!.closest('.chart-row') as HTMLElement;
@@ -180,18 +177,18 @@ describe('the chart, as a list of zones', () => {
 
   it('does not mark one of the zones as the lowest where they earn the same, or where there is only the one', () => {
     const same = ZONES.map((z) => ({ ...z, perSlotMonthMinor: z.occupied ? 30000 : null }));
-    const { container, unmount } = chart('en', same);
+    const { container, unmount } = chart(same);
     expect(container.querySelectorAll('.chart-bar--mark')).toHaveLength(0);
     expect(screen.queryByText('Lowest')).toBeNull();
     unmount();
-    const one = chart('en', [ZONES[0]!, ZONES[2]!]);
+    const one = chart([ZONES[0]!, ZONES[2]!]);
     expect(one.container.querySelectorAll('.chart-bar--mark')).toHaveLength(0);
     expect(screen.queryByText('Lowest')).toBeNull();
   });
 
   it('measures revenue where no zone has accrued any time yet, and says that it does', () => {
     const noTime = ZONES.map((z) => ({ ...z, perSlotMonthMinor: null }));
-    const { container } = chart('en', noTime);
+    const { container } = chart(noTime);
     expect(container.querySelector('.chart-axis-label')).toHaveTextContent(
       'Revenue (no occupancy accrued yet)',
     );
@@ -199,12 +196,12 @@ describe('the chart, as a list of zones', () => {
     expect(rowsOf(container).map(nameOf)).toEqual(['NJ / B', 'NJ / A', 'TA / V', 'NJ / O']);
     expect(rowsOf(container)[0]!.querySelector('.amount')).toHaveTextContent('$525.00');
     // Per slot-month, the axis says so.
-    const { container: perSlot } = chart('en');
+    const { container: perSlot } = chart();
     expect(perSlot.querySelectorAll('.chart-axis-label')[0]).toHaveTextContent('Per slot-month');
   });
 
   it('has a scale of round steps that starts with the zero, which no reader of it hears', () => {
-    const { container } = chart('en');
+    const { container } = chart();
     const axis = container.querySelector('.chart-axis')!;
     expect(axis).toHaveAttribute('aria-hidden', 'true');
     expect(Array.from(axis.querySelectorAll('.chart-tick')).map((t) => t.textContent)).toEqual([
@@ -213,9 +210,9 @@ describe('the chart, as a list of zones', () => {
       '$1K',
       '$1.5K',
     ]);
-    // Zero first: in Hebrew that is the right-hand end of the line, where the bars begin.
+    // Zero first, at the end of the line where the bars begin.
     for (const t of Array.from(axis.querySelectorAll('.chart-tick'))) {
-      // The tick is placed by the page's direction, and the figure in it is read left to right.
+      // The tick is placed along the axis, and the figure in it is a run of its own.
       expect(t).not.toHaveAttribute('dir');
       expect(t.querySelector('[dir="ltr"]')).not.toBeNull();
     }
@@ -223,16 +220,8 @@ describe('the chart, as a list of zones', () => {
 
   it('is not drawn where nothing has been earned: a chart of nothing says nothing the table does not', () => {
     const none = ZONES.map((z) => ({ ...z, revenueMinor: 0, perSlotMonthMinor: null }));
-    const { container } = chart('en', none);
+    const { container } = chart(none);
     expect(container.querySelector('.chart')).toBeNull();
-  });
-
-  it('says the same in Hebrew, with the names of the zones kept left to right', () => {
-    const { container } = chart('he');
-    expect(rowsOf(container).map(nameOf)).toEqual(['NJ / B', 'NJ / A', 'TA / V', 'NJ / O']);
-    expect(container.querySelector('.chart-flag')).toHaveTextContent('הנמוך ביותר');
-    expect(container.querySelector('.chart-note')).toHaveTextContent('3 מתוך 4 מדפים תפוסים');
-    expect(container.querySelector('.chart-label .ltr-run')).toHaveClass('ltr-run');
   });
 });
 
@@ -264,7 +253,6 @@ describe('the chart on the page of the shelf yield', () => {
         }));
       return [];
     });
-    localStorage.setItem('bault.locale', 'en');
     const { container } = render(
       <I18nProvider>
         <ShelfYieldPanel />
@@ -284,95 +272,83 @@ describe('the chart on the page of the shelf yield', () => {
 
 describe.skipIf(!browser)('the chart, in a browser', () => {
   for (const theme of ['dark', 'light'] as const) {
-    for (const locale of ['en', 'he'] as const) {
-      it(`is read, drawn and thin, and has no flag: ${theme}, ${locale}, desktop and phone`, async () => {
-        chart(locale);
-        for (const width of [1280, 390]) {
-          const page = await inBrowser(width, locale, theme);
-          const flags = await audit.audit(page);
-          expect(flags).toEqual([]);
-          const marks = await page.$$eval('.chart-bar', (bars) =>
-            bars.map((bar) => {
-              const style = getComputedStyle(bar);
-              return {
-                height: Math.round(bar.getBoundingClientRect().height),
-                // The end a bar grows toward is rounded, and the end it grows from, at the zero, is square.
-                rounded: [
-                  style.borderTopLeftRadius,
-                  style.borderTopRightRadius,
-                  style.borderBottomLeftRadius,
-                  style.borderBottomRightRadius,
-                ].map((r) => parseFloat(r) > 0),
-              };
-            }),
-          );
-          for (const mark of marks) {
-            expect(mark.height).toBeLessThanOrEqual(24);
-            expect(mark.rounded).toEqual(
-              locale === 'he' ? [true, false, true, false] : [false, true, false, true],
-            );
-          }
-          await page.context().close();
+    it(`is read, drawn and thin, and has no flag: ${theme}, desktop and phone`, async () => {
+      chart();
+      for (const width of [1280, 390]) {
+        const page = await inBrowser(width, theme);
+        const flags = await audit.audit(page);
+        expect(flags).toEqual([]);
+        const marks = await page.$$eval('.chart-bar', (bars) =>
+          bars.map((bar) => {
+            const style = getComputedStyle(bar);
+            return {
+              height: Math.round(bar.getBoundingClientRect().height),
+              // The end a bar grows toward is rounded, and the end it grows from, at the zero, is square.
+              rounded: [
+                style.borderTopLeftRadius,
+                style.borderTopRightRadius,
+                style.borderBottomLeftRadius,
+                style.borderBottomRightRadius,
+              ].map((r) => parseFloat(r) > 0),
+            };
+          }),
+        );
+        for (const mark of marks) {
+          expect(mark.height).toBeLessThanOrEqual(24);
+          expect(mark.rounded).toEqual([false, true, false, true]);
         }
-      });
-    }
+        await page.context().close();
+      }
+    });
   }
 
-  it('begins every bar at the end the zero is at, and writes its value just past its end, in either language', async () => {
-    for (const locale of ['en', 'he'] as const) {
-      localStorage.setItem('bault.locale', locale);
-      const { unmount } = chart(locale);
-      const page = await inBrowser(1280, locale, 'dark');
-      const geometry = await page.$$eval('.chart-row', (rows) =>
-        rows.map((row) => {
-          const track = row.querySelector('.chart-track')!.getBoundingClientRect();
-          const bar = row.querySelector('.chart-bar')!.getBoundingClientRect();
-          const value = row.querySelector('.chart-value')!.getBoundingClientRect();
-          const ratio = parseFloat(
-            (row.querySelector('.chart-track') as HTMLElement).style.getPropertyValue('--ratio'),
-          );
-          return {
-            track: { left: track.left, right: track.right, width: track.width },
-            bar: { left: bar.left, right: bar.right, width: bar.width },
-            value: { left: value.left, right: value.right },
-            ratio,
-          };
-        }),
-      );
-      for (const g of geometry) {
-        // The bar is its ratio of the track (less the track's hairline), from the zero's end.
-        expect(Math.abs(g.bar.width - g.ratio * g.track.width)).toBeLessThanOrEqual(2);
-        if (locale === 'he') {
-          expect(Math.abs(g.bar.right - g.track.right)).toBeLessThanOrEqual(2);
-          // The value is past the bar's end, toward where the bars end: to its left.
-          expect(g.value.right).toBeLessThanOrEqual(g.bar.left - 2 + 1);
-        } else {
-          expect(Math.abs(g.bar.left - g.track.left)).toBeLessThanOrEqual(2);
-          expect(g.value.left).toBeGreaterThanOrEqual(g.bar.right + 2 - 1);
-        }
-      }
-      // The ticks of the scale are where the bars would be at that value: $0 at the zero's end.
-      const ticks = await page.$$eval('.chart-tick', (els) =>
-        els.map((el) => {
-          const box = el.getBoundingClientRect();
-          return { centre: (box.left + box.right) / 2, text: el.textContent };
-        }),
-      );
-      const track = geometry[0]!.track;
-      const at = (i: number) => (i / (ticks.length - 1)) * track.width;
-      ticks.forEach((tick, i) => {
-        const expected = locale === 'he' ? track.right - at(i) : track.left + at(i);
-        expect(Math.abs(tick.centre - expected)).toBeLessThanOrEqual(3);
-      });
-      await page.context().close();
-      unmount();
+  it('begins every bar at the end the zero is at, and writes its value just past its end', async () => {
+    const { unmount } = chart();
+    const page = await inBrowser(1280, 'dark');
+    const geometry = await page.$$eval('.chart-row', (rows) =>
+      rows.map((row) => {
+        const track = row.querySelector('.chart-track')!.getBoundingClientRect();
+        const bar = row.querySelector('.chart-bar')!.getBoundingClientRect();
+        const value = row.querySelector('.chart-value')!.getBoundingClientRect();
+        const ratio = parseFloat(
+          (row.querySelector('.chart-track') as HTMLElement).style.getPropertyValue('--ratio'),
+        );
+        return {
+          track: { left: track.left, right: track.right, width: track.width },
+          bar: { left: bar.left, right: bar.right, width: bar.width },
+          value: { left: value.left, right: value.right },
+          ratio,
+        };
+      }),
+    );
+    for (const g of geometry) {
+      // The bar is its ratio of the track (less the track's hairline), from the zero's end.
+      expect(Math.abs(g.bar.width - g.ratio * g.track.width)).toBeLessThanOrEqual(2);
+      expect(Math.abs(g.bar.left - g.track.left)).toBeLessThanOrEqual(2);
+      // The value is past the bar's end, toward where the bars end.
+      expect(g.value.left).toBeGreaterThanOrEqual(g.bar.right + 2 - 1);
     }
+    // The ticks of the scale are where the bars would be at that value: $0 at the zero's end.
+    const ticks = await page.$$eval('.chart-tick', (els) =>
+      els.map((el) => {
+        const box = el.getBoundingClientRect();
+        return { centre: (box.left + box.right) / 2, text: el.textContent };
+      }),
+    );
+    const track = geometry[0]!.track;
+    const at = (i: number) => (i / (ticks.length - 1)) * track.width;
+    ticks.forEach((tick, i) => {
+      const expected = track.left + at(i);
+      expect(Math.abs(tick.centre - expected)).toBeLessThanOrEqual(3);
+    });
+    await page.context().close();
+    unmount();
   });
 
   it('colours the weakest in the amber and the rest in the text’s grey, whichever the theme', async () => {
-    chart('en');
+    chart();
     for (const theme of ['dark', 'light'] as const) {
-      const page = await inBrowser(1280, 'en', theme);
+      const page = await inBrowser(1280, theme);
       const colours = await page.evaluate(() => {
         const root = getComputedStyle(document.documentElement);
         const probe = (value: string) => {
@@ -399,7 +375,7 @@ describe.skipIf(!browser)('the chart, in a browser', () => {
   });
 
   it('draws the bars in the system’s own colours where the page is drawn in them, and the weakest in its highlight', async () => {
-    chart('en');
+    chart();
     const html = document.body.innerHTML;
     const context = await browser!.newContext({
       viewport: { width: 1280, height: 900 },
@@ -430,8 +406,8 @@ describe.skipIf(!browser)('the chart, in a browser', () => {
   });
 
   it('puts the name above the bar on a phone, which has the width, and leaves the scale to the values written at the bars', async () => {
-    chart('en');
-    const page = await inBrowser(390, 'en', 'dark');
+    chart();
+    const page = await inBrowser(390, 'dark');
     const phone = await page.$$eval('.chart-row', (rows) =>
       rows.map((row) => {
         const label = row.querySelector('.chart-label')!.getBoundingClientRect();
@@ -452,8 +428,8 @@ describe.skipIf(!browser)('the chart, in a browser', () => {
   });
 
   it('is as wide as the panel it is in allows and no wider than a chart is read: not a strip at the start of an empty page', async () => {
-    chart('en');
-    const wide = await inBrowser(1600, 'en', 'dark');
+    chart();
+    const wide = await inBrowser(1600, 'dark');
     const width = await wide.$eval('.chart', (el) => Math.round(el.getBoundingClientRect().width));
     expect(width).toBeGreaterThan(700);
     expect(width).toBeLessThanOrEqual(880);

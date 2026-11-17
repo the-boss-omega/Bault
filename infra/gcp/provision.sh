@@ -71,7 +71,6 @@ DB=bault
 TAG="$NAME"
 VM_SA="${NAME}-vm@${PROJECT}.iam.gserviceaccount.com"
 IMAGES_SA="${NAME}-images@${PROJECT}.iam.gserviceaccount.com"
-BACKUPS_SA="${NAME}-backups@${BACKUP_PROJECT}.iam.gserviceaccount.com"
 IMAGES_BUCKET="${PROJECT}-${NAME}-images"
 BACKUPS_BUCKET="${BACKUP_PROJECT}-${NAME}-backups"
 PUT_GET_ROLE="baultObjectPutGet"
@@ -108,6 +107,52 @@ value() {
   "$@"
 }
 
+# IAM takes a minute or two to see a role or a service account made a moment
+# ago, and until then refuses a binding that names it, as missing or as an
+# invalid argument. settled runs a binding like run, and tries such a refusal
+# again every IAM_PAUSE seconds, IAM_TRIES times. Any other error stops here.
+IAM_PAUSE="${BAULT_IAM_PAUSE:-10}"
+IAM_TRIES=18
+settled() {
+  local try err
+  printf '+ %s\n' "$(shown "$@")"
+  [ "$DRY_RUN" -eq 1 ] && return 0
+  err="$(mktemp)"
+  for ((try = 1; ; try++)); do
+    if "$@" 2> "$err"; then
+      rm -f "$err"
+      return 0
+    fi
+    if [ "$try" -ge "$IAM_TRIES" ] || ! grep -qiE 'does not exist|invalid.argument' "$err"; then
+      break
+    fi
+    echo "  IAM does not see it yet: again in ${IAM_PAUSE}s (${try} of ${IAM_TRIES})"
+    sleep "$IAM_PAUSE"
+  done
+  cat "$err" >&2
+  rm -f "$err"
+  [ "$try" -lt "$IAM_TRIES" ] \
+    || die "still refused after ${IAM_TRIES} tries. If it names something just created, run this again in a few minutes: it skips what exists"
+  exit 1
+}
+
+# New Google Cloud organisations enforce iam.disableServiceAccountKeyCreation on
+# every project, and it forbids HMAC keys too. The images bucket needs one.
+key_policy_stop() {
+  cat >&2 <<EOF
+error: project ${PROJECT} may not create service account keys. New Google Cloud
+organisations enforce the constraint iam.disableServiceAccountKeyCreation on every
+project, and it covers HMAC keys, which the app needs for the images bucket's S3
+API. Lift it for this project only (it takes the Organization Policy Administrator
+role), then run this again:
+
+  gcloud resource-manager org-policies disable-enforce iam.disableServiceAccountKeyCreation --project=${PROJECT}
+
+The backups project needs no exception: the server writes the backups as itself.
+EOF
+  exit 1
+}
+
 new_password() {
   openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | cut -c1-32
 }
@@ -125,6 +170,12 @@ if [ "$DRY_RUN" -eq 0 ]; then
   echo "gcloud account: $account"
   gcloud projects describe "$PROJECT" > /dev/null || die "cannot read project $PROJECT"
   gcloud projects describe "$BACKUP_PROJECT" > /dev/null || die "cannot read project $BACKUP_PROJECT"
+  # Step 7 makes the images key after half an hour of Cloud SQL, so ask now.
+  if [ -z "$(saved STORAGE_ACCESS_KEY)" ] || [ -z "$(saved STORAGE_SECRET_KEY)" ]; then
+    enforced="$(gcloud resource-manager org-policies describe iam.disableServiceAccountKeyCreation \
+      --project="$PROJECT" --effective --format='value(booleanPolicy.enforced)' 2> /dev/null || true)"
+    case "$enforced" in [Tt]rue) key_policy_stop ;; esac
+  fi
 fi
 
 step "1/9 APIs"
@@ -160,14 +211,11 @@ fi
 step "3/9 service accounts"
 exists gcloud iam service-accounts describe "$VM_SA" --project="$PROJECT" \
   || run gcloud iam service-accounts create "${NAME}-vm" --project="$PROJECT" \
-       --display-name="Bault server: connects to Cloud SQL, nothing else"
+       --display-name="Bault server: connects to Cloud SQL, adds backups, nothing else"
 exists gcloud iam service-accounts describe "$IMAGES_SA" --project="$PROJECT" \
   || run gcloud iam service-accounts create "${NAME}-images" --project="$PROJECT" \
        --display-name="Bault images: puts and gets objects in one bucket"
-exists gcloud iam service-accounts describe "$BACKUPS_SA" --project="$BACKUP_PROJECT" \
-  || run gcloud iam service-accounts create "${NAME}-backups" --project="$BACKUP_PROJECT" \
-       --display-name="Bault backups: adds objects to one bucket, reads and deletes none"
-run gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:${VM_SA}" \
+settled gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:${VM_SA}" \
   --role=roles/cloudsql.client --condition=None --quiet --format=none
 exists gcloud iam roles describe "$PUT_GET_ROLE" --project="$PROJECT" \
   || run gcloud iam roles create "$PUT_GET_ROLE" --project="$PROJECT" --title="Bault object put and get" \
@@ -177,7 +225,7 @@ step "4/9 buckets: ${IMAGES_BUCKET}, and ${BACKUPS_BUCKET} in ${BACKUP_PROJECT}"
 exists gcloud storage buckets describe "gs://${IMAGES_BUCKET}" --project="$PROJECT" \
   || run gcloud storage buckets create "gs://${IMAGES_BUCKET}" --project="$PROJECT" --location="$REGION" \
        --default-storage-class=STANDARD --uniform-bucket-level-access --public-access-prevention
-run gcloud storage buckets add-iam-policy-binding "gs://${IMAGES_BUCKET}" --member="serviceAccount:${IMAGES_SA}" \
+settled gcloud storage buckets add-iam-policy-binding "gs://${IMAGES_BUCKET}" --member="serviceAccount:${IMAGES_SA}" \
   --role="projects/${PROJECT}/roles/${PUT_GET_ROLE}" --format=none
 if ! exists gcloud storage buckets describe "gs://${BACKUPS_BUCKET}" --project="$BACKUP_PROJECT"; then
   run gcloud storage buckets create "gs://${BACKUPS_BUCKET}" --project="$BACKUP_PROJECT" --location="$BACKUP_LOCATION" \
@@ -187,7 +235,12 @@ if ! exists gcloud storage buckets describe "gs://${BACKUPS_BUCKET}" --project="
   run gcloud storage buckets update "gs://${BACKUPS_BUCKET}" --project="$BACKUP_PROJECT" --lifecycle-file="$lifecycle"
   rm -f "$lifecycle"
 fi
-run gcloud storage buckets add-iam-policy-binding "gs://${BACKUPS_BUCKET}" --member="serviceAccount:${BACKUPS_SA}" \
+# The server writes the backups as itself, through the metadata server, with no
+# key. objectCreator adds objects and nothing else: no list, no read, and no
+# overwrite, which needs delete. Ubuntu's rclone 1.60 sends an ACL with every
+# upload through the S3 API, which a bucket with uniform access refuses, so
+# backup.env uses rclone's own Cloud Storage backend.
+settled gcloud storage buckets add-iam-policy-binding "gs://${BACKUPS_BUCKET}" --member="serviceAccount:${VM_SA}" \
   --role=roles/storage.objectCreator --format=none
 
 step "5/9 Cloud SQL for PostgreSQL 16: ${SQL} (private IP only, TLS required, point-in-time recovery 7 days)"
@@ -248,25 +301,26 @@ if ! exists gcloud compute instances describe "$VM" --zone="$ZONE" --project="$P
   [ -z "$keyfile" ] || rm -f "$keyfile"
 fi
 
-step "7/9 HMAC keys for the two buckets"
+step "7/9 an HMAC key for the images bucket"
 IMAGES_KEY="$(saved STORAGE_ACCESS_KEY)"
 IMAGES_SECRET="$(saved STORAGE_SECRET_KEY)"
 if [ -z "$IMAGES_KEY" ] || [ -z "$IMAGES_SECRET" ]; then
   echo "+ gcloud storage hmac create ${IMAGES_SA} --project=${PROJECT}"
   if [ "$DRY_RUN" -eq 0 ]; then
-    pair="$(gcloud storage hmac create "$IMAGES_SA" --project="$PROJECT" --format='value(metadata.accessId,secret)')"
+    err="$(mktemp)"
+    if ! pair="$(gcloud storage hmac create "$IMAGES_SA" --project="$PROJECT" \
+                 --format='value(metadata.accessId,secret)' 2> "$err")"; then
+      cat "$err" >&2
+      if grep -q disableServiceAccountKeyCreation "$err"; then
+        rm -f "$err"
+        key_policy_stop
+      fi
+      rm -f "$err"
+      die "could not create the images bucket's HMAC key"
+    fi
+    rm -f "$err"
     IMAGES_KEY="$(printf '%s' "$pair" | cut -f1)"
     IMAGES_SECRET="$(printf '%s' "$pair" | cut -f2)"
-  fi
-fi
-BACKUPS_KEY="$(saved RCLONE_CONFIG_BACKUP_ACCESS_KEY_ID)"
-BACKUPS_SECRET="$(saved RCLONE_CONFIG_BACKUP_SECRET_ACCESS_KEY)"
-if [ -z "$BACKUPS_KEY" ] || [ -z "$BACKUPS_SECRET" ]; then
-  echo "+ gcloud storage hmac create ${BACKUPS_SA} --project=${BACKUP_PROJECT}"
-  if [ "$DRY_RUN" -eq 0 ]; then
-    pair="$(gcloud storage hmac create "$BACKUPS_SA" --project="$BACKUP_PROJECT" --format='value(metadata.accessId,secret)')"
-    BACKUPS_KEY="$(printf '%s' "$pair" | cut -f1)"
-    BACKUPS_SECRET="$(printf '%s' "$pair" | cut -f2)"
   fi
 fi
 
@@ -325,12 +379,9 @@ BACKUP_DIR=/var/backups/bault
 BACKUP_RETAIN_DAYS=14
 BACKUP_AGE_RECIPIENT=CHANGE_ME_your_age_public_key
 BACKUP_UPLOAD=rclone:backup:${BACKUPS_BUCKET}/nightly
-RCLONE_CONFIG_BACKUP_TYPE=s3
-RCLONE_CONFIG_BACKUP_PROVIDER=Other
-RCLONE_CONFIG_BACKUP_ENDPOINT=https://storage.googleapis.com
-RCLONE_CONFIG_BACKUP_REGION=auto
-RCLONE_CONFIG_BACKUP_ACCESS_KEY_ID=${BACKUPS_KEY}
-RCLONE_CONFIG_BACKUP_SECRET_ACCESS_KEY=${BACKUPS_SECRET}
+RCLONE_CONFIG_BACKUP_TYPE='google cloud storage'
+RCLONE_CONFIG_BACKUP_BUCKET_POLICY_ONLY=true
+RCLONE_CONFIG_BACKUP_NO_CHECK_BUCKET=true
 EOF
 chmod 600 "$tmp"
 mv "$tmp" "$OUT"

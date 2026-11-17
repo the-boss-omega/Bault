@@ -21,10 +21,6 @@ function renderIn(ui: React.ReactElement) {
 
 beforeEach(() => {
   get.mockReset();
-  try {
-    localStorage.setItem('bault.locale', 'en');
-  } catch {
-  }
 });
 
 describe('admin accounting', () => {
@@ -70,7 +66,7 @@ describe('admin accounting', () => {
     await user.click(screen.getByRole('button', { name: /show summary/i }));
 
     await waitFor(() => expect(get).toHaveBeenCalledWith(expect.stringMatching(/^\/admin\/accounting\/summary\?month=\d{4}-\d{2}$/)));
-    expect(await screen.findByText('Bault revenue')).toBeInTheDocument();
+    expect(await screen.findByText('Card Embassy revenue')).toBeInTheDocument();
     expect(screen.getByText('Customer money in')).toBeInTheDocument();
     expect(screen.getByText('Customer balances held')).toBeInTheDocument();
     expect(screen.getByText('Cash-out fees')).toBeInTheDocument();
@@ -116,7 +112,7 @@ describe('admin accounting', () => {
       mismatches: [
         {
           kind: 'withdrawal_without_payout',
-          detail: 'Money left this wallet and no payout at any provider records it leaving Bault.',
+          detail: 'Money left this wallet and no payout at any provider records it leaving Card Embassy.',
           paymentId: null,
           ledgerId: 'l-1',
           username: 'golden',

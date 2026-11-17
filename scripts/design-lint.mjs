@@ -90,18 +90,12 @@ function checkSpacing(file, line, text) {
   }
 }
 
+/**
+ * The stylesheets are written in logical properties (margin-inline-start, not margin-left), one way
+ * throughout, so that a rule reads the same wherever it is and two rules never name the same edge twice.
+ */
 const PHYSICAL_CSS =
   /(?:^|[\s;{])(?:(?:scroll-)?(?:margin|padding)|border)-(?:left|right)\b|(?:^|[\s;{])(?:left|right)\s*:|(?:^|[\s;{])(?:float|clear)\s*:\s*(?:left|right)\b|text-align\s*:\s*(?:left|right)\b|border-(?:top|bottom)-(?:left|right)-radius/;
-
-/**
- * Logical properties place things, but they cannot turn a gradient, a transform
- * origin or a background position around. Those multiply by --dir, which
- * theme.css sets once, and that is the only place the stylesheet may ask which way
- * the page is read.
- */
-const DIRECTION_BRANCH = /\[dir\s*=|:dir\(/;
-const PHYSICAL_KEYWORD =
-  /(?:transform-origin|background-position|object-position|mask-position)\s*:[^;]*\b(?:left|right)\b|\bto\s+(?:top\s+|bottom\s+)?(?:left|right)\b/;
 
 /**
  * The loops. Anything that animates forever has to be one of these: the ones that
@@ -161,9 +155,6 @@ cssCode.forEach((line, i) => {
   if (allowed(i)) return;
   if (PHYSICAL_CSS.test(line)) {
     report(rel, n, `physical property — use the inline-start/inline-end equivalent: ${line.trim()}`);
-  }
-  if (DIRECTION_BRANCH.test(line)) {
-    report(rel, n, `direction branch — read var(--dir) (theme.css) instead: ${line.trim()}`);
   }
   if (n <= tokenEndLine) return;
   checkSpacing(rel, n, line);
@@ -289,23 +280,6 @@ function splitTop(value, separator) {
   return parts;
 }
 
-/** The arguments of every `name(...)` call in a value, each call as a list of its top-level arguments. */
-function callsOf(value, name) {
-  const calls = [];
-  const re = new RegExp(`(?<![\\w-])${name}\\(`, 'g');
-  for (let m = re.exec(value); m; m = re.exec(value)) {
-    let depth = 1;
-    let i = m.index + m[0].length;
-    const begin = i;
-    for (; i < value.length && depth > 0; i += 1) {
-      if (value[i] === '(') depth += 1;
-      else if (value[i] === ')') depth -= 1;
-    }
-    calls.push(splitTop(value.slice(begin, i - 1), ','));
-  }
-  return calls;
-}
-
 const NAMED_COLOURS = new Set(
   (
     'aliceblue antiquewhite aqua aquamarine azure beige bisque blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral ' +
@@ -325,13 +299,11 @@ const COLOUR_PROP =
   /^(?:color|background(?:-color|-image)?|border(?:-(?:top|right|bottom|left|block|inline)(?:-(?:start|end))?)?(?:-color)?|outline(?:-color)?|fill|stroke|caret-color|accent-color|text-decoration(?:-color)?|text-emphasis(?:-color)?|box-shadow|text-shadow|column-rule(?:-color)?|scrollbar-color|stop-color|flood-color|-webkit-text-fill-color|-webkit-text-stroke(?:-color)?)$/;
 const SPACING_PROP = /^(?:padding|margin|inset|scroll-margin|scroll-padding)(?:-[\w-]+)?$|^(?:gap|row-gap|column-gap)$/;
 const BOX_SHORTHAND = /^(?:margin|padding|inset|scroll-margin|scroll-padding|border-width|border-color|border-style)$/;
-const POSITIONED = /^(?:background|background-position|background-position-x|mask|-webkit-mask|mask-position|mask-position-x|object-position|transform-origin|perspective-origin)$/;
-const isZero = (v) => /^[-+]?0*\.?0+(?:px|%|em|rem)?$/.test(v.trim());
 
 /**
  * What a declaration says, held to the rules the line-based checks cannot see: a value that wraps, a list
- * of animations, a shorthand that names a side without saying so, an angle or a distance that points one
- * way whichever way the page is read. `fromLine` skips the token block of index.css, where names are made.
+ * of animations, a shorthand that names a side without saying so. `fromLine` skips the token block of
+ * index.css, where names are made.
  */
 function checkDeclarations(short, raw, { fromLine = 0, isTheme = false, typeScale = false } = {}) {
   const rawLines = raw.split('\n');
@@ -380,29 +352,6 @@ function checkDeclarations(short, raw, { fromLine = 0, isTheme = false, typeScal
       if (t.length > 1 && (tl !== tr || bl !== br)) {
         say(d, 'corners that are not mirrored name a left and a right — use border-start-start-radius and its three siblings');
       }
-    }
-
-    if (POSITIONED.test(d.prop) && /\b(?:left|right)\b/.test(d.value.replace(/url\([^)]*\)/g, ''))) {
-      say(d, 'a position that names left or right does not turn round with the page — multiply by var(--dir)');
-    }
-
-    for (const m of d.value.matchAll(/\b(?:repeating-)?(?:linear|conic)-gradient\(\s*(?:from\s+)?(-?\d*\.?\d+)(deg|turn|rad|grad)\b/g)) {
-      const unit = { deg: 1, turn: 360, rad: 180 / Math.PI, grad: 0.9 }[m[2]];
-      const degrees = Number(m[1]) * unit;
-      if (Math.abs(((degrees % 180) + 180) % 180) > 0.5) {
-        say(d, `a gradient at ${m[1]}${m[2]} points one way whichever way the page is read — write calc(${m[1]}${m[2]} * var(--dir)), or design-lint-allow why it is symmetric`);
-      }
-    }
-
-    if (/^(?:-webkit-)?transform$/.test(d.prop)) {
-      const along = [...callsOf(d.value, 'translateX'), ...callsOf(d.value, 'translate'), ...callsOf(d.value, 'translate3d')].map((args) => args[0] ?? '');
-      for (const x of along) {
-        if (!/var\(/.test(x) && !isZero(x)) say(d, `a horizontal move of ${x} goes the same way in both languages — multiply by var(--dir)`);
-      }
-    }
-    if (d.prop === 'translate') {
-      const x = splitTop(d.value, ' ')[0] ?? '';
-      if (!/var\(/.test(x) && !isZero(x) && x !== 'none') say(d, `a horizontal move of ${x} goes the same way in both languages — multiply by var(--dir)`);
     }
 
     if (COLOUR_PROP.test(d.prop) && !isTheme) {
@@ -482,8 +431,7 @@ function cssIn(dir) {
 // the layers carry the sizes of single objects (a numeral on a ticket, a stamp) and are not.
 // Every stylesheet but index.css (which is held to the rules above, past its token block) is a layer:
 // all of them, found rather than listed, so that a new file is held the same way the day it is added.
-// The logical-properties rule, the direction rule, the colour rule and the reduced-motion guarantee
-// apply to every one of them.
+// The logical-properties rule, the colour rule and the reduced-motion guarantee apply to every one of them.
 checkDeclarations(rel, readFileSync(cssFile, 'utf8').split('\r\n').join('\n'), { fromLine: tokenEndLine, typeScale: true });
 const LAYERS = cssIn(webSrc).filter((file) => file !== cssFile);
 for (const file of LAYERS) {
@@ -502,10 +450,6 @@ for (const file of LAYERS) {
       if (allowedHere(i)) return;
       const n = i + 1;
       if (PHYSICAL_CSS.test(line)) report(short, n, `physical property — use the inline-start/inline-end equivalent: ${line.trim()}`);
-      if (PHYSICAL_KEYWORD.test(line)) report(short, n, `physical keyword — multiply by var(--dir) instead of saying left or right: ${line.trim()}`);
-      if (name !== 'theme.css' && DIRECTION_BRANCH.test(line)) {
-        report(short, n, `direction branch — read var(--dir) (theme.css) instead: ${line.trim()}`);
-      }
       checkSpacing(short, n, line);
       if (name !== 'theme.css') checkRadius(short, n, line);
       if (name !== 'theme.css' && !line.includes('data:image')) {
@@ -787,25 +731,10 @@ const PHYSICAL_STYLE = /\b(?:marginLeft|marginRight|paddingLeft|paddingRight|bor
  */
 const LITERAL_COLOUR_STYLE = /\b(?:color|background|backgroundColor|borderColor|outlineColor|fill|stroke)\s*:\s*['"](?:#[0-9a-f]{3,8}\b|(?:rgba?|hsla?|oklch|oklab|color-mix)\(|(?:white|black)['"])/i;
 
-/**
- * A locale-formatted date is not a left-to-right island. Forced left to right, a Hebrew date
- * (day, month, year) is drawn the other way round; read in the page's direction it keeps the
- * order its language gives it. Serials, codes and amounts are islands; dates are not.
- */
-const FORCED_LTR = /\bdir=(?:"ltr"|\{'ltr'\})/;
-const DATE_CALL = /\b(?:formatDate(?:Time)?\(|toLocale(?:Date|Time)String\(|Intl\.DateTimeFormat\()/;
-
 for (const file of walk(webSrc)) {
   const short = relative(repoRoot, file).split(sep).join('/');
   const lines = readFileSync(file, 'utf8').split('\n');
   lines.forEach((line, i) => {
-    if (FORCED_LTR.test(line) && !/<(?:input|textarea|select)\b/.test(line)) {
-      // From the opening tag to the first closing one.
-      const inner = lines.slice(i, i + 6).join('\n').split(/<\/[a-z]+>/)[0];
-      if (DATE_CALL.test(inner)) {
-        report(short, i + 1, `a date forced left to right is drawn the wrong way round in Hebrew — drop dir="ltr" (className="date" if it stands alone): ${line.trim()}`);
-      }
-    }
     if (PHYSICAL_CLASS.test(line)) report(short, i + 1, `physical utility class: ${line.trim()}`);
     if (PHYSICAL_STYLE.test(line)) {
       report(short, i + 1, `physical inline style — use marginInlineStart / textAlign: 'start': ${line.trim()}`);

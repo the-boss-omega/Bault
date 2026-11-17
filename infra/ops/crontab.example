@@ -24,6 +24,12 @@
 #   RCLONE_CONFIG_BACKUP_ACCESS_KEY_ID=...  # a key for the backup bucket only, PutObject only
 #   RCLONE_CONFIG_BACKUP_SECRET_ACCESS_KEY=...
 #
+# On Google Cloud, infra/gcp/configure.sh defines `backup` with rclone's own
+# Cloud Storage backend instead, signed in as the server, with no key:
+#   RCLONE_CONFIG_BACKUP_TYPE='google cloud storage'
+#   RCLONE_CONFIG_BACKUP_BUCKET_POLICY_ONLY=true   # no ACL, which uniform access refuses
+#   RCLONE_CONFIG_BACKUP_NO_CHECK_BUCKET=true
+#
 # rclone is what infra/production/bootstrap.sh installs. `BACKUP_UPLOAD=s3://…`
 # with AWS_* variables and BACKUP_S3_ENDPOINT also works, but needs the aws cli,
 # which Ubuntu 24.04 does not package; without the tool the job fails before

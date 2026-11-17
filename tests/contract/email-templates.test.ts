@@ -1,21 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { renderEmail } from '@bault/adapters';
 
-const HEBREW = /[֐-׿]/;
 const LINK = 'https://app.example.test/#/verify-email?token=abc123';
 
 describe('the account emails a collector receives first', () => {
   for (const template of ['email_verification', 'password_reset']) {
-    it(`${template} reads in Hebrew first, then English, each in its own direction`, () => {
+    it(`${template} is one message, in English`, () => {
       const { html, text } = renderEmail(template, { link: LINK });
-      const he = html.indexOf('lang="he"');
-      const en = html.indexOf('lang="en"');
-      expect(he).toBeGreaterThan(-1);
-      expect(en).toBeGreaterThan(he);
-      expect(html).toMatch(/lang="he" dir="rtl"/);
-      expect(html).toMatch(/lang="en" dir="ltr"/);
-      expect(text.split(LINK).length - 1).toBe(2);
-      expect(text.slice(0, text.indexOf(LINK))).toMatch(HEBREW);
+      expect(html.split('lang="en"').length - 1).toBe(1);
+      expect(html).not.toMatch(/lang="he"|dir="rtl"/);
+      expect(html).not.toMatch(/\p{Script=Hebrew}/u);
+      expect(text).not.toMatch(/\p{Script=Hebrew}/u);
+      expect(text.split(LINK).length - 1).toBe(1);
     });
 
     it(`${template} is the product's paper: its ink and its paper, the foil along its top and under its one button`, () => {
@@ -23,10 +19,10 @@ describe('the account emails a collector receives first', () => {
       expect(html).not.toContain('#17202c');
       expect(html).toContain('#15130f');
       expect(html).toContain('#f3efe6');
-      // The five hues of the foil: in the strip at the top and at the foot of each of the two buttons, three strips; a cell
-      // names its hue twice, as an attribute and as a style, for the client that keeps only one of them.
+      // The five hues of the foil: in the strip at the top and at the foot of the button, two strips; a cell names its
+      // hue twice, as an attribute and as a style, for the client that keeps only one of them.
       for (const hue of ['#ffa0a4', '#f8d376', '#85e9b6', '#6ed0ff', '#d3a6ff']) {
-        expect(html.split(hue).length - 1).toBe(3 * 2);
+        expect(html.split(hue).length - 1).toBe(2 * 2);
       }
     });
 
@@ -41,20 +37,16 @@ describe('the account emails a collector receives first', () => {
       expect(html).not.toMatch(/IBM Plex|Frank Ruhl|Geist/);
     });
 
-    it(`${template} has a kicker over each heading, and the Hebrew one is not spread out as capitals are`, () => {
+    it(`${template} has a kicker over its heading, in spaced capitals`, () => {
       const { html } = renderEmail(template, { link: LINK });
-      const hebrewHalf = html.slice(html.indexOf('lang="he"'), html.indexOf('lang="en"'));
-      expect(hebrewHalf).toMatch(/letter-spacing:0;[^>]*>[֐-׿ ]+<\/p><h1/);
-      const englishHalf = html.slice(html.indexOf('lang="en"'));
-      expect(englishHalf).toMatch(/letter-spacing:0\.08em;[^>]*>[A-Z ]+<\/p><h1/);
+      expect(html).toMatch(/letter-spacing:0\.08em;[^>]*>[A-Z ]+<\/p><h1/);
+    });
+
+    it(`${template} gives the link a button hides a line of its own`, () => {
+      const { html } = renderEmail(template, { link: LINK });
+      expect(html).toMatch(/<p style="clear:both;[^"]*">https:\/\/app\.example\.test/);
     });
   }
-
-  it('keeps the link readable left to right inside the Hebrew half', () => {
-    const { html } = renderEmail('password_reset', { link: LINK });
-    const hebrewHalf = html.slice(html.indexOf('lang="he"'), html.indexOf('lang="en"'));
-    expect(hebrewHalf).toMatch(/<p dir="ltr"[^>]*>https:\/\/app\.example\.test/);
-  });
 
   it('an update on the vault is one message in English, in the same paper', () => {
     const { html, text } = renderEmail('notification_event', {

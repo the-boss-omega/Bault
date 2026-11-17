@@ -7,7 +7,6 @@ import { CardSlab } from '../../../shared/CardPhoto';
 import { Serial } from '../../../shared/ui/Serial';
 import { SplitWords } from '../../../shared/ui/SplitWords';
 import { Button } from '../../../shared/ui/primitives';
-import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
 import { scrollBehavior } from '../../../shared/ui/motionPreference';
 import { useLandingMotion } from '../../../shared/ui/useLandingMotion';
 import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
@@ -220,15 +219,14 @@ export function LandingPage() {
       <header className="landing-bar lp-bar">
         <span className="lp-brand">
           <span className="lp-mark" aria-hidden="true">
-            B
+            C
           </span>
-          <span className="lp-word">Bault</span>
+          <span className="lp-word">Card Embassy</span>
         </span>
         <nav className="lp-nav" aria-label={t('nav.primary')}>
           <SectionLinks links={sectionLinks} />
         </nav>
         <div className="landing-bar-actions">
-          <LanguageSwitcher />
           <Button variant="ghost" onClick={goSignIn}>
             {t('landing.nav.signIn')}
           </Button>
@@ -501,7 +499,7 @@ export function LandingPage() {
       <footer className="lp-foot">
         <div className="lp-colophon">
           <div className="lp-colophon-top">
-            <span className="lp-colophon-word">Bault</span>
+            <span className="lp-colophon-word">Card Embassy</span>
             <div className="lp-colophon-nav">
               <SectionLinks links={sectionLinks} />
             </div>

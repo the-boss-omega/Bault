@@ -233,21 +233,21 @@ async function main(): Promise<void> {
       actionType: 'consignment_fee:card_show',
       model: 'percentage' as const,
       value: 1000,
-      description: 'Bault commission on a card-show consignment sale',
+      description: 'Card Embassy commission on a card-show consignment sale',
       billingTrigger: 'per_event' as const,
     },
     {
       actionType: 'consignment_fee:auction_house',
       model: 'percentage' as const,
       value: 100,
-      description: 'Bault commission on an auction-house consignment sale',
+      description: 'Card Embassy commission on an auction-house consignment sale',
       billingTrigger: 'per_event' as const,
     },
     {
       actionType: 'consignment_fee:ebay_partner',
       model: 'percentage' as const,
       value: 100,
-      description: 'Bault commission on an eBay partner consignment sale',
+      description: 'Card Embassy commission on an eBay partner consignment sale',
       billingTrigger: 'per_event' as const,
     },
     {
@@ -359,7 +359,7 @@ async function main(): Promise<void> {
       actionType: 'show_pickup',
       model: 'fixed' as const,
       value: 1500,
-      description: 'Collect your cards in person at a show Bault is attending',
+      description: 'Collect your cards in person at a show Card Embassy is attending',
       billingTrigger: 'per_event' as const,
     },
     ...MEMBERSHIP_TIERS.map((t) => ({
@@ -400,7 +400,7 @@ async function main(): Promise<void> {
       .insert(facility)
       .values({
         code: 'NJ',
-        name: 'Bault New Jersey',
+        name: 'Card Embassy New Jersey',
         role: 'primary',
         line1: 'SET REAL ADDRESS — placeholder',
         city: 'Newark',
@@ -415,7 +415,7 @@ async function main(): Promise<void> {
 
   await db.insert(facility).values({
     code: 'DE',
-    name: 'Bault Delaware',
+    name: 'Card Embassy Delaware',
     role: 'forwarding',
     line1: 'SET REAL ADDRESS — placeholder',
     city: 'Wilmington',
@@ -913,7 +913,7 @@ async function main(): Promise<void> {
       pickupEnabled: true,
       pickupCapacity: 12,
       pickupFeeMinor: 1500,
-      notes: 'Three-day show. Collections from the Bault table, ask for Hermon.',
+      notes: 'Three-day show. Collections from the Card Embassy table, ask for Hermon.',
     },
     {
       name: 'East Coast Winter Card Expo',
@@ -943,7 +943,7 @@ async function main(): Promise<void> {
     code: prefixedId(ID_PREFIX.serviceRequest),
     type: 'donation', requesterId: red, itemId: rayAltArt, status: 'completed',
     typeFields: { note: 'For the youth league raffle. No conditions.' },
-    fulfillment: { recipient: 'Bault platform custodian', notes: 'Accepted for the youth-league raffle. Ownership moved; the card stays on shelf B until the raffle van goes.' },
+    fulfillment: { recipient: 'Card Embassy platform custodian', notes: 'Accepted for the youth-league raffle. Ownership moved; the card stays on shelf B until the raffle van goes.' },
     fulfilledBy: eldar,
     fulfilledAt: minutes(4_320),
   });

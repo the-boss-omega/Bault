@@ -136,7 +136,7 @@ describe('adding a facility', () => {
       postalCode: string;
     }[];
     expect(addresses.find((a) => a.code === 'ZT1')).toMatchObject({
-      careOf: 'Bault C/O red',
+      careOf: 'Card Embassy C/O red',
       lines: ['500 Harbor Way', 'Dock 4'],
       city: 'Elizabeth',
       postalCode: '07201',

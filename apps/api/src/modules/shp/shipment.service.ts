@@ -272,7 +272,7 @@ export class ShipmentService {
       signatureRequired: profile.signatureRequired,
       customs:
         customsLines && customsLines.length > 0
-          ? customsDeclarationFor(customsLines, origin?.name ?? 'Bault')
+          ? customsDeclarationFor(customsLines, origin?.name ?? 'Card Embassy')
           : undefined,
     });
 
@@ -568,7 +568,7 @@ export class ShipmentService {
       dimensionsCm: profile.dimensionsCm,
       packagingGrams,
       signatureRequired: s.signatureRequired,
-      customs: customsLines.length > 0 ? customsDeclarationFor(customsLines, origin?.name ?? 'Bault') : undefined,
+      customs: customsLines.length > 0 ? customsDeclarationFor(customsLines, origin?.name ?? 'Card Embassy') : undefined,
     };
     return { rate: ShipmentService.chargedRate(s), request };
   }

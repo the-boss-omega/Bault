@@ -24,7 +24,7 @@ const CHALLENGE_TTL_MINUTES = 5;
 /** An emailed code can take a minute to arrive and a second one may be asked for, so the sign-in it finishes waits longer. */
 const EMAIL_CHALLENGE_TTL_MINUTES = 30;
 const CHALLENGE_MAX_FAILURES = 5;
-const ISSUER = 'Bault';
+const ISSUER = 'Card Embassy';
 
 export const EMAIL_CODE_MAX_FAILURES = 5;
 export const EMAIL_CODE_RESEND_SECONDS = 60;
@@ -882,7 +882,7 @@ export function emailCodeRefused(
       return new AppError(
         ErrorCode.MFA_CODE_INVALID,
         refusal.attemptsLeft > 0
-          ? `That code is not right. It can be tried ${refusal.attemptsLeft} more ${refusal.attemptsLeft === 1 ? 'time' : 'times'}; use the code in the newest email from Bault.`
+          ? `That code is not right. It can be tried ${refusal.attemptsLeft} more ${refusal.attemptsLeft === 1 ? 'time' : 'times'}; use the code in the newest email from Card Embassy.`
           : 'That code is not right, and it cannot be tried again. Send a new code.',
         status,
         { attemptsLeft: refusal.attemptsLeft },

@@ -140,7 +140,7 @@ export class EscrowService {
         .from(userAccount)
         .where(eq(userAccount.username, input.counterpartyUsername.trim().toLowerCase()))
         .limit(1);
-      if (!row) throw AppError.validation('No Bault account with that username');
+      if (!row) throw AppError.validation('No Card Embassy account with that username');
       if (row.id === raiserId) throw AppError.validation('You cannot be both sides of a deal');
       counterpartyUserId = row.id;
     }
@@ -205,7 +205,7 @@ export class EscrowService {
     const external = deal.counterpartyUserId === null;
     if (external && !isStaff(actor)) {
       throw AppError.forbidden(
-        'The other side is not a Bault account, so their agreement has to be recorded by us.',
+        'The other side is not a Card Embassy account, so their agreement has to be recorded by us.',
       );
     }
     if (!external && actor.id !== deal.counterpartyUserId && !isStaff(actor)) {
@@ -246,7 +246,7 @@ export class EscrowService {
 
     if (buyerId === null) {
       if (!isStaff(actor)) {
-        throw AppError.forbidden('The buyer is not a Bault account — we record receipt of the funds.');
+        throw AppError.forbidden('The buyer is not a Card Embassy account — we record receipt of the funds.');
       }
       if (!reference?.trim()) {
         throw AppError.validation('Record the payment reference you received it under.');
@@ -590,7 +590,7 @@ export class EscrowService {
     if (!sent) {
       throw new AppError(
         ErrorCode.CONFLICT,
-        'The buyer has no Bault vault, so the card has to be on its way to them before the seller is paid. ' +
+        'The buyer has no Card Embassy vault, so the card has to be on its way to them before the seller is paid. ' +
           'Ship it to the buyer, and confirm again once it has been dispatched.',
         409,
       );

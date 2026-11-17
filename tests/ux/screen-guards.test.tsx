@@ -122,3 +122,25 @@ describe('the two-factor panel', () => {
     expect(screen.queryByText(/could not be reached/i)).not.toBeInTheDocument();
   });
 });
+
+describe('a browser that blocks site storage', () => {
+  let read: ReturnType<typeof vi.spyOn>;
+  let write: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    const blocked = () => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    };
+    read = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(blocked);
+    write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(blocked);
+  });
+  afterEach(() => {
+    read.mockRestore();
+    write.mockRestore();
+  });
+
+  it('still renders the app', () => {
+    renderIn(<p>the app is here</p>);
+
+    expect(screen.getByText('the app is here')).toBeInTheDocument();
+  });
+});

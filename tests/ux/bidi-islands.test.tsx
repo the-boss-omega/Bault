@@ -10,15 +10,14 @@ vi.mock('../../apps/web/src/shared/api', () => ({
   isUnreachable: () => false,
 }));
 
-const { isolate, isolateLtr } = await import('../../apps/web/src/shared/money');
+const { isolate } = await import('../../apps/web/src/shared/money');
 const { ErrorState, Field } = await import('../../apps/web/src/shared/ui/primitives');
 const { HouseStoreSection } = await import('../../apps/web/src/areas/admin/HouseStoreSection');
 const { RemoveCommonsPanel } = await import('../../apps/web/src/areas/customer/vault/RemoveCommonsPanel');
 const { ServiceQueue } = await import('../../apps/web/src/areas/warehouse/ServiceQueue');
 const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 
-function inHebrew(ui: React.ReactElement) {
-  localStorage.setItem('bault.locale', 'he');
+function inPage(ui: React.ReactElement) {
   return render(<I18nProvider>{ui}</I18nProvider>);
 }
 
@@ -27,22 +26,19 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-describe('a name or a figure set into a sentence keeps its own order', () => {
-  it('isolate() is a first-strong isolate, and isolateLtr() a left-to-right one', () => {
+describe('a name set into a sentence keeps its own order', () => {
+  it('isolate() is a first-strong isolate', () => {
     expect(isolate('2011 Pokémon Call of Legends')).toBe('⁨2011 Pokémon Call of Legends⁩');
-    expect(isolateLtr('$39.00')).toBe('⁦$39.00⁩');
   });
 
-  it('both are invisible: what they wrap is read back unchanged once the marks are taken out', () => {
-    const strip = (s: string) => s.replace(/[⁦-⁩]/g, '');
-    expect(strip(isolate('Rayquaza (Gold Star)'))).toBe('Rayquaza (Gold Star)');
-    expect(strip(isolateLtr('-$20.00'))).toBe('-$20.00');
+  it('is invisible: what it wraps is read back unchanged once the marks are taken out', () => {
+    expect(isolate('Rayquaza (Gold Star)').replace(/[⁨⁩]/g, '')).toBe('Rayquaza (Gold Star)');
   });
 });
 
-describe('what the server wrote is its own island on a page that reads the other way', () => {
+describe('what the server wrote is its own island', () => {
   it('an error box sets the sentence in a <bdi>, so an English sentence keeps its full stop', () => {
-    inHebrew(<ErrorState message="Password must be at least 8 characters." />);
+    inPage(<ErrorState message="Password must be at least 8 characters." />);
 
     const sentence = screen.getByText('Password must be at least 8 characters.');
     expect(sentence.tagName).toBe('BDI');
@@ -50,7 +46,7 @@ describe('what the server wrote is its own island on a page that reads the other
   });
 
   it("a field's error is the same", () => {
-    inHebrew(
+    inPage(
       <Field label="Email" error="Enter a valid email address.">
         <input />
       </Field>,
@@ -64,7 +60,7 @@ describe('what the server wrote is its own island on a page that reads the other
 });
 
 describe('the admin house store', () => {
-  it('sets a description in its own island, so an English name keeps its order on a page that reads the other way', async () => {
+  it('sets a description in its own island, so a name keeps its own order whatever script it is typed in', async () => {
     get.mockResolvedValue([
       {
         id: 'h1',
@@ -78,7 +74,7 @@ describe('the admin house store', () => {
         status: 'active',
       },
     ]);
-    inHebrew(<HouseStoreSection onMsg={() => {}} onError={() => {}} />);
+    inPage(<HouseStoreSection onMsg={() => {}} onError={() => {}} />);
 
     const description = await screen.findByText('2011 Pokémon Call of Legends — Rayquaza #SL10/95');
     expect(description.tagName).toBe('BDI');
@@ -86,7 +82,7 @@ describe('the admin house store', () => {
     // The name is the headline of the product's tag, and the card's photograph is a button of its own beside it:
     // the words and the button are not one run of text (once a table cell that held both read "… Hotta · 2011").
     const tag = description.closest('.drawer-tag')!;
-    expect(within(tag as HTMLElement).getByRole('button', { name: /הצג|תמונה/ })).toBeInTheDocument();
+    expect(within(tag as HTMLElement).getByRole('button', { name: /show photo/i })).toBeInTheDocument();
   });
 });
 
@@ -111,7 +107,7 @@ describe('removing commons', () => {
   ];
 
   it('sets each name and each serial in an island of its own', () => {
-    inHebrew(<RemoveCommonsPanel items={items} windowDays={30} onDone={() => {}} onError={() => {}} />);
+    inPage(<RemoveCommonsPanel items={items} windowDays={30} onDone={() => {}} onError={() => {}} />);
 
     const name = screen.getByText('2005 Pokémon EX Deoxys — Rayquaza ★ (Gold Star)');
     expect(name.tagName).toBe('BDI');
@@ -122,14 +118,14 @@ describe('removing commons', () => {
   });
 
   it('keeps the reason a card cannot be chosen beside its choice, in a row that lays them out with a gap', () => {
-    inHebrew(<RemoveCommonsPanel items={items} windowDays={30} onDone={() => {}} onError={() => {}} />);
+    inPage(<RemoveCommonsPanel items={items} windowDays={30} onDone={() => {}} onError={() => {}} />);
 
     const blocked = screen.getByRole('checkbox', { name: /Deoxys/ });
     expect(blocked).toBeDisabled();
     const row = blocked.closest('li')!;
     expect(row).toHaveClass('check-row');
     // The reason is the row's, not the label's: set against the end of the label it had no gap from its date.
-    const reason = within(row).getByText('לא מאוחסן');
+    const reason = within(row).getByText('Not stored');
     expect(blocked.closest('label')!.contains(reason)).toBe(false);
   });
 });
@@ -155,7 +151,7 @@ describe('what a customer wrote in a request for a service', () => {
           ]
         : [],
     );
-    inHebrew(<ServiceQueue />);
+    inPage(<ServiceQueue />);
     const detail = await screen.findByText('Two additional photographs of the reverse. No handling out of the sleeve.');
     // `unicode-bidi: plaintext` on a block (the stylesheet hangs it from the page's edge): not a run inside a line that reads the page's way.
     expect(detail).toHaveClass('bidi', 'ask-line');

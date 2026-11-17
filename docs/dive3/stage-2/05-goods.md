@@ -8,7 +8,7 @@ About 1 minute. It builds on T9.1 and T2.2.
 
 These files describe the buildings that receive parcels. A `facility` has a `role`. A `primary` facility stores goods. A `forwarding` facility stores nothing and sends each parcel on to the facility in `forwardsToFacilityId`. `salesTaxBps` is shown to customers as guidance, and no charge reads it. A facility is closed by setting `active` to false, and it is never deleted.
 
-`FacilityService.inboundAddressesFor` builds the address a collector gives to a seller. Its `careOf` line is `Bault C/O <username>`, and the username is read from the collector's account, never from the request. In production the list leaves out any facility whose `line1` still holds the seed placeholder, which `isPlaceholder` detects.
+`FacilityService.inboundAddressesFor` builds the address a collector gives to a seller. Its `careOf` line is `Card Embassy C/O <username>`, and the username is read from the collector's account, never from the request. In production the list leaves out any facility whose `line1` still holds the seed placeholder, which `isPlaceholder` detects.
 
 #### `apps/api/src/modules/inv/parcel.schema.ts`
 

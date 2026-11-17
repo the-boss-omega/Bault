@@ -6,7 +6,7 @@
 
 About 1 minute. It builds on T16.1 and T16.4.
 
-These two files start the app. `index.html` sets `lang="he"` and `dir="rtl"` before any script runs, so the first paint is Hebrew and right to left. It links `favicon-32.png` and `apple-touch-icon.png`, the B that the rail shows, from the repo-root `assets` folder, which Vite serves as its public folder. `main.tsx` removes the retired `bault.railPinned` key. It then nests `StrictMode`, `ThemeProvider`, `I18nProvider`, `ErrorBoundary` and `App`, outermost first. The error boundary sits inside the providers, so a crash screen still shows in the viewer's theme and direction.
+These two files start the app. `index.html` sets `lang="en"` and no `dir`, so the page is English and left to right from the first paint, and nothing changes that later. It links `favicon-32.png` and `apple-touch-icon.png`, the B that the rail shows, from the repo-root `assets` folder, which Vite serves as its public folder. `main.tsx` removes the retired `bault.railPinned` and `bault.locale` keys. It then nests `StrictMode`, `ThemeProvider`, `I18nProvider`, `ErrorBoundary` and `App`, outermost first. The error boundary sits inside the providers, so a crash screen still shows in the viewer's theme.
 
 #### `apps/web/vite.config.ts`, `apps/web/proxy-target.ts`
 
@@ -22,7 +22,7 @@ About 1.5 minutes. It builds on T16.4 and T16.5.
 
 This is the whole stylesheet, tokens first, then every component class. The `:root` block has three typefaces, with `--font-mono` for codes only, ten type sizes, a 4px spacing scale, one `--radius` and one `--shadow-overlay`. Five accent colours have one job each. `--custody` means in Bault's care, `--brass` means money, `--frost` means held, `--amber` means a warning and `--oxblood` means an action that cannot be undone. A legacy block maps old names such as `--navy` and `--gold` onto them. `[data-density='warehouse']` and `[data-density='marketing']` reset spacing and row height for the same components.
 
-The file uses only logical properties such as `margin-inline-start`, so Hebrew and English share one layout, mirrored. The mono face comes only from `code`, `.code`, `.mono`, `.serial` and `.code-inline`, and from the counters `.rail-count` and `.state-count`. The one exception is the warehouse `.log` list, which names a monospace font stack directly. A cell or detail value with `dir="ltr"` keeps the normal UI face, so money, dates and e-mails in it do not look like codes.
+The file uses only logical properties such as `margin-inline-start`, and `design-lint` holds every stylesheet to that. The mono face comes only from `code`, `.code`, `.mono`, `.serial` and `.code-inline`, and from the counters `.rail-count` and `.state-count`. The one exception is the warehouse `.log` list, which names a monospace font stack directly. A cell or detail value with `dir="ltr"` keeps the normal UI face, so money, dates and e-mails in it do not look like codes.
 
 Dark mode is two identical blocks. One is `:root:not([data-theme='light'])` inside the `prefers-color-scheme` query, and the other is `:root[data-theme='dark']`. Change both, or a dark theme the viewer chose drifts from the one the system chose. `scripts/design-lint.mjs` enforces five rules. It refuses left and right properties in CSS, class names and inline styles. It refuses lengths off the scale, a literal radius or shadow, and a raw colour outside the token block. It allows the mono face only on code selectors, but it looks only for `var(--font-mono)`, so it misses `.log`. A `design-lint-allow` comment exempts a stylesheet line. CI does not run this linter, so run `node scripts/design-lint.mjs` yourself.
 
@@ -46,7 +46,7 @@ About 1.5 minutes. It builds on T16.3, T6.3 and T6.4.
 
 This file is the web app's only HTTP client. `api.get`, `post`, `patch`, `put` and `del` call `/api/v1` with a JSON content type and `credentials: 'include'`, which sends the session cookie. A failed call throws an `ApiError` with a `kind`, the status and the `code` from the error envelope. The kinds are `unreachable`, `unauthenticated`, `forbidden`, `not_found`, `server` and `client`. `apiErrorKey` maps a kind to a message key. It returns `null` for `client` errors, whose API message says more. Only `post` takes extra headers, and that is how an `Idempotency-Key` travels, as T6.5 explains. Nothing retries automatically.
 
-Keep the JSON content type on every write. The API's `jsonBodiesOnly` refuses any other type, as a defence against cross-site requests that T7.9 describes, which is why uploads travel as base64 inside JSON. Most screens show `(e as Error).message`, the API's English text, even on a Hebrew page. Only `App.tsx`, `ProfilePage`, `VerifyEmailPage` and `ResetPasswordPage` use `apiErrorKey`. The last two word a stale link in their own text, and the API answers a stale link with 410.
+Keep the JSON content type on every write. The API's `jsonBodiesOnly` refuses any other type, as a defence against cross-site requests that T7.9 describes, which is why uploads travel as base64 inside JSON. Most screens show `(e as Error).message`, the API's own English text. Only `App.tsx`, `ProfilePage`, `VerifyEmailPage` and `ResetPasswordPage` use `apiErrorKey`. The last two word a stale link in their own text, and the API answers a stale link with 410.
 
 #### `apps/web/src/shared/session.ts`, `apps/web/src/shared/twoFactor.ts`, `apps/web/src/shared/names.ts`
 
@@ -58,9 +58,9 @@ These files tell the app who is signed in, and they check names. The cookie is h
 
 About 1 minute. It builds on T16.4.
 
-This file gives the app its Hebrew and English text with no library, and nearly all of it is the two catalogues. `he` is the source of truth. `MessageKey` is the set of keys in `he`, and `en` is a `Record<MessageKey, string>`, so a missing English string fails the type check. A key built from a template string escapes that check, and `hasMessage` tests such a key at runtime. `t` fills `{placeholders}`. When the current language lacks a key, `t` falls back to the Hebrew text, then to the key itself. `I18nProvider` stores the choice under `bault.locale` and sets `lang` and `dir` on the `html` element, so nothing reloads.
+This file gives the app its text with no library, and nearly all of it is the one catalogue, `en`, in English. `MessageKey` is the set of keys in `en`, so a key that is not in the catalogue fails the type check. A key built from a template string escapes that check, and `hasMessage` tests such a key at runtime. `t` fills `{placeholders}`, and falls back to the key itself when the catalogue lacks it. `Locale` has one value, `en`, and `useI18n` gives a screen `t` and that `locale`, which the date formatters in `money.ts` take. There is no language to choose, so `I18nProvider` stores nothing and changes nothing on the `html` element.
 
-The provider calls `localStorage` without a `try`, unlike `theme.tsx` and `routing.ts`. Where the browser blocks storage, that call throws. The provider sits outside the `ErrorBoundary`, so nothing catches the error, and the visitor sees a blank page.
+The provider touches no storage and sets nothing on the `html` element, so a browser that blocks site storage opens the app like any other. This matters because the provider sits outside the `ErrorBoundary`, so an error it threw would leave the visitor a blank page.
 
 #### `apps/web/src/shared/theme.tsx`, `apps/web/src/shared/hooks.ts`
 
@@ -72,23 +72,23 @@ These files hold the colour theme and three shared hooks. `ThemeProvider` offers
 
 About 2 minutes. It builds on T16.4, T16.5 and T6.5.
 
-These are the design-system parts that every screen is built from. The `gold` variant of `Button` is for the one primary action in a view. `loading` disables the button and sets `aria-busy`, which is the client's guard against a double press. `Field` links its input to the hint, or to the error, which has `role="alert"`. `MoneyField` is the amount input, with `dir="ltr"` and a decimal keypad. `ContextTabs` is an ARIA tab list whose arrow keys mirror on a right-to-left page. `Panel`, `StatusBadge`, `EmptyState` and `SkeletonTable` only present content.
+These are the design-system parts that every screen is built from. The `gold` variant of `Button` is for the one primary action in a view. `loading` disables the button and sets `aria-busy`, which is the client's guard against a double press. `Field` links its input to the hint, or to the error, which has `role="alert"`. `MoneyField` is the amount input, with `dir="ltr"` and a decimal keypad. `ContextTabs` is an ARIA tab list that the left and right arrow keys move through. `Panel`, `StatusBadge`, `EmptyState` and `SkeletonTable` only present content.
 
 `DetailDrawer` shows one record in a side panel, and `ConfirmationModal` asks before an action. Both trap focus and return it to the opener. `isTopOverlay` gives Escape to the topmost overlay, so Escape closes one layer at a time. `dirty` stops an outside click from closing a drawer. `busy` disables Cancel and the backdrop, so the modal stays open while its action runs. Escape still closes a dirty drawer, which loses its input, and a busy modal, whose action carries on.
 
-`Serial`, `Code`, `Amount` and `LtrRun` mark Latin text, such as serials, bin codes and money, as a left-to-right run. `ItemPick` names a card in a picker by its serial and name. Any new serial, code, amount or e-mail on screen must go through these or get `dir="ltr"`, or the browser reorders its characters inside Hebrew text.
+`Serial`, `Code`, `Amount` and `LtrRun` mark Latin text, such as serials, bin codes and money, as a left-to-right run. `ItemPick` names a card in a picker by its serial and name. Any new serial, code, amount or e-mail on screen goes through these or gets `dir="ltr"`, so it stays one run beside a name somebody typed in a script that is read from the right.
 
 #### `apps/web/src/shared/ui/PageHeader.tsx`, `apps/web/src/shared/ui/NavigationRail.tsx`, `apps/web/src/shared/ui/navRailState.ts`, `apps/web/src/shared/ui/ErrorBoundary.tsx`
 
 About 1 minute. It builds on T16.1 and T16.2.
 
-These files draw the frame around every page. `PageHeader` holds the title and the breadcrumb. Beside them sit `AccountPill`, which shows `@username` or the suspended state, `ThemeToggle`, `LanguageSwitcher`, `NotificationBell` and `UserMenu`. The rail expands while hovered or focused and is never pinned. `navRailReducer` is its pure state machine, so `tests/web/nav-rail.test.ts` needs no DOM. `ErrorBoundary` catches a render crash and offers Try again and Reload the page, in English only.
+These files draw the frame around every page. `PageHeader` holds the title and the breadcrumb. Beside them sit `AccountPill`, which shows `@username` or the suspended state, `ThemeToggle`, `NotificationBell` and `UserMenu`. The rail expands while hovered or focused and is never pinned. `navRailReducer` is its pure state machine, so `tests/web/nav-rail.test.ts` needs no DOM. `ErrorBoundary` catches a render crash and offers Try again and Reload the page, in English only.
 
 #### `apps/web/src/shared/money.ts`
 
 About 1 minute. It builds on T5.5, T8.2 and T16.4.
 
-This file converts between cents and text. Amounts travel as integer cents and are all USD. `formatUsd` ignores any currency from the API. `formatLedgerAmount` puts a plus or minus sign on a ledger row from its `direction`. `dollarsToCents` parses what a person typed, such as `1,250.50`, and returns `null` for blank, malformed, zero or negative input. `centsToDollars` pre-fills a field. `formatDate` and `formatDateTime` use `he-IL` or `en-US`. Convert at the input and keep cents everywhere else. A field where $0 is valid cannot use `dollarsToCents`, because it refuses zero.
+This file converts between cents and text. Amounts travel as integer cents and are all USD. `formatUsd` ignores any currency from the API. `formatLedgerAmount` puts a plus or minus sign on a ledger row from its `direction`. `dollarsToCents` parses what a person typed, such as `1,250.50`, and returns `null` for blank, malformed, zero or negative input. `centsToDollars` pre-fills a field. `formatDate` and `formatDateTime` format in `en-US`, the one locale the app has. Convert at the input and keep cents everywhere else. A field where $0 is valid cannot use `dollarsToCents`, because it refuses zero.
 
 #### `apps/web/src/shared/walletRequests.ts`
 
@@ -120,7 +120,7 @@ About 2 minutes. It builds on T9.6, T10.1 and T12.6.
 
 This page shows the collector's cards, with a search, three scopes, a grid and an item drawer. The scopes are `active`, `hold` and `history`. `GET /vault/items` and `GET /vault/counts` load together once typing pauses, so the counts follow the search. `GET /vault/break-even` feeds the `Watch` meter, which compares a card's cost so far with its estimated value. A History row and its drawer say why the card left with `departureLabel`, from the API's `departure`. The class is named with `itemClassLabel`, never as its key.
 
-`ItemDrawer` loads the item, its `/timeline` and its `/storage` forecast. `timelineDetail` words each history entry in the page's language. It lives in `apps/web/src/shared/itemTimeline.ts`, beside `STATE_META`, and puts every code in its own isolated run from U+2068 to U+2069, so a Latin barcode cannot reorder a Hebrew sentence. `CARD_ACTIONS` lists the services, each limited by `states`, `lotOnly` or `gradedOnly` and priced from `useServicePrices`. A card on hold, or one that has left, offers none.
+`ItemDrawer` loads the item, its `/timeline` and its `/storage` forecast. `timelineDetail` words each history entry. It lives in `apps/web/src/shared/itemTimeline.ts`, beside `STATE_META`, and puts every code in its own isolated run from U+2068 to U+2069, so a value cannot reorder the sentence around it. `CARD_ACTIONS` lists the services, each limited by `states`, `lotOnly` or `gradedOnly` and priced from `useServicePrices`. A card on hold, or one that has left, offers none.
 
 Deslab and donation cannot be undone, so each shows a `ConfirmationModal` first. It then posts the request, such as `/services/donation`, and at once posts the returned `confirmationToken` to the confirm route, the pair that T6.6 describes. A service is charged when requested, with no idempotency key. The guard against a double charge is the server's `assertNotAlreadyOpen`. It allows one open request per service type per card, so a repeat gets a 409.
 
@@ -142,7 +142,7 @@ About 1.5 minutes. It builds on T8.1 and T8.6.
 
 This page shows the collector's balance, ledger and cash requests. The tabs are `overview`, `transactions`, `cash-in`, `cash-out` and `requests`. The page loads `GET /finance/wallet`, `/finance/ledger`, `/finance/wallet-requests` and `/finance/wallet/pending` together. Pending totals stay apart from the balance, because none of that money has moved. `runningBalances` walks the whole ledger, oldest first, to give each row's balance after it. It relies on `LedgerService.list` returning every row. If that endpoint ever pages, the running balances go wrong, so the server would have to supply the figure. `RequestDrawer` shows a request's history and cancels it while `canCancel` holds.
 
-`TYPE_META` labels every ledger type. `REF_LABEL` labels every reference type the API writes, but not `interest`, which the worker's interest job writes. So those rows show the raw word `interest` in both languages. A new type or reference shows its raw name until someone adds it to these maps and to both catalogues.
+`TYPE_META` labels every ledger type. `REF_LABEL` labels every reference type the API writes, but not `interest`, which the worker's interest job writes. So those rows show the raw word `interest`. A new type or reference shows its raw name until someone adds it to these maps and to the catalogue.
 
 #### `apps/web/src/areas/customer/finance/MoneyPanels.tsx`, `apps/web/src/areas/customer/finance/WalletRequestForms.tsx`
 
@@ -196,7 +196,7 @@ These are the account, helpdesk and notification screens. `ProfilePage` saves na
 
 About 1 minute. It builds on T16.1 and T16.4.
 
-These are the public landing page and the help pages. `LandingPage` needs no session. It reads the public `GET /pricing/list` and `GET /content/account-terms`. `FaqLegalPage` has the tabs `ask`, `guides`, `faq`, `policy`, `prices`, `shows`, `contact` and `legal`, built from static content files plus live panels. The FAQ, guides and legal text are English only, even in Hebrew. The terms, privacy policy and cookie notice show `DRAFT_NOTICE`, because a lawyer must review them before launch.
+These are the public landing page and the help pages. `LandingPage` needs no session. It reads the public `GET /pricing/list` and `GET /content/account-terms`. `FaqLegalPage` has the tabs `ask`, `guides`, `faq`, `policy`, `prices`, `shows`, `contact` and `legal`, built from static content files plus live panels. The FAQ, guides and legal text are written in English, as the rest of the app is. The terms, privacy policy and cookie notice show `DRAFT_NOTICE`, because a lawyer must review them before launch.
 
 #### `apps/web/src/areas/warehouse/WarehouseConsole.tsx`
 
@@ -244,4 +244,4 @@ These panels hold the admin's reports and queues. `AccountingSection` shows the 
 
 These small files need no separate time.
 
-`fonts.css` holds the `@font-face` rules, split by `unicode-range` so a page fetches only the fonts it needs. `icons.tsx` holds the inline SVG icons. `YieldChart` draws the shelf yield bar chart. `StorefrontPanel` shows a seller's public storefront, the one that `?seller=` names, or else the visitor's own. `HelpPanels.tsx`, `IntakePolicyPanel.tsx`, `PriceListPanel.tsx` and `LegalDocumentView.tsx` render the help tabs. `faqContent.ts`, `guideContent.ts` and `legalContent.ts` hold the static help and legal text. `demoUsers.ts` holds the seeded-account hint on the dev server.
+`fonts.css` holds the `@font-face` rules for the Latin and Latin Extended subsets, split by `unicode-range` so a page fetches only the fonts it needs. `icons.tsx` holds the inline SVG icons. `YieldChart` draws the shelf yield bar chart. `StorefrontPanel` shows a seller's public storefront, the one that `?seller=` names, or else the visitor's own. `HelpPanels.tsx`, `IntakePolicyPanel.tsx`, `PriceListPanel.tsx` and `LegalDocumentView.tsx` render the help tabs. `faqContent.ts`, `guideContent.ts` and `legalContent.ts` hold the static help and legal text. `demoUsers.ts` holds the seeded-account hint on the dev server.

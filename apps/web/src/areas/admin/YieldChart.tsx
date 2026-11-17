@@ -37,7 +37,7 @@ const props = (values: Record<string, number>) => values as unknown as CSSProper
  * one at the top), each with its value at the end of its bar and what it is made of (how many of its shelves are
  * occupied) at its start, the weakest of the zones that are occupied marked in the amber and in words, and a
  * scale of round steps under them. Every value is written beside its bar, so the table under the chart is its
- * twin and nothing is behind a hover. It reads from the end its zero is at: from the right, in Hebrew.
+ * twin and nothing is behind a hover. It reads from the end its zero is at, the left.
  */
 export function YieldChart({
   rows,
@@ -112,7 +112,7 @@ export function YieldChart({
       <div className="chart-axis" aria-hidden="true">
         <span className="chart-ticks">
           {ticks.map((tick) => (
-            // The tick is placed by the page's direction and its figure is read left to right: two elements.
+            // The tick is placed along the axis, and its figure is a run of its own: two elements.
             <span key={tick} className="chart-tick" style={props({ '--at': tick / scale })}>
               <span dir="ltr">{formatTick(tick)}</span>
             </span>

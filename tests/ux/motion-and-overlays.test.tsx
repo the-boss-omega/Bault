@@ -59,7 +59,6 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  document.documentElement.dir = '';
 });
 
 /** A rectangle, without depending on jsdom having DOMRect. */
@@ -422,23 +421,12 @@ describe('ContextTabs', () => {
   }
 
   it('measures the active tab from the inline-start edge, left to right', () => {
-    document.documentElement.dir = 'ltr';
     rects(box(0, 300), box(100, 100));
     render(<ContextTabs label="t" tabs={tabs} active="b" onSelect={() => {}} />);
     const list = screen.getByRole('tablist');
     expect(list.style.getPropertyValue('--tab-x')).toBe('100px');
     expect(list.style.getPropertyValue('--tab-w')).toBe('100px');
     expect(list.dataset.ready).toBe('true');
-  });
-
-  it('measures the same tab from the right edge when the page reads right to left', () => {
-    document.documentElement.dir = 'rtl';
-    // In RTL the bar starts at its right edge, so the active tab sits 100px to the left of it.
-    rects(box(0, 300), box(100, 100));
-    render(<ContextTabs label="t" tabs={tabs} active="b" onSelect={() => {}} />);
-    const list = screen.getByRole('tablist');
-    expect(list.style.getPropertyValue('--tab-x')).toBe('-100px');
-    expect(list.style.getPropertyValue('--tab-w')).toBe('100px');
   });
 
   it('measures again when a tab changes size, and stops when it is gone', () => {
@@ -456,7 +444,6 @@ describe('ContextTabs', () => {
       }
     }
     vi.stubGlobal('ResizeObserver', FakeResize);
-    document.documentElement.dir = 'ltr';
     rects(box(0, 300), box(100, 100));
     const { unmount } = render(<ContextTabs label="t" tabs={tabs} active="b" onSelect={() => {}} />);
     const list = screen.getByRole('tablist');
@@ -471,18 +458,16 @@ describe('ContextTabs', () => {
     expect(sizes[0]!.disconnected).toBe(true);
   });
 
-  it('moves between tabs with the arrow that points the way it is read', () => {
+  it('moves between tabs with the arrows: the next one is to the right, the one before it to the left', () => {
     const picked: string[] = [];
-    document.documentElement.dir = 'rtl';
     render(<ContextTabs label="t" tabs={tabs} active="a" onSelect={(k) => picked.push(k)} />);
     const list = screen.getByRole('tablist');
-    // In right-to-left, the next tab is to the left.
+    list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-    expect(picked).toEqual(['b']);
+    expect(picked).toEqual(['b', 'b']);
   });
 
   it('takes focus to the tab it selects, so the ring is on what is selected', () => {
-    document.documentElement.dir = 'ltr';
     render(<ContextTabs label="t" tabs={tabs} active="a" onSelect={() => {}} />);
     screen.getByRole('tab', { name: 'Alpha' }).focus();
 
@@ -498,7 +483,6 @@ describe('ContextTabs', () => {
     });
 
     it('brings a selected tab that is out of sight into view, with room beside it', () => {
-      document.documentElement.dir = 'ltr';
       const scrollTo = vi.fn();
       Element.prototype.scrollTo = scrollTo;
       // The strip shows 0 to 300; the selected tab is at 400 to 480, past its end.
@@ -511,10 +495,9 @@ describe('ContextTabs', () => {
     });
 
     it('brings it back from the other side too', () => {
-      document.documentElement.dir = 'rtl';
       const scrollTo = vi.fn();
       Element.prototype.scrollTo = scrollTo;
-      // In right-to-left the strip starts at its right end; the tab is out past its left end, at -120 to -40.
+      // The strip has been scrolled on, and the tab is out past its start, at -120 to -40.
       rects(box(0, 300), box(-120, 80));
 
       render(<ContextTabs label="t" tabs={tabs} active="b" onSelect={() => {}} />);
@@ -523,7 +506,6 @@ describe('ContextTabs', () => {
     });
 
     it('leaves a selected tab that is already in view where it is', () => {
-      document.documentElement.dir = 'ltr';
       const scrollTo = vi.fn();
       Element.prototype.scrollTo = scrollTo;
       rects(box(0, 300), box(100, 80));

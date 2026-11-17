@@ -53,12 +53,10 @@ describe('the words for a day and a time', () => {
   const noon = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12, 0, 0).toISOString();
   const now = new Date(2026, 9, 27, 15, 0, 0);
 
-  it('says today and yesterday in the page’s language, from the browser’s own tables, then just the date', () => {
+  it('says today and yesterday, from the browser’s own tables, then just the date', () => {
     expect(formatDayHeading(noon(2026, 10, 27), 'en', now)).toMatch(/^today · .*October 27/i);
     expect(formatDayHeading(noon(2026, 10, 26), 'en', now)).toMatch(/^yesterday · .*October 26/i);
     expect(formatDayHeading(noon(2026, 10, 24), 'en', now)).toMatch(/^[A-Za-z]+, October 24$/);
-    expect(formatDayHeading(noon(2026, 10, 27), 'he', now)).toMatch(/^היום · /);
-    expect(formatDayHeading(noon(2026, 10, 26), 'he', now)).toMatch(/^אתמול · /);
   });
 
   it('adds the year when the day is not this year’s', () => {
@@ -68,7 +66,7 @@ describe('the words for a day and a time', () => {
 
   it('is a time of day and nothing else', () => {
     expect(formatTime(new Date(2026, 9, 27, 6, 8).toISOString(), 'en')).toBe('6:08 AM');
-    expect(formatTime(new Date(2026, 9, 27, 18, 5).toISOString(), 'he')).toBe('18:05');
+    expect(formatTime(new Date(2026, 9, 27, 18, 5).toISOString(), 'en')).toBe('6:05 PM');
     expect(formatTime(null, 'en')).toBe('—');
     expect(formatTime('not a date', 'en')).toBe('not a date');
   });
@@ -78,15 +76,11 @@ describe('how long ago a moment was', () => {
   const now = new Date(2026, 9, 27, 15, 0, 0);
   const noon = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12).toISOString();
 
-  it('uses the day’s own words in the page’s language, then counts the days, with no plural of ours to get wrong', () => {
+  it('uses the day’s own words, then counts the days, with no plural of ours to get wrong', () => {
     expect(formatAge(noon(2026, 10, 27), 'en', now)).toBe('today');
     expect(formatAge(noon(2026, 10, 26), 'en', now)).toBe('yesterday');
     expect(formatAge(noon(2026, 10, 24), 'en', now)).toBe('3 days ago');
-    expect(formatAge(noon(2026, 10, 27), 'he', now)).toBe('היום');
-    expect(formatAge(noon(2026, 10, 26), 'he', now)).toBe('אתמול');
-    // Hebrew has a word of its own for two days and a plural for the rest: both are the browser's.
-    expect(formatAge(noon(2026, 10, 25), 'he', now)).toBe('שלשום');
-    expect(formatAge(noon(2026, 10, 24), 'he', now)).toBe('לפני 3 ימים');
+    expect(formatAge(noon(2026, 10, 25), 'en', now)).toBe('2 days ago');
   });
 
   it('counts in weeks and then in months as the count grows, so a stale request is not “97 days ago”', () => {
@@ -94,7 +88,6 @@ describe('how long ago a moment was', () => {
     expect(formatAge(noon(2026, 10, 13), 'en', now)).toBe('2 weeks ago');
     expect(formatAge(noon(2026, 10, 6), 'en', now)).toBe('3 weeks ago');
     expect(formatAge(noon(2026, 8, 1), 'en', now)).toBe('3 months ago');
-    expect(formatAge(noon(2026, 8, 1), 'he', now)).toMatch(/^לפני /);
   });
 
   it('counts calendar days, not hours, and is never in the future', () => {

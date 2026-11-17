@@ -156,11 +156,8 @@
   --shadow-overlay: 0 4px 6px -1px oklch(0 0 0 / 10%), 0 12px 32px oklch(0 0 0 / 14%);
   --shadow-card: var(--shadow-xs);
 
-  --font-ui: var(--font-sans), 'IBM Plex Sans Hebrew', system-ui, sans-serif;
-  /* Geist Mono has no Hebrew, and a missing glyph falls to whatever monospace the
-     system has. Plex Sans Hebrew sits second so Hebrew in a label is its own face
-     while serials and digits stay Geist Mono. */
-  --font-mono: var(--font-mono-face), 'IBM Plex Sans Hebrew', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --font-ui: var(--font-sans), system-ui, sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --font-display: 'Frank Ruhl Libre', 'Times New Roman', serif;
 }
 
@@ -175,7 +172,6 @@
   --foil-c: oklch(0.86 0.12 160);
   --foil-d: oklch(0.82 0.12 235);
   --foil-e: oklch(0.8 0.14 305);
-  /* design-lint-allow: a band of foil colour: it reads the same either way round */
   --foil: linear-gradient(115deg, var(--foil-a), var(--foil-b), var(--foil-c), var(--foil-d), var(--foil-e), var(--foil-a));
 
   --paper: #f3efe6;
@@ -249,27 +245,10 @@
   --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
 }
 
-/* Direction, declared once. Logical properties place things, but they cannot turn
-   a gradient, a transform origin or a background position around. Anything that
-   has to face the way the page is read multiplies by --dir (1 left to right, -1
-   right to left). This is the only place the stylesheet asks which way the page
-   reads: design-lint forbids [dir='rtl'] and :dir(rtl) in every other rule. */
+/* The edge a block of text hangs from. A block that takes the direction of its own text
+   (unicode-bidi: plaintext, so a name or a message typed in a script that is read from the
+   right keeps its letters in order) would hang from that text's edge, and `start` follows it.
+   The order of the letters is the text's; the edge is the page's, which is the left. */
 :root {
-  --dir: 1;
-  /* The edge a block of text hangs from. A block that takes the direction of its own text
-     (unicode-bidi: plaintext, so an English sentence keeps its full stop) would hang from that
-     text's edge, and `start` follows it: a serial or an English name at the left of a Hebrew
-     tile, under a status at the right. The order of the letters is the text's; the edge is the page's. */
   --text-start: left;
-}
-
-:root[dir='rtl'] {
-  --dir: -1;
-  --text-start: right;
-}
-
-/* Hebrew sets tight and wide tracking badly; the Latin display tracking is Latin-only. */
-:lang(he) {
-  --track-tight: 0;
-  --track-label: 0.02em;
 }

@@ -27,7 +27,6 @@ const { FaqLegalPage } = await import('../../apps/web/src/areas/customer/help/Fa
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   audit: (page: Page, options?: { forced?: boolean }) => Promise<string[]>;
   auditButtons: (page: Page) => Promise<string[]>;
-  inspect: (page: Page, locale: string, width: number) => Promise<{ flags: string[] }>;
 };
 
 /**
@@ -64,14 +63,7 @@ afterAll(async () => {
   await browser?.close();
 });
 
-type Locale = 'en' | 'he';
-
-async function inBrowser(
-  width: number,
-  locale: Locale,
-  theme: 'dark' | 'light',
-  touch = false,
-): Promise<Page> {
+async function inBrowser(width: number, theme: 'dark' | 'light', touch = false): Promise<Page> {
   const html = document.body.innerHTML;
   const context = await browser!.newContext({
     viewport: { width, height: 1000 },
@@ -81,7 +73,7 @@ async function inBrowser(
   });
   const page = await context.newPage();
   await page.setContent(
-    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
+    `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
   );
   return page;
 }
@@ -89,7 +81,6 @@ async function inBrowser(
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
-  localStorage.setItem('bault.locale', 'en');
   window.location.hash = '';
 });
 
@@ -148,7 +139,7 @@ describe('opening an escrow deal, as a slip', () => {
     await user.type(screen.getByLabelText('Their username'), 'golden');
     expect(within(lineOf(slip, 'Other side')).getByText('@golden')).toBeInTheDocument();
 
-    await user.click(screen.getByLabelText('The other side has no Bault account'));
+    await user.click(screen.getByLabelText('The other side has no Card Embassy account'));
     expect(lineOf(slip, 'Other side')).toHaveTextContent('—');
     await user.type(screen.getByLabelText('Their name'), 'Dana Levi');
     await user.type(screen.getByLabelText('Their email'), 'dana@example.com');
@@ -328,45 +319,6 @@ describe('a shared parcel, opened, joined and kept', () => {
   });
 });
 
-describe.skipIf(!browser)('a figure with its unit, set into a Hebrew sentence', () => {
-  it('is drawn as it is typed, "10 g", and not with its unit first: the parcel\'s total, the quote and the size of a box', async () => {
-    localStorage.setItem('bault.locale', 'he');
-    get.mockImplementation((path: string) => {
-      if (path === '/shipping/groups')
-        return Promise.resolve([
-          {
-            id: 'g1',
-            code: 'GRP-7P6YKNHS',
-            status: 'forming',
-            destinationAddress: 'Dana Levi, 12 Vine St, Trenton, NJ 08608, US',
-            recipientName: 'Dana Levi',
-            notes: null,
-            memberCount: 2,
-            totalItems: 2,
-            totalWeightGrams: 10,
-            members: [],
-          },
-        ]);
-      return Promise.resolve([]);
-    });
-    render(
-      <I18nProvider>
-        <SharedParcelsTab
-          reloadToken={0}
-          onChanged={vi.fn()}
-          onError={vi.fn()}
-          onStatus={vi.fn()}
-        />
-      </I18nProvider>,
-    );
-    await screen.findByText('GRP-7P6YKNHS');
-    const page = await inBrowser(1440, 'he', 'dark');
-    const { flags } = await audit.inspect(page, 'he', 1440);
-    expect(flags.filter((f) => f.includes('drawn out of order'))).toEqual([]);
-    await page.context().close();
-  });
-});
-
 describe('the question put to the assistant', () => {
   async function open() {
     window.location.hash = '#/faq/ask';
@@ -419,7 +371,7 @@ describe.skipIf(!browser)('the three, in a browser', () => {
     // A button with nothing to send is a blank; with a question in the box it is the print.
     await userEvent.type(await screen.findByLabelText('Your question'), 'Is grading insured?');
     for (const theme of ['dark', 'light'] as const) {
-      const page = await inBrowser(1100, 'en', theme);
+      const page = await inBrowser(1100, theme);
       const read = (selector: string, prop: string) =>
         page.$eval(selector, (el, p) => getComputedStyle(el).getPropertyValue(p), prop);
       expect(await read('.ask-composer', 'background-color')).toBe('rgb(243, 239, 230)');
@@ -431,33 +383,30 @@ describe.skipIf(!browser)('the three, in a browser', () => {
   });
 
   for (const theme of ['dark', 'light'] as const) {
-    for (const locale of ['en', 'he'] as const) {
-      it(`reads the answer printed on its slip (a code is a pill elsewhere, ink on paper here): ${theme}, ${locale}`, async () => {
-        localStorage.setItem('bault.locale', locale);
-        window.location.hash = '#/faq/ask';
-        const user = userEvent.setup();
-        render(
-          <I18nProvider>
-            <FaqLegalPage />
-          </I18nProvider>,
-        );
-        await user.type(await screen.findByRole('textbox'), 'שאלה');
-        await user.keyboard('{Enter}');
-        await screen.findByText('#1DDD');
-        const page = await inBrowser(390, locale, theme, true);
-        const code = await page.$eval('code.ask-words', (el) => {
-          const style = getComputedStyle(el);
-          return { bg: style.backgroundColor, color: style.color, border: style.borderTopWidth };
-        });
-        expect(code.bg).toBe('rgba(0, 0, 0, 0)');
-        expect(code.color).toBe('rgb(21, 19, 15)');
-        expect(code.border).toBe('0px');
-        const flags = await audit.audit(page);
-        expect(flags.filter((f) => /color-contrast/.test(f))).toEqual([]);
-        expect(await audit.auditButtons(page)).toEqual([]);
-        await page.context().close();
+    it(`reads the answer printed on its slip (a code is a pill elsewhere, ink on paper here): ${theme}`, async () => {
+      window.location.hash = '#/faq/ask';
+      const user = userEvent.setup();
+      render(
+        <I18nProvider>
+          <FaqLegalPage />
+        </I18nProvider>,
+      );
+      await user.type(await screen.findByRole('textbox'), 'A question');
+      await user.keyboard('{Enter}');
+      await screen.findByText('#1DDD');
+      const page = await inBrowser(390, theme, true);
+      const code = await page.$eval('code.ask-words', (el) => {
+        const style = getComputedStyle(el);
+        return { bg: style.backgroundColor, color: style.color, border: style.borderTopWidth };
       });
-    }
+      expect(code.bg).toBe('rgba(0, 0, 0, 0)');
+      expect(code.color).toBe('rgb(21, 19, 15)');
+      expect(code.border).toBe('0px');
+      const flags = await audit.audit(page);
+      expect(flags.filter((f) => /color-contrast/.test(f))).toEqual([]);
+      expect(await audit.auditButtons(page)).toEqual([]);
+      await page.context().close();
+    });
   }
 
   it('puts the escrow slip beside its fields on a wide window, between the fields and the button on a phone', async () => {
@@ -475,7 +424,7 @@ describe.skipIf(!browser)('the three, in a browser', () => {
     );
     await screen.findByLabelText('Their username');
     for (const width of [1440, 390]) {
-      const page = await inBrowser(width, 'en', 'dark', width < 800);
+      const page = await inBrowser(width, 'dark', width < 800);
       const box = await page.evaluate(() => {
         const rect = (selector: string) =>
           document.querySelector(selector)!.getBoundingClientRect();

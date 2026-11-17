@@ -119,6 +119,15 @@ file_set() {
   mv "$tmp" "$file"
 }
 
+# Drops every KEY= line.
+file_unset() {
+  local file="$1" key="$2" tmp
+  tmp="$(mktemp "$file.XXXXXX")"
+  awk -v key="$key" 'index($0, key "=") != 1' "$file" > "$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" "$file"
+}
+
 placeholder() {
   case "$1" in
     "" | CHANGE_ME* | *example.com* | *example.internal* | *OWNER*) return 0 ;;
@@ -177,7 +186,7 @@ smtp_port_ok() {
     *) say "  587 or 465"; return 1 ;;
   esac
 }
-from_ok() { [[ "$1" == *@*.* ]] || { say "  an address, such as Bault <noreply@yourdomain>"; return 1; }; any "$1"; }
+from_ok() { [[ "$1" == *@*.* ]] || { say "  an address, such as Card Embassy <noreply@yourdomain>"; return 1; }; any "$1"; }
 age_ok() { [[ "$1" =~ ^age1[0-9a-z]{58}$ ]] || { say "  an age public key: age1 and 58 more characters (age-keygen prints it)"; return 1; }; }
 
 SET_KEYS=()
@@ -282,7 +291,7 @@ if placeholder "$smtp_host" || placeholder "$(file_get "$PROD" SMTP_PASSWORD)" |
   ask "SMTP password (hidden)" 1 "" nonempty
   set_prod SMTP_PASSWORD "$ANSWER"
   current="$(file_get "$PROD" SMTP_FROM)"; placeholder "$current" && current=""
-  ask "Sender, such as Bault <noreply@yourdomain>" 0 "$current" from_ok
+  ask "Sender, such as Card Embassy <noreply@yourdomain>" 0 "$current" from_ok
   set_prod SMTP_FROM "$ANSWER"
 fi
 
@@ -337,21 +346,44 @@ if [ ! -e "$BACKUP" ]; then
   {
     echo "# /etc/bault/backup.env: written by infra/gcp/configure.sh. Sourced by the"
     echo "# nightly job (infra/ops/crontab.example) and read by deploy.sh."
-    section backup
+    section backup | awk '!/^RCLONE_CONFIG_BACKUP_/'
   } > "$BACKUP"
   chmod 600 "$BACKUP"
   echo "wrote $BACKUP"
 elif [ "$HAVE_FROM" -eq 1 ]; then
-  # The connection and the bucket's key are provision.sh's; the rest is yours.
+  # The connection and the bucket are provision.sh's; the rest is yours.
   while IFS= read -r line; do
     key="${line%%=*}"
     value="$(unquote "${line#*=}")"
     case "$key" in
+      RCLONE_CONFIG_BACKUP_*) continue ;;
       BACKUP_AGE_RECIPIENT | BACKUP_DIR | BACKUP_RETAIN_DAYS) [ -z "$(file_get "$BACKUP" "$key")" ] || continue ;;
     esac
     [ "$(file_get "$BACKUP" "$key")" = "$value" ] || file_set "$BACKUP" "$key" "$value"
   done < <(section backup)
   echo "updated $BACKUP from $FROM"
+fi
+
+# rclone's remote "backup" is rclone's own Cloud Storage backend, signed in as
+# the server's service account through the metadata server, with no key: that
+# account may add objects to the backups bucket and nothing else. Ubuntu's
+# rclone 1.60 sends an ACL with every upload through the S3 API, which a bucket
+# with uniform access refuses, so the S3 settings and the key an older
+# provision.sh wrote are taken out, with or without its file.
+for pair in "RCLONE_CONFIG_BACKUP_TYPE=google cloud storage" RCLONE_CONFIG_BACKUP_BUCKET_POLICY_ONLY=true \
+            RCLONE_CONFIG_BACKUP_NO_CHECK_BUCKET=true; do
+  [ "$(file_get "$BACKUP" "${pair%%=*}")" = "${pair#*=}" ] || file_set "$BACKUP" "${pair%%=*}" "${pair#*=}"
+done
+stale=()
+while IFS= read -r key; do
+  case "$key" in
+    RCLONE_CONFIG_BACKUP_TYPE | RCLONE_CONFIG_BACKUP_BUCKET_POLICY_ONLY | RCLONE_CONFIG_BACKUP_NO_CHECK_BUCKET) ;;
+    *) file_unset "$BACKUP" "$key"; stale+=("$key") ;;
+  esac
+done < <(sed -nE 's/^(RCLONE_CONFIG_BACKUP_[A-Za-z0-9_]*)=.*/\1/p' "$BACKUP" | sort -u)
+if [ ${#stale[@]} -gt 0 ]; then
+  echo "removed from backup.env: ${stale[*]}"
+  echo "the server's own service account writes the backups now; the bault-backups account and its HMAC key are unused"
 fi
 age="$(file_get "$BACKUP" BACKUP_AGE_RECIPIENT)"
 if placeholder "$age" || ! age_ok "$age" 2> /dev/null || wanted BACKUP_AGE_RECIPIENT age; then

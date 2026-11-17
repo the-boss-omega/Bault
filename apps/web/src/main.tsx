@@ -15,8 +15,10 @@ import './gallery.css';
 import './screens.css';
 import './motion.css';
 
+// Keys the app no longer reads: the rail is never pinned, and the product has one language.
 try {
   localStorage.removeItem('bault.railPinned');
+  localStorage.removeItem('bault.locale');
 } catch {
 }
 
