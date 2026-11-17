@@ -60,7 +60,7 @@ About 1 minute. It builds on T16.4.
 
 This file gives the app its text with no library, and nearly all of it is the one catalogue, `en`, in English. `MessageKey` is the set of keys in `en`, so a key that is not in the catalogue fails the type check. A key built from a template string escapes that check, and `hasMessage` tests such a key at runtime. `t` fills `{placeholders}`, and falls back to the key itself when the catalogue lacks it. `Locale` has one value, `en`, and `useI18n` gives a screen `t` and that `locale`, which the date formatters in `money.ts` take. There is no language to choose, so `I18nProvider` stores nothing and changes nothing on the `html` element.
 
-The provider calls `localStorage` without a `try`, unlike `theme.tsx` and `routing.ts`. Where the browser blocks storage, that call throws. The provider sits outside the `ErrorBoundary`, so nothing catches the error, and the visitor sees a blank page.
+The provider touches no storage and sets nothing on the `html` element, so a browser that blocks site storage opens the app like any other. This matters because the provider sits outside the `ErrorBoundary`, so an error it threw would leave the visitor a blank page.
 
 #### `apps/web/src/shared/theme.tsx`, `apps/web/src/shared/hooks.ts`
 
