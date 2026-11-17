@@ -33,6 +33,8 @@ import {
   IconMarketplace,
   IconShield,
   IconShippingServices,
+  IconEscrow,
+  IconStore,
   IconVault,
   IconWallet,
   IconWarehouse,
@@ -49,6 +51,8 @@ import { InboundPage } from './areas/customer/inbound/InboundPage';
 import { SupportPage } from './areas/customer/support/SupportPage';
 import { WalletPage } from './areas/customer/finance/WalletPage';
 import { MarketplacePage } from './areas/customer/marketplace/MarketplacePage';
+import { StorePage } from './areas/customer/marketplace/StorePage';
+import { EscrowPage } from './areas/customer/marketplace/EscrowPage';
 import { ShippingServicesPage } from './areas/customer/shipping/ShippingServicesPage';
 import { FaqLegalPage } from './areas/customer/help/FaqLegalPage';
 import { NotificationsPage } from './areas/customer/notifications/NotificationsPage';
@@ -77,6 +81,8 @@ const SECTIONS: readonly SectionSpec[] = [
   { key: 'wallet', labelKey: 'tab.wallet', titleKey: 'wallet.title', icon: <IconWallet /> },
   { key: 'membership', labelKey: 'tab.membership', titleKey: 'membership.title', icon: <IconShield /> },
   { key: 'marketplace', labelKey: 'tab.marketplace', titleKey: 'market.title', icon: <IconMarketplace /> },
+  { key: 'store', labelKey: 'tab.store', titleKey: 'store.title', icon: <IconStore /> },
+  { key: 'escrow', labelKey: 'tab.escrow', titleKey: 'escrow.title', icon: <IconEscrow /> },
   {
     key: 'shipping-services',
     labelKey: 'tab.shippingServices',
@@ -431,6 +437,8 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
             {section === 'wallet' && <WalletPage />}
             {section === 'membership' && <MembershipPage />}
             {section === 'marketplace' && <MarketplacePage />}
+            {section === 'store' && <StorePage />}
+            {section === 'escrow' && <EscrowPage />}
             {section === 'shipping-services' && <ShippingServicesPage />}
             {section === 'faq' && <FaqLegalPage />}
             {section === 'notifications' && (

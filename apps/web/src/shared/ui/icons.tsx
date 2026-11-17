@@ -52,6 +52,26 @@ export function IconMarketplace(p: IconProps) {
   );
 }
 
+export function IconStore(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4.6 8.5h14.8l-.95 10.6a1.5 1.5 0 0 1-1.5 1.4H7.05a1.5 1.5 0 0 1-1.5-1.4z" />
+      <path d="M8.75 10.75V7a3.25 3.25 0 0 1 6.5 0v3.75" />
+    </Svg>
+  );
+}
+
+export function IconEscrow(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M12 3.5v17M7.5 20.5h9" />
+      <path d="M4.5 6.5h15" />
+      <path d="M6.5 6.5 3.75 13a2.75 2.75 0 0 0 5.5 0z" />
+      <path d="M17.5 6.5 14.75 13a2.75 2.75 0 0 0 5.5 0z" />
+    </Svg>
+  );
+}
+
 export function IconServices(p: IconProps) {
   return (
     <Svg {...p}>
