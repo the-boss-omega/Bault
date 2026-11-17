@@ -272,9 +272,10 @@ describe('A5 the notification feed a collector reads', () => {
     const red = await signIn(SEED.collector);
     const redId = await userIdOf(red);
     const someone = '7f1c2a9e-1111-4222-8333-944455556666';
+    const code = `WR-V${Date.now()}`;
     const content = {
       message: 'A payment of $12.00 was reversed by the bank.',
-      requestCode: 'WR-VIEWS1',
+      requestCode: code,
       amount: 12_00,
       refundedMinor: 12_00,
       reason: 'Chargeback typed by an admin: cardholder disputed',
@@ -296,8 +297,8 @@ describe('A5 the notification feed a collector reads', () => {
     );
     await sql(
       `UPDATE notification SET provider_ref = 'prov-123', failure_reason = 'SMTP 550 mailbox unavailable'
-        WHERE user_id = $1 AND channel = 'email' AND content->>'requestCode' = 'WR-VIEWS1'`,
-      [redId],
+        WHERE user_id = $1 AND channel = 'email' AND content->>'requestCode' = $2`,
+      [redId, code],
     );
 
     const feed = await red.get('/notifications');
@@ -320,15 +321,76 @@ describe('A5 the notification feed a collector reads', () => {
       'reason',
     ]);
     const rows = (feed.body as { eventType: string; content: Record<string, unknown> }[]).filter(
-      (n) => n.content.requestCode === 'WR-VIEWS1',
+      (n) => n.content.requestCode === code,
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]!.content).toEqual({
       message: content.message,
-      requestCode: 'WR-VIEWS1',
+      requestCode: code,
       amount: 12_00,
       refundedMinor: 12_00,
     });
     expect(JSON.stringify(feed.body)).not.toMatch(new RegExp(someone));
+  });
+});
+
+const DEAL_DROPPED = [
+  'raisedBy',
+  'counterpartyUserId',
+  'fundingAttestedBy',
+  'inspectedBy',
+  'buyerReleaseAttestedBy',
+  'sellerReleaseAttestedBy',
+  'buyerId',
+  'sellerId',
+  'itemId',
+  'actorId',
+  'metadata',
+  'onBehalfOf',
+  'configuredBps',
+  'deals',
+] as const;
+
+describe('A6 escrow as a collector reads it', () => {
+  it('names the caller’s side instead of sending either party’s id', async () => {
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+    const operator = await signIn(SEED.operator);
+    const raised = await red.post('/escrow', {
+      raiserRole: 'seller',
+      counterpartyUsername: 'golden',
+      description: 'Views check: Base Set Charizard, PSA 6',
+      valueMinor: 300_000,
+      settlement: 'buyer_vault',
+    });
+    expect(raised.status).toBe(201);
+    expectWithout(raised.body, DEAL_DROPPED);
+    expect(raised.body).toMatchObject({ myRole: 'seller', raisedByMe: true, counterpartyIsMember: true });
+    expect((await golden.post(`/escrow/${raised.body.id}/agree`, { notes: 'Agreed at the show.' })).status).toBe(201);
+
+    const mine = await golden.get('/escrow/mine');
+    expectWithout(mine.body, DEAL_DROPPED);
+    const theirs = (mine.body as { id: string; myRole: string; raisedByMe: boolean }[]).find(
+      (d) => d.id === raised.body.id,
+    )!;
+    expect(theirs).toMatchObject({ myRole: 'buyer', raisedByMe: false });
+
+    const detail = await golden.get(`/escrow/${raised.body.id}`);
+    expect(detail.status).toBe(200);
+    expectWithout(detail.body, DEAL_DROPPED);
+    const events = detail.body.events as { eventType: string; byStaff: boolean; notes: string | null }[];
+    expect(events.map((e) => e.eventType).sort()).toEqual(['agreed', 'raised']);
+    expect(events.every((e) => e.byStaff === false)).toBe(true);
+    expect(events.find((e) => e.eventType === 'agreed')?.notes).toBe('Agreed at the show.');
+
+    const terms = await golden.get('/escrow/terms');
+    expectWithout(terms.body, DEAL_DROPPED);
+    expectWith(terms.body, ['feeBps', 'minimumFeeMinor', 'minimumValueMinor']);
+    const held = await golden.get('/escrow/held');
+    expect(Object.keys(held.body)).toEqual(['heldMinor']);
+
+    const staff = await operator.get(`/escrow/${raised.body.id}`);
+    expect(staff.status).toBe(200);
+    expectWith(staff.body, ['raisedBy', 'counterpartyUserId', 'buyerId', 'sellerId', 'actorId', 'metadata']);
   });
 });

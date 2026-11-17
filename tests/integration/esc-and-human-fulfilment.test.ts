@@ -125,7 +125,8 @@ describe('ESC escrow and human fulfilment', () => {
 
     const detail = (await buyer.get(`/escrow/${deal.id}`)).body;
     expect(detail.deal.status).toBe('settled');
-    expect(detail.deal.itemId).toBe(card.id);
+    expect(detail.deal.itemId).toBeUndefined();
+    expect((await operator.get(`/escrow/${deal.id}`)).body.deal.itemId).toBe(card.id);
     const kinds = (detail.events as Array<{ eventType: string }>).map((e) => e.eventType);
     for (const step of ['raised', 'agreed', 'funded', 'item_received', 'inspected', 'settled']) {
       expect(kinds).toContain(step);
@@ -225,8 +226,11 @@ describe('ESC escrow and human fulfilment', () => {
 
     const detail = (await seller.get(`/escrow/${deal.id}`)).body;
     expect(detail.deal.fundingSource).toBe('external');
-    expect(detail.deal.fundingAttestedBy).toBeTruthy();
-    expect(detail.buyerId).toBeNull();
+    expect(detail.deal.fundingAttestedBy).toBeUndefined();
+    expect(detail.deal.counterpartyIsMember).toBe(false);
+    const staff = (await operator.get(`/escrow/${deal.id}`)).body;
+    expect(staff.deal.fundingAttestedBy).toBeTruthy();
+    expect(staff.buyerId).toBeNull();
   });
 
   it('does not pay the seller of an outside buyer until the card is on its way to them', async () => {
