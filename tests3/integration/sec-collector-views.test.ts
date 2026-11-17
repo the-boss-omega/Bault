@@ -548,3 +548,37 @@ describe('A10 inbound parcels, addresses and show calendars as a collector reads
     expectWith(channels.body.channels, ['key', 'label', 'minAskingMinor', 'requiresEvent']);
   });
 });
+
+describe('A11 support tickets as a collector reads them', () => {
+  it('marks staff messages without naming staff and leaves out assignment and resolution ids', async () => {
+    const red = await signIn(SEED.collector);
+    const operator = await signIn(SEED.operator);
+    const opened = await red.post('/support/tickets', {
+      category: 'item',
+      subject: 'Views: a scuff on my slab',
+      body: 'There is a scuff on the case that was not there before.',
+      relatedType: 'item',
+      relatedId: '7f1c2a9e-1111-4222-8333-944455556666',
+    });
+    expect(opened.status).toBe(201);
+    expectWithout(opened.body, ['userId', 'assignedTo', 'resolvedBy', 'relatedType', 'relatedId']);
+    expect((await operator.post(`/support/tickets/${opened.body.id}/messages`, { body: 'We will look at it today.' })).status).toBe(201);
+
+    const list = await red.get('/support/tickets');
+    expectWithout(list.body, ['userId', 'assignedTo', 'resolvedBy', 'relatedType', 'relatedId']);
+    expectWith(list.body, ['id', 'code', 'subject', 'status', 'lastMessageAt']);
+
+    const thread = await red.get(`/support/tickets/${opened.body.id}`);
+    expect(thread.status).toBe(200);
+    expectWithout(thread.body, ['userId', 'assignedTo', 'resolvedBy', 'relatedId']);
+    const messages = thread.body.messages as { fromStaff: boolean; authorUsername?: string; body: string }[];
+    expect(messages.map((m) => m.fromStaff)).toEqual([false, true]);
+    expect(messages[0]!.authorUsername).toBe('red');
+    expect(messages[1]).not.toHaveProperty('authorUsername');
+    expect(JSON.stringify(thread.body)).not.toMatch(/hermon/);
+
+    const staff = await operator.get(`/support/tickets/${opened.body.id}`);
+    expectWith(staff.body, ['userId', 'assignedTo', 'authorUsername']);
+    expect(JSON.stringify(staff.body)).toMatch(/hermon/);
+  });
+});

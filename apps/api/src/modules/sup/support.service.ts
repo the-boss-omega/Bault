@@ -29,6 +29,20 @@ export interface TicketActor {
 const MAX_SUBJECT = 200;
 const MAX_BODY = 5_000;
 
+export function collectorTicketView(ticket: typeof supportTicket.$inferSelect) {
+  return {
+    id: ticket.id,
+    code: ticket.code,
+    category: ticket.category,
+    subject: ticket.subject,
+    status: ticket.status,
+    lastMessageAt: ticket.lastMessageAt,
+    resolvedAt: ticket.resolvedAt,
+    createdAt: ticket.createdAt,
+    updatedAt: ticket.updatedAt,
+  };
+}
+
 @Injectable()
 export class SupportService {
   constructor(
@@ -100,8 +114,6 @@ export class SupportService {
         category: supportTicket.category,
         subject: supportTicket.subject,
         status: supportTicket.status,
-        relatedType: supportTicket.relatedType,
-        relatedId: supportTicket.relatedId,
         lastMessageAt: supportTicket.lastMessageAt,
         createdAt: supportTicket.createdAt,
       })
@@ -146,7 +158,21 @@ export class SupportService {
       .leftJoin(userAccount, eq(userAccount.id, supportMessage.authorId))
       .where(eq(supportMessage.ticketId, ticketId))
       .orderBy(asc(supportMessage.createdAt));
-    return { ticket, messages };
+    if (this.staff(actor)) return { ticket, messages };
+    return {
+      ticket: collectorTicketView(ticket),
+      messages: messages.map((m) => {
+        const fromStaff = m.authorRole === 'staff';
+        return {
+          id: m.id,
+          authorRole: m.authorRole,
+          fromStaff,
+          body: m.body,
+          createdAt: m.createdAt,
+          ...(fromStaff ? {} : { authorUsername: m.authorUsername }),
+        };
+      }),
+    };
   }
 
   async reply(ticketId: string, actor: TicketActor, rawBody: string) {
