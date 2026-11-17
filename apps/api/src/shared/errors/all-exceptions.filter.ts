@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { EasyPostError, PaymentProviderError } from '@bault/adapters';
-import { pgErrorCode } from './pg-error';
+import { PG_UNIQUE_VIOLATION, pgErrorCode } from './pg-error';
 import { ErrorCode } from './error-codes';
 import {
   reportException,
@@ -60,10 +60,25 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
+    if (pgErrorCode(exception) === PG_UNIQUE_VIOLATION) {
+      const safe = withoutQueryValues(exception);
+      this.logger.error(`Unique violation answered as a conflict: ${safe instanceof Error ? safe.stack : String(safe)}`);
+      this.report(safe, describeRequest(requestOf(host)));
+      res.status(HttpStatus.CONFLICT).json({
+        error: {
+          code: ErrorCode.CONFLICT,
+          message: 'That clashes with something already saved. Refresh and try again.',
+          details: {},
+        },
+      });
+      return;
+    }
+
     const provider = providerFailure(exception);
     if (provider) {
+      const safe = providerReport(exception as Error, provider);
       if (provider.rejectedInput) {
-        this.logger.warn(`Provider rejected the request (${provider.kind}): ${describe(exception)}`);
+        this.logger.warn(`Provider rejected the request (${provider.kind}): ${describe(safe)}`);
         res.status(HttpStatus.BAD_REQUEST).json({
           error: {
             code: ErrorCode.PROVIDER_REJECTED,
@@ -73,8 +88,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
         });
         return;
       }
-      this.logger.error(`Provider failure (${provider.kind}): ${exception instanceof Error ? exception.stack : describe(exception)}`);
-      this.report(exception, describeRequest(requestOf(host)));
+      this.logger.error(`Provider failure (${provider.kind}): ${safe.stack}`);
+      this.report(safe, describeRequest(requestOf(host)));
       res.status(HttpStatus.BAD_GATEWAY).json({
         error: {
           code: ErrorCode.PROVIDER_UNAVAILABLE,
@@ -127,19 +142,40 @@ function isInvalidTextRepresentation(exception: unknown): boolean {
   return pgErrorCode(exception) === PG_INVALID_TEXT_REPRESENTATION;
 }
 
-function providerFailure(
-  exception: unknown,
-): { kind: 'shipping' | 'payment'; rejectedInput: boolean; reason: string } | null {
+interface ProviderFailure {
+  kind: 'shipping' | 'payment';
+  rejectedInput: boolean;
+  reason: string;
+  status: number | null;
+  path: string | null;
+}
+
+function providerFailure(exception: unknown): ProviderFailure | null {
   if (!(exception instanceof Error)) return null;
   if (exception instanceof EasyPostError || exception.name === 'EasyPostError') {
     const e = exception as EasyPostError;
     const reason = (e.detail ?? e.message).replace(/[.\s]+$/, '').slice(0, 300);
-    return { kind: 'shipping', rejectedInput: e.status === 400 || e.status === 422, reason };
+    const status = typeof e.status === 'number' ? e.status : null;
+    const path = typeof e.path === 'string' && e.path ? e.path : null;
+    return { kind: 'shipping', rejectedInput: status === 400 || status === 422, reason, status, path };
   }
   if (exception instanceof PaymentProviderError || exception.name === 'PaymentProviderError') {
-    return { kind: 'payment', rejectedInput: false, reason: exception.message };
+    const status = (exception as PaymentProviderError).status;
+    return { kind: 'payment', rejectedInput: false, reason: exception.message, status: typeof status === 'number' ? status : null, path: null };
   }
   return null;
+}
+
+function providerReport(exception: Error, provider: ProviderFailure): Error {
+  const status = provider.status === null ? 'with no HTTP status' : String(provider.status);
+  const where = provider.path ? ` on ${provider.path}` : '';
+  const safe = new Error(
+    provider.kind === 'shipping' ? `EasyPost ${status}${where}` : `Payment provider ${status}${where}`,
+  );
+  safe.name = exception.name;
+  const frames = (exception.stack ?? '').split('\n').filter((line) => /^\s+at /.test(line));
+  safe.stack = [`${safe.name}: ${safe.message}`, ...frames].join('\n');
+  return safe;
 }
 
 function withoutQueryValues(exception: unknown): unknown {
