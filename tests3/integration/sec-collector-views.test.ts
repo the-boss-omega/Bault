@@ -495,3 +495,18 @@ describe('A8 marketplace reads as a collector receives them', () => {
     expectWith(store.body, ['username', 'listings']);
   });
 });
+
+describe('A9 the pricing rule table', () => {
+  it('is for admins only, while the public price list stays open', async () => {
+    const red = await signIn(SEED.collector);
+    const operator = await signIn(SEED.operator);
+    const admin = await signIn(SEED.admin);
+    expect((await red.get('/pricing/rules')).status).toBe(403);
+    expect((await operator.get('/pricing/rules')).status).toBe(403);
+    expect((await new Client().get('/pricing/rules')).status).toBe(401);
+    const rules = await admin.get('/pricing/rules');
+    expect(rules.status).toBe(200);
+    expectWith(rules.body, ['actionType', 'parameters', 'effectiveFrom']);
+    expect((await red.get('/pricing/list')).status).toBe(200);
+  });
+});
