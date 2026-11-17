@@ -256,6 +256,8 @@ describe('a label refused at dispatch', () => {
     const cheaper = eligible[0]!;
     expect(cheaper.totalMinor).toBeLessThan(chosen.totalMinor);
     const refusedView = (await owner.get(`/shipping/shipments/${shipmentId}`)).body;
+    const staffView = (await operator.get(`/shipping/shipments/${shipmentId}`)).body;
+    expect(staffView.labelRefused).toMatchObject({ reason: expect.stringContaining('rate expired') });
 
     const before = await walletOf(owner);
     const again = await owner.post(`/shipping/shipments/${shipmentId}/select-rate`, {
@@ -263,7 +265,7 @@ describe('a label refused at dispatch', () => {
       serviceLevel: cheaper.serviceLevel,
     });
     expect(again.status).toBe(201);
-    expect(refusedView.labelRefused).toMatchObject({ reason: expect.stringContaining('rate expired') });
+    expect(refusedView.labelRefused).toEqual({ reason: 'The carrier could not print a label for this shipment.' });
     expect(again.body).toMatchObject({ status: 'rates_selected', cost: cheaper.totalMinor });
     expect((await walletOf(owner)) - before).toBe(chosen.totalMinor - cheaper.totalMinor);
 

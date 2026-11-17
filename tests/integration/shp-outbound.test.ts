@@ -316,7 +316,8 @@ describe('SHP outbound shipping', () => {
 
     const absorbed = (await collector.get(`/shipping/shipments/${source.id}`)).body;
     expect(absorbed.status).toBe('cancelled');
-    expect(absorbed.mergedIntoShipmentId).toBe(target.id);
+    expect(absorbed.mergedIntoShipmentId).toBeUndefined();
+    expect(absorbed.cancelReason).toBe(`Merged into ${target.code}`);
   });
 
   it('refuses to merge two requests going to different addresses', async () => {
@@ -681,7 +682,8 @@ describe('SHP outbound shipping', () => {
 
     const shipment = (await collector.get(`/shipping/shipments/${shipped.body.shipmentId}`)).body;
     expect(shipment.itemIds).toHaveLength(0);
-    expect(shipment.serviceKey).toBe('direct_overnight');
+    expect(shipment.serviceKey).toBeUndefined();
+    expect((await operator.get(`/shipping/shipments/${shipped.body.shipmentId}`)).body.serviceKey).toBe('direct_overnight');
 
     const form = { carrier: 'FedEx', packageWeightGrams: 180, fulfillmentNotes: 'Overnight envelope, two slabs.' };
     const wrongParcel = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {

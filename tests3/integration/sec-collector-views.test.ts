@@ -394,3 +394,64 @@ describe('A6 escrow as a collector reads it', () => {
     expectWith(staff.body, ['raisedBy', 'counterpartyUserId', 'buyerId', 'sellerId', 'actorId', 'metadata']);
   });
 });
+
+const SHIPMENT_DROPPED = [
+  'providerShipmentId',
+  'providerRateId',
+  'customerName',
+  'serviceKey',
+  'mergedIntoShipmentId',
+  'barcode',
+  'userId',
+  'membershipCover',
+  'labelObjectKey',
+  'fulfillment',
+  'fulfilledBy',
+  'quotedBy',
+  'handedOverBy',
+  'packageWeightGrams',
+  'destinationDetail',
+] as const;
+
+describe('A7 shipping as a collector reads it', () => {
+  it('quotes, lists and tracks without provider ids or other internals', async () => {
+    const operator = await signIn(SEED.operator);
+    await fundWallet(SEED.collector, 50_000);
+    const red = await signIn(SEED.collector);
+    const item = await intakeFor(operator, SEED.collector, { description: 'Shipping view card' });
+    const order = {
+      itemIds: [item.id],
+      destinationAddress: 'Red Ashwood, 1200 Market St, San Francisco 94102, US',
+      destinationCountry: 'US',
+      destinationPostalCode: '94102',
+      recipientName: 'Red Ashwood',
+    };
+
+    const quote = await red.post('/shipping/quote', order);
+    expect(quote.status).toBe(201);
+    expect((quote.body.rates as unknown[]).length).toBeGreaterThan(0);
+    expectWithout(quote.body, ['providerShipmentId', 'providerRateId']);
+    expectWith(quote.body.rates, ['carrier', 'serviceLevel', 'serviceKey', 'totalMinor']);
+
+    const created = await red.post('/shipping/shipments', order);
+    expect(created.status).toBe(201);
+    expectWithout(created.body, SHIPMENT_DROPPED);
+    expectWith(created.body, ['id', 'code', 'status', 'itemIds']);
+
+    const rates = await red.get(`/shipping/shipments/${created.body.id}/rates`);
+    expectWithout(rates.body, ['providerShipmentId', 'providerRateId']);
+
+    const list = await red.get('/shipping/shipments');
+    expectWithout(list.body, SHIPMENT_DROPPED);
+    const row = (list.body as { id: string; itemIds: string[]; items: unknown[] }[]).find((s) => s.id === created.body.id)!;
+    expect(row.itemIds).toEqual([item.id]);
+    expect(row.items).toEqual([{ id: item.id, serialNumber: item.serialNumber, description: 'Shipping view card' }]);
+
+    const tracked = await red.get(`/shipping/shipments/${created.body.id}`);
+    expectWithout(tracked.body, SHIPMENT_DROPPED);
+    expectWith(tracked.body, ['code', 'trackingNumber', 'carrier', 'serviceLevel', 'itemIds', 'cancelReason']);
+
+    const staff = await operator.get(`/shipping/shipments/${created.body.id}`);
+    expectWith(staff.body, ['customerName', 'serviceKey', 'mergedIntoShipmentId', 'barcode']);
+  });
+});
