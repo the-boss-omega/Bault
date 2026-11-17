@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const get = vi.fn();
@@ -26,7 +26,7 @@ const { IntakePolicyPanel } = await import('../../apps/web/src/areas/customer/he
 const { VaultPage } = await import('../../apps/web/src/areas/customer/vault/VaultPage');
 const { RemoveCommonsPanel } = await import('../../apps/web/src/areas/customer/vault/RemoveCommonsPanel');
 const { WalletPage } = await import('../../apps/web/src/areas/customer/finance/WalletPage');
-const { WhiteGloveQuotes } = await import('../../apps/web/src/areas/customer/shipping/HumanFulfilmentPanels');
+const { ShowPickupPanel, WhiteGlovePanel, WhiteGloveQuotes } = await import('../../apps/web/src/areas/customer/shipping/HumanFulfilmentPanels');
 const { RechooseService, ShipmentDrawer } = await import('../../apps/web/src/areas/customer/shipping/ShippingServicesPage');
 const { useI18n } = await import('../../apps/web/src/shared/i18n');
 
@@ -391,6 +391,79 @@ describe('a hand-delivery quote reaches the collector (F060)', () => {
     await waitFor(() => expect(onError).toHaveBeenCalled());
     expect(String(onError.mock.calls.at(-1)?.[0] ?? '')).toMatch(/the quote changed/i);
     expect(onChanged).toHaveBeenCalled();
+  });
+});
+
+describe('asking for hand delivery and a show pickup', () => {
+  const ITEMS = [
+    { id: 'i1', serialNumber: 'SN-CL10-0005', typeClass: 'trading_card', description: 'Call of Legends Rayquaza' },
+    { id: 'i2', serialNumber: 'SN-DR97-0001', typeClass: 'trading_card', description: 'EX Dragon Rayquaza' },
+  ];
+  const HOME = { id: 'a1', label: 'Home', recipient: 'Red Ashwood', line1: '12 Vine St', city: 'Trenton', region: 'NJ', country: 'US', postalCode: '08608', isDefault: true };
+  const VAULT = { facilityId: 'f1', code: 'NJ1', name: 'Card Embassy Vault', role: 'primary', careOf: 'Card Embassy C/O red', lines: ['1 Vault Way'], city: 'Newark', region: 'NJ', postalCode: '07102', country: 'US', phone: null, salesTaxBps: 0, forwardingDays: null };
+
+  function answer() {
+    get.mockImplementation((path: string) => {
+      if (path === '/shipping/white-glove/terms') return Promise.resolve({ baseDomesticMinor: 15000, baseInternationalMinor: 60000, quoteWithinHours: 48 });
+      if (path === '/me/addresses') return Promise.resolve([HOME]);
+      if (path === '/me/inbound-addresses') return Promise.resolve([VAULT]);
+      if (path === '/shipping/shipments') return Promise.resolve([{ id: 's1', code: 'SHP-OPEN0001', status: 'requested', itemIds: ['i2'] }]);
+      if (path === '/shipping/pickup/shows') return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+  }
+
+  it('collects from the vault, delivers to a saved address, and asks for a date with a from and to time', async () => {
+    answer();
+    post.mockResolvedValue({ id: 'w1', code: 'SHP-HAND0001' });
+    renderIn(<WhiteGlovePanel items={ITEMS} onError={() => {}} onStatus={() => {}} onCreated={() => {}} />);
+    const user = userEvent.setup();
+
+    expect(await screen.findByText('On SHP-OPEN0001')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /SN-DR97-0001/ })).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: /SN-CL10-0005/ }));
+
+    await waitFor(() => expect(screen.getByLabelText('Collect from')).toHaveValue('vault:f1'));
+    expect(screen.getByLabelText('Deliver to')).toHaveValue('a1');
+    expect(document.querySelectorAll('input[type="datetime-local"]')).toHaveLength(0);
+
+    const pickup = screen.getByRole('group', { name: 'When it can be collected' });
+    const delivery = screen.getByRole('group', { name: 'When it can be delivered' });
+    await user.click(screen.getByRole('button', { name: 'Ask for a quote' }));
+    expect(within(pickup).getByText('Choose a date and a time from and to.')).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+
+    fireEvent.change(within(pickup).getByLabelText('Date'), { target: { value: '2030-03-04' } });
+    fireEvent.change(within(delivery).getByLabelText('Date'), { target: { value: '2030-03-05' } });
+    fireEvent.change(within(delivery).getByLabelText('and'), { target: { value: '12:00' } });
+    await user.click(screen.getByRole('button', { name: 'Ask for a quote' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const [path, body] = post.mock.calls[0]!;
+    expect(path).toBe('/shipping/white-glove');
+    expect(body).toMatchObject({
+      itemIds: ['i1'],
+      pickupAddress: 'Card Embassy Vault, 1 Vault Way, Newark, NJ 07102, US',
+      deliveryAddress: 'Red Ashwood, 12 Vine St, Trenton, NJ 08608, US',
+      destinationCountry: 'US',
+      recipientName: 'Red Ashwood',
+      pickupFrom: new Date('2030-03-04T09:00').toISOString(),
+      pickupTo: new Date('2030-03-04T17:00').toISOString(),
+      deliverFrom: new Date('2030-03-05T09:00').toISOString(),
+      deliverTo: new Date('2030-03-05T12:00').toISOString(),
+    });
+  });
+
+  it('dims an item already on a shipment in the show pickup too', async () => {
+    get.mockImplementation((path: string) => {
+      if (path === '/shipping/pickup/shows') return Promise.resolve([{ id: 'e1', name: 'Card Show', startsAt: '2030-01-01', requestDeadline: '2029-12-20', open: true, venue: 'Hall', city: 'Newark', feeMinor: 1000, remaining: null }]);
+      if (path === '/shipping/shipments') return Promise.resolve([{ id: 's1', code: 'SHP-OPEN0001', status: 'picking', itemIds: ['i1'] }]);
+      return Promise.resolve([]);
+    });
+    renderIn(<ShowPickupPanel items={ITEMS} onError={() => {}} onStatus={() => {}} onCreated={() => {}} />);
+    expect(await screen.findByText('On SHP-OPEN0001')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /SN-CL10-0005/ })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: /SN-DR97-0001/ })).toBeEnabled();
   });
 });
 

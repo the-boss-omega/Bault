@@ -4161,3 +4161,12 @@ code.ask-words {
 .vault-select-count {
   font-weight: 600;
 }
+
+/* ---- Hand delivery: a window is a date and two times ---- */
+
+.time-window {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
