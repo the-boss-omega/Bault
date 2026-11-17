@@ -46,8 +46,8 @@ import {
   needsCustoms,
   shipmentAddOn,
   signatureForced,
+  usdAmount,
 } from './shipping-options';
-import { formatMinor } from '../../shared/money';
 import { UNLIMITED } from '../mem/tiers';
 import {
   MembershipService,
@@ -816,7 +816,7 @@ export class ShipmentService {
       if (balance.amount < differenceMinor) {
         throw new AppError(
           ErrorCode.INSUFFICIENT_BALANCE,
-          `That service costs ${formatMinor(differenceMinor)} more than the one already paid for, and the wallet holds ${formatMinor(balance.amount)}. Top up, or choose a cheaper service.`,
+          `That service costs ${usdAmount(differenceMinor)} more than the one already paid for, and the wallet holds ${usdAmount(balance.amount)}. Top up, or choose a cheaper service.`,
           409,
           { shortfallMinor: differenceMinor - balance.amount },
         );
@@ -930,7 +930,7 @@ export class ShipmentService {
       if (balance.amount < s.cost) {
         throw new AppError(
           ErrorCode.CONFLICT,
-          `Short by ${formatMinor(s.cost - balance.amount)}. Top up the wallet and try again.`,
+          `Short by ${usdAmount(s.cost - balance.amount)}. Top up the wallet and try again.`,
           409,
         );
       }

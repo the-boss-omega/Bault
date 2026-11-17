@@ -288,6 +288,8 @@ export function VaultPage() {
   const [culling, setCulling] = useState(false);
   const [cullWindowDays, setCullWindowDays] = useState<number | null>(null);
   const [watch, setWatch] = useState<Map<string, BreakEvenRow>>(() => new Map());
+  const [selecting, setSelecting] = useState(false);
+  const [shipPicks, setShipPicks] = useState<Set<string>>(() => new Set());
 
   const load = useCallback(async () => {
     const query = new URLSearchParams({ scope });
@@ -338,6 +340,21 @@ export function VaultPage() {
 
   const countFor = (s: Scope) => (counts ? counts[s] : undefined);
 
+  const canShip = (item: VaultItem) => item.lifecycleState === 'stored' && !item.historical && !item.holdFlag;
+  const togglePick = (id: string) =>
+    setShipPicks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const stopSelecting = () => {
+    setSelecting(false);
+    setShipPicks(new Set());
+  };
+  const shipThese = () =>
+    navigate({ section: 'shipping-services', tab: 'shipping', params: { items: Array.from(shipPicks).join(',') } });
+
   return (
     <>
       <div className="vault-command">
@@ -386,6 +403,11 @@ export function VaultPage() {
 
         {items !== null && (
           <span className="vault-count">{t('vault.assetsCount', { count: items.length })}</span>
+        )}
+        {scope === 'active' && (
+          <Button size="sm" pressed={selecting} onClick={() => (selecting ? stopSelecting() : setSelecting(true))}>
+            {selecting ? t('vault.select.stop') : t('vault.select.start')}
+          </Button>
         )}
         {scope === 'active' && cullWindowDays !== null && (
           <Button size="sm" onClick={() => setCulling((v) => !v)}>
@@ -454,11 +476,29 @@ export function VaultPage() {
                 t={t}
                 locale={locale}
                 onOpen={() => openRecord('item', item.id)}
+                select={
+                  selecting && scope === 'active'
+                    ? { on: shipPicks.has(item.id), can: canShip(item), toggle: () => togglePick(item.id) }
+                    : undefined
+                }
               />
             ))}
           </ul>
         )}
       </Panel>
+
+      {selecting && scope === 'active' && (
+        <div className="vault-select-bar" role="region" aria-label={t('vault.select.bar')}>
+          <span className="vault-select-count">{t('vault.select.count', { count: shipPicks.size })}</span>
+          <span className="spacer" />
+          <Button variant="ghost" size="sm" onClick={stopSelecting}>
+            {t('vault.select.stop')}
+          </Button>
+          <Button variant="primary" size="sm" icon={<IconBox />} disabled={shipPicks.size === 0} onClick={shipThese}>
+            {t('vault.select.ship')}
+          </Button>
+        </div>
+      )}
 
       {selected && (
         <ItemDrawer
@@ -482,12 +522,14 @@ function CardTile({
   t,
   locale,
   onOpen,
+  select,
 }: {
   item: VaultItem;
   watch?: BreakEvenRow;
   t: TranslateFn;
   locale: string;
   onOpen: () => void;
+  select?: { on: boolean; can: boolean; toggle: () => void };
 }) {
   const meta = STATE_META[item.lifecycleState];
   const historical = Boolean(item.historical);
@@ -501,15 +543,32 @@ function CardTile({
         'card--interactive',
         historical ? 'card--historical' : '',
         frozen ? 'card--frozen' : '',
+        select ? (select.can ? 'card--selectable' : 'card--unselectable') : '',
+        select?.on ? 'card--picked' : '',
       ]
         .filter(Boolean)
         .join(' ')}
       onPointerMove={slabMove}
       onPointerLeave={slabLeave}
     >
-      <button type="button" className="card-hit" onClick={onOpen}>
-        <span className="sr-only">{t('vault.openCard', { name })}</span>
-      </button>
+      {select ? (
+        <button
+          type="button"
+          className="card-hit"
+          aria-pressed={select.on}
+          disabled={!select.can}
+          onClick={select.toggle}
+        >
+          <span className="sr-only">
+            {select.can ? t('vault.select.card', { name }) : t('vault.select.cannot', { name })}
+          </span>
+        </button>
+      ) : (
+        <button type="button" className="card-hit" onClick={onOpen}>
+          <span className="sr-only">{t('vault.openCard', { name })}</span>
+        </button>
+      )}
+      {select?.can && <span className={`card-pick-mark${select.on ? ' is-on' : ''}`} aria-hidden="true" />}
 
       <div className="card-art">
         <CardPhotoThumb serialNumber={item.serialNumber} title={name} decorative />
