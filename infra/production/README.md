@@ -342,10 +342,13 @@ not delete. Replace it instead.
    - the database passwords: `bault_owner` with `gcloud sql users
      set-password`, and `bault_app` and `bault_worker` by running `roles.sql`
      again with new `BAULT_APP_PASSWORD` and `BAULT_WORKER_PASSWORD`;
-   - the images and backups storage keys: deactivate and delete the old ones
-     (`gcloud storage hmac list`, `update --deactivate`, `delete`), remove
-     them from `bault-gcp.env`, and run `provision.sh` again, which makes new
-     ones;
+   - the images storage key: deactivate and delete the old one
+     (`gcloud storage hmac list`, `update --deactivate`, `delete`), remove it
+     from `bault-gcp.env`, and run `provision.sh` again, which makes a new one
+     (in an organisation that forbids keys, lift that for the project first,
+     as `infra/gcp/README.md` step 1 shows). The backups have no key to
+     rotate on Google Cloud: the server's own service account writes them,
+     and a token taken from the old server expires within the hour;
    - the PayPal client secret, the EasyPost key, the SMTP password,
      `API_DOCS_PASSWORD` and the registry token.
 
