@@ -32,6 +32,11 @@ export class MarketReadService {
     return { id: row.id, username: row.username, firstName: row.firstName, lastName: row.lastName };
   }
 
+  async collectorProfile(rawUsername: string, callerId: string) {
+    const { username } = await this.counterparty(rawUsername, callerId);
+    return { username };
+  }
+
   async tradableItem(rawUsername: string, rawSerial: string, callerId: string) {
     const owner = await this.counterparty(rawUsername, callerId);
     const serial = (rawSerial ?? '').trim();
@@ -62,7 +67,6 @@ export class MarketReadService {
       typeClass: row.typeClass,
       description: row.description,
       conditionGrade: row.conditionGrade,
-      ownerUsername: owner.username,
     };
   }
 
@@ -133,8 +137,8 @@ export class MarketReadService {
       .where(or(eq(offer.buyerId, userId), eq(listing.sellerId, userId)))
       .orderBy(desc(offer.createdAt));
 
-    return rows.map((r) => {
-      const side = r.sellerId === userId ? ('seller' as const) : ('buyer' as const);
+    return rows.map(({ buyerId: _buyerId, sellerId, parentOfferId: _parentOfferId, itemId: _itemId, ...r }) => {
+      const side = sellerId === userId ? ('seller' as const) : ('buyer' as const);
       return {
         ...r,
         direction: side === 'seller' ? ('incoming' as const) : ('outgoing' as const),
@@ -221,7 +225,6 @@ export class MarketReadService {
     const listings = await this.db
       .select({
         id: listing.id,
-        itemId: listing.itemId,
         askingPrice: listing.askingPrice,
         currency: listing.currency,
         publishedAt: listing.publishedAt,

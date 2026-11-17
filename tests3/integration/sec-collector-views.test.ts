@@ -455,3 +455,43 @@ describe('A7 shipping as a collector reads it', () => {
     expectWith(staff.body, ['customerName', 'serviceKey', 'mergedIntoShipmentId', 'barcode']);
   });
 });
+
+describe('A8 marketplace reads as a collector receives them', () => {
+  it('sends offers, collectors, tradable items and listings without other people’s ids or names', async () => {
+    const operator = await signIn(SEED.operator);
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+    const item = await intakeFor(operator, SEED.collector, { description: 'Market view card' });
+    const listed = await red.post('/marketplace/listings', { itemId: item.id, askingPrice: 90_00 });
+    expect(listed.status).toBe(201);
+    await fundWallet(SEED.collector2, 20_000);
+    const offered = await golden.post(`/marketplace/listings/${listed.body.id}/offers`, { amount: 70_00 });
+    expect(offered.status).toBe(201);
+
+    for (const reader of [red, golden]) {
+      const offers = await reader.get('/marketplace/offers/mine');
+      expect(offers.status).toBe(200);
+      expectWithout(offers.body, ['buyerId', 'sellerId', 'parentOfferId', 'itemId']);
+      const row = (offers.body as { id: string }[]).find((o) => o.id === offered.body.id);
+      expectWith(row, ['id', 'listingId', 'amount', 'status', 'listingStatus', 'side', 'yourTurn', 'direction']);
+    }
+
+    const collector = await golden.get('/marketplace/collectors/red');
+    expect(collector.status).toBe(200);
+    expect(collector.body).toEqual({ username: 'red' });
+
+    const kept = await intakeFor(operator, SEED.collector, { description: 'Tradable view card' });
+    const tradable = await golden.get(`/marketplace/collectors/red/items/${encodeURIComponent(kept.serialNumber)}`);
+    expect(tradable.status).toBe(200);
+    expectWithout(tradable.body, ['ownerUsername', 'ownerId']);
+    expect(tradable.body.id).toBe(kept.id);
+
+    const browse = await golden.get('/marketplace/listings?limit=200');
+    expectWithout(browse.body, ['itemId', 'sellerId', 'ownerId']);
+    expectWith(browse.body, ['id', 'imageUrl', 'sellerUsername']);
+
+    const store = await golden.get('/marketplace/sellers/red');
+    expectWithout(store.body, ['itemId', 'sellerId', 'ownerId']);
+    expectWith(store.body, ['username', 'listings']);
+  });
+});
