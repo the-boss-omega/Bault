@@ -189,7 +189,6 @@ export class ParcelService {
         forwardedAt: parcel.forwardedAt,
         condition: parcel.condition,
         conditionNotes: parcel.conditionNotes,
-        facilityCode: facility.code,
         facilityName: facility.name,
       })
       .from(parcel)
@@ -696,6 +695,11 @@ export class ParcelService {
         ? Math.floor((Date.now() - new Date(oldestReceivedAt).getTime()) / 3_600_000)
         : null,
     };
+  }
+
+  async collectorWorkflow() {
+    const { unclaimed: _unclaimed, ...rest } = await this.workflow();
+    return rest;
   }
 
   listRetentionDue(retentionDays: number) {

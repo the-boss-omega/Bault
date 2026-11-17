@@ -136,6 +136,19 @@ export class ConsignmentService {
       .orderBy(sql`${consignmentEvent.requestDeadline} asc`);
   }
 
+  async collectorEvents() {
+    const events = await this.listEvents();
+    return events.map((e) => ({
+      id: e.id,
+      name: e.name,
+      venue: e.venue,
+      city: e.city,
+      startsAt: e.startsAt,
+      endsAt: e.endsAt,
+      requestDeadline: e.requestDeadline,
+    }));
+  }
+
   async complete(operatorId: string, requestId: string, form: ConsignmentFulfillment) {
     const saleAmountMinor = form.saleAmountMinor;
     return this.custody.run(async (tx) => {

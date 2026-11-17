@@ -73,7 +73,7 @@ export class MktController {
 
   @Get('collectors/:username')
   collector(@CurrentUser() user: AuthUser, @Param('username') username: string) {
-    return this.read.counterparty(username, user.id);
+    return this.read.collectorProfile(username, user.id);
   }
 
   @Get('collectors/:username/items/:serial')

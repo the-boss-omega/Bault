@@ -38,6 +38,7 @@ export class PrcController {
     return this.priceList.publicList();
   }
 
+  @Roles('admin')
   @Get('rules')
   list() {
     return this.db.select().from(pricingRule).orderBy(sql`${pricingRule.effectiveFrom} desc`);

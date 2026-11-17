@@ -104,8 +104,9 @@ export class ParcelController {
   }
 
   @Get('parcels/workflow/status')
-  workflow() {
-    return this.parcels.workflow();
+  workflow(@CurrentUser() user: AuthUser) {
+    const staff = user.role === 'warehouse_operator' || user.role === 'admin';
+    return staff ? this.parcels.workflow() : this.parcels.collectorWorkflow();
   }
 
   @Roles('warehouse_operator', 'admin')

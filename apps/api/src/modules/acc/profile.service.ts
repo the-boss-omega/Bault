@@ -86,12 +86,13 @@ export class ProfileService {
     return this.get(userId);
   }
 
-  listAddresses(userId: string) {
-    return this.db
+  async listAddresses(userId: string) {
+    const rows = await this.db
       .select()
       .from(shippingAddress)
       .where(eq(shippingAddress.userId, userId))
       .orderBy(sql`${shippingAddress.createdAt} desc`);
+    return rows.map(addressView);
   }
 
   async addAddress(userId: string, dto: AddressInput) {
@@ -116,7 +117,7 @@ export class ProfileService {
         })
         .returning();
       if (!row) throw AppError.validation('Failed to add address');
-      return row;
+      return addressView(row);
     });
   }
 
@@ -147,7 +148,7 @@ export class ProfileService {
       await tx.update(shippingAddress).set(set as never).where(eq(shippingAddress.id, id));
       const [row] = await tx.select().from(shippingAddress).where(eq(shippingAddress.id, id)).limit(1);
       if (!row) throw AppError.notFound('Address not found');
-      return row;
+      return addressView(row);
     });
   }
 
@@ -161,6 +162,20 @@ export class ProfileService {
     await this.db.delete(shippingAddress).where(eq(shippingAddress.id, id));
     return { deleted: true };
   }
+}
+
+function addressView(row: typeof shippingAddress.$inferSelect) {
+  return {
+    id: row.id,
+    label: row.label,
+    recipient: row.recipient,
+    line1: row.line1,
+    city: row.city,
+    region: row.region,
+    country: row.country,
+    postalCode: row.postalCode,
+    isDefault: row.isDefault,
+  };
 }
 
 function regionFor(country: string, value: string | null | undefined): string | null {

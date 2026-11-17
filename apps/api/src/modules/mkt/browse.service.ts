@@ -69,7 +69,7 @@ export class BrowseService {
       .limit(clampLimit(limit, { max: 200, fallback: 50 }));
 
     return Promise.all(
-      rows.map(async (row) => ({ ...row, imageUrl: await this.newestImageUrl(row.itemId) })),
+      rows.map(async ({ itemId, ...row }) => ({ ...row, imageUrl: await this.newestImageUrl(itemId) })),
     );
   }
 
@@ -103,7 +103,8 @@ export class BrowseService {
       images.map(async (img) => ({ type: img.type, url: await this.storage.getSignedUrl(img.objectKey) })),
     );
 
-    return { ...row, imageUrl: signedImages[0]?.url ?? null, images: signedImages };
+    const { itemId: _itemId, ...shown } = row;
+    return { ...shown, imageUrl: signedImages[0]?.url ?? null, images: signedImages };
   }
 
   private async newestImageUrl(itemId: string): Promise<string | null> {

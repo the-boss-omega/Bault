@@ -5,7 +5,7 @@ import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import { AllowSuspended } from '../acc/allow-suspended.decorator';
 import type { AuthUser } from '../sec/auth-context';
-import { SupportService, type TicketCategory } from './support.service';
+import { SupportService, collectorTicketView, type TicketCategory } from './support.service';
 
 const CATEGORIES = ['parcel', 'shipment', 'item', 'billing', 'account', 'private_sale', 'other'] as const;
 
@@ -34,8 +34,8 @@ export class SupController {
 
   @AllowSuspended()
   @Post('tickets')
-  open(@Body() dto: OpenTicketDto, @CurrentUser() user: AuthUser) {
-    return this.support.open(user.id, dto);
+  async open(@Body() dto: OpenTicketDto, @CurrentUser() user: AuthUser) {
+    return collectorTicketView(await this.support.open(user.id, dto));
   }
 
   @AllowSuspended()

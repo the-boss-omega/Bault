@@ -113,6 +113,63 @@ export interface Quote {
   optionProblems: { field: string; message: string }[];
 }
 
+const LABEL_REFUSAL_SENTENCES: readonly [RegExp, string][] = [
+  [/address|street|zip|postal|city|recipient|delivery point/i, 'The carrier could not print a label for this address.'],
+  [/weight|dimension|too (heavy|large|big)|oversize/i, 'The carrier would not take a parcel of this size or weight.'],
+  [/customs/i, 'The carrier needs fuller customs details before it can print a label.'],
+  [/no overnight service|offers no/i, 'The carrier offers no service of this kind for this parcel.'],
+];
+
+export function labelRefusalSentence(raw: string | null): string {
+  const match = LABEL_REFUSAL_SENTENCES.find(([pattern]) => pattern.test(raw ?? ''));
+  return match ? match[1] : 'The carrier could not print a label for this shipment.';
+}
+
+export function collectorRateView<T extends Rate>(rate: T): Omit<T, 'providerShipmentId' | 'providerRateId'> {
+  const view: T = { ...rate };
+  delete view.providerShipmentId;
+  delete view.providerRateId;
+  return view;
+}
+
+export function collectorQuoteView(quote: Quote) {
+  return { ...quote, rates: quote.rates.map(collectorRateView) };
+}
+
+const SHIPMENT_ROW_STAFF_ONLY = [
+  'userId',
+  'serviceKey',
+  'destinationDetail',
+  'quotedBy',
+  'handedOverBy',
+  'membershipCover',
+  'providerShipmentId',
+  'providerRateId',
+  'labelObjectKey',
+  'packageWeightGrams',
+  'fulfillmentNotes',
+  'fulfillment',
+  'fulfilledBy',
+  'mergedIntoShipmentId',
+] as const;
+
+export function collectorShipmentRowView(row: typeof shipment.$inferSelect) {
+  const view: Record<string, unknown> = { ...row };
+  for (const key of SHIPMENT_ROW_STAFF_ONLY) delete view[key];
+  return view;
+}
+
+type TrackingView = ReturnType<ShipmentService['toTrackingView']>;
+
+export function collectorTrackingView(view: TrackingView) {
+  const { customerName: _customerName, serviceKey: _serviceKey, mergedIntoShipmentId: _merged, ...rest } = view;
+  return {
+    ...rest,
+    items: view.items.map((i) => ({ id: i.id, serialNumber: i.serialNumber, description: i.description })),
+    labelRefused: view.labelRefused ? { reason: labelRefusalSentence(view.labelRefused.reason) } : null,
+  };
+}
+
 @Injectable()
 export class ShipmentService {
   constructor(
@@ -455,7 +512,7 @@ export class ShipmentService {
     const parcels = await this.directParcels(
       rows.filter((r) => ShipmentService.isDirect(r.shipment)).map((r) => r.shipment.id),
     );
-    return rows.map((row) =>
+    const views = rows.map((row) =>
       this.toTrackingView(
         row.shipment,
         { username: row.username, accountName: fullName(row.firstName, row.lastName) },
@@ -463,9 +520,10 @@ export class ShipmentService {
         parcels,
       ),
     );
+    return staff ? views : views.map(collectorTrackingView);
   }
 
-  private toTrackingView(
+  toTrackingView(
     s: typeof shipment.$inferSelect,
     owner: { username: string | null; accountName: string },
     labels: Map<string, { id: string; serialNumber: string; barcode: string; description: string | null }>,
@@ -977,11 +1035,13 @@ export class ShipmentService {
       .from(userAccount)
       .where(eq(userAccount.id, s.userId))
       .limit(1);
-    return this.toTrackingView(
+    const view = this.toTrackingView(
       s,
       { username: owner?.username ?? null, accountName: fullName(owner?.firstName, owner?.lastName) },
       await this.itemLabels((s.itemIds as string[]) ?? []),
       ShipmentService.isDirect(s) ? await this.directParcels([s.id]) : new Map(),
     );
+    const staff = actor.role === 'warehouse_operator' || actor.role === 'admin';
+    return staff ? view : collectorTrackingView(view);
   }
 }
