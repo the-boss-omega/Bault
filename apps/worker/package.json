@@ -14,12 +14,12 @@
     "@bault/adapters": "workspace:*",
     "@bault/config": "workspace:*",
     "@sentry/node": "10.75.3",
-    "pg": "^8.13.1",
+    "pg": "^8.23.1",
     "pg-boss": "^10.1.5"
   },
   "devDependencies": {
-    "@types/pg": "^8.11.10",
-    "tsx": "^4.19.2",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.2"
   }
 }
