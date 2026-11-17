@@ -227,11 +227,7 @@ The options:
 
 **Where:** `ConsignmentService.request` and the event's `capacity` (`dis/consignment.service.ts`, `dis/consignment-event.schema.ts`); `PhotographyService.request` (`dis/photography.service.ts`); `MediaService.requestVideo`, `requestInspection`, `assertOwnedAndPresent` (`dis/media.service.ts`); `CustodyService.lockExpecting`, as `DisposalServicesService.confirmDeslab` already uses it; the show lock in `HumanFulfilmentService.requestPickup` for the pattern.
 **Task:** of two consignment requests for a show with one place left, exactly one is created; of parallel photography, video or inspection requests for one card, exactly one is created and charged.
-**Test first:** concurrency: a new `tests/concurrency/service-capacity.test.ts`, beside `show-pickup-capacity.test.ts`:
-- a show of the test's own with `capacity = 1`, two collectors' graded cards held with `holdRowLock` while both send `POST /services/consignment`, then released: both succeed now;
-- six parallel `POST /services/photography` for one card: now more than one answers 201 and more than one charge is written.
-
-**Done when:** the new test, `pnpm test:concurrency` and `pnpm test:integration` (`dis-services.test.ts`, `dis-item-services.test.ts`) pass.
+**Done:** `ConsignmentService.request` now reads the show row `FOR UPDATE` before it counts, so the count and the insert happen under the show lock as in `HumanFulfilmentService.requestPickup`. `PhotographyService.request` and `MediaService.assertOwnedAndPresent` now call `CustodyService.lockExpecting` with the owner, the states `stored` and `listed`, and holds allowed, so parallel requests for one card queue on the item row and only the first passes `assertNotAlreadyOpen` and is charged. Photography gained the same shelf states as video and inspection, since it used to accept a card in any state, and a request for someone else's card now answers 409 from `lockExpecting` instead of 403. The test is `tests/concurrency/service-capacity.test.ts`: a show of its own with `capacity = 1` and two collectors' graded cards held with `holdRowLock` gives one 201 and one 409, and six parallel photography, video or inspection requests for one card give one 201, five 409s, one request and one `service` charge.
 <details><summary>Hints</summary>
 
 1. `show-pickup-capacity.test.ts` is the same race on the same table; copy its set-up, and close your show in `afterAll` as it does.

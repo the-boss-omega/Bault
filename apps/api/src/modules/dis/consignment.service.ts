@@ -90,6 +90,7 @@ export class ConsignmentService {
           .select()
           .from(consignmentEvent)
           .where(eq(consignmentEvent.id, eventId))
+          .for('update')
           .limit(1);
         if (!event || !event.active) throw AppError.validation('That show is not accepting consignments');
         if (event.requestDeadline.getTime() < Date.now()) {
