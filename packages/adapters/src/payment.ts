@@ -227,7 +227,7 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
         body: JSON.stringify({
           sender_batch_header: {
             sender_batch_id: req.idempotencyKey,
-            email_subject: 'Your Bault cash-out',
+            email_subject: 'Your Card Embassy cash-out',
             email_message: 'The store credit you asked us to send back.',
           },
           items: [

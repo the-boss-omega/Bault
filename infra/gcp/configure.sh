@@ -186,7 +186,7 @@ smtp_port_ok() {
     *) say "  587 or 465"; return 1 ;;
   esac
 }
-from_ok() { [[ "$1" == *@*.* ]] || { say "  an address, such as Bault <noreply@yourdomain>"; return 1; }; any "$1"; }
+from_ok() { [[ "$1" == *@*.* ]] || { say "  an address, such as Card Embassy <noreply@yourdomain>"; return 1; }; any "$1"; }
 age_ok() { [[ "$1" =~ ^age1[0-9a-z]{58}$ ]] || { say "  an age public key: age1 and 58 more characters (age-keygen prints it)"; return 1; }; }
 
 SET_KEYS=()
@@ -291,7 +291,7 @@ if placeholder "$smtp_host" || placeholder "$(file_get "$PROD" SMTP_PASSWORD)" |
   ask "SMTP password (hidden)" 1 "" nonempty
   set_prod SMTP_PASSWORD "$ANSWER"
   current="$(file_get "$PROD" SMTP_FROM)"; placeholder "$current" && current=""
-  ask "Sender, such as Bault <noreply@yourdomain>" 0 "$current" from_ok
+  ask "Sender, such as Card Embassy <noreply@yourdomain>" 0 "$current" from_ok
   set_prod SMTP_FROM "$ANSWER"
 fi
 

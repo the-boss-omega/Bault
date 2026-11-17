@@ -65,13 +65,13 @@ describe('retired keys are really gone', () => {
 });
 
 describe('brand', () => {
-  it('says Bault, never ShipMyCards, in every catalogued string', () => {
+  it('says Card Embassy, never Bault or ShipMyCards, in every catalogued string', () => {
     expect(MESSAGE_KEYS.length).toBeGreaterThan(100);
 
     const offenders: string[] = [];
     for (const key of MESSAGE_KEYS) {
       const value = t(key);
-      if (/ship\s*my\s*cards/i.test(value)) offenders.push(`${key} = ${value}`);
+      if (/ship\s*my\s*cards|\bbault\b/i.test(value)) offenders.push(`${key} = ${value}`);
     }
     expect(offenders).toEqual([]);
   });
@@ -80,8 +80,8 @@ describe('brand', () => {
     expect(MESSAGE_KEYS.filter((key) => /\p{Script=Hebrew}/u.test(t(key)))).toEqual([]);
   });
 
-  it('names Bault in the strings that carry the product name', () => {
-    expect(t('app.title')).toContain('Bault');
-    expect(t('error.unreachable')).toContain('Bault');
+  it('names Card Embassy in the strings that carry the product name', () => {
+    expect(t('app.title')).toContain('Card Embassy');
+    expect(t('error.unreachable')).toContain('Card Embassy');
   });
 });

@@ -259,7 +259,7 @@ export function reconcile(input: {
     if (vouched.has(w.ledgerId)) continue;
     mismatches.push({
       kind: 'withdrawal_without_payout',
-      detail: 'Money left this wallet and no payout at any provider records it leaving Bault.',
+      detail: 'Money left this wallet and no payout at any provider records it leaving Card Embassy.',
       paymentId: null,
       ledgerId: w.ledgerId,
       walletRequestId: w.walletRequestId,

@@ -103,14 +103,14 @@ export function NavigationRail({
           }}
         >
           <span className="rail-mark" aria-hidden="true">
-            B
+            C
           </span>
           <span className="rail-brand-text">
-            <span className="rail-word">Bault</span>
+            <span className="rail-word">Card Embassy</span>
             <span className="rail-sub">{t('nav.workspace')}</span>
           </span>
           <span className="rail-word-mini" aria-hidden="true">
-            Bault
+            Card Embassy
           </span>
         </a>
 

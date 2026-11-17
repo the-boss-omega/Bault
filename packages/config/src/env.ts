@@ -55,7 +55,7 @@ const BaseSchema = z.object({
   PAYPAL_CLIENT_ID: z.string().optional().default(''),
   PAYPAL_CLIENT_SECRET: z.string().optional().default(''),
   PAYPAL_WEBHOOK_ID: z.string().optional().default(''),
-  PAYPAL_PAYOUT_NOTE: z.string().optional().default('Your Bault cash-out'),
+  PAYPAL_PAYOUT_NOTE: z.string().optional().default('Your Card Embassy cash-out'),
 
   PAYOUT_MODE: z.enum(['provider', 'manual']).default('provider'),
 

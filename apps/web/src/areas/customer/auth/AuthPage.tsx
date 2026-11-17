@@ -88,9 +88,9 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
       <div className="auth-box">
         <div className="auth-brand">
           <span className="rail-mark" aria-hidden="true">
-            B
+            C
           </span>
-          <span className="auth-brand-word">Bault</span>
+          <span className="auth-brand-word">Card Embassy</span>
         </div>
 
         {children}

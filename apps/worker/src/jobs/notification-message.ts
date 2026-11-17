@@ -184,16 +184,16 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     case 'escrow_proposed': {
       const amount = num(p, 'valueMinor');
       return amount != null
-        ? `Somebody has proposed a private deal with you through Bault, ${ref(p, 'dealCode')}, for ${usd(amount)}. Nothing moves until you agree the terms.`
-        : `Somebody has proposed a private deal with you through Bault, ${ref(p, 'dealCode')}.`;
+        ? `Somebody has proposed a private deal with you through Card Embassy, ${ref(p, 'dealCode')}, for ${usd(amount)}. Nothing moves until you agree the terms.`
+        : `Somebody has proposed a private deal with you through Card Embassy, ${ref(p, 'dealCode')}.`;
     }
     case 'escrow_agreed':
       return `Both sides have agreed the terms on ${ref(p, 'dealCode')}. The next step is the money being held.`;
     case 'escrow_funded': {
       const amount = num(p, 'amountMinor');
       return amount != null
-        ? `The full ${usd(amount)} on ${ref(p, 'dealCode')} is now held by Bault. It is safe to send the card.`
-        : `The funds on ${ref(p, 'dealCode')} are now held by Bault. It is safe to send the card.`;
+        ? `The full ${usd(amount)} on ${ref(p, 'dealCode')} is now held by Card Embassy. It is safe to send the card.`
+        : `The funds on ${ref(p, 'dealCode')} are now held by Card Embassy. It is safe to send the card.`;
     }
     case 'escrow_inspected': {
       const matches = p.matches === true;
@@ -224,7 +224,7 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     case 'show_pickup_booked': {
       const show = str(p, 'showName');
       return show
-        ? `Your cards will travel to ${show} for you to collect. Bring ID and ask for the Bault table — shipment ${ref(p, 'shipmentCode')}.`
+        ? `Your cards will travel to ${show} for you to collect. Bring ID and ask for the Card Embassy table — shipment ${ref(p, 'shipmentCode')}.`
         : `Your show pickup ${ref(p, 'shipmentCode')} is booked.`;
     }
     case 'handed_over': {

@@ -85,7 +85,7 @@ export class CustomsService {
         currency: s.currency,
       },
       declaration:
-        'The values stated are those declared by the owner of the goods. Bault does not adjust, reduce or omit a declared value for any reason.',
+        'The values stated are those declared by the owner of the goods. Card Embassy does not adjust, reduce or omit a declared value for any reason.',
       dutyNote:
         'Import duty, VAT and any brokerage the destination country charges are payable by the recipient on arrival.',
     };

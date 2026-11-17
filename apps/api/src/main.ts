@@ -85,7 +85,7 @@ async function bootstrap(): Promise<void> {
         given.length === expected.length && timingSafeEqual(given, expected);
       if (!ok) {
         res.statusCode = 401;
-        res.setHeader('WWW-Authenticate', 'Basic realm="Bault API docs"');
+        res.setHeader('WWW-Authenticate', 'Basic realm="Card Embassy API docs"');
         res.end('Unauthorized');
         return;
       }
@@ -94,7 +94,7 @@ async function bootstrap(): Promise<void> {
   }
 
   const openApiConfig = new DocumentBuilder()
-    .setTitle('Bault API')
+    .setTitle('Card Embassy API')
     .setDescription('Collectibles vaulting & marketplace platform')
     .setVersion('0.1.0')
     .addCookieAuth(env.SESSION_COOKIE_NAME)

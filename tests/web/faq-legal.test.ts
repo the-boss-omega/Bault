@@ -58,7 +58,7 @@ function textOf(entry: (typeof FAQ.entries)[number]): string {
 }
 const ALL_FAQ_TEXT = FAQ.entries.map(textOf).join('\n');
 
-describe('FAQ: Bault’s own answers', () => {
+describe('FAQ: Card Embassy’s own answers', () => {
   it('records when it was last checked against the code', () => {
     expect(FAQ.reviewed.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(FAQ.reviewed.entryCount).toBe(FAQ.entries.length);

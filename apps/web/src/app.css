@@ -81,6 +81,8 @@ body::before {
   letter-spacing: 0.22em;
   font-weight: 700;
   font-size: 10px;
+  /* Two words in a 72px rail: one under the other. */
+  line-height: 1.2;
 }
 
 .rail-item {

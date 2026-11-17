@@ -118,9 +118,9 @@ describe('the browser tab', () => {
         </I18nProvider>
       </ThemeProvider>,
     );
-    await waitFor(() => expect(document.title).toBe(`${t('support.title', 'en')} · Bault`));
+    await waitFor(() => expect(document.title).toBe(`${t('support.title', 'en')} · Card Embassy`));
     unmount();
-    expect(document.title).toBe('Bault');
+    expect(document.title).toBe('Card Embassy');
   });
 });
 

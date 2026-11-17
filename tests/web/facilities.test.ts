@@ -252,7 +252,7 @@ describe('the address as a customer is given it', () => {
       code: FACILITY.code,
       name: FACILITY.name,
       role: FACILITY.role,
-      careOf: 'Bault C/O username',
+      careOf: 'Card Embassy C/O username',
       lines: [FACILITY.line1, FACILITY.line2!],
       city: FACILITY.city,
       region: FACILITY.region,
@@ -266,19 +266,19 @@ describe('the address as a customer is given it', () => {
   });
 
   it('leaves out the lines that are not yet written, and has the care-of line from the start', () => {
-    expect(previewLines(draftOf(null))).toEqual(['Bault C/O username', 'US']);
+    expect(previewLines(draftOf(null))).toEqual(['Card Embassy C/O username', 'US']);
     expect(previewLines(typed({ city: 'Elizabeth' }))).toEqual([
-      'Bault C/O username',
+      'Card Embassy C/O username',
       'Elizabeth',
       'US',
     ]);
     expect(previewLines(typed({ city: 'Elizabeth', region: 'NJ' }))).toEqual([
-      'Bault C/O username',
+      'Card Embassy C/O username',
       'Elizabeth, NJ',
       'US',
     ]);
     expect(previewLines(typed({ region: 'NJ', postalCode: '07201' }))).toEqual([
-      'Bault C/O username',
+      'Card Embassy C/O username',
       'NJ 07201',
       'US',
     ]);

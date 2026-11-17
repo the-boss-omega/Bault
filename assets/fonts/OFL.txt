@@ -1,4 +1,4 @@
-The fonts in this directory are served by Bault from /fonts and are used under
+The fonts in this directory are served by Card Embassy from /fonts and are used under
 the SIL Open Font License, Version 1.1, reproduced below as the licence requires.
 
 Geist, Geist Mono
