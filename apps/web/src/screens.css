@@ -4099,3 +4099,65 @@ code.ask-words {
     grid-area: note;
   }
 }
+
+/* ---- The vault, picking cards to ship: a tick on each card that can go, the rest dimmed, and a bar with the count ---- */
+
+.card--unselectable {
+  opacity: 0.45;
+}
+
+.card--unselectable .card-hit {
+  cursor: not-allowed;
+}
+
+.card--picked {
+  outline: 2px solid var(--foreground);
+  outline-offset: 4px;
+}
+
+.card-pick-mark {
+  position: absolute;
+  inset-block-start: var(--sp-2);
+  inset-inline-end: var(--sp-2);
+  z-index: 2;
+  inline-size: 26px;
+  block-size: 26px;
+  border: 1.5px solid var(--control-border, var(--border));
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--card) 80%, transparent);
+  pointer-events: none;
+}
+
+.card-pick-mark.is-on {
+  border-color: var(--foreground);
+  background: var(--foreground);
+}
+
+.card-pick-mark.is-on::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--background);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 12.5l3.5 3.5L17 9' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 12.5l3.5 3.5L17 9' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat;
+}
+
+.vault-select-bar {
+  position: sticky;
+  inset-block-end: var(--sp-4);
+  z-index: var(--z-sticky);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  box-shadow: 0 8px 24px color-mix(in oklab, var(--background) 60%, transparent);
+}
+
+.vault-select-count {
+  font-weight: 600;
+}

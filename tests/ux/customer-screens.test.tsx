@@ -161,6 +161,31 @@ describe('the vault', () => {
     });
   });
 
+  it('picks several items to ship and opens the shipping form with them', async () => {
+    const SECOND = { ...ITEM, id: 'i2', serialNumber: 'SN-CL10-0005', barcode: 'SN-CL10-0005', description: 'Call of Legends Rayquaza' };
+    const AWAY = { ...ITEM, id: 'i3', serialNumber: 'SN-GRADE-0001', barcode: 'SN-GRADE-0001', description: 'Away at PSA', lifecycleState: 'at_grader' };
+    get.mockImplementation((path: string) =>
+      Promise.resolve(path.startsWith('/vault/items') ? [ITEM, SECOND, AWAY] : { active: 3, hold: 0, history: 0 }),
+    );
+    window.location.hash = '#/vault';
+    renderIn(<VaultPage />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Select to ship' }));
+
+    const bar = screen.getByRole('region', { name: 'Items picked to ship' });
+    expect(bar).toHaveTextContent('0 picked');
+    expect(within(bar).getByRole('button', { name: 'Ship these' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: /Away at PSA cannot be shipped/ })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: /Pick 2003 Pokémon EX Dragon/ }));
+    await user.click(screen.getByRole('button', { name: /Pick Call of Legends Rayquaza/ }));
+    expect(bar).toHaveTextContent('2 picked');
+    expect(screen.getByRole('button', { name: /Pick Call of Legends Rayquaza/ })).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(within(bar).getByRole('button', { name: 'Ship these' }));
+    expect(window.location.hash).toBe('#/shipping-services/shipping?items=i1%2Ci2');
+  });
+
   it('shows the reason the vault could not be loaded', async () => {
     get.mockRejectedValue(new Error('Could not reach the vault.'));
     renderIn(<VaultPage />);
