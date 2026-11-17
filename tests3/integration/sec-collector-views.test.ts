@@ -357,7 +357,7 @@ describe('A6 escrow as a collector reads it', () => {
     const raised = await red.post('/escrow', {
       raiserRole: 'seller',
       counterpartyUsername: 'golden',
-      description: 'Views check: Base Set Charizard, PSA 6',
+      description: 'Views check: EX Deoxys Rayquaza, PSA 6',
       valueMinor: 300_000,
       settlement: 'buyer_vault',
     });
