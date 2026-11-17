@@ -13,13 +13,13 @@ import { isValidUsername, normalizeNamePart, normalizeUsername } from '../../sha
 import { VerificationService } from './verification.service';
 import { SessionService, type ClientOrigin } from './session.service';
 import { LoginAttemptService } from './login-attempts.service';
-import { MfaService, codeInvalid, type SecondFactorProof } from './mfa/mfa.service';
+import { MfaService, codeInvalid, emailCodeRefused, type Challenge, type SecondFactorProof } from './mfa/mfa.service';
 import type { AuthUser } from '../sec/auth-context';
 import { CURRENT_TERMS_VERSION } from './terms';
 
 export type LoginResult =
   | { kind: 'session'; user: AuthUser; rawToken: string; expiresAt: Date }
-  | { kind: 'challenge'; challengeToken: string; expiresAt: Date };
+  | ({ kind: 'challenge' } & Challenge);
 
 @Injectable()
 export class AuthService {
@@ -157,15 +157,21 @@ export class AuthService {
       throw AppError.accountSuspended();
     }
 
-    if (await this.mfa.isEnabled(u.id)) {
-      const challenge = await this.mfa.issueChallenge(u.id, normalized);
+    const method = await this.mfa.enabledMethod(u.id);
+    if (method) {
+      const challenge = await this.mfa.issueChallenge(u.id, normalized, method);
       await this.attempts.record(normalized, u.id, 'mfa_challenged', origin);
       return { kind: 'challenge', ...challenge };
     }
 
     const { rawToken, expiresAt } = await this.sessions.create(u.id, origin);
     await this.attempts.record(normalized, u.id, 'success', origin);
-    return { kind: 'session', user: { id: u.id, role: u.role, status: u.status, mfaEnabled: false }, rawToken, expiresAt };
+    return {
+      kind: 'session',
+      user: { id: u.id, role: u.role, status: u.status, mfaEnabled: false, mfaMethod: null },
+      rawToken,
+      expiresAt,
+    };
   }
 
   async completeSecondFactor(
@@ -191,6 +197,9 @@ export class AuthService {
         case 'invalid':
           await this.attempts.record(challenge.identifier, challenge.userId, 'mfa_failed', origin);
           throw codeInvalid(HttpStatus.UNAUTHORIZED);
+        case 'code_refused':
+          await this.attempts.record(challenge.identifier, challenge.userId, 'mfa_failed', origin);
+          throw emailCodeRefused(result.refusal, HttpStatus.UNAUTHORIZED);
         case 'refused':
           await this.attempts.record(challenge.identifier, challenge.userId, 'refused', origin);
           throw AppError.accountSuspended();
@@ -198,6 +207,18 @@ export class AuthService {
           throw challengeExpired();
       }
     });
+  }
+
+  /** Mails a new code for a sign-in still waiting for one, unless the sign-in lockout is on. */
+  async resendSignInCode(challengeToken: string): Promise<{ sentTo: string; resendAfterSeconds: number }> {
+    const challenge = await this.mfa.findChallenge(challengeToken);
+    if (!challenge) throw challengeExpired();
+    const wait = Math.max(
+      await this.attempts.lockedFor(challenge.identifier),
+      await this.attempts.secondFactorLockedFor(challenge.userId),
+    );
+    if (wait > 0) throw this.attempts.lockedError(wait);
+    return this.mfa.resendSignInCode(challenge.userId);
   }
 }
 

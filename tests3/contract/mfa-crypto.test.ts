@@ -12,6 +12,13 @@ import {
 } from '../../apps/api/src/modules/acc/mfa/totp';
 import { UnreadableSecretError, deriveSubkey, openSecret, sealSecret } from '../../apps/api/src/modules/acc/mfa/secret-box';
 import {
+  emailCodeHash,
+  emailCodeKey,
+  emailCodeMatches,
+  maskEmail,
+  normalizeEmailCode,
+} from '../../apps/api/src/modules/acc/mfa/email-codes';
+import {
   RECOVERY_CODE_COUNT,
   generateRecoveryCodes,
   hashRecoveryCode,
@@ -219,5 +226,37 @@ describe('recovery codes', () => {
     expect(h).toBe(hashRecoveryCode(key, normal));
     expect(h).not.toBe(hashRecoveryCode(randomBytes(32), normal));
     expect(h).not.toContain(normal);
+  });
+});
+
+describe('emailed codes', () => {
+  const key = emailCodeKey(randomBytes(32));
+
+  it('are kept as an HMAC under their own subkey, bound to the code row', () => {
+    const hash = emailCodeHash(key, 'row-1', '012345');
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(hash).not.toContain('012345');
+    expect(emailCodeHash(key, 'row-2', '012345')).not.toBe(hash);
+    expect(emailCodeHash(emailCodeKey(randomBytes(32)), 'row-1', '012345')).not.toBe(hash);
+  });
+
+  it('match only the code that was mailed, for the row it was mailed for', () => {
+    const hash = emailCodeHash(key, 'row-1', '012345');
+    expect(emailCodeMatches(key, 'row-1', '012345', hash)).toBe(true);
+    expect(emailCodeMatches(key, 'row-1', '012346', hash)).toBe(false);
+    expect(emailCodeMatches(key, 'row-2', '012345', hash)).toBe(false);
+    expect(emailCodeMatches(key, 'row-1', '012345', 'not-a-hash')).toBe(false);
+  });
+
+  it('are read however they were typed, and anything else is not a code', () => {
+    expect(normalizeEmailCode(' 012 345 ')).toBe('012345');
+    expect(normalizeEmailCode('012-345')).toBe('012345');
+    for (const bad of ['', '12345', '1234567', 'abcdef', '１２３４５６']) expect(normalizeEmailCode(bad)).toBeNull();
+  });
+
+  it('are announced to an address shown only in part', () => {
+    expect(maskEmail('eldar@bault.dev')).toBe('e•••@bault.dev');
+    expect(maskEmail('a@x.test')).toBe('a•••@x.test');
+    expect(maskEmail('not-an-address')).toBe('•••');
   });
 });

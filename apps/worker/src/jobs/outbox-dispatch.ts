@@ -6,6 +6,7 @@ import { reportJobFailure } from '../observability';
 import { notificationMessage } from './notification-message';
 import { defaultEmailEnabled, eventSubject } from './notification-events';
 import { PASSWORD_RESET_REQUESTED, sendPasswordReset } from './password-reset-mail';
+import { MFA_EMAIL_CODE_REQUESTED, sendMfaEmailCode } from './mfa-email-code-mail';
 
 const SINGLE_RECIPIENT_KEYS = ['ownerId', 'userId', 'sellerId', 'buyerId', 'responderId', 'donorId'];
 
@@ -147,7 +148,13 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
       const counts =
         claimed.event_type === PASSWORD_RESET_REQUESTED
           ? await sendPasswordReset(client, claimed.payload, emailAdapter()).then(() => ({ delivered: 0, mailed: 0, failed: 0 }))
-          : await deliver(client, env, claimed);
+          : claimed.event_type === MFA_EMAIL_CODE_REQUESTED
+            ? await sendMfaEmailCode(client, claimed.payload, emailAdapter()).then((sent) => ({
+                delivered: 0,
+                mailed: sent ? 1 : 0,
+                failed: 0,
+              }))
+            : await deliver(client, env, claimed);
       await client.query(
         `UPDATE outbox_message
             SET dispatched_at = now(), attempts = attempts + 1, last_attempt_at = now()

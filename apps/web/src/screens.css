@@ -1698,6 +1698,42 @@ li.is-clickable {
   overflow-wrap: anywhere;
 }
 
+/* The two ways to be asked for the second step are tiles, side by side where there is room: each its name and,
+   under it, a line on what it means. The radio is still the control. */
+.choice-tiles.mfa-methods {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+.mfa-methods .choice-tile {
+  align-items: flex-start;
+  block-size: 100%;
+  padding-block: var(--sp-3);
+}
+
+/* An address is one long word: it breaks where it must rather than leave its tile. */
+.mfa-methods .field-hint {
+  overflow-wrap: anywhere;
+}
+
+.mfa-methods .choice-tile input {
+  margin-block-start: 2px;
+}
+
+.choice-tile-text {
+  display: grid;
+  gap: var(--sp-1);
+  min-inline-size: 0;
+}
+
+.choice-tile-name {
+  font-weight: 600;
+}
+
+/* Asking for another emailed code, and how long until it may be asked for, on one line under the code. */
+.mfa-resend {
+  gap: var(--sp-2);
+}
+
 /* The sheet of codes is as wide as a sheet is: the codes are read down it, two to a line where there is room. */
 .mfa-codes {
   max-inline-size: 460px;

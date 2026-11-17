@@ -227,12 +227,13 @@ describe('the menu of what can be asked for', () => {
       'Send the item to a third-party grader and receive a certificate.',
     );
     expect(grading).toHaveClass('btn--row');
-    // Where there is a price it is the row's own: the generic service fee, and the inspection's.
+    // Where there is a price it is the row's own: the generic service fee, and the inspection's. The price list is a
+    // fetch of its own, so the rows can be drawn before it answers: wait for it.
     expect(
-      within(screen.getByRole('button', { name: 'Professional photography' })).getByText('$20.00'),
+      await within(screen.getByRole('button', { name: 'Professional photography' })).findByText('$20.00'),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByRole('button', { name: 'Condition inspection' })).getByText('$15.00'),
+      await within(screen.getByRole('button', { name: 'Condition inspection' })).findByText('$15.00'),
     ).toBeInTheDocument();
     // What cannot be taken back is said in the row's colour first.
     expect(screen.getByRole('button', { name: 'Donation' })).toHaveClass('btn--danger');

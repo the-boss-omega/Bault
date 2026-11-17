@@ -30,7 +30,7 @@ About 2 minutes. It builds on T14.3, T14.4 and T15.3.
 
 This job delivers the messages the API writes to the outbox. `dispatchOutbox` turns `outbox_message` rows into notifications, one message per transaction, oldest first. It claims a message `FOR UPDATE SKIP LOCKED` while its `attempts` is below `MAX_ATTEMPTS`. The message's notifications and its `dispatched_at` commit together. A message that throws rolls back alone, and `recordFailure` saves the error outside that transaction, so the rollback does not erase it. After five attempts the message is parked. The admin console finds parked messages with its own copy of the number, `PARKED_AFTER_ATTEMPTS`, in the admin module's `apps/api/src/modules/adm/outbox-parking.ts`.
 
-`recipientsOf` uses the payload's `recipientIds`, or else the first key of `SINGLE_RECIPIENT_KEYS` that is present. So without `recipientIds`, an event naming both `sellerId` and `buyerId` reaches only the seller. A message with no recipient still counts as dispatched. `deliver` writes the in-app row first, unless the person turned that channel off. It then sends e-mail if `channelEnabled` allows it and the account is `active`. A failed send is a `failed` notification row, not a failed dispatch. A `PASSWORD_RESET_REQUESTED` message goes to `sendPasswordReset` instead, with no in-app row. Mail goes out before the commit, so a crash in between mails twice. Sending at least once is the side the design chose.
+`recipientsOf` uses the payload's `recipientIds`, or else the first key of `SINGLE_RECIPIENT_KEYS` that is present. So without `recipientIds`, an event naming both `sellerId` and `buyerId` reaches only the seller. A message with no recipient still counts as dispatched. `deliver` writes the in-app row first, unless the person turned that channel off. It then sends e-mail if `channelEnabled` allows it and the account is `active`. A failed send is a `failed` notification row, not a failed dispatch. A `PASSWORD_RESET_REQUESTED` message goes to `sendPasswordReset` instead, and an `MFA_EMAIL_CODE_REQUESTED` one to `sendMfaEmailCode`, each with no in-app row. Mail goes out before the commit, so a crash in between mails twice. Sending at least once is the side the design chose.
 
 #### `apps/worker/src/jobs/notification-events.ts`, `apps/worker/src/jobs/notification-message.ts`
 
@@ -45,6 +45,12 @@ A new event type touches six places that no compiler links. They are `apps/api/s
 About 1 minute. It builds on T7.5 and T14.3.
 
 This file sends the password-reset mail. `sendPasswordReset` finds an `active`, `suspended` or `pending` account by e-mail and creates a random token. It stores only the token's SHA-256 hash in `verification_token`, valid for `RESET_TTL_MINUTES`, which is 60. It then mails the link, and a failed send is logged, not retried. The token commits with the dispatcher's transaction. So a dispatch that rolls back after the send leaves a mailed link that does not work. Mailing `pending` accounts is an open decision.
+
+#### `apps/worker/src/jobs/mfa-email-code-mail.ts`
+
+About 1 minute. It builds on T7.6 and T14.3.
+
+This file mints and mails a two-factor code the API asked for. The payload names only the `mfa_email_code` row, so the outbox never holds a code. `sendMfaEmailCode` locks that row and goes on only while it still waits, which means not replaced, withdrawn or already sent, and asked for within the ten minutes it would last, `EMAIL_CODE_TTL_MINUTES`. The account must be `active` or `suspended` and still have an email factor. A sign-in code needs that factor enabled, and an enabled factor must still be bound to the account's address, or nothing is mailed and a warning is logged. It draws six random digits, stores `emailCodeHash` with `sent_to`, `sent_at` and a ten-minute `expires_at`, and mails them with the `mfa_email_code` template. `emailCodeKey` and `emailCodeHash` repeat the API's `email-codes.ts`, and `tests/worker/mfa-email-code.test.ts` holds the two to the same answer. Unlike the reset mail, a failed send throws, so the hash rolls back with the dispatch and the message is tried again on the next run. A mail accepted just before a failed commit is a code that does not work, and the retry mails a new one.
 
 #### `apps/worker/src/jobs/storage-fee.ts`
 

@@ -84,6 +84,23 @@ export async function openTransaction(): Promise<{
   };
 }
 
+/** Runs `work` on one connection inside BEGIN … COMMIT, rolling back if it throws: what a worker job is handed. */
+export async function inTransaction<T>(work: (client: PgClient) => Promise<T>): Promise<T> {
+  pool ??= new Pool({ connectionString: databaseUrl(), max: 4 });
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    const out = await work(client);
+    await client.query('commit');
+    return out;
+  } catch (e) {
+    await client.query('rollback').catch(() => undefined);
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 export async function waitForLockWaiters(count: number, timeoutMs = 10_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {

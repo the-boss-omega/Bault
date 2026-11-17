@@ -23,6 +23,7 @@ export interface ProfileView {
   termsVersion: string | null;
   termsAcceptedAt: Date | null;
   mfaEnabled: boolean;
+  mfaMethod: 'totp' | 'email' | null;
   mfaRequired: boolean;
 }
 
@@ -53,6 +54,7 @@ export class ProfileService {
       .where(eq(userAccount.id, userId))
       .limit(1);
     if (!u) throw AppError.notFound('Profile not found');
+    const mfaMethod = await this.mfa.enabledMethod(u.id);
     return {
       id: u.id,
       email: u.email,
@@ -65,7 +67,8 @@ export class ProfileService {
       nameReviewRequired: u.nameReviewRequired,
       termsVersion: u.termsVersion,
       termsAcceptedAt: u.termsAcceptedAt,
-      mfaEnabled: await this.mfa.isEnabled(u.id),
+      mfaEnabled: mfaMethod !== null,
+      mfaMethod,
       mfaRequired: this.mfa.requiredFor(u.role),
     };
   }

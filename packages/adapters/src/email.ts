@@ -107,6 +107,30 @@ function frame(section: string, preheader: string): string {
   ].join('\n');
 }
 
+interface CodeCopy {
+  kicker: string;
+  heading: string;
+  body: string;
+  footer: string;
+}
+
+/** A code to type, not a link to follow: the digits on a card of their own, large, in the reader's monospace. */
+function codeEmail(copy: CodeCopy, code: string): RenderedEmail {
+  const html = [
+    '<div lang="en" dir="ltr" style="text-align:left">',
+    `<p style="margin:0 0 10px;font:600 11px/1.3 ${MONO};letter-spacing:0.08em;color:${INK_3}">${escapeHtml(copy.kicker)}</p>`,
+    `<h1 style="margin:0 0 14px;font:600 26px/1.25 ${SERIF};color:${INK}">${escapeHtml(copy.heading)}</h1>`,
+    `<p style="margin:0 0 20px;font:400 15px/1.6 ${SANS};color:${INK_2}">${escapeHtml(copy.body)}</p>`,
+    `<p style="display:inline-block;margin:0 0 20px;padding:14px 20px;font:700 32px/1.1 ${MONO};letter-spacing:0.2em;color:${INK};background:${BRIGHT};border:1px solid ${RULE};border-radius:4px">${escapeHtml(code)}</p>`,
+    `<p style="margin:0;font:400 13px/1.55 ${SANS};color:${INK_3}">${escapeHtml(copy.footer)}</p>`,
+    '</div>',
+  ].join('');
+  return {
+    text: [copy.kicker, copy.heading, '', copy.body, '', code, '', copy.footer].join('\n'),
+    html: frame(html, copy.body),
+  };
+}
+
 function actionEmail(copy: ActionCopy, link: string): RenderedEmail {
   return {
     text: actionText(copy, link),
@@ -139,6 +163,26 @@ export function renderEmail(template: string, variables: Record<string, string>)
         },
         link,
       );
+    case 'mfa_email_code': {
+      const minutes = variables.minutes ?? '10';
+      const settings = variables.purpose === 'settings';
+      return codeEmail(
+        settings
+          ? {
+              kicker: 'CONFIRMATION CODE',
+              heading: 'Confirm a change to two-factor sign-in',
+              body: 'Enter this code in Card Embassy to confirm the change you are making to how you sign in.',
+              footer: `It works once, for the next ${minutes} minutes. If you did not ask for it, somebody may be changing your two-factor sign-in: change your password. Bault never asks for this code by phone or email.`,
+            }
+          : {
+              kicker: 'SIGN-IN CODE',
+              heading: 'Your sign-in code',
+              body: 'Enter this code on the Card Embassy sign-in page to finish signing in.',
+              footer: `It works once, for the next ${minutes} minutes. If more than one email came, use the code in the newest. If you did not just try to sign in, somebody knows your password: change it, and do not give this code to anyone. Bault never asks for it by phone or email.`,
+            },
+        variables.code ?? '',
+      );
+    }
     case 'notification_event':
       return actionEmail(
         {

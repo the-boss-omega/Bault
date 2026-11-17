@@ -37,6 +37,8 @@ export interface AdminUser {
   autoSuspended: boolean;
   intakeId: string | null;
   mfaEnabled: boolean;
+  /** How the second factor is asked for, when there is one. */
+  mfaMethod?: 'totp' | 'email' | null;
 }
 
 const ROLES = ['user', 'warehouse_operator', 'admin'];
@@ -137,7 +139,7 @@ export function UsersSection({
                           {t(`account.status.${u.status}` as MessageKey)}
                         </StatusBadge>
                         {u.mfaEnabled && (
-                          <span title={t('admin.users.mfaOnTitle')}>
+                          <span title={t(u.mfaMethod === 'email' ? 'admin.users.mfaOnEmailTitle' : 'admin.users.mfaOnTitle')}>
                             <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
                           </span>
                         )}
@@ -249,7 +251,7 @@ function AccountDrawer({
     try {
       const res = await api.post<{ sessionsEnded: number }>(`/admin/users/${user.id}/mfa/reset`);
       const text = t('admin.users.mfaResetDone', { email: user.email, count: res.sessionsEnded });
-      onChanged({ ...user, mfaEnabled: false });
+      onChanged({ ...user, mfaEnabled: false, mfaMethod: null });
       onSaved(text);
       setNotice({ ok: true, text });
     } catch (e) {
@@ -337,7 +339,7 @@ function AccountDrawer({
                 {statusLabel(status)}
               </StatusBadge>
               {user.mfaEnabled && (
-                <span title={t('admin.users.mfaOnTitle')}>
+                <span title={t(user.mfaMethod === 'email' ? 'admin.users.mfaOnEmailTitle' : 'admin.users.mfaOnTitle')}>
                   <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
                 </span>
               )}

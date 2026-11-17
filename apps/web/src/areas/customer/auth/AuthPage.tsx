@@ -18,6 +18,7 @@ export interface SessionUser {
   mfaEnrollmentRequired?: boolean;
   mfaRequired?: boolean;
   mfaEnabled?: boolean;
+  mfaMethod?: 'totp' | 'email' | null;
 }
 
 

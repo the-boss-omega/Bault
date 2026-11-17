@@ -86,6 +86,7 @@ describe('the shell of an account that is suspended', () => {
     shell();
     await waitFor(() => expect(bell()).not.toBeNull());
     expect(document.querySelectorAll('.ph-controls > *')).toHaveLength(2);
-    expect(get.mock.calls.map((call) => call[0])).toContain('/notifications');
+    // The bell asks for its count in an effect after it is drawn, so the request can come a moment later.
+    await waitFor(() => expect(get.mock.calls.map((call) => call[0])).toContain('/notifications'));
   });
 });

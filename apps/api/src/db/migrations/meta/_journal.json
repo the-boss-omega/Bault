@@ -274,6 +274,13 @@
       "when": 1785075400000,
       "tag": "0038_every_database_has_its_platform_custodian",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1785075500000,
+      "tag": "0039_a_code_by_email",
+      "breakpoints": true
     }
   ]
 }
