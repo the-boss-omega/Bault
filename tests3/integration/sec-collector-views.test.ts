@@ -1,5 +1,5 @@
 import { afterAll, describe, it, expect } from 'vitest';
-import { Client, SEED, signIn, intakeFor } from '../../tests/integration/helpers/http';
+import { Client, SEED, fundWallet, signIn, intakeFor } from '../../tests/integration/helpers/http';
 import { closeDb } from '../../tests/integration/helpers/db';
 
 afterAll(closeDb);
@@ -117,5 +117,74 @@ describe('A2 the vault item timeline a collector reads', () => {
     const staffKinds = (staff.body as { kind: string }[]).map((e) => e.kind);
     expect(staffKinds).toEqual(expect.arrayContaining(['correction', 'bin_transfer', 'relocate', 'intake']));
     expectWith(staff.body, ['toBin', 'field']);
+  });
+});
+
+const REQUEST_DROPPED = [
+  'requesterId',
+  'batchId',
+  'chargeId',
+  'fulfilledBy',
+  'fulfilledAt',
+  'fulfillment',
+  'quotedBy',
+  'declinedBy',
+  'completedBy',
+  'approvalBy',
+  'approvalReason',
+  'rationale',
+  'eventId',
+  'transactionId',
+  'deniedAt',
+  'periodId',
+  'allowance',
+  'kind',
+] as const;
+
+describe('A3 service requests as a collector reads them', () => {
+  it('lists and returns requests without staff or billing internals', async () => {
+    await fundWallet(SEED.collector, 50_000);
+    const operator = await signIn(SEED.operator);
+    const red = await signIn(SEED.collector);
+    const item = await intakeFor(operator, SEED.collector, { description: 'Service view card' });
+
+    const photo = await red.post('/services/photography', { itemId: item.id });
+    expect(photo.status).toBe(201);
+    expectWithout(photo.body, REQUEST_DROPPED);
+    expectWith(photo.body, ['id', 'code', 'type', 'status', 'itemId', 'createdAt', 'typeFields']);
+
+    const asked = await red.post('/services/custom', {
+      itemId: item.id,
+      summary: 'Clean the case',
+      detail: 'Please wipe the slab case and remove the sticker residue.',
+    });
+    expect(asked.status).toBe(201);
+    expectWithout(asked.body, REQUEST_DROPPED);
+    expect(asked.body.code).toBeTruthy();
+    expect((await operator.post(`/services/requests/${asked.body.id}/accept`)).status).toBe(201);
+    const quoted = await operator.post(`/services/custom/${asked.body.id}/quote`, {
+      priceMinor: 12_00,
+      scope: 'Wipe the case and lift the residue with a plastic blade.',
+    });
+    expect(quoted.status).toBe(201);
+    expect(quoted.body.typeFields.quotedBy).toBeTruthy();
+
+    const mine = await red.get('/services/mine');
+    expect(mine.status).toBe(200);
+    expectWithout(mine.body, REQUEST_DROPPED);
+    const rows = mine.body as { id: string; typeFields: Record<string, unknown> }[];
+    const custom = rows.find((r) => r.id === asked.body.id)!;
+    expect(custom.typeFields).toMatchObject({ stage: 'quoted', priceMinor: 12_00, summary: 'Clean the case' });
+    expect(custom.typeFields.scope).toMatch(/plastic blade/);
+    const shoot = rows.find((r) => r.id === photo.body.id)!;
+    if (shoot.typeFields.billed !== undefined) {
+      expect(Object.keys(shoot.typeFields.billed as object).sort()).toEqual(['amountMinor', 'currency']);
+    }
+
+    const queue = await operator.get('/services/queue');
+    const staffRow = (queue.body as { id: string; typeFields: Record<string, unknown> }[]).find(
+      (r) => r.id === asked.body.id,
+    )!;
+    expect(staffRow.typeFields.quotedBy).toBeTruthy();
   });
 });
