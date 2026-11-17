@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -178,7 +178,7 @@ export class GroupShipmentService {
     const rows = [];
     for (const m of members) {
       const ids = (m.shipment.itemIds as string[]) ?? [];
-      const items = ids.length > 0 ? await this.profiles.loadShippableItems(m.shipment.userId, ids) : [];
+      const items = await this.profiles.loadItems(ids);
       const measured = this.profiles.measure(items);
       totalWeightGrams += measured.totalWeightGrams;
       totalItems += items.length;
@@ -226,7 +226,10 @@ export class GroupShipmentService {
     if (group.payerUserId !== userId) throw AppError.forbidden('Only the payer can lock the group');
     if (group.status !== 'forming') throw new AppError(ErrorCode.CONFLICT, 'Already locked', 409);
 
-    const members = await this.db.select().from(shipment).where(eq(shipment.groupId, groupId));
+    const members = await this.db
+      .select({ id: shipment.id })
+      .from(shipment)
+      .where(and(eq(shipment.groupId, groupId), ne(shipment.status, 'cancelled')));
     if (members.length < 2) {
       throw AppError.validation('A shared parcel needs at least two people in it.');
     }
@@ -240,7 +243,10 @@ export class GroupShipmentService {
         .returning({ id: shipmentGroup.id });
       if (!locked) throw new AppError(ErrorCode.CONFLICT, 'That group is no longer open to locking', 409);
 
-      const current = await tx.select().from(shipment).where(eq(shipment.groupId, groupId));
+      const current = await tx
+        .select()
+        .from(shipment)
+        .where(and(eq(shipment.groupId, groupId), ne(shipment.status, 'cancelled')));
       if (current.length < 2) {
         throw AppError.validation('A shared parcel needs at least two people in it.');
       }
@@ -267,16 +273,17 @@ export class GroupShipmentService {
     const [group] = await this.db.select().from(shipmentGroup).where(eq(shipmentGroup.id, groupId)).limit(1);
     if (!group) throw AppError.notFound('Group not found');
     if (group.payerUserId !== userId) throw AppError.forbidden('Only the payer can cancel the group');
-    if (group.status === 'dispatched') {
-      throw new AppError(ErrorCode.CONFLICT, 'That parcel has already gone', 409);
-    }
 
     const now = new Date();
     return this.db.transaction(async (tx) => {
-      await tx
+      const [cancelled] = await tx
         .update(shipmentGroup)
         .set({ status: 'cancelled', cancelledAt: now, notes: reason.trim(), updatedAt: now })
-        .where(eq(shipmentGroup.id, groupId));
+        .where(and(eq(shipmentGroup.id, groupId), inArray(shipmentGroup.status, ['forming', 'locked'])))
+        .returning({ id: shipmentGroup.id });
+      if (!cancelled) {
+        throw new AppError(ErrorCode.CONFLICT, 'That shared parcel has already gone or been cancelled', 409);
+      }
       await tx.update(shipment).set({ groupId: null, updatedAt: now }).where(eq(shipment.groupId, groupId));
       return { status: 'cancelled' as const };
     });
