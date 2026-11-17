@@ -98,6 +98,13 @@ describe('scripts/ops/load-test.mjs', () => {
     expect(s.overall.p95).toBe(95);
     expect(verdict(s, { maxP95: 1000, maxErrorRate: 0.05 })).toEqual([]);
     expect(verdict(s, { maxP95: 50, maxErrorRate: 0.01 })).toHaveLength(2);
+    const named = summarize(samples, ['browse listings', 'vault items', 'wallet']);
+    expect(named.rows.map((r) => [r.name, r.count])).toEqual([
+      ['browse listings', 98],
+      ['vault items', 0],
+      ['wallet', 2],
+    ]);
+    expect(named.rows.find((r) => r.name === 'vault items')?.p95).toBeNull();
   });
 
   it('leaves out listing detail when there is no listing to read', () => {
