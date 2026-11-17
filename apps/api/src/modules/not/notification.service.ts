@@ -62,36 +62,16 @@ export class NotificationService {
       );
     }
 
-    return this.db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(notificationPreference)
-        .where(
-          and(
-            eq(notificationPreference.userId, userId),
-            eq(notificationPreference.eventType, eventType),
-            eq(notificationPreference.channel, channel),
-          ),
-        )
-        .limit(1);
-
-      if (existing) {
-        const [updated] = await tx
-          .update(notificationPreference)
-          .set({ enabled, updatedAt: new Date() })
-          .where(eq(notificationPreference.id, existing.id))
-          .returning();
-        if (!updated) throw AppError.validation('Failed to update preference');
-        return updated;
-      }
-
-      const [created] = await tx
-        .insert(notificationPreference)
-        .values({ userId, eventType, channel, enabled })
-        .returning();
-      if (!created) throw AppError.validation('Failed to create preference');
-      return created;
-    });
+    const [saved] = await this.db
+      .insert(notificationPreference)
+      .values({ userId, eventType, channel, enabled })
+      .onConflictDoUpdate({
+        target: [notificationPreference.userId, notificationPreference.eventType, notificationPreference.channel],
+        set: { enabled, updatedAt: new Date() },
+      })
+      .returning();
+    if (!saved) throw AppError.validation('Failed to save preference');
+    return saved;
   }
 
   async setChannel(userId: string, channel: string, enabled: boolean) {
