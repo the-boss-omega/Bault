@@ -5,9 +5,8 @@ import { ITEM_CLASSES, itemClassLabel, itemName } from '../../../shared/itemClas
 import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
-import { Amount, Code, ItemPick, Serial } from '../../../shared/ui/Serial';
-import { storefrontHref } from '../../../shared/market';
-import { dollarsToCents, formatUsd, isolate } from '../../../shared/money';
+import { Amount, ItemPick, Serial } from '../../../shared/ui/Serial';
+import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
@@ -23,11 +22,11 @@ import {
   TabPanel,
 } from '../../../shared/ui/primitives';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
-import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
 import { IconSearch, IconTag } from '../../../shared/ui/icons';
 import { MyListingsPanel, OffersPanel, SwapsPanel } from './SellerPanels';
 import { ProposeTradePanel } from './ProposeTradePanel';
 import { StorefrontPanel } from './StorefrontPanel';
+import { ListingDealFlow, SellerLink, type ListingDeal } from './ListingDeal';
 import { HouseStorePanel } from './HouseStorePanel';
 import { loadProfile } from '../../../shared/session';
 
@@ -68,8 +67,7 @@ export function MarketplacePage() {
   function clearFilters() {
     setParams({ q: null, type: null, condition: null, min: null, max: null, sort: null });
   }
-  const [buying, setBuying] = useState<Listing | null>(null);
-  const [offering, setOffering] = useState<Listing | null>(null);
+  const [deal, setDeal] = useState<ListingDeal | null>(null);
   const { items, reload: reloadItems } = useVaultItems(true);
   const [myUsername, setMyUsername] = useState<string | undefined>(undefined);
   const [meId, setMeId] = useState<string | null>(null);
@@ -116,21 +114,17 @@ export function MarketplacePage() {
     return () => clearTimeout(handle);
   }, [query, loadListings]);
 
-  async function buy(listing: Listing) {
-    try {
-      const result = await api.post<{ replayed?: boolean }>(
-        `/marketplace/listings/${listing.id}/purchase`,
-      );
-      setStatus(result?.replayed ? t('market.alreadyBought') : t('market.status.purchased'));
+  const dealDone = useCallback(
+    async (message: string, kind: ListingDeal['kind']) => {
+      setStatus(message);
       setError(null);
-      await loadListings(query);
-      await reloadItems();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBuying(null);
-    }
-  }
+      if (kind === 'buy') {
+        await loadListings(query);
+        await reloadItems();
+      }
+    },
+    [loadListings, query, reloadItems],
+  );
 
   const tabs = TABS.map((key) => ({ key, label: t(`market.tab.${key}` as MessageKey) }));
 
@@ -279,10 +273,10 @@ export function MarketplacePage() {
                     </div>
 
                     <div className="actions">
-                      <Button variant="primary" size="sm" onClick={() => setBuying(listing)}>
+                      <Button variant="primary" size="sm" onClick={() => setDeal({ kind: 'buy', listing })}>
                         {t('market.buy')}
                       </Button>
-                      <Button variant="secondary" size="sm" onClick={() => setOffering(listing)}>
+                      <Button variant="secondary" size="sm" onClick={() => setDeal({ kind: 'offer', listing })}>
                         {t('market.makeOffer')}
                       </Button>
                     </div>
@@ -322,24 +316,6 @@ export function MarketplacePage() {
         </TabPanel>
       )}
 
-      {buying && (
-        <ConfirmationModal
-          title={t('market.buy.confirmTitle')}
-          body={
-            <p>
-              {t('market.buy.confirmBody', {
-                item: isolate(itemName(t, buying)),
-                amount: formatUsd(buying.askingPrice),
-              })}
-            </p>
-          }
-          confirmLabel={t('market.buy')}
-          cancelLabel={t('ui.cancel')}
-          onConfirm={() => void buy(buying)}
-          onCancel={() => setBuying(null)}
-        />
-      )}
-
       {tab === 'listings' && (
         <TabPanel tab="listings">
           <MyListingsPanel onChanged={async (m) => setStatus(m)} onError={setError} />
@@ -361,7 +337,13 @@ export function MarketplacePage() {
 
       {tab === 'trade' && (
         <TabPanel tab="trade">
-          <ProposeTradePanel onProposed={async (m) => setStatus(m)} onError={setError} />
+          <ProposeTradePanel
+            key={`${route.params.with ?? ''}|${route.params.serial ?? ''}`}
+            initialUsername={route.params.with}
+            initialSerial={route.params.serial}
+            onProposed={async (m) => setStatus(m)}
+            onError={setError}
+          />
           <SwapsPanel
             onChanged={async (m) => {
               setStatus(m);
@@ -380,30 +362,17 @@ export function MarketplacePage() {
 
       {tab === 'store' && (
         <TabPanel tab="store">
-          <StorefrontPanel seller={route.params.seller} myUsername={myUsername} onError={setError} />
+          <StorefrontPanel
+            seller={route.params.seller}
+            myUsername={myUsername}
+            onDone={dealDone}
+            onError={setError}
+          />
         </TabPanel>
       )}
 
-      {offering && (
-        <OfferDrawer
-          listing={offering}
-          t={t}
-          onClose={() => setOffering(null)}
-          onSent={() => {
-            setStatus(t('market.status.offerSent'));
-            setOffering(null);
-          }}
-        />
-      )}
+      <ListingDealFlow deal={deal} onClose={() => setDeal(null)} onDone={dealDone} onError={setError} />
     </>
-  );
-}
-
-function SellerLink({ t, username }: { t: TranslateFn; username: string }) {
-  return (
-    <a href={storefrontHref(username)} aria-label={t('market.store.of', { username })}>
-      <Code value={`@${username}`} />
-    </a>
   );
 }
 
@@ -537,92 +506,5 @@ export function SellPanel({
         </div>
       )}
     </Panel>
-  );
-}
-
-function OfferDrawer({
-  listing,
-  t,
-  onClose,
-  onSent,
-}: {
-  listing: Listing;
-  t: TranslateFn;
-  onClose: () => void;
-  onSent: () => void;
-}) {
-  const [amount, setAmount] = useState(() => (listing.askingPrice / 100).toFixed(2));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const cents = dollarsToCents(amount);
-
-  async function send() {
-    if (cents === null) return;
-    setBusy(true);
-    try {
-      await api.post(`/marketplace/listings/${listing.id}/offers`, { amount: cents });
-      onSent();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <DetailDrawer
-      title={t('market.offer.title')}
-      subtitle={itemName(t, listing)}
-      onClose={onClose}
-      dirty
-      footer={
-        <>
-          <Button variant="primary" disabled={busy || cents === null} onClick={send}>
-            {t('market.offer.submit')}
-          </Button>
-          <Button variant="ghost" onClick={onClose}>
-            {t('ui.cancel')}
-          </Button>
-        </>
-      }
-    >
-      <dl className="detail-list">
-        <div className="detail-row">
-          <dt className="detail-label">{t('market.offer.askingPrice')}</dt>
-          <dd className="detail-value num" dir="ltr">
-            {formatUsd(listing.askingPrice)}
-          </dd>
-        </div>
-        {listing.sellerUsername && (
-          <div className="detail-row">
-            <dt className="detail-label">{t('market.listing.soldBy')}</dt>
-            <dd className="detail-value">
-              <SellerLink t={t} username={listing.sellerUsername} />
-            </dd>
-          </div>
-        )}
-      </dl>
-
-      <div className="field" style={{ marginBlockStart: 'var(--sp-5)' }}>
-        <label className="field-label" htmlFor="offer-amount">
-          {t('market.offer.amountLabel')}
-        </label>
-        <div className="money-input">
-          <span aria-hidden="true">$</span>
-          <input
-            id="offer-amount"
-            inputMode="decimal"
-            dir="ltr"
-            autoFocus
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </div>
-        <p className="field-hint">{t('market.offer.hint')}</p>
-      </div>
-
-      {error && <div className="stack-top" ><ErrorState message={error} /></div>}
-    </DetailDrawer>
   );
 }

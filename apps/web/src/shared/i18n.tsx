@@ -352,6 +352,7 @@ const en = {
   'market.store.empty': 'Nothing for sale',
   'market.store.emptyText': 'This collector has no active listings right now.',
   'market.store.yourLink': 'Your storefront link: {link}',
+  'market.store.proposeTrade': 'Propose a trade',
 
   'consign.title': 'Send to consignment',
   'consign.channel': 'Where to sell it',

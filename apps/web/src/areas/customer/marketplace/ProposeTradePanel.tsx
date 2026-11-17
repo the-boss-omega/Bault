@@ -26,21 +26,25 @@ interface TradableItem {
 }
 
 export function ProposeTradePanel({
+  initialUsername,
+  initialSerial,
   onProposed,
   onError,
 }: {
+  initialUsername?: string;
+  initialSerial?: string;
   onProposed: (message: string) => Promise<void> | void;
   onError: (m: string) => void;
 }) {
   const { t } = useI18n();
   const { items } = useVaultItems(true);
 
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(initialUsername ?? '');
   const [counterparty, setCounterparty] = useState<Collector | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const [offered, setOffered] = useState<Record<string, boolean>>({});
   const [wanted, setWanted] = useState<TradableItem[]>([]);
-  const [serial, setSerial] = useState('');
+  const [serial, setSerial] = useState(initialSerial ?? '');
   const [gift, setGift] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -66,6 +70,27 @@ export function ProposeTradePanel({
       setLookingUp(false);
     }
   }
+
+  useEffect(() => {
+    const who = normalizeUsername(initialUsername ?? '');
+    if (!isValidUsername(who)) return;
+    let live = true;
+    setLookingUp(true);
+    api
+      .get<Collector>(`/marketplace/collectors/${who}`)
+      .then((found) => {
+        if (live) setCounterparty(found);
+      })
+      .catch((e: unknown) => {
+        if (live) onError((e as Error).message);
+      })
+      .finally(() => {
+        if (live) setLookingUp(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [initialUsername, onError]);
 
   /** A gift moves one item, so what was ticked for a swap is cut to the first of it. */
   function chooseGift(on: boolean) {
