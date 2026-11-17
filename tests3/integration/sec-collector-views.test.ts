@@ -4,8 +4,6 @@ import { closeDb, sql } from '../../tests/integration/helpers/db';
 
 afterAll(closeDb);
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function keysIn(value: unknown, out: Set<string> = new Set()): Set<string> {
   if (Array.isArray(value)) {
     for (const v of value) keysIn(v, out);
