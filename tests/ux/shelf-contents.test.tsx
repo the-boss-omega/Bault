@@ -206,7 +206,7 @@ describe('what is on a shelf', () => {
     ).toEqual(['Close']);
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(slot).toHaveFocus();
+    await waitFor(() => expect(slot).toHaveFocus());
     expect(
       get.mock.calls.every(
         ([path]) => typeof path === 'string' && path.startsWith('/custody/bins/b1/items'),
