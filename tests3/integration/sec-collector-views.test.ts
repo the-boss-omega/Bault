@@ -1,6 +1,6 @@
 import { afterAll, describe, it, expect } from 'vitest';
 import { Client, SEED, fundWallet, signIn, intakeFor } from '../../tests/integration/helpers/http';
-import { closeDb } from '../../tests/integration/helpers/db';
+import { closeDb, sql } from '../../tests/integration/helpers/db';
 
 afterAll(closeDb);
 
@@ -264,5 +264,71 @@ describe('A4 wallet requests as a collector reads them', () => {
 
     const other = await signIn(SEED.collector);
     expect((await other.get(`/finance/wallet-requests/${rejected.body.id}`)).status).toBe(404);
+  });
+});
+
+describe('A5 the notification feed a collector reads', () => {
+  it('shows only in-app rows, with the message, codes and amounts and no ids or delivery internals', async () => {
+    const red = await signIn(SEED.collector);
+    const redId = await userIdOf(red);
+    const someone = '7f1c2a9e-1111-4222-8333-944455556666';
+    const content = {
+      message: 'A payment of $12.00 was reversed by the bank.',
+      requestCode: 'WR-VIEWS1',
+      amount: 12_00,
+      refundedMinor: 12_00,
+      reason: 'Chargeback typed by an admin: cardholder disputed',
+      buyerId: someone,
+      sellerId: someone,
+      itemId: someone,
+      listingId: someone,
+      transactionId: someone,
+      requestId: someone,
+      shipmentId: someone,
+      counteredBy: someone,
+      recipientIds: [someone],
+    };
+    await sql(
+      `INSERT INTO notification (user_id, event_type, content, channel, status)
+       VALUES ($1, 'payment_reversed', $2::jsonb, 'in_app', 'sent'),
+              ($1, 'payment_reversed', $2::jsonb, 'email', 'failed')`,
+      [redId, JSON.stringify(content)],
+    );
+    await sql(
+      `UPDATE notification SET provider_ref = 'prov-123', failure_reason = 'SMTP 550 mailbox unavailable'
+        WHERE user_id = $1 AND channel = 'email' AND content->>'requestCode' = 'WR-VIEWS1'`,
+      [redId],
+    );
+
+    const feed = await red.get('/notifications');
+    expect(feed.status).toBe(200);
+    expectWithout(feed.body, [
+      'userId',
+      'channel',
+      'status',
+      'providerRef',
+      'failureReason',
+      'recipientIds',
+      'buyerId',
+      'sellerId',
+      'itemId',
+      'listingId',
+      'transactionId',
+      'requestId',
+      'shipmentId',
+      'counteredBy',
+      'reason',
+    ]);
+    const rows = (feed.body as { eventType: string; content: Record<string, unknown> }[]).filter(
+      (n) => n.content.requestCode === 'WR-VIEWS1',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.content).toEqual({
+      message: content.message,
+      requestCode: 'WR-VIEWS1',
+      amount: 12_00,
+      refundedMinor: 12_00,
+    });
+    expect(JSON.stringify(feed.body)).not.toMatch(new RegExp(someone));
   });
 });

@@ -126,18 +126,15 @@ describe('NOT channels and published content', () => {
     expect(badEvent.status).toBe(400);
   });
 
-  it('records the channel a notification was delivered on', async () => {
+  it('shows a collector only the in-app rows, without channel or delivery status', async () => {
     const operator = await signIn(SEED.operator);
     await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
 
     const collector = await signIn(SEED.collector);
-    const feed = (await collector.get('/notifications')).body as Array<{
-      channel: string;
-      status: string;
-    }>;
+    const feed = (await collector.get('/notifications')).body as Array<Record<string, unknown>>;
+    expect(feed.length).toBeGreaterThan(0);
     for (const row of feed) {
-      expect(['in_app', 'email']).toContain(row.channel);
-      expect(['sent', 'failed']).toContain(row.status);
+      expect(Object.keys(row).sort()).toEqual(['content', 'createdAt', 'eventType', 'id']);
     }
   });
 
