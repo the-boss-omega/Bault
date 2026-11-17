@@ -5315,15 +5315,22 @@ interface I18nValue {
 const I18nContext = createContext<I18nValue | null>(null);
 
 function initialLocale(): Locale {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  return saved === 'he' || saved === 'en' ? saved : DEFAULT_LOCALE;
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved === 'he' || saved === 'en' ? saved : DEFAULT_LOCALE;
+  } catch {
+    return DEFAULT_LOCALE;
+  }
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>(initialLocale);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, locale);
+    try {
+      localStorage.setItem(STORAGE_KEY, locale);
+    } catch {
+    }
     document.documentElement.lang = locale;
     document.documentElement.dir = locale === 'he' ? 'rtl' : 'ltr';
   }, [locale]);

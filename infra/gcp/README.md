@@ -10,7 +10,7 @@ Postgres; S3-compatible object storage. On Google Cloud those are:
 | Database | Cloud SQL for PostgreSQL 16, Enterprise edition, `db-custom-1-3840` (1 vCPU, 3.75 GB), private IP only, TLS required, point-in-time recovery for 7 days, 14 daily backups |
 | Connection | the Cloud SQL Auth Proxy, as the compose service `cloudsql` (`compose.gcp.yml`) |
 | Images | a Cloud Storage bucket, reached through its S3 API with an HMAC key that may create and read objects, nothing else |
-| Backups | a bucket in a second project, objects kept at least 30 days and deleted after 120, with a key that may only add |
+| Backups | a bucket in a second project, objects kept at least 30 days and deleted after 120, written by the server's own service account, which may only add, with no key at all |
 | Firewall | 80 and 443 from anywhere, 22 from `ADMIN_IP` only, in the VPC firewall and again in `ufw` |
 
 | File | What it is |
@@ -84,10 +84,35 @@ IAP, behind your Google sign-in and its 2-step verification, so port 22 never
 faces the internet and a changing home IP does not matter. Running the script
 again is safe: it creates only what is missing.
 
+A new Google Cloud organisation enforces the constraint
+`iam.disableServiceAccountKeyCreation` on every project ("secure by default"),
+and the constraint forbids HMAC keys too. The images bucket needs one, because
+the app reaches it through the S3 API, so `provision.sh` checks the production
+project before it creates anything, and stops with the command that lifts the
+constraint for that project only. Running it takes the Organization Policy
+Administrator role, which an organisation administrator can grant themselves in
+IAM & Admin → IAM, with the organisation selected.
+
+```sh
+gcloud resource-manager org-policies disable-enforce iam.disableServiceAccountKeyCreation --project="$P"
+```
+
+The constraint stops only new keys, so once the script has finished you can
+give the project back to the organisation's rule with
+`gcloud resource-manager org-policies delete iam.disableServiceAccountKeyCreation --project="$P"`.
+A later run that has to make a new key, after a rotation, needs the exception
+again. The backups project needs none, because the server writes the backups
+as itself (step 9).
+
+IAM takes a minute or two to see a role or a service account it has just made,
+and until then refuses a binding that names it. The script tries such a
+binding again every 10 seconds for three minutes, and if IAM still refuses, it
+stops and asks you to run it again.
+
 It writes `~/bault-gcp.env` (mode 600): the server's IP, the Cloud SQL
-instance, three database passwords, two HMAC keys and a section for each file
-under `/etc/bault`. It never prints a secret. Do not paste the file anywhere;
-step 5 copies it to the server.
+instance, three database passwords, the images bucket's HMAC key and a section
+for each file under `/etc/bault`. It never prints a secret. Do not paste the
+file anywhere; step 5 copies it to the server.
 
 ## 2. SSH through IAP (Cloud Shell, once)
 
@@ -177,10 +202,13 @@ asks for one group again. `--change checkout` turns on cash-in by PayPal
 checkout (`PAYPAL_CHECKOUT_ENABLED`, off until then): first subscribe the same
 PayPal webhook to `CHECKOUT.ORDER.APPROVED` and to `PAYMENT.CAPTURE.COMPLETED`,
 `PENDING`, `DENIED`, `DECLINED`, `REFUNDED` and `REVERSED`, then restart the
-API. Then, in Cloud Shell, keep the file in your password manager (⋮ →
-Download) and delete it there too: `shred -u ~/bault-gcp.env`. Copy
-`/etc/bault/production.env` into the password manager as well: losing
-`MFA_ENCRYPTION_KEY` locks every authenticator out.
+API. On a server set up when the backups still went through the S3 API with a
+key of their own, a run takes those settings and that key out of `backup.env`,
+with or without `~/bault-gcp.env`. Then, in Cloud Shell, keep the file in your
+password manager (⋮ → Download) and delete it there too:
+`shred -u ~/bault-gcp.env`. Copy `/etc/bault/production.env` into the
+password manager as well: losing `MFA_ENCRYPTION_KEY` locks every
+authenticator out.
 
 ## 6. Database roles, the first time only (the server, as deploy)
 
@@ -239,8 +267,15 @@ crontab infra/ops/crontab.example      # replaces deploy's crontab
 ```
 
 The crontab holds two jobs. The nightly backup encrypts a dump to your age key
-and uploads it to the backups project, where the server's key can add a dump
-and nothing else. So list it from Cloud Shell, with your own login:
+and uploads it to the backups project. The server signs in there as itself,
+the service account `bault-vm`, through the metadata server, so no key for the
+backups exists anywhere. That account may add a dump and nothing else, so it
+cannot list, read, replace or delete one. Ubuntu 24.04's rclone (1.60) sends an
+ACL with every upload through the S3 API, which a bucket with uniform
+bucket-level access refuses, and new organisations forbid turning uniform
+access off, so `backup.env` defines the remote with rclone's own Cloud Storage
+backend, which sends none. To see the backups, list them from Cloud Shell, with
+your own login:
 `gcloud storage ls gs://<backups-project>-bault-backups/nightly/`. Restores,
 including Cloud SQL's point-in-time clone, are in
 [`infra/ops/RESTORE.md`](../ops/RESTORE.md).

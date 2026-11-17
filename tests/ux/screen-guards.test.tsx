@@ -11,7 +11,7 @@ vi.mock('../../apps/web/src/shared/api', () => ({
   ApiError: class ApiError extends Error {},
 }));
 
-const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
+const { I18nProvider, useI18n } = await import('../../apps/web/src/shared/i18n');
 const { VerifyEmailPage } = await import('../../apps/web/src/areas/customer/auth/VerifyEmailPage');
 const { ErrorBoundary } = await import('../../apps/web/src/shared/ui/ErrorBoundary');
 const { TwoFactorPanel } = await import('../../apps/web/src/areas/customer/profile/TwoFactorPanel');
@@ -120,5 +120,41 @@ describe('the two-factor panel', () => {
     expect(await screen.findByRole('button', { name: /set up two-factor sign-in/i })).toBeInTheDocument();
     expect(get).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(/could not be reached/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('a browser that blocks site storage', () => {
+  let read: ReturnType<typeof vi.spyOn>;
+  let write: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    const blocked = () => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    };
+    read = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(blocked);
+    write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(blocked);
+  });
+  afterEach(() => {
+    read.mockRestore();
+    write.mockRestore();
+  });
+
+  it('still renders the app, in the default language', () => {
+    renderIn(<p>the app is here</p>);
+
+    expect(screen.getByText('the app is here')).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute('lang', 'he');
+    expect(document.documentElement).toHaveAttribute('dir', 'rtl');
+  });
+
+  it('switches language for the rest of the visit', async () => {
+    function Switch() {
+      const { toggleLocale } = useI18n();
+      return <button onClick={toggleLocale}>switch</button>;
+    }
+    renderIn(<Switch />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'switch' }));
+    expect(document.documentElement).toHaveAttribute('lang', 'en');
+    expect(document.documentElement).toHaveAttribute('dir', 'ltr');
   });
 });
