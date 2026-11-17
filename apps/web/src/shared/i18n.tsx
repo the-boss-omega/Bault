@@ -216,7 +216,6 @@ const en = {
   'market.tab.offers': 'Offers',
   'market.tab.trade': 'Trade',
   'market.tab.store': 'Storefront',
-  'market.tab.house': 'Card Embassy store',
   'admin.section.house': 'Card Embassy store',
   'house.title': 'The Card Embassy store',
   'house.subtitle': 'Items Card Embassy sells itself. Every copy you buy gets its own serial and barcode and goes straight into your vault.',
@@ -639,6 +638,8 @@ const en = {
   'notifications.event.parcel_disposed': 'Parcel closed',
   'tab.wallet': 'Wallet',
   'tab.marketplace': 'Marketplace',
+  'tab.store': 'Store',
+  'tab.escrow': 'Escrow',
   'tab.shippingServices': 'Shipping & Services',
   'tab.faqLegal': 'FAQ & Legal',
   'tab.notifications': 'Notifications',
@@ -748,6 +749,8 @@ const en = {
   'wallet.col.balance': 'Balance',
 
   'market.title': 'Marketplace',
+  'store.title': 'Card Embassy store',
+  'escrow.title': 'Escrow',
   'market.searchPlaceholder': 'Search the marketplace',
   'market.filters': 'Narrow the listings',
   'market.filter.type': 'Type',
@@ -2113,7 +2116,6 @@ const en = {
   'prices.trigger.weekly': 'weekly',
   'prices.trigger.monthly': 'monthly',
 
-  'market.tab.escrow': 'Escrow',
   'ss.tab.in-person': 'In person',
 
   'esc.title': 'Escrow — a private deal with us in the middle',
