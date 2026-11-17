@@ -27,6 +27,7 @@ export async function expireUnpaidShipments(pool: Pool): Promise<void> {
                 cancelled_at = now(),
                 cancel_reason = 'Not paid within the holding period',
                 payment_due_at = NULL,
+                group_id = NULL,
                 updated_at = now()
           WHERE id = $1`,
         [row.id],

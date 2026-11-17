@@ -13,6 +13,7 @@ import { MembershipService } from '../mem/membership.service';
 import { serviceRequest } from './dis.schema';
 import { userAccount } from '../acc/acc.schema';
 import { item } from '../cst/cst.schema';
+import type { AuthUser } from '../sec/auth-context';
 
 type ServiceType =
   | 'batch_split'
@@ -132,6 +133,13 @@ export class ServiceRequestService {
       ? await tx.select().from(serviceRequest).where(eq(serviceRequest.id, requestId)).for('update').limit(1)
       : await this.db.select().from(serviceRequest).where(eq(serviceRequest.id, requestId)).limit(1);
     if (!row) throw AppError.notFound('Service request not found');
+    return row;
+  }
+
+  async getFor(requestId: string, viewer: Pick<AuthUser, 'id' | 'role'>) {
+    const row = await this.get(requestId);
+    const staff = viewer.role === 'warehouse_operator' || viewer.role === 'admin';
+    if (!staff && row.requesterId !== viewer.id) throw AppError.notFound('Service request not found');
     return row;
   }
 

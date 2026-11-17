@@ -249,11 +249,7 @@ The options:
 
 **Where:** `DisController.get`, `ServiceRequestService.get`; `ShpController.group`, `GroupShipmentService.describe`; `BreakEvenService.forOwner` (`vlt/break-even.service.ts`); the existing pattern in `WalletRequestService.loadFor` and `EscrowService.loadFor`.
 **Task:** a service request is readable by its requester and by staff, a group by its members and by staff; anyone else gets 404. Break-Even Watch counts only the charges the current owner paid.
-**Test first:** core:
-- in `tests3/integration/sec-authorization.test.ts`, describe 'one customer against another customer': golden reads one of red's service requests, and a group red opened; both answer 200 now and must answer 404;
-- in `tests3/integration/vlt-break-even.test.ts`, describe 'what it counts': after red sells a card to golden, golden's row for it shows only golden's charges; it includes red's intake fee now.
-
-**Done when:** the tests, `pnpm test:core` and `pnpm test:integration` pass (`shp-outbound.test.ts` reads a group as a member and must still work).
+**Done:** the two reads now decide in the service, as `loadFor` does. `DisController.get` passes the signed-in user to `ServiceRequestService.getFor`, which answers 404 unless the viewer is the requester, a `warehouse_operator` or an `admin`; `get` itself stays unguarded for the internal callers that read with a `tx`. `ShpController.group` passes the user to `GroupShipmentService.describeFor`, which answers 404 unless the viewer is staff, the payer, or owns a shipment whose `groupId` is the group, so a member who leaves loses the read; `describe` stays as it was for `join` and `mine`. The tests are in `tests3/integration/sec-authorization.test.ts`, describe 'one customer against another customer': golden gets 404 for red's service request and red's group, red and both staff roles get 200, and golden reads the group once it has joined. The Break-Even Watch bullet is not fixed here, because it goes with the removal of that feature.
 <details><summary>Hints</summary>
 
 1. The controllers have the `AuthUser`; pass it down and decide in the service, as `loadFor` does.
@@ -312,11 +308,7 @@ The options:
 - `describe` and `mine` work whatever has happened to a member's cards since they joined.
 - `cancel` changes only a group that is `forming` or `locked`, and the dead `dispatched` check goes or becomes part of that condition.
 
-**Test first:**
-- integration: in `tests/integration/shp-outbound.test.ts`, beside 'lets two collectors ship to one address without either owning the other cards': golden joins red's group and cancels her shipment, and red's lock must answer 400 'A shared parcel needs at least two people in it.' (it locks now);
-- worker: in `tests/worker/shipment-expiry.test.ts`, an expired shipment that was in a group has `group_id` null afterwards (it keeps it now).
-
-**Done when:** the tests, `pnpm test:integration`, `pnpm test:concurrency` (`group-lock.test.ts` drives lock against cancel) and `pnpm test:worker` pass.
+**Done:** a shipment leaves its group in the same UPDATE that ends it: `ShipmentEditService.cancel` and the source side of `merge` set `groupId` to null, and `expireUnpaidShipments` sets `group_id = NULL` in its own UPDATE. `GroupShipmentService.lock` also counts only shipments that are not `cancelled`, in its first read and again under the lock, which guards any older row or other path that ends a shipment. `describe` reads the members' cards with the new `ParcelProfileService.loadItems`, a plain read with no ownership or state check, and passes them to `measure`, so `GET /shipping/groups` and `GET /shipping/groups/:id` answer after a dispatch or a sale. `cancel` now moves a group to `cancelled` with one UPDATE conditional on `forming` or `locked` and answers 409 otherwise; the dead `dispatched` check is gone. The tests are in `tests/integration/shp-outbound.test.ts`, 'does not lock a shared parcel whose only other member cancelled her shipment' and 'still shows a shared parcel after one member’s card has gone out', which dispatches golden's shipment and reads the group as both members, and in `tests/worker/shipment-expiry.test.ts`, 'takes a released shipment out of its shared parcel'. Rows that were cancelled before this change keep their `group_id`; `lock` ignores them, and `describe` still lists them.
 <details><summary>Hints</summary>
 
 1. Clearing `groupId` in both cancel paths fixes the count at its source; filtering by status in `lock` as well guards any other path that ends a shipment.

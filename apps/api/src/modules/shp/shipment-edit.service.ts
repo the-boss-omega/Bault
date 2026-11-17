@@ -196,6 +196,7 @@ export class ShipmentEditService {
           mergedIntoShipmentId: targetId,
           cancelledAt: now,
           cancelReason: `Merged into ${target.code ?? targetId}`,
+          groupId: null,
           updatedAt: now,
         })
         .where(eq(shipment.id, sourceId));
@@ -334,6 +335,7 @@ export class ShipmentEditService {
           cancelReason: reason.trim(),
           restockingFeeMinor: feeMinor,
           paymentDueAt: null,
+          groupId: null,
           updatedAt: now,
         })
         .where(eq(shipment.id, shipmentId));
