@@ -582,3 +582,26 @@ describe('A11 support tickets as a collector reads them', () => {
     expect(JSON.stringify(staff.body)).toMatch(/hermon/);
   });
 });
+
+describe('A12 saved addresses as a collector reads them', () => {
+  it('leaves out the owner id and the creation time', async () => {
+    const red = await signIn(SEED.collector);
+    const added = await red.post('/me/addresses', {
+      label: 'Views',
+      recipient: 'Red Ashwood',
+      line1: '3 Vine St',
+      city: 'Trenton',
+      region: 'NJ',
+      country: 'US',
+      postalCode: '08608',
+    });
+    expect(added.status).toBe(201);
+    expectWithout(added.body, ['userId', 'createdAt']);
+    const edited = await red.patch(`/me/addresses/${added.body.id}`, { city: 'Princeton' });
+    expectWithout(edited.body, ['userId', 'createdAt']);
+    const list = await red.get('/me/addresses');
+    expectWithout(list.body, ['userId', 'createdAt']);
+    expectWith(list.body, ['id', 'label', 'recipient', 'line1', 'city', 'region', 'country', 'postalCode', 'isDefault']);
+    expect((await red.del(`/me/addresses/${added.body.id}`)).status).toBeLessThan(300);
+  });
+});
