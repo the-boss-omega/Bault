@@ -181,8 +181,6 @@ export function ShippingServicesPage() {
         <TabPanel tab="shipping">
           <ShipmentComposer
             items={items}
-            onError={setError}
-            onStatus={setStatus}
             onCreated={() => {
               setShipmentsVersion((v) => v + 1);
               void reload();
