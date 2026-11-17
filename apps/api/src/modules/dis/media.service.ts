@@ -3,9 +3,8 @@ import { desc, eq } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
-import { ErrorCode } from '../../shared/errors/error-codes';
 import { CustodyService } from '../cst/custody.service';
-import { item, itemImage } from '../cst/cst.schema';
+import { itemImage } from '../cst/cst.schema';
 import { ServiceRequestService } from './service.service';
 import { INSPECTION_AREAS, isKnownArea, type InspectionArea } from './grading-tiers';
 
@@ -45,13 +44,8 @@ export class MediaService {
     private readonly requests: ServiceRequestService,
   ) {}
 
-  private async assertOwnedAndPresent(tx: Database, ownerId: string, itemId: string) {
-    const [it] = await tx.select().from(item).where(eq(item.id, itemId)).limit(1);
-    if (!it || it.ownerId !== ownerId) throw AppError.forbidden('Not your item');
-    if (it.lifecycleState !== 'stored' && it.lifecycleState !== 'listed') {
-      throw new AppError(ErrorCode.CONFLICT, `Item must be on the shelf (it is ${it.lifecycleState})`, 409);
-    }
-    return it;
+  private assertOwnedAndPresent(tx: Database, ownerId: string, itemId: string) {
+    return this.custody.lockExpecting(tx, itemId, { ownerId, fromStates: ['stored', 'listed'], allowHold: true });
   }
 
   async requestVideo(ownerId: string, itemId: string) {

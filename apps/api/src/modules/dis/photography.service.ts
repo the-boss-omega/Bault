@@ -4,7 +4,7 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { CustodyService } from '../cst/custody.service';
-import { item, itemImage } from '../cst/cst.schema';
+import { itemImage } from '../cst/cst.schema';
 import { ServiceRequestService } from './service.service';
 
 export interface PhotographyFulfillment {
@@ -33,8 +33,7 @@ export class PhotographyService {
 
   async request(ownerId: string, itemId: string) {
     return this.custody.run(async (tx) => {
-      const [it] = await tx.select().from(item).where(eq(item.id, itemId)).limit(1);
-      if (!it || it.ownerId !== ownerId) throw AppError.forbidden('Not your item');
+      await this.custody.lockExpecting(tx, itemId, { ownerId, fromStates: ['stored', 'listed'], allowHold: true });
       return this.requests.create(tx, { type: 'professional_photography', requesterId: ownerId, itemId });
     });
   }
