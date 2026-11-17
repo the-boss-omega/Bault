@@ -58,6 +58,47 @@ export interface WalletRequestFilters {
   to?: string;
 }
 
+const STAFF_ROLES = new Set(['admin', 'warehouse_operator']);
+
+const PAYOUT_FAILED_FOR_COLLECTOR = 'The payout could not be sent, and the money is back in your wallet.';
+
+export function collectorWalletRequestView(row: typeof walletRequest.$inferSelect) {
+  return {
+    id: row.id,
+    code: row.code,
+    type: row.type,
+    status: row.status,
+    amount: row.amount,
+    currency: row.currency,
+    fundingSource: row.fundingSource,
+    destinationAccount: row.destinationAccount,
+    beneficiaryName: row.beneficiaryName,
+    reference: row.reference,
+    notes: row.notes,
+    rejectionReason: row.rejectionReason,
+    completedAt: row.completedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function collectorHistoryReason(event: typeof walletRequestEvent.$inferSelect): string | null {
+  if (event.toStatus === 'rejected') return event.reason;
+  if (event.toStatus === 'cancelled' && event.actorRole === 'user') return event.reason;
+  if (event.toStatus === 'payout_failed') return PAYOUT_FAILED_FOR_COLLECTOR;
+  return null;
+}
+
+function collectorHistoryView(event: typeof walletRequestEvent.$inferSelect) {
+  return {
+    fromStatus: event.fromStatus,
+    toStatus: event.toStatus,
+    occurredAt: event.occurredAt,
+    byStaff: STAFF_ROLES.has(event.actorRole ?? ''),
+    reason: collectorHistoryReason(event),
+  };
+}
+
 @Injectable()
 export class WalletRequestService {
   private readonly logger = new Logger(WalletRequestService.name);
@@ -190,12 +231,28 @@ export class WalletRequestService {
     return fullName(u.firstName, u.lastName) || u.legacyDisplayName?.trim() || null;
   }
 
-  listMine(userId: string) {
-    return this.db
+  async listMine(userId: string) {
+    const rows = await this.db
       .select()
       .from(walletRequest)
       .where(eq(walletRequest.userId, userId))
       .orderBy(desc(walletRequest.createdAt));
+    return rows.map(collectorWalletRequestView);
+  }
+
+  async collectorDetail(requestId: string, userId: string) {
+    const [request] = await this.db
+      .select()
+      .from(walletRequest)
+      .where(and(eq(walletRequest.id, requestId), eq(walletRequest.userId, userId)))
+      .limit(1);
+    if (!request) throw AppError.notFound('Wallet request not found');
+    const history = await this.db
+      .select()
+      .from(walletRequestEvent)
+      .where(eq(walletRequestEvent.requestId, requestId))
+      .orderBy(walletRequestEvent.occurredAt);
+    return { ...collectorWalletRequestView(request), history: history.map(collectorHistoryView) };
   }
 
   async listForReview(actor: RequestActor, filters: WalletRequestFilters = {}) {

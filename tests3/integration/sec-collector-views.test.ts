@@ -188,3 +188,81 @@ describe('A3 service requests as a collector reads them', () => {
     expect(staffRow.typeFields.quotedBy).toBeTruthy();
   });
 });
+
+const WALLET_REQUEST_DROPPED = [
+  'userId',
+  'documentKey',
+  'payoutPaymentId',
+  'payoutReference',
+  'reviewedBy',
+  'reviewedAt',
+  'settledLedgerId',
+  'payout',
+  'username',
+  'email',
+  'customerName',
+  'actorId',
+  'actorRole',
+  'metadata',
+  'requestId',
+] as const;
+
+describe('A4 wallet requests as a collector reads them', () => {
+  it('lists and details requests without reviewer, payout or staff-note internals', async () => {
+    const golden = await signIn(SEED.collector2);
+    const admin = await signIn(SEED.admin);
+    const created = await golden.post('/finance/wallet-requests', {
+      type: 'cash_in',
+      amountMinor: 25_00,
+      currency: 'USD',
+      fundingSource: 'bank_transfer',
+      reference: `views-${Date.now()}`,
+    });
+    expect(created.status).toBe(201);
+    expectWithout(created.body, WALLET_REQUEST_DROPPED);
+    const id = created.body.id as string;
+
+    expect((await admin.post(`/admin/wallet-requests/${id}/review`, {})).status).toBe(201);
+    expect((await admin.post(`/admin/wallet-requests/${id}/approve`, { note: 'Matched on the bank statement, row 14' })).status).toBe(201);
+    expect((await admin.post(`/admin/wallet-requests/${id}/complete`, {})).status).toBe(201);
+
+    const list = await golden.get('/finance/wallet-requests');
+    expect(list.status).toBe(200);
+    expectWithout(list.body, WALLET_REQUEST_DROPPED);
+    expectWith(list.body, ['id', 'code', 'type', 'status', 'amount', 'reference', 'createdAt', 'updatedAt']);
+
+    const detail = await golden.get(`/finance/wallet-requests/${id}`);
+    expect(detail.status).toBe(200);
+    expectWithout(detail.body, WALLET_REQUEST_DROPPED);
+    const history = detail.body.history as { toStatus: string; byStaff: boolean; reason: string | null }[];
+    expect(history.map((e) => e.toStatus)).toEqual(['submitted', 'pending_review', 'approved', 'completed']);
+    expect(history.map((e) => e.byStaff)).toEqual([false, true, true, true]);
+    expect(history.every((e) => e.reason === null)).toBe(true);
+    expect(JSON.stringify(detail.body)).not.toMatch(/bank statement/);
+
+    const staff = await admin.get(`/admin/wallet-requests/${id}`);
+    expect(staff.status).toBe(200);
+    expectWith(staff.body, ['userId', 'username', 'email', 'reviewedBy', 'settledLedgerId', 'actorId', 'metadata']);
+    expect(JSON.stringify(staff.body)).toMatch(/bank statement/);
+  });
+
+  it('keeps the rejection reason and the collector’s own cancel reason', async () => {
+    const golden = await signIn(SEED.collector2);
+    const admin = await signIn(SEED.admin);
+    const rejected = await golden.post('/finance/wallet-requests', {
+      type: 'cash_in',
+      amountMinor: 26_00,
+      currency: 'USD',
+      fundingSource: 'bank_transfer',
+      reference: `views-r-${Date.now()}`,
+    });
+    await admin.post(`/admin/wallet-requests/${rejected.body.id}/reject`, { reason: 'The transfer never arrived.' });
+    const read = await golden.get(`/finance/wallet-requests/${rejected.body.id}`);
+    const last = (read.body.history as { toStatus: string; reason: string | null }[]).at(-1)!;
+    expect(last).toMatchObject({ toStatus: 'rejected', reason: 'The transfer never arrived.' });
+    expect(read.body.rejectionReason).toBe('The transfer never arrived.');
+
+    const other = await signIn(SEED.collector);
+    expect((await other.get(`/finance/wallet-requests/${rejected.body.id}`)).status).toBe(404);
+  });
+});
