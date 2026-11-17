@@ -63,9 +63,7 @@ afterAll(async () => {
   await browser?.close();
 });
 
-type Locale = 'en' | 'he';
-
-async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light'): Promise<Page> {
+async function inBrowser(width: number, theme: 'dark' | 'light'): Promise<Page> {
   const html = document.body.innerHTML;
   const context = await browser!.newContext({
     viewport: { width, height: 1000 },
@@ -75,7 +73,7 @@ async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light')
   });
   const page = await context.newPage();
   await page.setContent(
-    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
+    `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
   );
   return page;
 }
@@ -161,7 +159,6 @@ beforeEach(() => {
   post.mockReset();
   patch.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
   current = FACILITIES();
   get.mockImplementation(async (path: string) => {
     if (path === '/admin/facilities') return current;
@@ -242,7 +239,7 @@ describe('a facility, opened', () => {
     expect(drawer()).toHaveAccessibleName('Bault Oregon');
     expect(window.location.hash).toBe('#/admin/facilities?facility=f-or');
     expect(preview().textContent).toBe(
-      'Bault C/O username\n12 Pier Road\nDock 3\nPortland, OR 97201\nUS',
+      'Card Embassy C/O username\n12 Pier Road\nDock 3\nPortland, OR 97201\nUS',
     );
     expect(preview()).toHaveAttribute('dir', 'ltr');
     expect(lineOf('Role')).toHaveTextContent('Primary');
@@ -274,7 +271,7 @@ describe('a facility, opened', () => {
     expect(within(drawer()).getByText(/still the install’s stand-in address/)).toBeInTheDocument();
     expect(within(drawer()).getByRole('textbox', { name: 'Street and number' })).toHaveValue('');
     expect(within(drawer()).getByRole('textbox', { name: 'Postal code' })).toHaveValue('');
-    expect(preview().textContent).toBe('Bault C/O username\nNewark, NJ\nUS');
+    expect(preview().textContent).toBe('Card Embassy C/O username\nNewark, NJ\nUS');
     expect(within(drawer()).getByRole('button', { name: 'Save' })).toBeDisabled();
 
     await user.type(
@@ -284,7 +281,7 @@ describe('a facility, opened', () => {
     expect(within(drawer()).getByRole('button', { name: 'Save' })).toBeDisabled();
     await user.type(within(drawer()).getByRole('textbox', { name: 'Postal code' }), '07102');
 
-    expect(preview().textContent).toBe('Bault C/O username\n77 Real Street\nNewark, NJ 07102\nUS');
+    expect(preview().textContent).toBe('Card Embassy C/O username\n77 Real Street\nNewark, NJ 07102\nUS');
     expect(within(drawer()).getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
@@ -422,7 +419,7 @@ describe('a new facility', () => {
   it('begins blank, in the country the product is run from, and cannot be added yet', async () => {
     await open();
     expect(window.location.hash).toBe('#/admin/facilities?facility=new');
-    expect(preview().textContent).toBe('Bault C/O username\nUS');
+    expect(preview().textContent).toBe('Card Embassy C/O username\nUS');
     expect(field('Code')).toHaveValue('');
     expect(within(drawer()).getByRole('combobox', { name: 'Country' })).toHaveValue('US');
     expect(within(drawer()).getByRole('combobox', { name: 'Role' })).toHaveValue('primary');
@@ -448,7 +445,7 @@ describe('a new facility', () => {
     expect(field('Code')).toHaveValue('NJ2');
     expect(drawer().querySelector('.drawer-tag-title')).toHaveTextContent('Bault Newark Annex');
     expect(preview().textContent).toBe(
-      'Bault C/O username\n500 Harbor Way\nDock 4\nElizabeth, NJ 07201\nUS',
+      'Card Embassy C/O username\n500 Harbor Way\nDock 4\nElizabeth, NJ 07201\nUS',
     );
     expect(lineOf('Sales tax (%)')).toHaveTextContent('6.63%');
     expect(within(drawer()).getByRole('button', { name: 'Add' })).toBeEnabled();
@@ -567,7 +564,7 @@ describe('a new facility', () => {
     await user.type(field('City'), 'London');
     await user.type(field('Postal code'), 'EC1A 1BB');
     expect(within(drawer()).getByRole('button', { name: 'Add' })).toBeEnabled();
-    expect(preview().textContent).toBe('Bault C/O username\n1 Queen St\nLondon, EC1A 1BB\nGB');
+    expect(preview().textContent).toBe('Card Embassy C/O username\n1 Queen St\nLondon, EC1A 1BB\nGB');
   });
 
   it('keeps what was written where the server refused it', async () => {
@@ -592,49 +589,30 @@ describe('a new facility', () => {
   });
 });
 
-describe('the facilities, in Hebrew', () => {
-  it('are read in Hebrew, with the names and addresses in islands of their own', async () => {
-    localStorage.setItem('bault.locale', 'he');
-    const user = userEvent.setup();
-    console_();
-    await screen.findByRole('heading', { name: 'מתקנים (3)' });
-    expect(screen.getByRole('button', { name: 'הוספת מתקן' })).toBeInTheDocument();
-    expect(rows()[1]).toHaveTextContent('מעביר אל NJ · 4 ימי עסקים');
-
-    await user.click(screen.getByRole('button', { name: 'Bault Oregon' }));
-    expect(drawer().querySelector('.drawer-tag-title bdi')).toHaveAttribute('dir', 'auto');
-    expect(drawer().querySelector('.address-block')).toHaveAttribute('dir', 'ltr');
-    expect(within(drawer()).getByRole('button', { name: 'החזרה לשימוש' })).toBeInTheDocument();
-  });
-});
-
 describe.skipIf(!browser)('the facilities, in a browser', () => {
   for (const theme of ['dark', 'light'] as const) {
-    for (const locale of ['en', 'he'] as const) {
-      it(`are read, reached and drawn without a flag: ${theme}, ${locale}, the roll and a drawer, desktop and phone`, async () => {
-        localStorage.setItem('bault.locale', locale);
-        const user = userEvent.setup();
-        console_();
-        await screen.findByRole('button', { name: 'Bault New Jersey' });
+    it(`are read, reached and drawn without a flag: ${theme}, the roll and a drawer, desktop and phone`, async () => {
+      const user = userEvent.setup();
+      console_();
+      await screen.findByRole('button', { name: 'Bault New Jersey' });
 
-        for (const width of [1280, 390]) {
-          const page = await inBrowser(width, locale, theme);
-          expect(await audit.auditButtons(page)).toEqual([]);
-          const flags = await audit.audit(page);
-          expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
-          await page.context().close();
-        }
+      for (const width of [1280, 390]) {
+        const page = await inBrowser(width, theme);
+        expect(await audit.auditButtons(page)).toEqual([]);
+        const flags = await audit.audit(page);
+        expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
+        await page.context().close();
+      }
 
-        await user.click(screen.getByRole('button', { name: 'Bault Delaware' }));
-        await screen.findByRole('dialog');
-        for (const width of [1280, 390]) {
-          const page = await inBrowser(width, locale, theme);
-          expect(await audit.auditButtons(page)).toEqual([]);
-          const flags = await audit.audit(page);
-          expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
-          await page.context().close();
-        }
-      });
-    }
+      await user.click(screen.getByRole('button', { name: 'Bault Delaware' }));
+      await screen.findByRole('dialog');
+      for (const width of [1280, 390]) {
+        const page = await inBrowser(width, theme);
+        expect(await audit.auditButtons(page)).toEqual([]);
+        const flags = await audit.audit(page);
+        expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
+        await page.context().close();
+      }
+    });
   }
 });

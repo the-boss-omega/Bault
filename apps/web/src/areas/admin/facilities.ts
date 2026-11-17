@@ -166,7 +166,7 @@ export function previewLines(draft: FacilityDraft): string[] {
     .filter(Boolean)
     .join(', ');
   return [
-    'Bault C/O username',
+    'Card Embassy C/O username',
     draft.line1.trim(),
     draft.line2.trim(),
     place,

@@ -179,14 +179,7 @@ afterAll(async () => {
   await browser?.close();
 });
 
-type Locale = 'en' | 'he';
-
-async function inBrowser(
-  width: number,
-  locale: Locale,
-  theme: 'dark' | 'light',
-  touch = false,
-): Promise<Page> {
+async function inBrowser(width: number, theme: 'dark' | 'light', touch = false): Promise<Page> {
   const html = document.body.innerHTML;
   const context = await browser!.newContext({
     viewport: { width, height: 1000 },
@@ -196,7 +189,7 @@ async function inBrowser(
   });
   const page = await context.newPage();
   await page.setContent(
-    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
+    `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
   );
   return page;
 }
@@ -223,7 +216,6 @@ beforeEach(() => {
   post.mockReset();
   get.mockImplementation((path: string) => answer(path));
   openRequests = [];
-  localStorage.setItem('bault.locale', 'en');
   window.location.hash = '';
 });
 
@@ -235,12 +227,13 @@ describe('the menu of what can be asked for', () => {
       'Send the item to a third-party grader and receive a certificate.',
     );
     expect(grading).toHaveClass('btn--row');
-    // Where there is a price it is the row's own: the generic service fee, and the inspection's.
+    // Where there is a price it is the row's own: the generic service fee, and the inspection's. The price list is a
+    // fetch of its own, so the rows can be drawn before it answers: wait for it.
     expect(
-      within(screen.getByRole('button', { name: 'Professional photography' })).getByText('$20.00'),
+      await within(screen.getByRole('button', { name: 'Professional photography' })).findByText('$20.00'),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByRole('button', { name: 'Condition inspection' })).getByText('$15.00'),
+      await within(screen.getByRole('button', { name: 'Condition inspection' })).findByText('$15.00'),
     ).toBeInTheDocument();
     // What cannot be taken back is said in the row's colour first.
     expect(screen.getByRole('button', { name: 'Donation' })).toHaveClass('btn--danger');
@@ -454,47 +447,38 @@ describe('a request for something else, as a slip', () => {
 
 describe.skipIf(!browser)('the menu and the slips, in a browser', () => {
   for (const theme of ['dark', 'light'] as const) {
-    for (const locale of ['en', 'he'] as const) {
-      it(`every row of the menu is read, edged and a finger's width tall: ${theme}, ${locale}`, async () => {
-        localStorage.setItem('bault.locale', locale);
-        await openDrawer();
-        const page = await inBrowser(390, locale, theme, true);
-        expect(await audit.auditButtons(page)).toEqual([]);
-        const heights = await page.$$eval('.service-menu .btn--row', (rows) =>
-          rows.map((row) => Math.round(row.getBoundingClientRect().height)),
-        );
-        expect(heights.length).toBeGreaterThan(5);
-        for (const h of heights) expect(h).toBeGreaterThanOrEqual(44);
-        const flags = await audit.audit(page);
-        expect(flags.filter((f) => /color-contrast/.test(f))).toEqual([]);
-        await page.context().close();
-      });
-    }
-  }
-
-  for (const locale of ['en', 'he'] as const) {
-    it(`starts its words where the page starts, and the way on turns with the page: ${locale}`, async () => {
-      localStorage.setItem('bault.locale', locale);
+    it(`every row of the menu is read, edged and a finger's width tall: ${theme}`, async () => {
       await openDrawer();
-      const page = await inBrowser(1100, locale, 'dark');
-      const read = await page.$eval('[data-action="grading"]', (row) => {
-        const rtl = document.documentElement.dir === 'rtl';
-        const name = row.querySelector('.btn-row-name')!.getBoundingClientRect();
-        const box = row.getBoundingClientRect();
-        return {
-          // How far the name is from the edge the page starts at, and from the one it ends at.
-          fromStart: rtl ? box.right - name.right : name.left - box.left,
-          fromEnd: rtl ? name.left - box.left : box.right - name.right,
-          chevron: getComputedStyle(row.querySelector('.btn-row-end svg')!).transform,
-        };
-      });
-      expect(read.fromStart).toBeLessThan(read.fromEnd);
-      expect(read.chevron).toBe(
-        locale === 'he' ? 'matrix(-1, 0, 0, 1, 0, 0)' : 'matrix(1, 0, 0, 1, 0, 0)',
+      const page = await inBrowser(390, theme, true);
+      expect(await audit.auditButtons(page)).toEqual([]);
+      const heights = await page.$$eval('.service-menu .btn--row', (rows) =>
+        rows.map((row) => Math.round(row.getBoundingClientRect().height)),
       );
+      expect(heights.length).toBeGreaterThan(5);
+      for (const h of heights) expect(h).toBeGreaterThanOrEqual(44);
+      const flags = await audit.audit(page);
+      expect(flags.filter((f) => /color-contrast/.test(f))).toEqual([]);
       await page.context().close();
     });
   }
+
+  it('starts its words where the page starts, and the way on points along the line', async () => {
+    await openDrawer();
+    const page = await inBrowser(1100, 'dark');
+    const read = await page.$eval('[data-action="grading"]', (row) => {
+      const name = row.querySelector('.btn-row-name')!.getBoundingClientRect();
+      const box = row.getBoundingClientRect();
+      return {
+        // How far the name is from the edge the page starts at, and from the one it ends at.
+        fromStart: name.left - box.left,
+        fromEnd: box.right - name.right,
+        chevron: getComputedStyle(row.querySelector('.btn-row-end svg')!).transform,
+      };
+    });
+    expect(read.fromStart).toBeLessThan(read.fromEnd);
+    expect(read.chevron).toBe('none');
+    await page.context().close();
+  });
 
   it('puts a slip over its fields at the width of the drawer’s column, on a wide window and on a phone', async () => {
     const user = userEvent.setup();
@@ -502,7 +486,7 @@ describe.skipIf(!browser)('the menu and the slips, in a browser', () => {
     await user.click(await screen.findByRole('button', { name: 'Third-party grading' }));
     await screen.findByRole('option', { name: 'PSA Value' });
     for (const width of [1100, 390]) {
-      const page = await inBrowser(width, 'en', 'dark', width < 800);
+      const page = await inBrowser(width, 'dark', width < 800);
       const box = await page.evaluate(() => {
         const rect = (selector: string) =>
           document.querySelector(selector)!.getBoundingClientRect();
@@ -528,7 +512,7 @@ describe.skipIf(!browser)('the menu and the slips, in a browser', () => {
     await openDrawer();
     await user.click(await screen.findByRole('button', { name: 'Condition inspection' }));
     await screen.findByRole('checkbox', { name: 'Corners' });
-    const page = await inBrowser(1100, 'en', 'dark');
+    const page = await inBrowser(1100, 'dark');
     // The page is the markup as it was first drawn (every area asked for); a click in it toggles a tile as it would.
     await page.getByRole('checkbox', { name: 'Edges' }).click();
     // The pointer is on the tile it clicked, which lights it as a tile under a pointer is; it is moved off, and the

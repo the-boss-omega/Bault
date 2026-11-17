@@ -11,7 +11,7 @@ vi.mock('../../apps/web/src/shared/api', () => ({
   ApiError: class ApiError extends Error {},
 }));
 
-const { I18nProvider, useI18n } = await import('../../apps/web/src/shared/i18n');
+const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 const { VerifyEmailPage } = await import('../../apps/web/src/areas/customer/auth/VerifyEmailPage');
 const { ErrorBoundary } = await import('../../apps/web/src/shared/ui/ErrorBoundary');
 const { TwoFactorPanel } = await import('../../apps/web/src/areas/customer/profile/TwoFactorPanel');
@@ -138,23 +138,9 @@ describe('a browser that blocks site storage', () => {
     write.mockRestore();
   });
 
-  it('still renders the app, in the default language', () => {
+  it('still renders the app', () => {
     renderIn(<p>the app is here</p>);
 
     expect(screen.getByText('the app is here')).toBeInTheDocument();
-    expect(document.documentElement).toHaveAttribute('lang', 'he');
-    expect(document.documentElement).toHaveAttribute('dir', 'rtl');
-  });
-
-  it('switches language for the rest of the visit', async () => {
-    function Switch() {
-      const { toggleLocale } = useI18n();
-      return <button onClick={toggleLocale}>switch</button>;
-    }
-    renderIn(<Switch />);
-
-    await userEvent.click(screen.getByRole('button', { name: 'switch' }));
-    expect(document.documentElement).toHaveAttribute('lang', 'en');
-    expect(document.documentElement).toHaveAttribute('dir', 'ltr');
   });
 });

@@ -40,7 +40,6 @@ const RUNS = [
 beforeEach(() => {
   get.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
 });
 
 async function storage(runs: unknown[]) {

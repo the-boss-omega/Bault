@@ -315,7 +315,7 @@ export class AccountingService {
         'Single-entry wallet ledger: revenue is the net of fee, service_charge and interest rows, ' +
         'less the shipping and service refunds written that month, each off the line its charge was counted on, ' +
         'and less the cash-out fees given back when a payout was refused or returned. ' +
-        'PayPal\'s fees on cash-ins credited that month are Bault\'s cost: the collector is credited what they paid, ' +
+        'PayPal\'s fees on cash-ins credited that month are Card Embassy\'s cost: the collector is credited what they paid, ' +
         'and the fees are shown beside revenue, not taken off it. ' +
         'No tax has been applied or separated; which lines are taxable is for the accountant.',
     };

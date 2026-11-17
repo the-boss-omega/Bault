@@ -45,16 +45,12 @@ beforeEach(() => {
   get.mockImplementation((path: string) =>
     path === '/content/account-terms' ? Promise.resolve(TERMS) : Promise.resolve([]),
   );
-  try {
-    localStorage.setItem('bault.locale', 'en');
-  } catch {
-  }
 });
 
 describe('FAQ & Legal', () => {
-  it('shows Bault’s own FAQ, with no other company in it', async () => {
+  it('shows Card Embassy’s own FAQ, with no other company in it', async () => {
     renderAt('#/faq/faq');
-    expect(await screen.findByText('What is Bault?')).toBeInTheDocument();
+    expect(await screen.findByText('What is Card Embassy?')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/ship\s*my\s*cards/i);
     expect(screen.getByText(/answers, last checked against the product/i)).toBeInTheDocument();
   });
@@ -65,8 +61,7 @@ describe('FAQ & Legal', () => {
     const banner = within(panel).getByRole('note');
     expect(banner).toHaveTextContent('DRAFT — must be reviewed by a lawyer before launch');
     expect(banner).toHaveTextContent(TERMS_VERSION);
-    // The version is set in an island of its own (invisible where the line reads the same way as it does).
-    expect(within(panel).getByText(new RegExp(`Version \u2066?${TERMS_VERSION}\u2069?`))).toBeInTheDocument();
+    expect(within(panel).getByText(new RegExp(`Version ${TERMS_VERSION}`))).toBeInTheDocument();
   });
 
   it('shows the figures the documents point at, from the API', async () => {
@@ -77,25 +72,9 @@ describe('FAQ & Legal', () => {
     expect(get).toHaveBeenCalledWith('/content/account-terms');
   });
 
-  it('sets the version of the terms in an island of its own, so its numbers and its word keep their order in Hebrew', async () => {
-    localStorage.setItem('bault.locale', 'he');
-    renderAt('#/faq/legal');
-    await screen.findByText('-$20.00');
-    // In a right-to-left line "2026-10-draft-1" is drawn "draft-1-2026-10": the figures list and the line under the title.
-    const versions = [...document.querySelectorAll('dd, p.hint')]
-      .map((el) => el.textContent ?? '')
-      .filter((text) => text.includes(TERMS_VERSION));
-    expect(versions.length).toBeGreaterThanOrEqual(2);
-    for (const text of versions) expect(text).toContain(`\u2066${TERMS_VERSION}\u2069`);
-  });
-
-  it('draws the suspension threshold as an amount of its own, so its minus stays in front of it in Hebrew', async () => {
-    localStorage.setItem('bault.locale', 'he');
+  it('draws the suspension threshold as an amount, as every amount is drawn', async () => {
     renderAt('#/faq/legal');
     const threshold = await screen.findByText('-$20.00');
-
-    // Left to right and isolated: a bare "-$20.00" in a right-to-left cell is drawn "$20.00-".
     expect(threshold).toHaveClass('amount');
-    expect(threshold).toHaveAttribute('dir', 'ltr');
   });
 });

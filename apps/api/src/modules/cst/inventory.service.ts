@@ -108,7 +108,7 @@ export class InventoryService {
   async reportPdf(cut: Cut): Promise<Buffer> {
     const report = await this.report(cut);
     return renderReportPdf({
-      title: 'Bault — Inventory Report',
+      title: 'Card Embassy — Inventory Report',
       subtitle: `${report.label} · generated ${report.generatedAt.slice(0, 19).replace('T', ' ')} UTC`,
       columns: [report.label, 'Items'],
       rows: report.rows.map((r) => ({ label: r.label, count: r.count })),

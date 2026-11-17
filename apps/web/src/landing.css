@@ -131,16 +131,6 @@
   line-height: 1.6;
 }
 
-:lang(he) .lp-h2,
-:lang(he) .lp-headline,
-:lang(he) .lp-close-title {
-  letter-spacing: 0;
-}
-
-:lang(he) .lp-h2 {
-  line-height: 1.1;
-}
-
 /* ---- Hero ---- */
 
 .lp-hero {
@@ -169,13 +159,6 @@
   letter-spacing: -0.03em;
   text-wrap: balance;
   color: var(--foreground);
-}
-
-:lang(he) .lp-headline {
-  max-width: 14ch;
-  font-size: clamp(46px, 6.4vw, 100px);
-  font-weight: 700;
-  line-height: 1.04;
 }
 
 .lp-lede {
@@ -219,7 +202,6 @@
   inset-inline: 2%;
   inset-block-end: 17.5%;
   height: 1px;
-  /* design-lint-allow: a symmetric sheen: the same mirrored */
   background: linear-gradient(90deg, transparent, oklch(1 0 0 / 38%) 20%, oklch(1 0 0 / 38%) 80%, transparent);
 }
 
@@ -388,11 +370,6 @@
   color: var(--foreground);
 }
 
-:lang(he) .lp-truth h3 {
-  letter-spacing: 0;
-  line-height: 1.12;
-}
-
 .lp-truth p {
   max-width: 46ch;
   margin: 0;
@@ -454,7 +431,6 @@
   inset-inline: 24px;
   inset-block-end: 24px;
   height: 30%;
-  /* design-lint-allow: a barcode is read the same way whichever way the page is */
   background: repeating-linear-gradient(
     90deg,
     var(--paper-ink) 0 2px,
@@ -600,7 +576,7 @@
 }
 
 .lp-rates .data-table tbody tr:hover {
-  background: linear-gradient(calc(90deg * var(--dir)), color-mix(in oklab, var(--foreground) 4%, transparent), transparent);
+  background: linear-gradient(90deg, color-mix(in oklab, var(--foreground) 4%, transparent), transparent);
 }
 
 .landing-price-what {
@@ -741,7 +717,6 @@
   inset-inline: 10%;
   inset-block-end: 17%;
   height: 1px;
-  /* design-lint-allow: a symmetric sheen: the same mirrored */
   background: linear-gradient(90deg, transparent, oklch(1 0 0 / 45%) 20%, oklch(1 0 0 / 45%) 80%, transparent);
   transform: scaleX(0);
   transition: transform 1000ms var(--ease-out-expo);
@@ -911,11 +886,6 @@
   text-wrap: balance;
 }
 
-:lang(he) .lp-steps .step-name {
-  letter-spacing: 0;
-  line-height: 1.14;
-}
-
 .lp-steps .step-detail {
   max-width: 44ch;
   margin: 0;
@@ -950,12 +920,6 @@
   letter-spacing: -0.035em;
   text-wrap: balance;
   color: var(--foreground);
-}
-
-:lang(he) .lp-close-title {
-  max-width: 9ch;
-  font-size: clamp(54px, 11vw, 170px);
-  line-height: 1;
 }
 
 .lp-fan--close {
@@ -1240,11 +1204,6 @@
   font: 400 12.5px/1.6 var(--font-mono);
 }
 
-:lang(he) .lp-colophon-note {
-  font-family: var(--font-ui);
-  font-size: 13.5px;
-}
-
 
 /* ---- Three ways out: boarding passes ----
    Three tickets, each torn along a perforation into a main part and a stub
@@ -1311,10 +1270,6 @@
   font: 500 clamp(28px, 3vw, 40px) / 1.05 var(--font-display);
   letter-spacing: -0.02em;
   color: var(--foreground);
-}
-
-:lang(he) .lp-ticket-main h3 {
-  letter-spacing: 0;
 }
 
 .lp-ticket-main p {
@@ -1436,7 +1391,6 @@
   .lp-stub-bars {
     min-block-size: 0;
     block-size: 24px;
-    /* design-lint-allow: a barcode is read the same way whichever way the page is */
     background: repeating-linear-gradient(
       90deg,
       var(--muted-foreground) 0 2px,
@@ -1471,10 +1425,8 @@
   box-shadow: 0 22px 40px -22px var(--paper-shadow), inset 0 0 0 1px oklch(0 0 0 / 6%);
   transform: rotate(1.6deg);
   transition: transform 700ms var(--ease-out-expo);
-  /* design-lint-allow: a symmetric zigzag edge: the same mirrored */
   -webkit-mask: linear-gradient(#000 0 0) top / 100% calc(100% - 7px) no-repeat,
     conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 14px 7px repeat-x;
-  /* design-lint-allow: a symmetric zigzag edge: the same mirrored */
   mask: linear-gradient(#000 0 0) top / 100% calc(100% - 7px) no-repeat,
     conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 14px 7px repeat-x;
 }
@@ -1559,16 +1511,6 @@
   box-shadow: inset 0 0 0 3px var(--paper-bright), inset 0 0 0 4px var(--paper-ink);
 }
 
-/* ---- Hebrew sets heavier and wider ---- */
-
-:lang(he) .lp-h2,
-:lang(he) .lp-truth h3,
-:lang(he) .lp-ticket-main h3,
-:lang(he) .lp-steps .step-name,
-:lang(he) .lp-close-title {
-  font-weight: 700;
-}
-
 /* ---- The record section ends when its last clause does ---- */
 
 .lp-truth:last-child {
@@ -1613,7 +1555,7 @@
   height: 1px;
   background: var(--foil);
   transform: scaleX(0);
-  transform-origin: calc(50% - 50% * var(--dir)) 50%;
+  transform-origin: 0 50%;
   transition: transform 450ms var(--ease-out-expo);
 }
 
@@ -1637,9 +1579,7 @@
   inset-inline: 0;
   z-index: 70;
   height: 2px;
-  /* A width, not a scale: a scale needs an origin, and an origin has no logical
-     keyword, so it would need a branch for right-to-left. It is one fixed 2px
-     element, repainted at most once a frame. */
+  /* A width: one fixed 2px element, repainted at most once a frame. */
   inline-size: calc(var(--sp, 0) * 100%);
   background: var(--foil);
   pointer-events: none;

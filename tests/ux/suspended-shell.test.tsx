@@ -59,7 +59,6 @@ const bell = () => document.querySelector('.ph-controls button[aria-haspopup="di
 beforeEach(() => {
   get.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
   window.location.hash = '#/support';
 });
 
@@ -75,8 +74,8 @@ describe('the shell of an account that is suspended', () => {
     await screen.findByText(/account suspended/i);
     expect(get.mock.calls.map((call) => call[0])).not.toContain('/notifications');
     expect(bell()).toBeNull();
-    // The theme and the language are still there, as the pair they are.
-    expect(document.querySelectorAll('.ph-controls > *')).toHaveLength(2);
+    // The theme is still there, alone in its group.
+    expect(document.querySelectorAll('.ph-controls > *')).toHaveLength(1);
   });
 
   it('keeps the bell for an account that is not', async () => {
@@ -86,7 +85,8 @@ describe('the shell of an account that is suspended', () => {
     window.location.hash = '#/vault';
     shell();
     await waitFor(() => expect(bell()).not.toBeNull());
-    expect(document.querySelectorAll('.ph-controls > *')).toHaveLength(3);
-    expect(get.mock.calls.map((call) => call[0])).toContain('/notifications');
+    expect(document.querySelectorAll('.ph-controls > *')).toHaveLength(2);
+    // The bell asks for its count in an effect after it is drawn, so the request can come a moment later.
+    await waitFor(() => expect(get.mock.calls.map((call) => call[0])).toContain('/notifications'));
   });
 });

@@ -66,12 +66,6 @@
   color: var(--paper-ink-3);
 }
 
-:lang(he) .statement-head {
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 .statement-label {
   margin: clamp(24px, 3vw, 36px) 0 0;
   color: var(--paper-ink-2);
@@ -117,12 +111,6 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--paper-ink-3);
-}
-
-:lang(he) .statement-term dt {
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
 .statement-term dd {
@@ -333,12 +321,6 @@
   color: var(--muted-foreground);
 }
 
-:lang(he) .transit-label {
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 .transit-amount {
   font: 500 22px/1 var(--font-display);
   font-variant-numeric: lining-nums tabular-nums;
@@ -436,12 +418,6 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
-
-  :lang(he) .dt-wrap--stack .data-table--ledger td:nth-child(5)::before {
-    font-size: 12px;
-    letter-spacing: 0;
-    text-transform: none;
-  }
 }
 
 /* ---- Membership: the tiers are cards, the schedule is under them ---- */
@@ -519,10 +495,6 @@
   font: 500 clamp(32px, 3.2vw, 42px) / 1.05 var(--font-display);
   letter-spacing: -0.02em;
   color: var(--foreground);
-}
-
-:lang(he) .mem-offers .offer-name {
-  letter-spacing: 0;
 }
 
 .mem-offers .offer-price {
@@ -938,11 +910,10 @@
   place-items: center;
   align-self: center;
   color: var(--muted-foreground);
-  transform: scaleX(var(--dir));
 }
 
 .trade-swap--back {
-  transform: scaleX(calc(var(--dir) * -1));
+  transform: scaleX(-1);
 }
 
 @media (max-width: 1179px) {
@@ -1107,12 +1078,6 @@
   }
 }
 
-/* A time has no letters to say which way it reads, so it was set from the left whatever the page reads and, in
-   Hebrew, sat at the far side of its column. It hangs from the edge the page starts at. */
-.timeline--stamped > li > .date {
-  text-align: var(--text-start);
-}
-
 /* ---- A drawer's tag: the sum it is about, on paper ---- */
 
 .drawer-tag,
@@ -1173,13 +1138,6 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--paper-ink-3);
-}
-
-:lang(he) .drawer-tag-kicker,
-:lang(he) .ledger-kicker {
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
 .drawer-tag-amount {
@@ -1364,14 +1322,6 @@
   font: 500 11.5px/1.3 var(--font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-/* Hebrew has no capitals and the mono face has no Hebrew: the words are in the UI face, not spaced out. */
-:lang(he) .parcel-stub-empty {
-  font-family: var(--font-ui);
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
 /* ---- A ticket as it is written: its subject in the display face, its kind, and how its message begins ---- */
@@ -1748,6 +1698,42 @@ li.is-clickable {
   overflow-wrap: anywhere;
 }
 
+/* The two ways to be asked for the second step are tiles, side by side where there is room: each its name and,
+   under it, a line on what it means. The radio is still the control. */
+.choice-tiles.mfa-methods {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+.mfa-methods .choice-tile {
+  align-items: flex-start;
+  block-size: 100%;
+  padding-block: var(--sp-3);
+}
+
+/* An address is one long word: it breaks where it must rather than leave its tile. */
+.mfa-methods .field-hint {
+  overflow-wrap: anywhere;
+}
+
+.mfa-methods .choice-tile input {
+  margin-block-start: 2px;
+}
+
+.choice-tile-text {
+  display: grid;
+  gap: var(--sp-1);
+  min-inline-size: 0;
+}
+
+.choice-tile-name {
+  font-weight: 600;
+}
+
+/* Asking for another emailed code, and how long until it may be asked for, on one line under the code. */
+.mfa-resend {
+  gap: var(--sp-2);
+}
+
 /* The sheet of codes is as wide as a sheet is: the codes are read down it, two to a line where there is room. */
 .mfa-codes {
   max-inline-size: 460px;
@@ -2091,12 +2077,6 @@ li.is-clickable {
   border-block-start: 1px dashed var(--border);
 }
 
-:lang(he) .register-day {
-  font: 500 13px/1.3 var(--font-ui);
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 /* The second line of an entry of the sign-in log: where from, and on what. */
 .register-meta {
   margin: 0;
@@ -2401,7 +2381,6 @@ li.is-clickable {
 .label-bars {
   inline-size: 100%;
   block-size: 46px;
-  /* design-lint-allow: a barcode is read the same way whichever way the page is */
   background: repeating-linear-gradient(
     90deg,
     var(--foreground) 0 2px,
@@ -2479,11 +2458,6 @@ li.is-clickable {
 
   .label-tracking {
     text-align: start;
-  }
-
-  :lang(he) .label-carrier {
-    font-family: var(--font-ui);
-    letter-spacing: 0;
   }
 }
 
@@ -2620,12 +2594,6 @@ li.is-clickable {
   color: var(--paper-ink-3);
 }
 
-:lang(he) .shelf-zone-name {
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 .shelf-zone-name b {
   margin-inline-start: 4px;
   font: 500 28px/1 var(--font-display);
@@ -2699,7 +2667,6 @@ button.shelf-slot {
 
 .shelf-slot[data-state='out'] {
   border-color: var(--border);
-  /* design-lint-allow: a hatch: either diagonal reads the same */
   background: repeating-linear-gradient(
     135deg,
     transparent 0 7px,
@@ -2752,12 +2719,6 @@ button.shelf-slot {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted-foreground);
-}
-
-:lang(he) .shelf-contents-title {
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
 .shelf-items {
@@ -2895,12 +2856,6 @@ button.shelf-slot {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--paper-ink-3);
-}
-
-:lang(he) .auth-kicker {
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
 .auth-card h2 {
@@ -3173,13 +3128,6 @@ button.shelf-slot {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--paper-ink-3);
-}
-
-:lang(he) .ask-who,
-:lang(he) .ask-composer-label {
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
 .ask-words {
@@ -3572,7 +3520,7 @@ code.ask-words {
   align-items: center;
   border-inline-end: var(--border-w) solid var(--line);
   background-image: repeating-linear-gradient(
-    calc(90deg * var(--dir)),
+    90deg,
     var(--line) 0 var(--border-w),
     transparent var(--border-w) calc(100% / var(--steps))
   );
@@ -3641,7 +3589,7 @@ code.ask-words {
 .chart-tick {
   position: absolute;
   inset-inline-start: calc(var(--at) * 100%);
-  transform: translateX(calc(-50% * var(--dir)));
+  transform: translateX(-50%);
   white-space: nowrap;
 }
 
@@ -3762,7 +3710,6 @@ code.ask-words {
   inline-size: 16px;
   block-size: 16px;
   color: var(--ink-2);
-  transform: scaleX(var(--dir));
   transition: transform var(--dur) var(--ease);
 }
 

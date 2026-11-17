@@ -92,7 +92,6 @@ function answer(addresses: unknown[]) {
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
-  localStorage.setItem('bault.locale', 'en');
   window.location.hash = '';
 });
 
@@ -150,14 +149,6 @@ describe('an address form asks for the state or province where carriers need one
     window.location.hash = '#/profile/addresses';
     renderIn(<ProfilePage />);
     expect(await screen.findByText('State or province missing')).toBeInTheDocument();
-  });
-
-  it('asks for it in Hebrew on a Hebrew page', async () => {
-    localStorage.setItem('bault.locale', 'he');
-    answer([OLD_US]);
-    window.location.hash = '#/profile/addresses';
-    renderIn(<ProfilePage />);
-    expect(await screen.findByText('חסר מחוז או מדינה')).toBeInTheDocument();
   });
 });
 

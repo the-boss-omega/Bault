@@ -104,7 +104,7 @@ describe('email', () => {
         SMTP_HOST: 'smtp.example.invalid',
         SMTP_USER: 'u',
         SMTP_PASSWORD: 'p',
-        SMTP_FROM: 'Bault <u@example.invalid>',
+        SMTP_FROM: 'Card Embassy <u@example.invalid>',
       }),
     ).toBeInstanceOf(SmtpEmailAdapter);
     expect(createEmailAdapter(base)).toBeInstanceOf(ConsoleEmailAdapter);

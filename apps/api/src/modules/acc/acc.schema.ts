@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgEnum, pgTable, text, timestamp, boolean, uniqueIndex, index, check, bigint, integer } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, timestamp, boolean, uniqueIndex, index, check, bigint, integer, primaryKey, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../db/schema/_helpers';
 
 export const accountStatus = pgEnum('account_status', [
@@ -94,13 +94,50 @@ export const loginAttempt = pgTable(
   }),
 );
 
-export const mfaFactor = pgTable('mfa_factor', {
-  userId: text('user_id').primaryKey(),
-  secretCiphertext: text('secret_ciphertext').notNull(),
-  enabledAt: timestamp('enabled_at', { withTimezone: true }),
-  lastUsedStep: bigint('last_used_step', { mode: 'number' }),
-  createdAt: createdAt(),
-});
+export const mfaMethod = pgEnum('mfa_method', ['totp', 'email']);
+
+export const mfaFactor = pgTable(
+  'mfa_factor',
+  {
+    userId: text('user_id').notNull(),
+    method: mfaMethod('method').notNull().default('totp'),
+    secretCiphertext: text('secret_ciphertext'),
+    emailAddress: text('email_address'),
+    enabledAt: timestamp('enabled_at', { withTimezone: true }),
+    lastUsedStep: bigint('last_used_step', { mode: 'number' }),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    pk: primaryKey({ name: 'mfa_factor_user_method_pk', columns: [t.userId, t.method] }),
+    oneEnabled: uniqueIndex('mfa_factor_one_enabled')
+      .on(t.userId)
+      .where(sql`${t.enabledAt} IS NOT NULL`),
+  }),
+);
+
+export const mfaEmailCodePurpose = pgEnum('mfa_email_code_purpose', ['sign_in', 'settings']);
+
+export const mfaEmailCode = pgTable(
+  'mfa_email_code',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id').notNull(),
+    purpose: mfaEmailCodePurpose('purpose').notNull(),
+    codeHash: text('code_hash'),
+    sentTo: text('sent_to'),
+    failedAttempts: integer('failed_attempts').notNull().default(0),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  },
+  (t) => ({
+    oneLive: uniqueIndex('mfa_email_code_one_live')
+      .on(t.userId, t.purpose)
+      .where(sql`${t.consumedAt} IS NULL`),
+    byUser: index('mfa_email_code_user_idx').on(t.userId, t.requestedAt),
+  }),
+);
 
 export const mfaRecoveryCode = pgTable(
   'mfa_recovery_code',

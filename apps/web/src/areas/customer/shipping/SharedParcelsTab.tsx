@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
-import { formatUsd, isolateLtr } from '../../../shared/money';
+import { formatUsd } from '../../../shared/money';
 import { formatWeight } from '../../../shared/carriers';
 import { shipmentStatusLabel, type ShipmentSummary } from '../../../shared/shipments';
 import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
@@ -274,7 +274,7 @@ export function SharedParcelsTab({
                     note={t('grp.summary', {
                       members: g.memberCount,
                       items: g.totalItems,
-                      weight: isolateLtr(formatWeight(g.totalWeightGrams)),
+                      weight: formatWeight(g.totalWeightGrams),
                     })}
                   >
                     <dl className="ledger-lines drawer-tag-lines">

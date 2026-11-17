@@ -64,9 +64,7 @@ afterAll(async () => {
   await browser?.close();
 });
 
-type Locale = 'en' | 'he';
-
-async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light'): Promise<Page> {
+async function inBrowser(width: number, theme: 'dark' | 'light'): Promise<Page> {
   const html = document.body.innerHTML;
   const context = await browser!.newContext({
     viewport: { width, height: 1000 },
@@ -76,7 +74,7 @@ async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light')
   });
   const page = await context.newPage();
   await page.setContent(
-    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
+    `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
   );
   return page;
 }
@@ -124,8 +122,7 @@ const UNKNOWN = {
 const onError = vi.fn();
 const onLoaded = vi.fn();
 
-function check(data: unknown, locale: Locale = 'en') {
-  localStorage.setItem('bault.locale', locale);
+function check(data: unknown) {
   get.mockResolvedValue(data);
   return render(
     <I18nProvider>
@@ -135,7 +132,7 @@ function check(data: unknown, locale: Locale = 'en') {
 }
 
 async function sheet() {
-  return screen.findByRole('region', { name: /Launch check|בדיקת השקה/ });
+  return screen.findByRole('region', { name: /Launch check/ });
 }
 const groupsOf = () => Array.from(document.querySelectorAll('tbody.roll-group')) as HTMLElement[];
 const codes = (root: Element) =>
@@ -150,7 +147,6 @@ beforeEach(() => {
   onError.mockReset();
   onLoaded.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
 });
 
 describe('the sheet: the verdict on paper, and its figure', () => {
@@ -226,11 +222,8 @@ describe('what is wrong, beside the sheet', () => {
     expect(within(fallback).getByText('intake', { selector: 'code' })).toBeInTheDocument();
     // A rule that is not there is a dash, not $0.00.
     expect(fallback.querySelector('.coverage-cell--rule')).toHaveTextContent('—');
-    // What each is for, as the server wrote it (in its own language).
-    expect(within(row('parcel_forwarding')).getByText(/Forwarding a parcel/)).toHaveAttribute(
-      'lang',
-      'en',
-    );
+    // What each is for, as the server wrote it.
+    expect(within(row('parcel_forwarding')).getByText(/Forwarding a parcel/)).toBeInTheDocument();
   });
 
   it('marks on the edge of its line what makes an action fail or free, and what relies on something else', async () => {
@@ -337,42 +330,28 @@ describe('the check, again', () => {
     await waitFor(() => expect(onError).toHaveBeenCalledWith('The price list is not reachable.'));
     expect(screen.getByText('Prices are missing')).toBeInTheDocument();
   });
-
-  it('is read in Hebrew with the groups, the sheet and the figures in the words of the page', async () => {
-    check(GAPS, 'he');
-    const tag = await sheet();
-    expect(tag.querySelector('.drawer-tag-title')).toHaveTextContent('חסרים מחירים');
-    expect(within(tag).getByText('לא מוכן')).toBeInTheDocument();
-    expect(groupsOf().map((g) => g.querySelector('.roll-group-name')?.textContent)).toEqual([
-      'דורשות כלל',
-      'נשענות על ברירת מחדל',
-    ]);
-    expect(tag.querySelector('.drawer-tag-amount .amount')).toHaveAttribute('dir', 'ltr');
-  });
 });
 
 describe.skipIf(!browser)('the check, in a browser', () => {
   for (const theme of ['dark', 'light'] as const) {
-    for (const locale of ['en', 'he'] as const) {
-      it(`is read and reached without a flag, folds open and shut: ${theme}, ${locale}, desktop and phone`, async () => {
-        const user = userEvent.setup();
-        check(UNKNOWN, locale);
-        await sheet();
-        for (const open of [false, true]) {
-          if (open) {
-            for (const summary of Array.from(document.querySelectorAll('summary')))
-              await user.click(summary);
-          }
-          for (const width of [1280, 390]) {
-            const page = await inBrowser(width, locale, theme);
-            expect(await audit.auditButtons(page)).toEqual([]);
-            const flags = await audit.audit(page);
-            expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
-            await page.context().close();
-          }
+    it(`is read and reached without a flag, folds open and shut: ${theme}, desktop and phone`, async () => {
+      const user = userEvent.setup();
+      check(UNKNOWN);
+      await sheet();
+      for (const open of [false, true]) {
+        if (open) {
+          for (const summary of Array.from(document.querySelectorAll('summary')))
+            await user.click(summary);
         }
-      });
-    }
+        for (const width of [1280, 390]) {
+          const page = await inBrowser(width, theme);
+          expect(await audit.auditButtons(page)).toEqual([]);
+          const flags = await audit.audit(page);
+          expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
+          await page.context().close();
+        }
+      }
+    });
   }
 
   it('puts the sheet beside what is wrong where there is room, and over it on a phone', async () => {
@@ -380,7 +359,7 @@ describe.skipIf(!browser)('the check, in a browser', () => {
     await sheet();
     const box = (sel: string) =>
       `(() => { const b = document.querySelector('${sel}').getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right }; })()`;
-    const wide = await inBrowser(1280, 'en', 'dark');
+    const wide = await inBrowser(1280, 'dark');
     const w = {
       sheet: (await wide.evaluate(box('.coverage-sheet'))) as Record<string, number>,
       gaps: (await wide.evaluate(box('.coverage-gaps'))) as Record<string, number>,
@@ -391,7 +370,7 @@ describe.skipIf(!browser)('the check, in a browser', () => {
     expect(w.rest.top).toBeGreaterThanOrEqual(Math.max(w.sheet.bottom, w.gaps.bottom) - 1);
     await wide.context().close();
 
-    const phone = await inBrowser(390, 'en', 'dark');
+    const phone = await inBrowser(390, 'dark');
     const p = {
       sheet: (await phone.evaluate(box('.coverage-sheet'))) as Record<string, number>,
       gaps: (await phone.evaluate(box('.coverage-gaps'))) as Record<string, number>,
@@ -408,7 +387,7 @@ describe.skipIf(!browser)('the check, in a browser', () => {
     check(GAPS);
     await sheet();
     for (const theme of ['dark', 'light'] as const) {
-      const page = await inBrowser(1280, 'en', theme);
+      const page = await inBrowser(1280, theme);
       const paper = await page.$eval('.coverage-sheet .drawer-tag', (el) => {
         const style = getComputedStyle(el);
         return { bg: style.backgroundColor, color: style.color };
@@ -421,7 +400,7 @@ describe.skipIf(!browser)('the check, in a browser', () => {
   it('turns an action into a card on a phone: its code and its rule on one line, what it is priced by under it, the edge coloured', async () => {
     check(GAPS);
     await sheet();
-    const page = await inBrowser(390, 'en', 'dark');
+    const page = await inBrowser(390, 'dark');
     const card = await page.$eval('tr.is-alert', (tr) => {
       const rect = (sel: string) => {
         const b = tr.querySelector(sel)!.getBoundingClientRect();
@@ -460,7 +439,7 @@ describe.skipIf(!browser)('the check, in a browser', () => {
   it('is opened and shut from the keyboard, with Enter and with Space, by the line that names it', async () => {
     check(READY);
     await sheet();
-    const page = await inBrowser(1280, 'en', 'dark');
+    const page = await inBrowser(1280, 'dark');
     const open = () =>
       page.$$eval('details.coverage-fold', (folds) =>
         folds.map((f) => (f as HTMLDetailsElement).open),
@@ -482,17 +461,17 @@ describe.skipIf(!browser)('the check, in a browser', () => {
     await page.context().close();
   });
 
-  it('turns the chevron down when a fold is open, and points it the way the page reads when it is shut', async () => {
+  it('turns the chevron down when a fold is open, and leaves it pointing along the line when it is shut', async () => {
     const user = userEvent.setup();
-    check(READY, 'he');
+    check(READY);
     await sheet();
-    const closed = await inBrowser(1280, 'he', 'dark');
+    const closed = await inBrowser(1280, 'dark');
     expect(
       await closed.$eval('.coverage-fold > summary svg', (el) => getComputedStyle(el).transform),
-    ).toBe('matrix(-1, 0, 0, 1, 0, 0)');
+    ).toBe('none');
     await closed.context().close();
     await user.click(document.querySelector('summary')!);
-    const open = await inBrowser(1280, 'he', 'dark');
+    const open = await inBrowser(1280, 'dark');
     expect(
       await open.$eval(
         '.coverage-fold[open] > summary svg',

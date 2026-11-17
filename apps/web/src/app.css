@@ -81,6 +81,8 @@ body::before {
   letter-spacing: 0.22em;
   font-weight: 700;
   font-size: 10px;
+  /* Two words in a 72px rail: one under the other. */
+  line-height: 1.2;
 }
 
 .rail-item {
@@ -97,7 +99,7 @@ body::before {
 
 .rail-item.is-active {
   color: var(--foreground);
-  background: linear-gradient(calc(90deg * var(--dir)), color-mix(in oklab, var(--foreground) 8%, transparent), transparent 90%);
+  background: linear-gradient(90deg, color-mix(in oklab, var(--foreground) 8%, transparent), transparent 90%);
 }
 
 .rail-item.is-active::before {
@@ -143,11 +145,6 @@ body::before {
   font-weight: 500;
   line-height: 1.02;
   letter-spacing: -0.025em;
-}
-
-:lang(he) .page-title {
-  letter-spacing: 0;
-  line-height: 1.1;
 }
 
 .breadcrumb {
@@ -210,7 +207,7 @@ body::before {
 }
 
 .avatar {
-  background: linear-gradient(calc(135deg * var(--dir)), var(--secondary), var(--accent));
+  background: linear-gradient(135deg, var(--secondary), var(--accent));
   color: var(--foreground);
   border: var(--border-w) solid var(--border);
 }
@@ -376,11 +373,6 @@ body::before {
   color: var(--foreground);
 }
 
-:lang(he) .auth-headline {
-  letter-spacing: 0;
-  line-height: 1.1;
-}
-
 .auth-lede {
   margin: 0;
   max-width: 44ch;
@@ -418,10 +410,6 @@ body::before {
   letter-spacing: -0.02em;
 }
 
-:lang(he) .auth-card h2 {
-  letter-spacing: 0;
-}
-
 @media (max-width: 899px) {
   .auth-stage {
     grid-template-columns: minmax(0, 1fr);
@@ -441,29 +429,6 @@ body::before {
   .auth-box {
     padding-block: 32px 48px;
   }
-}
-
-/* ---- The language switch: a globe and the code, side by side ---- */
-
-.icon-btn:has(.lang-code) {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: auto;
-  padding-inline: 12px;
-}
-
-.icon-btn:has(.lang-code) svg {
-  transform: none;
-  width: 16px;
-  height: 16px;
-}
-
-.lang-code {
-  position: static;
-  color: inherit;
-  font: 600 12px/1 var(--font-mono);
-  letter-spacing: 0.08em;
 }
 
 /* ---- Details: the boot mark breathes, selection and scrollbars belong to the room ---- */
@@ -495,13 +460,6 @@ body::before {
 * {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
-}
-
-/* ---- Right-to-left: a chevron points the way you are reading ---- */
-
-.breadcrumb-sep {
-  display: inline-block;
-  transform: scaleX(var(--dir));
 }
 
 /* ---- Money is set in the display face; it needs no accent colour ---- */

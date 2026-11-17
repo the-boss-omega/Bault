@@ -10,8 +10,8 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 /**
  * What a visitor sees before the application has started: the page as the server sends it, its stylesheet,
  * and the one script that is allowed to run first. The bundle is held back, so what is measured is the first
- * frame and not the second. A visitor who left in the light theme and in English must not be shown a dark
- * Hebrew page that then changes, and the browser's own controls and chrome must be in the theme from the start.
+ * frame and not the second. A visitor who left in the light theme must not be shown a dark page that then
+ * changes, and the browser's own controls and chrome must be in the theme from the start.
  *
  * It needs the production build (pnpm --filter @bault/web build), which is what is served, and a browser.
  */
@@ -93,16 +93,21 @@ async function firstFrame(stored: Record<string, string>, system: 'light' | 'dar
 }
 
 describe.skipIf(!browser)('the first frame, before the application starts', () => {
-  it('light and English, on a dark system: a light English page, and the browser draws its own controls light', async () => {
-    const frame = await firstFrame({ 'bault.theme': 'light', 'bault.locale': 'en' }, 'dark');
-    expect(frame).toMatchObject({ theme: 'light', lang: 'en', dir: 'ltr', scheme: 'light', chrome: '#ffffff' });
+  it('light, on a dark system: a light English page, and the browser draws its own controls light', async () => {
+    const frame = await firstFrame({ 'bault.theme': 'light' }, 'dark');
+    expect(frame).toMatchObject({ theme: 'light', lang: 'en', dir: '', scheme: 'light', chrome: '#ffffff' });
     expect(frame.bright).toBeGreaterThan(0.9);
   });
 
-  it('dark and Hebrew, on a light system: a dark right-to-left page, controls dark', async () => {
-    const frame = await firstFrame({ 'bault.theme': 'dark', 'bault.locale': 'he' }, 'light');
-    expect(frame).toMatchObject({ theme: 'dark', lang: 'he', dir: 'rtl', scheme: 'dark', chrome: '#0a0a0a' });
+  it('dark, on a light system: a dark page, controls dark', async () => {
+    const frame = await firstFrame({ 'bault.theme': 'dark' }, 'light');
+    expect(frame).toMatchObject({ theme: 'dark', lang: 'en', scheme: 'dark', chrome: '#0a0a0a' });
     expect(frame.bright).toBeLessThan(0.1);
+  });
+
+  it('a language chosen before the product had one is not read: the page is English and left to right', async () => {
+    const frame = await firstFrame({ 'bault.locale': 'he' }, 'dark');
+    expect(frame).toMatchObject({ lang: 'en', dir: '' });
   });
 
   it('the system’s choice follows the system, in the page, in the controls and in the browser’s chrome', async () => {
@@ -115,10 +120,10 @@ describe.skipIf(!browser)('the first frame, before the application starts', () =
     expect(dark.bright).toBeLessThan(0.1);
   });
 
-  it('nobody has chosen anything: the product’s own defaults, dark and Hebrew, whatever the system', async () => {
+  it('nobody has chosen anything: the product’s own default, dark, whatever the system', async () => {
     for (const system of ['light', 'dark'] as const) {
       const frame = await firstFrame({}, system);
-      expect(frame).toMatchObject({ theme: 'dark', lang: 'he', dir: 'rtl', scheme: 'dark' });
+      expect(frame).toMatchObject({ theme: 'dark', lang: 'en', dir: '', scheme: 'dark' });
       expect(frame.bright).toBeLessThan(0.1);
     }
   });

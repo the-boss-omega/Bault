@@ -183,7 +183,7 @@ export class PayPalCheckoutService {
         currency: row.currency,
         requestId: checkoutOrderRequestId(row.id),
         customId: row.id,
-        description: 'Bault wallet cash-in',
+        description: 'Card Embassy wallet cash-in',
         returnUrl: `${base}/?paypal=approved&payment=${row.id}`,
         cancelUrl: `${base}/?paypal=cancelled&payment=${row.id}`,
         landing,

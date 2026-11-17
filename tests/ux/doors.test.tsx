@@ -67,9 +67,7 @@ afterAll(async () => {
   await browser?.close();
 });
 
-type Locale = 'en' | 'he';
-
-async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light'): Promise<Page> {
+async function inBrowser(width: number, theme: 'dark' | 'light'): Promise<Page> {
   const html = document.body.innerHTML;
   // The axe checks of the audit need a page that came from a context of its own.
   const context = await browser!.newContext({
@@ -80,14 +78,14 @@ async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light')
   });
   const page = await context.newPage();
   await page.setContent(
-    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
+    `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
   );
   return page;
 }
 
 const noop = () => {};
 
-function door(which: 'signIn' | 'signUp' | 'forgot' | 'mfa' | 'reset' | 'verify') {
+function door(which: 'signIn' | 'signUp' | 'forgot' | 'mfa' | 'mfaEmail' | 'reset' | 'verify') {
   switch (which) {
     case 'signIn':
       return <SignInPage onSignedIn={noop} onGoToSignUp={noop} onGoToForgotPassword={noop} />;
@@ -96,7 +94,16 @@ function door(which: 'signIn' | 'signUp' | 'forgot' | 'mfa' | 'reset' | 'verify'
     case 'forgot':
       return <ForgotPasswordPage onGoToSignIn={noop} />;
     case 'mfa':
-      return <SecondFactorForm challengeToken="t" onSignedIn={noop} onRestart={noop} />;
+      return <SecondFactorForm challenge={{ challengeToken: 't' }} onSignedIn={noop} onRestart={noop} />;
+    case 'mfaEmail':
+      // An emailed code, just sent: the button for another is held, and the wait is said beside it.
+      return (
+        <SecondFactorForm
+          challenge={{ challengeToken: 't', method: 'email', codeSent: true, sentTo: 'r•••@bault.dev', resendAfterSeconds: 60 }}
+          onSignedIn={noop}
+          onRestart={noop}
+        />
+      );
     case 'reset':
       return <ResetPasswordPage />;
     case 'verify':
@@ -113,34 +120,25 @@ const renderDoor = (which: Parameters<typeof door>[0]) =>
 
 beforeEach(() => {
   post.mockReset();
-  localStorage.setItem('bault.locale', 'en');
   window.location.hash = '#/';
 });
 
 describe('a door', () => {
-  const KICKERS: [Parameters<typeof door>[0], string, string][] = [
-    ['signIn', 'Members’ entrance', 'כניסת חברים'],
-    ['signUp', 'New account', 'חשבון חדש'],
-    ['forgot', 'Getting back in', 'שחזור גישה'],
-    ['mfa', 'Second factor', 'שלב שני'],
+  const KICKERS: [Parameters<typeof door>[0], string][] = [
+    ['signIn', 'Members’ entrance'],
+    ['signUp', 'New account'],
+    ['forgot', 'Getting back in'],
+    ['mfa', 'Second factor'],
   ];
 
-  for (const [which, en, he] of KICKERS) {
-    it(`${which} says what the slip is over its heading, in both languages`, () => {
-      const { container, unmount } = renderDoor(which);
-      expect(container.querySelector('.auth-kicker')).toHaveTextContent(en);
+  for (const [which, kicker] of KICKERS) {
+    it(`${which} says what the slip is over its heading`, () => {
+      const { container } = renderDoor(which);
+      expect(container.querySelector('.auth-kicker')).toHaveTextContent(kicker);
       expect(container.querySelector('.auth-slip h2')).toBeInTheDocument();
       // Over the heading, not the heading again.
       expect(container.querySelector('.auth-kicker')!.textContent).not.toBe(
         container.querySelector('.auth-slip h2')!.textContent,
-      );
-      unmount();
-
-      localStorage.setItem('bault.locale', 'he');
-      const hebrew = renderDoor(which);
-      expect(hebrew.container.querySelector('.auth-kicker')).toHaveTextContent(he);
-      expect(hebrew.container.querySelector('.auth-kicker')!.textContent).not.toBe(
-        hebrew.container.querySelector('.auth-slip h2')!.textContent,
       );
     });
   }
@@ -177,12 +175,12 @@ describe('a door', () => {
 });
 
 describe.skipIf(!browser)('a door, in a browser', () => {
-  const WHICH = ['signIn', 'signUp', 'forgot', 'mfa'] as const;
+  const WHICH = ['signIn', 'signUp', 'forgot', 'mfa', 'mfaEmail'] as const;
 
   for (const theme of ['dark', 'light'] as const) {
     it(`is paper in the ${theme} theme, with the paper's controls on it, and its one button is the ink`, async () => {
       renderDoor('signIn');
-      const page = await inBrowser(1100, 'en', theme);
+      const page = await inBrowser(1100, theme);
       const read = (selector: string, prop: string) =>
         page.$eval(selector, (el, p) => getComputedStyle(el).getPropertyValue(p), prop);
       expect(await read('.auth-card', 'background-color')).toBe('rgb(243, 239, 230)');
@@ -205,7 +203,7 @@ describe.skipIf(!browser)('a door, in a browser', () => {
 
   it('has its stub under the button, cut off by a perforation with a notch at each end', async () => {
     renderDoor('signIn');
-    const page = await inBrowser(1100, 'en', 'dark');
+    const page = await inBrowser(1100, 'dark');
     const box = (selector: string) =>
       page.$eval(selector, (el) => el.getBoundingClientRect().toJSON());
     const button = await box('.auth-card .btn--primary');
@@ -233,19 +231,16 @@ describe.skipIf(!browser)('a door, in a browser', () => {
   });
 
   for (const theme of ['dark', 'light'] as const) {
-    for (const locale of ['en', 'he'] as const) {
-      for (const which of WHICH) {
-        it(`${which}: every control is read, edged and reached, on the paper: ${theme}, ${locale}`, async () => {
-          localStorage.setItem('bault.locale', locale);
-          renderDoor(which);
-          const page = await inBrowser(390, locale, theme);
-          expect(await audit.auditButtons(page)).toEqual([]);
-          // What is printed on the paper is read on it: no contrast finding, in labels, hints, links or the code.
-          const flags = await audit.audit(page);
-          expect(flags.filter((flag) => /color-contrast/.test(flag))).toEqual([]);
-          await page.context().close();
-        });
-      }
+    for (const which of WHICH) {
+      it(`${which}: every control is read, edged and reached, on the paper: ${theme}`, async () => {
+        renderDoor(which);
+        const page = await inBrowser(390, theme);
+        expect(await audit.auditButtons(page)).toEqual([]);
+        // What is printed on the paper is read on it: no contrast finding, in labels, hints, links or the code.
+        const flags = await audit.audit(page);
+        expect(flags.filter((flag) => /color-contrast/.test(flag))).toEqual([]);
+        await page.context().close();
+      });
     }
   }
 
@@ -253,7 +248,7 @@ describe.skipIf(!browser)('a door, in a browser', () => {
     const user = userEvent.setup();
     const { unmount } = renderDoor('signUp');
     await user.type(screen.getByLabelText('Email'), 'nope');
-    const page = await inBrowser(1100, 'en', 'dark');
+    const page = await inBrowser(1100, 'dark');
     expect(
       await page.$eval('.auth-card .field-error', (el) => getComputedStyle(el).color),
     ).not.toBe('rgb(21, 19, 15)');

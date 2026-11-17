@@ -178,16 +178,6 @@ export function IconSettings(p: IconProps) {
   );
 }
 
-export function IconGlobe(p: IconProps) {
-  return (
-    <Svg {...p}>
-      <circle cx="12" cy="12" r="8.75" />
-      <path d="M3.4 9.5h17.2M3.4 14.5h17.2" />
-      <path d="M12 3.3c2.2 2.4 3.35 5.45 3.35 8.7S14.2 18.3 12 20.7c-2.2-2.4-3.35-5.45-3.35-8.7S9.8 5.7 12 3.3Z" />
-    </Svg>
-  );
-}
-
 export function IconSignOut(p: IconProps) {
   return (
     <Svg {...p}>

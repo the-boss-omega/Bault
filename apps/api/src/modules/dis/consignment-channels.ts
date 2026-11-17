@@ -20,7 +20,7 @@ export const CONSIGNMENT_CHANNELS: readonly ConsignmentChannel[] = [
     requiresEvent: true,
     payoutDaysMin: 3,
     payoutDaysMax: 10,
-    partnerFeeNote: 'No partner commission — Bault sells it at the table.',
+    partnerFeeNote: 'No partner commission — Card Embassy sells it at the table.',
   },
   {
     key: 'auction_house',

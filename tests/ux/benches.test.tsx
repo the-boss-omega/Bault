@@ -75,14 +75,7 @@ afterAll(async () => {
   await browser?.close();
 });
 
-type Locale = 'en' | 'he';
-
-async function inBrowser(
-  width: number,
-  locale: Locale,
-  theme: 'dark' | 'light',
-  touch = false,
-): Promise<Page> {
+async function inBrowser(width: number, theme: 'dark' | 'light', touch = false): Promise<Page> {
   const html = document.body.innerHTML;
   const context = await browser!.newContext({
     viewport: { width, height: 1000 },
@@ -92,7 +85,7 @@ async function inBrowser(
   });
   const page = await context.newPage();
   await page.setContent(
-    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
+    `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
   );
   return page;
 }
@@ -140,7 +133,6 @@ beforeEach(() => {
     if (path === '/me/inbound-addresses') return Promise.resolve(FACILITIES);
     return Promise.resolve([]);
   });
-  localStorage.setItem('bault.locale', 'en');
   window.location.hash = '';
 });
 
@@ -644,60 +636,54 @@ describe('a sale from the store, to be labelled and shelved', () => {
 
 describe.skipIf(!browser)('the benches, in a browser', () => {
   for (const theme of ['dark', 'light'] as const) {
-    for (const locale of ['en', 'he'] as const) {
-      it(`a bench is read, edged and reached, and its docket is paper: ${theme}, ${locale}`, async () => {
-        localStorage.setItem('bault.locale', locale);
-        post.mockResolvedValue({});
-        const user = userEvent.setup();
-        render(wrap(<RelocateBench shelves={SHELVES} onLog={vi.fn()} onDone={vi.fn()} />));
-        await user.type(document.querySelector('input')!, 'SN-CL10-0005');
-        const inputs = document.querySelectorAll('input');
-        await user.type(inputs[1]!, 'BIN-RF5DBQ7Q');
-        const page = await inBrowser(390, locale, theme, true);
-        const docket = await page.$eval('.request-slip .drawer-tag', (el) => {
-          const style = getComputedStyle(el);
-          return { bg: style.backgroundColor, color: style.color };
-        });
-        expect(docket).toEqual({ bg: 'rgb(243, 239, 230)', color: 'rgb(21, 19, 15)' });
-        expect(await audit.auditButtons(page)).toEqual([]);
-        const flags = await audit.audit(page);
-        expect(flags.filter((f) => /color-contrast/.test(f))).toEqual([]);
-        await page.context().close();
+    it(`a bench is read, edged and reached, and its docket is paper: ${theme}`, async () => {
+      post.mockResolvedValue({});
+      const user = userEvent.setup();
+      render(wrap(<RelocateBench shelves={SHELVES} onLog={vi.fn()} onDone={vi.fn()} />));
+      await user.type(document.querySelector('input')!, 'SN-CL10-0005');
+      const inputs = document.querySelectorAll('input');
+      await user.type(inputs[1]!, 'BIN-RF5DBQ7Q');
+      const page = await inBrowser(390, theme, true);
+      const docket = await page.$eval('.request-slip .drawer-tag', (el) => {
+        const style = getComputedStyle(el);
+        return { bg: style.backgroundColor, color: style.color };
       });
-    }
+      expect(docket).toEqual({ bg: 'rgb(243, 239, 230)', color: 'rgb(21, 19, 15)' });
+      expect(await audit.auditButtons(page)).toEqual([]);
+      const flags = await audit.audit(page);
+      expect(flags.filter((f) => /color-contrast/.test(f))).toEqual([]);
+      await page.context().close();
+    });
   }
 
-  it('reads a scan in the code’s face, left to right, with the glyph of what scans at its start, in either language', async () => {
-    for (const locale of ['en', 'he'] as const) {
-      localStorage.setItem('bault.locale', locale);
-      const { unmount } = render(wrap(<HoldBench onLog={vi.fn()} onDone={vi.fn()} />));
-      const page = await inBrowser(1100, locale, 'dark');
-      const read = await page.$eval('.scan-input', (el) => {
-        const input = el.querySelector('input')!;
-        const style = getComputedStyle(input);
-        const svg = el.querySelector('svg')!.getBoundingClientRect();
-        const box = input.getBoundingClientRect();
-        return {
-          direction: style.direction,
-          family: style.fontFamily,
-          height: Math.round(box.height),
-          glyphAtLeft: svg.left - box.left < 24,
-        };
-      });
-      expect(read.direction).toBe('ltr');
-      expect(read.family).toMatch(/mono|Geist Mono|ui-monospace/i);
-      expect(read.height).toBeGreaterThanOrEqual(48);
-      expect(read.glyphAtLeft).toBe(true);
-      await page.context().close();
-      unmount();
-    }
+  it('reads a scan in the code’s face, left to right, with the glyph of what scans at its start', async () => {
+    const { unmount } = render(wrap(<HoldBench onLog={vi.fn()} onDone={vi.fn()} />));
+    const page = await inBrowser(1100, 'dark');
+    const read = await page.$eval('.scan-input', (el) => {
+      const input = el.querySelector('input')!;
+      const style = getComputedStyle(input);
+      const svg = el.querySelector('svg')!.getBoundingClientRect();
+      const box = input.getBoundingClientRect();
+      return {
+        direction: style.direction,
+        family: style.fontFamily,
+        height: Math.round(box.height),
+        glyphAtLeft: svg.left - box.left < 24,
+      };
+    });
+    expect(read.direction).toBe('ltr');
+    expect(read.family).toMatch(/mono|Geist Mono|ui-monospace/i);
+    expect(read.height).toBeGreaterThanOrEqual(48);
+    expect(read.glyphAtLeft).toBe(true);
+    await page.context().close();
+    unmount();
   });
 
   it('keeps the docket the height it was when an outcome comes: nothing under it jumps', async () => {
     post.mockResolvedValue({});
     const user = userEvent.setup();
     render(wrap(<RelocateBench shelves={SHELVES} onLog={vi.fn()} onDone={vi.fn()} />));
-    const before = await inBrowser(1100, 'en', 'dark');
+    const before = await inBrowser(1100, 'dark');
     const heightBefore = await before.$eval('.request-slip', (el) =>
       Math.round(el.getBoundingClientRect().height),
     );
@@ -710,7 +696,7 @@ describe.skipIf(!browser)('the benches, in a browser', () => {
       expect(document.querySelector('.docket-outcome')).toHaveTextContent('Moved'),
     );
     // The fields are empty again, so the docket is as it began, with the outcome in its foot.
-    const after = await inBrowser(1100, 'en', 'dark');
+    const after = await inBrowser(1100, 'dark');
     const heightAfter = await after.$eval('.request-slip', (el) =>
       Math.round(el.getBoundingClientRect().height),
     );
@@ -722,7 +708,7 @@ describe.skipIf(!browser)('the benches, in a browser', () => {
     render(wrap(<ReceiveParcels onReceived={vi.fn()} />));
     await screen.findByLabelText('Facility');
     for (const width of [1440, 390]) {
-      const page = await inBrowser(width, 'en', 'dark', width < 800);
+      const page = await inBrowser(width, 'dark', width < 800);
       const box = await page.evaluate(() => {
         const rect = (selector: string) =>
           document.querySelector(selector)!.getBoundingClientRect();

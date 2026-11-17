@@ -176,11 +176,11 @@ export const GUIDES: readonly Guide[] = [
         route: '#/marketplace/offers',
       },
       {
-        text: 'Consignment is the other route: Bault sells it for you through a card show, an auction house or an eBay partner. Each has its own commission, its own payout window and its own rules — a card show has a date and a deadline; some channels take graded cards only.',
+        text: 'Consignment is the other route: Card Embassy sells it for you through a card show, an auction house or an eBay partner. Each has its own commission, its own payout window and its own rules — a card show has a date and a deadline; some channels take graded cards only.',
         route: '#/vault/active',
       },
       {
-        text: 'A buyout is Bault buying it outright. You ask, an operator quotes, and you accept or decline. It pays less than the market because Bault then carries the risk of selling it.',
+        text: 'A buyout is Card Embassy buying it outright. You ask, an operator quotes, and you accept or decline. It pays less than the market because Card Embassy then carries the risk of selling it.',
         route: '#/vault/active',
       },
       {
@@ -230,10 +230,10 @@ export const GUIDES: readonly Guide[] = [
         text: 'Services that cannot legally carry your parcel are shown anyway, with the rule they failed. If the cheap option will not insure a $3,000 card, you find that out here rather than after a claim.',
       },
       {
-        text: 'Choose a service yourself, or press Choose for me and Bault takes the best balance of price and time among the ones that can carry it.',
+        text: 'Choose a service yourself, or press Choose for me and Card Embassy takes the best balance of price and time among the ones that can carry it.',
       },
       {
-        text: 'Rush is Bault picking and packing the same day. It does not make the carrier faster and is not presented as though it does.',
+        text: 'Rush is Card Embassy picking and packing the same day. It does not make the carrier faster and is not presented as though it does.',
       },
       {
         text: 'While a request still says Requested you can add or remove cards, merge it with another request to the same address, or cancel it for nothing. Once a service is paid for, cancelling costs a restocking fee.',
@@ -261,7 +261,7 @@ export const GUIDES: readonly Guide[] = [
         text: 'A tracker can travel inside the parcel, and is only sold alongside insurance, because it exists to help recover a parcel somebody is going to claim on.',
       },
       {
-        text: 'An international parcel needs a customs value, and it is the figure YOU declare. Bault does not adjust, reduce or omit it — under-declaring to lower your duty would be done in your name and signed for by you.',
+        text: 'An international parcel needs a customs value, and it is the figure YOU declare. Card Embassy does not adjust, reduce or omit it — under-declaring to lower your duty would be done in your name and signed for by you.',
       },
       {
         text: 'A commercial invoice is generated from the shipment, one line per card, with an HS code and country of origin. Duty and tax at the far end are paid by whoever receives it.',

@@ -8,7 +8,7 @@ About 1 minute. It builds on T9.1 and T2.2.
 
 These files describe the buildings that receive parcels. A `facility` has a `role`. A `primary` facility stores goods. A `forwarding` facility stores nothing and sends each parcel on to the facility in `forwardsToFacilityId`. `salesTaxBps` is shown to customers as guidance, and no charge reads it. A facility is closed by setting `active` to false, and it is never deleted.
 
-`FacilityService.inboundAddressesFor` builds the address a collector gives to a seller. Its `careOf` line is `Bault C/O <username>`, and the username is read from the collector's account, never from the request. In production the list leaves out any facility whose `line1` still holds the seed placeholder, which `isPlaceholder` detects.
+`FacilityService.inboundAddressesFor` builds the address a collector gives to a seller. Its `careOf` line is `Card Embassy C/O <username>`, and the username is read from the collector's account, never from the request. In production the list leaves out any facility whose `line1` still holds the seed placeholder, which `isPlaceholder` detects.
 
 #### `apps/api/src/modules/inv/parcel.schema.ts`
 
@@ -190,7 +190,7 @@ About 1 minute. It builds on T6.1 and T12.2.
 
 About 1.5 minutes. It builds on T9.4, T7.7 and T7.8.
 
-These files hold the console's reads and edits of users, items and disputes. The schema defines `dispute`, plus `storageFeeRun` and `storageCover`, which the worker's sweep writes. `listUsers` hides fixture accounts. `updateUser` stops an admin from suspending, closing or demoting their own account, which would lock them out. A status write clears `autoSuspendedAt`, and a name write clears `nameReviewRequired`.
+These files hold the console's reads and edits of users, items and disputes. The schema defines `dispute`, plus `storageFeeRun` and `storageCover`, which the worker's sweep writes. `listUsers` hides fixture accounts, and says for each account whether a second factor is on and its `mfaMethod`. `updateUser` stops an admin from suspending, closing or demoting their own account, which would lock them out. A status write clears `autoSuspendedAt`, and a name write clears `nameReviewRequired`.
 
 `updateItem` is the one item edit outside the kernel. It locks the item, writes custody events itself and skips `assertTransition`, so it can unstick items. An owner change removes the old owner's listing and rejects its pending offers. It checks no `TransferExpectation`. A bin change writes no `bin_transfer` row, so `ShelfYieldService` still dates an admin-moved item from its arrival on the old shelf. `runStorageFees` has no caller and would still bill split lots. `recentLogins` reads the sign-in log and marks an identifier `suspicious` at five failures within 24 hours.
 

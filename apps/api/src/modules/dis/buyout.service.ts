@@ -109,7 +109,7 @@ export class BuyoutService {
       );
 
       await this.custody.transferOwnership(tx, req.itemId, platformId, ownerId, 'buyout accepted', { ownerId });
-      await this.custody.changeState(tx, req.itemId, 'sold', ownerId, 'bought by Bault');
+      await this.custody.changeState(tx, req.itemId, 'sold', ownerId, 'bought by Card Embassy');
 
       const [txn] = await tx
         .insert(transaction)

@@ -64,14 +64,7 @@ afterAll(async () => {
   await browser?.close();
 });
 
-type Locale = 'en' | 'he';
-
-async function inBrowser(
-  width: number,
-  locale: Locale,
-  theme: 'dark' | 'light',
-  height = 1000,
-): Promise<Page> {
+async function inBrowser(width: number, theme: 'dark' | 'light', height = 1000): Promise<Page> {
   const html = document.body.innerHTML;
   const context = await browser!.newContext({
     viewport: { width, height },
@@ -81,7 +74,7 @@ async function inBrowser(
   });
   const page = await context.newPage();
   await page.setContent(
-    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
+    `<!doctype html><html lang="en" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
   );
   return page;
 }
@@ -172,7 +165,7 @@ const ROWS: Row[] = [
     amount: 120000,
     createdAt: at(3),
     updatedAt: at(2),
-    customerName: 'נועם כץ',
+    customerName: 'Noam Katz',
     username: 'noam',
     fundingSource: 'bank_transfer',
     reference: 'TRF-88213',
@@ -332,7 +325,6 @@ beforeEach(() => {
   onMsg.mockReset();
   onError.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
   window.location.hash = '#/admin/requests';
   serve();
 });
@@ -453,23 +445,6 @@ describe('the requests, a roll grouped by what each needs', () => {
       'Needs a decision',
       'Closed',
     ]);
-  });
-
-  it('is read in Hebrew with the groups, the ages and the money in the words of the page', async () => {
-    localStorage.setItem('bault.locale', 'he');
-    render(wrap());
-    await screen.findByRole('heading', { name: /^בקשות ארנק \(/ });
-    await waitFor(() => expect(groups().length).toBe(3));
-    expect(groups().map((g) => g.querySelector('.roll-group-name')?.textContent)).toEqual([
-      'ממתינות להחלטה',
-      'בתהליך',
-      'סגורות',
-    ]);
-    // Three days is "3 ימים", from the browser's own tables.
-    expect(within(lineFor('WR-1041')).getByText('לפני 3 ימים')).toBeInTheDocument();
-    expect(within(lineFor('WR-1042')).getByText('שלשום')).toBeInTheDocument();
-    // The sum is a figure: it is read left to right in a Hebrew sentence.
-    expect(groups()[0]!.querySelector('.roll-group-sums .num')).toHaveAttribute('dir', 'ltr');
   });
 });
 
@@ -808,54 +783,50 @@ describe('what is done to a request', () => {
 
 describe.skipIf(!browser)('the desk, in a browser', () => {
   for (const theme of ['dark', 'light'] as const) {
-    for (const locale of ['en', 'he'] as const) {
-      it(`the roll is read, reached and drawn without a flag: ${theme}, ${locale}, desktop and phone`, async () => {
-        localStorage.setItem('bault.locale', locale);
-        const { unmount } = render(wrap());
-        await waitFor(() => expect(groups().length).toBe(3));
-        for (const width of [1280, 390]) {
-          const page = await inBrowser(width, locale, theme);
-          expect(await audit.auditButtons(page)).toEqual([]);
-          const flags = await audit.audit(page);
-          expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
-          await page.context().close();
-        }
-        unmount();
-      });
+    it(`the roll is read, reached and drawn without a flag: ${theme}, desktop and phone`, async () => {
+      const { unmount } = render(wrap());
+      await waitFor(() => expect(groups().length).toBe(3));
+      for (const width of [1280, 390]) {
+        const page = await inBrowser(width, theme);
+        expect(await audit.auditButtons(page)).toEqual([]);
+        const flags = await audit.audit(page);
+        expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
+        await page.context().close();
+      }
+      unmount();
+    });
 
-      it(`a request, opened, is paper on the room, edged and reached: ${theme}, ${locale}`, async () => {
-        localStorage.setItem('bault.locale', locale);
-        const user = userEvent.setup();
-        render(wrap());
-        await waitFor(() => expect(groups().length).toBe(3));
-        await user.click(screen.getByRole('button', { name: 'WR-1042' }));
-        await dialog('WR-1042');
-        await waitFor(() => expect(document.querySelector('.desk-next')).not.toBeNull());
-        for (const width of [1280, 390]) {
-          // A page made from the markup has no script, so what the app does to a drawer whose body scrolls and has
-          // no control in it (it becomes the stop: drawer-scroll.test.tsx) does not run here. In a wider font than
-          // the page's own, which is not loaded in a page like this, a settled request is taller than a thousand
-          // pixels' room, and axe is right that its body is a box the keyboard cannot scroll. This is a test of
-          // paper, edges and reach, so the window is tall enough that the body does not scroll in any font.
-          const page = await inBrowser(width, locale, theme, 1800);
-          const paper = await page.$eval('.drawer .drawer-tag', (el) => {
-            const style = getComputedStyle(el);
-            return { bg: style.backgroundColor, color: style.color };
-          });
-          expect(paper).toEqual({ bg: 'rgb(243, 239, 230)', color: 'rgb(21, 19, 15)' });
-          expect(await audit.auditButtons(page)).toEqual([]);
-          const flags = await audit.audit(page);
-          expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
-          await page.context().close();
-        }
-      });
-    }
+    it(`a request, opened, is paper on the room, edged and reached: ${theme}`, async () => {
+      const user = userEvent.setup();
+      render(wrap());
+      await waitFor(() => expect(groups().length).toBe(3));
+      await user.click(screen.getByRole('button', { name: 'WR-1042' }));
+      await dialog('WR-1042');
+      await waitFor(() => expect(document.querySelector('.desk-next')).not.toBeNull());
+      for (const width of [1280, 390]) {
+        // A page made from the markup has no script, so what the app does to a drawer whose body scrolls and has
+        // no control in it (it becomes the stop: drawer-scroll.test.tsx) does not run here. In a wider font than
+        // the page's own, which is not loaded in a page like this, a settled request is taller than a thousand
+        // pixels' room, and axe is right that its body is a box the keyboard cannot scroll. This is a test of
+        // paper, edges and reach, so the window is tall enough that the body does not scroll in any font.
+        const page = await inBrowser(width, theme, 1800);
+        const paper = await page.$eval('.drawer .drawer-tag', (el) => {
+          const style = getComputedStyle(el);
+          return { bg: style.backgroundColor, color: style.color };
+        });
+        expect(paper).toEqual({ bg: 'rgb(243, 239, 230)', color: 'rgb(21, 19, 15)' });
+        expect(await audit.auditButtons(page)).toEqual([]);
+        const flags = await audit.audit(page);
+        expect(flags.filter((f) => !/^enum names on screen/.test(f))).toEqual([]);
+        await page.context().close();
+      }
+    });
   }
 
   it('is a card to a phone: the number and the sum on the first line, whose it is and where it stands on the second', async () => {
     render(wrap());
     await waitFor(() => expect(groups().length).toBe(3));
-    const page = await inBrowser(390, 'en', 'dark');
+    const page = await inBrowser(390, 'dark');
     const card = await page.$eval('tr.roll-line', (tr) => {
       const rect = (sel: string) => {
         const box = tr.querySelector(sel)!.getBoundingClientRect();
@@ -908,7 +879,7 @@ describe.skipIf(!browser)('the desk, in a browser', () => {
     await user.click(screen.getByRole('button', { name: 'WR-1036' }));
     await dialog('WR-1036');
     await waitFor(() => expect(document.querySelector('.drawer-tag-lines')).not.toBeNull());
-    const page = await inBrowser(390, 'en', 'dark');
+    const page = await inBrowser(390, 'dark');
     const account = await page.$eval('.drawer-tag-lines', (dl) => {
       const line = Array.from(dl.querySelectorAll('.ledger-line')).find((l) =>
         /Destination account/.test(l.querySelector('dt')?.textContent ?? ''),

@@ -85,7 +85,6 @@ beforeEach(() => {
   post.mockReset();
   patch.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
 });
 
 async function profile(tab: string) {
@@ -384,6 +383,7 @@ describe('the second factor, on cards and a sheet', () => {
     });
     await profile('security');
     const user = userEvent.setup();
+    await user.click(await screen.findByRole('radio', { name: /authenticator app/i }));
     await user.click(await screen.findByRole('button', { name: /set up two-factor sign-in/i }));
 
     const key = await screen.findByRole('region', { name: 'Set up two-factor sign-in' });

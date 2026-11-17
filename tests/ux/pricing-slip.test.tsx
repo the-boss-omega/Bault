@@ -81,7 +81,6 @@ beforeEach(() => {
   get.mockReset();
   post.mockReset();
   localStorage.clear();
-  localStorage.setItem('bault.locale', 'en');
 });
 
 afterEach(() => {

@@ -400,7 +400,7 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
         payment_source: {
           paypal: {
             experience_context: {
-              brand_name: 'Bault',
+              brand_name: 'Card Embassy',
               landing_page: req.landing === 'card' ? 'GUEST_CHECKOUT' : 'LOGIN',
               shipping_preference: 'NO_SHIPPING',
               user_action: 'PAY_NOW',
@@ -518,7 +518,7 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
         body: JSON.stringify({
           sender_batch_header: {
             sender_batch_id: req.idempotencyKey,
-            email_subject: 'Your Bault cash-out',
+            email_subject: 'Your Card Embassy cash-out',
             email_message: 'The store credit you asked us to send back.',
           },
           items: [

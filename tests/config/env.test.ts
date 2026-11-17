@@ -35,7 +35,7 @@ const PROD = {
   SMTP_HOST: 'smtp.example.com',
   SMTP_USER: 'u',
   SMTP_PASSWORD: 'p',
-  SMTP_FROM: 'Bault <noreply@example.com>',
+  SMTP_FROM: 'Card Embassy <noreply@example.com>',
   APP_BASE_URL: 'https://app.example.com',
   TRUST_PROXY: 'uniquelocal',
 };

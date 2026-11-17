@@ -76,8 +76,6 @@ const EVENTS = [
 beforeEach(() => {
   get.mockReset();
   localStorage.clear();
-  // The product opens in Hebrew; these read it in English unless a test says otherwise.
-  localStorage.setItem('bault.locale', 'en');
   get.mockImplementation((path: string) => {
     if (path === '/escrow/mine') return Promise.resolve([DEAL]);
     if (path === '/escrow/terms') return Promise.resolve({ feeBps: 100, minimumFeeMinor: 2500, minimumValueMinor: 50000 });
@@ -156,15 +154,14 @@ describe('what a deal’s history says', () => {
     );
   }
 
-  it('uses the words for the states and the steps the product already has, in the page’s language', () => {
-    localStorage.setItem('bault.locale', 'he');
+  it('uses the words for the states and the steps the product already has', () => {
     const { container } = render(
       <I18nProvider>
         <Labels types={['raised', 'agreed', 'funded', 'settled', 'returned', 'cancelled']} />
       </I18nProvider>,
     );
     const words = [...container.querySelectorAll('li')].map((li) => li.textContent);
-    expect(words).toEqual(['הוצעה', 'סוכמה', 'הכסף מוחזק', 'הושלמה', 'הוחזרה', 'בוטלה']);
+    expect(words).toEqual(['Proposed', 'Terms agreed', 'Funds held', 'Settled', 'Returned', 'Cancelled']);
   });
 
   it('says whether the inspection passed, and shows what it does not know as it was recorded', () => {

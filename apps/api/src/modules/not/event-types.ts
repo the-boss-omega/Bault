@@ -47,7 +47,7 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
   { key: 'swap_proposed', category: 'marketplace', label: 'Somebody proposes a swap', emailByDefault: true },
   { key: 'swap_completed', category: 'marketplace', label: 'A swap completes', emailByDefault: true },
   { key: 'transfer_completed', category: 'marketplace', label: 'A gift transfer completes', emailByDefault: true },
-  { key: 'buyout_quoted', category: 'marketplace', label: 'Bault quotes you for a buyout', emailByDefault: true },
+  { key: 'buyout_quoted', category: 'marketplace', label: 'Card Embassy quotes you for a buyout', emailByDefault: true },
   { key: 'custom_request_raised', category: 'custody', label: 'We have your custom request', emailByDefault: false },
   { key: 'custom_request_quoted', category: 'custody', label: 'Your custom request is priced', emailByDefault: true },
   { key: 'custom_request_declined', category: 'custody', label: 'A custom request cannot be done', emailByDefault: true },

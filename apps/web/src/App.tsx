@@ -15,7 +15,6 @@ import { NavigationRail, type NavDestination } from './shared/ui/NavigationRail'
 import { useScrollableRegions } from './shared/ui/useScrollableRegions';
 import {
   AccountPill,
-  LanguageSwitcher,
   MobileBar,
   NotificationBell,
   PageHeader,
@@ -151,9 +150,9 @@ const AUTH_ROUTES: Record<string, AuthMode> = {
 const LANDING_ROUTES = ['', 'welcome'];
 
 export default function App() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const route = useRoute();
-  useScrollableRegions(locale);
+  useScrollableRegions();
   const [boot, setBoot] = useState<BootState>({ status: 'loading' });
 
   const loadSession = useCallback(async () => {
@@ -203,7 +202,7 @@ export default function App() {
     return (
       <div className="boot">
         <span className="rail-mark" aria-hidden="true">
-          B
+          C
         </span>
         <p className="hint">{t('app.loading')}</p>
       </div>
@@ -214,7 +213,7 @@ export default function App() {
     return (
       <div className="boot">
         <span className="rail-mark" aria-hidden="true">
-          B
+          C
         </span>
         <div className="boot-error">
           <ErrorState
@@ -342,9 +341,9 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
   const tabKey = route.tab ? `${TAB_PREFIX[section] ?? ''}${route.tab}` : '';
 
   useEffect(() => {
-    document.title = `${pageTitle} · Bault`;
+    document.title = `${pageTitle} · Card Embassy`;
     return () => {
-      document.title = 'Bault';
+      document.title = 'Card Embassy';
     };
   }, [pageTitle]);
 
@@ -399,7 +398,6 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
                 />
                 <span className="ph-controls">
                   <ThemeToggle />
-                  <LanguageSwitcher />
                   {!suspended && (
                     <NotificationBell
                       items={notifications.items}
