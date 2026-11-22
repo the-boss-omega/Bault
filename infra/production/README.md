@@ -75,7 +75,22 @@ Fill in every value. In `production.env` at least: `BAULT_DOMAIN`,
 `compose.yml`, `172.30.89.0/24`), PayPal, `PAYOUT_MODE`, EasyPost, SMTP,
 `STORAGE_*`, `SENTRY_DSN`, and `MFA_ENCRYPTION_KEY` (`openssl rand -base64 32`;
 keep a copy — losing it locks every enrolled authenticator out). Never
-`ALLOW_DESTRUCTIVE_SEED`.
+`ALLOW_DESTRUCTIVE_SEED`. `PAYPAL_PAYOUT_NOTE` is the subject of the email
+PayPal sends with each cash-out (empty means `Your Card Embassy cash-out`), and
+`SUPPORT_EMAIL`, `SUPPORT_PHONE`, `SUPPORT_HOURS` and `SUPPORT_TEAM` are the
+contact page's details, each shown as not published when empty. There is no
+session secret: sessions are random tokens looked up by hash, and an old
+`SESSION_COOKIE_SECRET` or `EMAIL_API_KEY` line is ignored.
+
+The web app's error reporting is not configured here: `bault-web` is a built
+bundle, so its two variables are build arguments of `apps/web/Dockerfile`, and
+nothing in `compose.yml` or `/etc/bault` changes them. `release.yml` passes
+`VITE_RELEASE` (the tag being released) and `VITE_SENTRY_DSN`, taken from the
+GitHub repository variable of that name (Settings, Secrets and variables,
+Actions, Variables). The DSN is the public key of a Sentry browser project;
+leave the variable unset and the web app loads and sends nothing. Set it before
+tagging, because a released image keeps the DSN it was built with, and the
+image's CSP then allows that one Sentry host in `connect-src`.
 
 Check the owner's connection from the host before going further:
 
@@ -177,6 +192,17 @@ restore drill is `infra/ops/RESTORE.md`. The same crontab runs
 hangs (compose restarts only one that exits), and logs what it does to
 `/var/log/bault/watchdog.log`.
 
+Before installing the crontab, replace `MAILTO=CHANGE_ME@your-ops-address`
+in it with an address this host can actually deliver to (a mail relay such as
+`msmtp-mta` must be set up, since the server sends no mail of its own), or
+with `MAILTO=""` if nobody will read cron mail. A failed dump leaves
+`BACKUP-FAILED` in `BACKUP_DIR` (`/var/backups/bault`) with the time and the
+exit status, the watchdog writes it once to `watchdog.log` as
+`backup: the nightly backup FAILED: …`, and the next good dump removes it, so
+`ls /var/backups/bault/BACKUP-FAILED` is the quick check. The commented
+dead-man's-switch line in the crontab is what reaches a person when the host
+cannot send mail.
+
 ## 7. Prices (the first deploy, and whenever a price changes)
 
 A fresh database has no prices: the coverage report is not ready, and every
@@ -253,6 +279,8 @@ Still by hand, because nothing outside the server can drive them:
   events;
 - the verify and reset emails landed in the inbox, not in spam;
 - Sentry shows the forged webhook (a `WebhookVerificationError`);
+- with `VITE_SENTRY_DSN` set, a browser error reaches Sentry tagged with the
+  release, and the browser console shows no CSP refusal for it;
 - a label refused at dispatch, re-rated from the shipment drawer;
 - a delivered parcel sending its notification;
 - the requeue drill: stop SMTP, let a message park, restore SMTP, requeue it

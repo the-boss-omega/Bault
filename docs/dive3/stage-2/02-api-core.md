@@ -18,7 +18,7 @@ The first middleware is `requestContext`. Then `trust proxy` is set from `TRUST_
 
 `trust proxy` decides `req.ip`, which the rate limiter, the sign-in log and sessions use. `true` is refused everywhere, because it believes a forged `X-Forwarded-For`, so a client could fake its address and dodge the rate limit. `loopback` is refused in production, where every visitor would share the proxy's address and so one rate-limit budget.
 
-`enableShutdownHooks` lets requests in flight finish on SIGTERM. Then `bootstrap` sets the `api/v1` prefix and installs `AllExceptionsFilter`. It installs a `ValidationPipe` with `whitelist`, `forbidNonWhitelisted` and `transform`. The pipe builds its errors with `validationException`. `/docs` exists only with `EXPOSE_API_DOCS`. `API_DOCS_PASSWORD` adds Basic auth, checked with `timingSafeEqual` so the check's timing does not leak the password. Production requires the password with the docs on.
+`bootstrap` creates the app from `ApiProcessModule`, which imports `AppModule` and adds `FlushReportsOnShutdown`. `enableShutdownHooks` lets requests in flight finish on SIGTERM or SIGINT. Nest then runs the shutdown hooks, and the root module's `onApplicationShutdown` runs after every other module's destroy and before-shutdown hooks, so the last thing the API does before it re-raises the signal is flush the error reports, for two seconds at most. Before the app is created, `flushReportsOnExit` from `@bault/adapters` makes an uncaught exception or an unhandled rejection log, flush and exit with code 1, as Node would have done without a flush. Then `bootstrap` sets the `api/v1` prefix and installs `AllExceptionsFilter`. It installs a `ValidationPipe` with `whitelist`, `forbidNonWhitelisted` and `transform`. The pipe builds its errors with `validationException`. `/docs` exists only with `EXPOSE_API_DOCS`. `API_DOCS_PASSWORD` adds Basic auth, checked with `timingSafeEqual` so the check's timing does not leak the password. Production requires the password with the docs on.
 
 #### `apps/api/src/app.module.ts`, `apps/api/src/shared/throttle/auth-bucket.ts`
 
@@ -126,7 +126,7 @@ About 1 minute. It builds on T17.5.
 
 This file sends errors to Sentry. `initErrorReporting` does nothing without `SENTRY_DSN`. Otherwise it reports errors only, with `sendDefaultPii: false`, and passes every event through `scrubErrorEvent` from `packages/adapters/src/error-report.ts`. `reportException` tags `request_id` and attaches the request.
 
-`EXCEPTION_REPORTER` lets a service report a failure that it answers with a 4xx, which the filter does not report. Only `TopupService` uses it. No module provides the token, so `TopupService` falls back to `reportException`. The API never calls `flushErrorReporting`, so a report still queued at shutdown can be lost. The worker's own copy in `apps/worker/src/observability.ts` does flush.
+`EXCEPTION_REPORTER` lets a service report a failure that it answers with a 4xx, which the filter does not report. Only `TopupService` uses it. No module provides the token, so `TopupService` falls back to `reportException`. `FlushReportsOnShutdown` calls `flushErrorReporting` through `flushWithin` when the app shuts down, and `REPORT_FLUSHER` lets a test hand it a stub. The worker has its own copy in `apps/worker/src/observability.ts`.
 
 #### `apps/api/src/shared/observability/health.controller.ts`, `apps/api/src/shared/observability/heartbeat.schema.ts`, `apps/api/src/shared/observability/observability.module.ts`
 
