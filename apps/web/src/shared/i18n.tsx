@@ -1900,8 +1900,8 @@ const en = {
   'ship.svc.usps_ground': 'USPS Ground Advantage',
   'ship.svc.usps_priority': 'USPS Priority Mail',
   'ship.svc.fedex_2day': 'FedEx 2Day',
-  'ship.svc.epacket': 'ePacket International',
-  'ship.svc.epost': 'ePost International',
+  'ship.svc.epacket': 'USPS First-Class International',
+  'ship.svc.epost': 'USPS Priority Mail International',
   'ship.svc.fedex_intl_priority': 'FedEx International Priority',
   'ship.svc.direct_overnight': 'Direct Overnight',
 
