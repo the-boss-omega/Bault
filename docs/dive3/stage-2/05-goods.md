@@ -44,7 +44,7 @@ This file defines the item and the records of where it has been. A `bin` is a sh
 
 An `item` always has one `ownerId`, and the trigger `trg_no_delete_item` refuses any delete. Its main columns are `lifecycleState`, `binId`, `holdFlag`, `sourceParcelId`, and the lot fields `isLot`, `lotSize` and `lotBroken`. A lot is several cards stored and billed as one item. `oversized` is copied from the class at intake and never derived again. So a later change to the class list cannot reprice goods already stored. `custodyEvent` and `binTransfer` are append-only. `itemChangeHistory`, `itemImage` and `batch` complete the file.
 
-`binId` is free text with no foreign key. `ConsignmentService.warehouseTransfer` writes `EXT:<warehouse>/<bin>` into it, so every join from an item to its `bin` compares the bin's id as text.
+`binId` is free text with no foreign key. `ConsignmentService.warehouseTransfer` writes `EXT:<warehouse>/<bin>` into it, so every join from an item to its `bin` compares the bin's id as text. The same holds for the bin columns of `custodyEvent` and `binTransfer`. Every other id in this file is a `uuid` with a foreign key since `0042`, to `user_account`, `item`, `batch`, `parcel` or `facility`.
 
 #### `apps/api/src/modules/inv/item-classes.ts`, `apps/api/src/modules/inv/intake-policy.ts`
 

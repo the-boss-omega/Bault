@@ -1,6 +1,7 @@
-import { check, pgEnum, pgTable, text, jsonb, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { check, pgEnum, pgTable, text, jsonb, timestamp, uniqueIndex, index, uuid } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
 
 export const ledgerType = pgEnum('ledger_type', [
   'purchase',
@@ -25,7 +26,7 @@ export const ledgerRecord = pgTable(
   'ledger_record',
   {
     id: pkId(),
-    userId: text('user_id').notNull(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
     type: ledgerType('type').notNull(),
     amount: amountMinor().notNull(),
     direction: ledgerDirection('direction').notNull(),
@@ -49,7 +50,7 @@ export const ledgerRecord = pgTable(
 
 export const externalPayment = pgTable('external_payment', {
   id: pkId(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   provider: text('provider').notNull(),
   providerRef: text('provider_ref').notNull(),
   purpose: text('purpose').notNull(),
@@ -66,7 +67,7 @@ export const externalPayment = pgTable('external_payment', {
 
 export const charge = pgTable('charge', {
   id: pkId(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   actionType: text('action_type').notNull(),
   pricingRuleSnapshot: jsonb('pricing_rule_snapshot').notNull(),
   amount: amountMinor().notNull(),
@@ -95,7 +96,7 @@ export const walletRequestStatus = pgEnum('wallet_request_status', [
 export const walletRequest = pgTable('wallet_request', {
   id: pkId(),
   code: text('code').notNull(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   type: walletRequestType('type').notNull(),
   status: walletRequestStatus('status').notNull().default('submitted'),
   amount: amountMinor().notNull(),
@@ -106,10 +107,10 @@ export const walletRequest = pgTable('wallet_request', {
   reference: text('reference'),
   documentKey: text('document_key'),
   notes: text('notes'),
-  settledLedgerId: text('settled_ledger_id'),
-  payoutPaymentId: text('payout_payment_id'),
+  settledLedgerId: uuid('settled_ledger_id').references(() => ledgerRecord.id, { onDelete: 'restrict' }),
+  payoutPaymentId: uuid('payout_payment_id').references(() => externalPayment.id, { onDelete: 'restrict' }),
   payoutReference: text('payout_reference'),
-  reviewedBy: text('reviewed_by'),
+  reviewedBy: uuid('reviewed_by').references(() => userAccount.id, { onDelete: 'restrict' }),
   reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
   rejectionReason: text('rejection_reason'),
   completedAt: timestamp('completed_at', { withTimezone: true }),
@@ -119,8 +120,8 @@ export const walletRequest = pgTable('wallet_request', {
 
 export const walletRequestEvent = pgTable('wallet_request_event', {
   id: pkId(),
-  requestId: text('request_id').notNull(),
-  actorId: text('actor_id'),
+  requestId: uuid('request_id').notNull().references(() => walletRequest.id, { onDelete: 'restrict' }),
+  actorId: uuid('actor_id').references(() => userAccount.id, { onDelete: 'restrict' }),
   actorRole: text('actor_role'),
   fromStatus: text('from_status'),
   toStatus: text('to_status').notNull(),
@@ -132,7 +133,7 @@ export const walletRequestEvent = pgTable('wallet_request_event', {
 
 export const withdrawal = pgTable('withdrawal', {
   id: pkId(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   destinationAccount: text('destination_account').notNull(),
   amount: amountMinor().notNull(),
   currency: currency().notNull(),

@@ -1,5 +1,6 @@
-import { index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { foreignKey, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
 
 export const gradingSubmissionStatus = pgEnum('grading_submission_status', [
   'open',
@@ -26,5 +27,6 @@ export const gradingSubmission = pgTable(
   (t) => ({
     gradingSubmissionCodeUnique: uniqueIndex('grading_submission_code_unique').on(t.code),
     gradingSubmissionBodyStatusIdx: index('grading_submission_body_status_idx').on(t.gradingBody, t.status),
+    shippedByFk: foreignKey({ name: 'grading_submission_shipped_by_fk', columns: [t.shippedBy], foreignColumns: [userAccount.id] }),
   }),
 );
