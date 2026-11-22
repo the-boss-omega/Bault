@@ -544,6 +544,75 @@ describe('asking for hand delivery and a show pickup', () => {
     });
   });
 
+  async function fillWindows(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole('checkbox', { name: /SN-CL10-0005/ }));
+    const pickup = screen.getByRole('group', { name: 'When it can be collected' });
+    const delivery = screen.getByRole('group', { name: 'When it can be delivered' });
+    fireEvent.change(within(pickup).getByLabelText('Date'), { target: { value: '2030-03-04' } });
+    fireEvent.change(within(delivery).getByLabelText('Date'), { target: { value: '2030-03-05' } });
+  }
+
+  it('sends the phone of the saved address it delivers to, for the courier', async () => {
+    answer();
+    get.mockImplementation((path: string) => {
+      if (path === '/me/addresses') return Promise.resolve([{ ...HOME, line2: 'Apt 4B', phone: '+1 609-555-0134' }]);
+      if (path === '/me/inbound-addresses') return Promise.resolve([VAULT]);
+      return Promise.resolve([]);
+    });
+    post.mockResolvedValue({ id: 'w1', code: 'SHP-HAND0001' });
+    renderIn(<WhiteGlovePanel items={ITEMS} onError={() => {}} onStatus={() => {}} onCreated={() => {}} />);
+    const user = userEvent.setup();
+    await fillWindows(user);
+    await waitFor(() => expect(screen.getByLabelText('Deliver to')).toHaveValue('a1'));
+    expect(screen.queryByLabelText('Phone for the courier (optional)')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Ask for a quote' }));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post.mock.calls[0]![1]).toMatchObject({
+      deliveryAddress: 'Red Ashwood, 12 Vine St, Apt 4B, Trenton, NJ 08608, US',
+      contactPhone: '+1 609-555-0134',
+    });
+    expect(post.mock.calls[0]![1].deliveryAddress).not.toContain('555-0134');
+  });
+
+  it('sends no phone for a saved address that has none', async () => {
+    answer();
+    post.mockResolvedValue({ id: 'w1', code: 'SHP-HAND0001' });
+    renderIn(<WhiteGlovePanel items={ITEMS} onError={() => {}} onStatus={() => {}} onCreated={() => {}} />);
+    const user = userEvent.setup();
+    await fillWindows(user);
+    await waitFor(() => expect(screen.getByLabelText('Deliver to')).toHaveValue('a1'));
+    await user.click(screen.getByRole('button', { name: 'Ask for a quote' }));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post.mock.calls[0]![1]).not.toHaveProperty('contactPhone');
+  });
+
+  it('asks for a phone for the courier after an address typed by hand, and sends it', async () => {
+    answer();
+    post.mockResolvedValue({ id: 'w1', code: 'SHP-HAND0001' });
+    renderIn(<WhiteGlovePanel items={ITEMS} onError={() => {}} onStatus={() => {}} onCreated={() => {}} />);
+    const user = userEvent.setup();
+    await fillWindows(user);
+    await waitFor(() => expect(screen.getByLabelText('Deliver to')).toHaveValue('a1'));
+    await user.selectOptions(screen.getByLabelText('Deliver to'), 'other');
+
+    const typed = screen.getByLabelText('Deliver to this address');
+    const phone = screen.getByLabelText('Phone for the courier (optional)');
+    expect(typed.compareDocumentPosition(phone) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(phone).toHaveAttribute('type', 'tel');
+    expect(phone).toHaveAttribute('autocomplete', 'tel');
+    expect(phone).toHaveAttribute('maxlength', '20');
+
+    await user.type(typed, 'The Langham, 250 Franklin St, Boston MA 02110');
+    await user.type(phone, ' +1 617-555-0199 ');
+    await user.click(screen.getByRole('button', { name: 'Ask for a quote' }));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post.mock.calls[0]![1]).toMatchObject({
+      deliveryAddress: 'The Langham, 250 Franklin St, Boston MA 02110',
+      contactPhone: '+1 617-555-0199',
+    });
+  });
+
   it('dims an item already on a shipment in the show pickup too', async () => {
     get.mockImplementation((path: string) => {
       if (path === '/shipping/pickup/shows') return Promise.resolve([{ id: 'e1', name: 'Card Show', startsAt: '2030-01-01', requestDeadline: '2029-12-20', open: true, venue: 'Hall', city: 'Newark', feeMinor: 1000, remaining: null }]);
@@ -639,5 +708,38 @@ describe('cancelling a shipment says what it will cost', () => {
     expect(await screen.findByText('ship.cancelNoFee')).toBeInTheDocument();
     expect(screen.queryByText('ship.cancelFeeWarning')).not.toBeInTheDocument();
     expect(get).toHaveBeenCalledWith('/shipping/shipments/pk1/cancel-fee');
+  });
+});
+
+describe('a collector’s own hand delivery', () => {
+  it('shows the phone they gave for the courier under the destination', () => {
+    get.mockResolvedValue([]);
+    renderIn(
+      <ShipmentDrawer
+        shipment={{
+          id: 'hd1',
+          code: 'SHP-HAND0001',
+          status: 'requested',
+          fulfilmentMethod: 'hand_delivery',
+          itemIds: ['i1'],
+          destinationAddress: 'The Langham, 250 Franklin St, Boston MA 02110',
+          contactPhone: '+1 617-555-0199',
+          destinationCountry: 'US',
+          declaredValueMinor: 0,
+          insuredValueMinor: 0,
+          addOns: [],
+          labelRefused: null,
+          createdAt: '2030-01-01T00:00:00Z',
+        } as never}
+        locale="en"
+        t={(k: string) => k}
+        onClose={() => {}}
+        onChanged={() => {}}
+        onError={() => {}}
+        onStatus={() => {}}
+      />,
+    );
+    expect(screen.getByText('ff.wg.courierPhone')).toBeInTheDocument();
+    expect(screen.getByText('+1 617-555-0199')).toBeInTheDocument();
   });
 });

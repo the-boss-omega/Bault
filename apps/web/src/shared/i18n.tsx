@@ -2315,6 +2315,8 @@ const en = {
   'ff.wg.deliverAfterPickup': 'It cannot be delivered before it is collected.',
   'ff.wg.deliveryAddress': 'Deliver to',
   'ff.wg.country': 'Country',
+  'ff.wg.contactPhone': 'Phone for the courier (optional)',
+  'ff.wg.courierPhone': 'Phone for the courier',
   'ff.wg.ask': 'Ask for a quote',
   'ff.wg.nothingCharged': 'Nothing is charged now. This is a question, not a booking.',
   'ff.wg.requested': 'Request {id} received. We will come back with a price within {hours} hours.',

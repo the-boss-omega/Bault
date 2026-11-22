@@ -23,6 +23,19 @@ export interface HandDeliveryProblem {
   message: string;
 }
 
+const CONTACT_PHONE = /^(?=(?:.*\d){6})[0-9+\- ]{6,20}$/;
+
+export function contactPhoneOf(value: string | null | undefined): string | null {
+  const phone = (value ?? '').trim();
+  return phone ? phone : null;
+}
+
+export function shipmentContactPhone(s: { fulfilmentMethod: string; destinationDetail: unknown }): string | null {
+  if (s.fulfilmentMethod !== 'hand_delivery') return null;
+  const detail = s.destinationDetail as { phone?: unknown } | null;
+  return typeof detail?.phone === 'string' ? detail.phone : null;
+}
+
 export function checkHandDelivery(input: {
   pickupFrom: Date;
   pickupTo: Date;
@@ -30,6 +43,7 @@ export function checkHandDelivery(input: {
   deliverTo: Date;
   pickupAddress: string;
   deliveryAddress: string;
+  contactPhone?: string | null;
   now?: Date;
 }): HandDeliveryProblem[] {
   const problems: HandDeliveryProblem[] = [];
@@ -40,6 +54,13 @@ export function checkHandDelivery(input: {
   }
   if (!input.deliveryAddress.trim()) {
     problems.push({ field: 'deliveryAddress', message: 'Say where it is being taken.' });
+  }
+  const phone = contactPhoneOf(input.contactPhone);
+  if (phone !== null && !CONTACT_PHONE.test(phone)) {
+    problems.push({
+      field: 'contactPhone',
+      message: 'A phone for the courier is 6 to 20 characters of digits, spaces, plus and dashes, with at least six digits.',
+    });
   }
   if (input.pickupTo.getTime() <= input.pickupFrom.getTime()) {
     problems.push({ field: 'pickupTo', message: 'The pickup window has to be a window.' });
