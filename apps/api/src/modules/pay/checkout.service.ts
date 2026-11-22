@@ -14,6 +14,19 @@ import { WALLET_REQUEST_LIMITS } from './wallet-request.rules';
 import { FUNDING_ROUTES, isInstantRoute } from './money-terms';
 import { formatMinor } from '../../shared/money';
 import { CHECKOUT_LANDING, paypalCheckoutOffered } from './paypal-checkout.service';
+import { cryptoCheckoutOffered } from './crypto-checkout.service';
+
+const CRYPTO_ROUTE = {
+  key: 'crypto',
+  label: 'Crypto',
+  instant: false,
+  feeBps: 0,
+  description:
+    'Pay a fixed dollar amount in crypto on Coinbase Commerce, which converts it to dollars. The balance moves once the network confirms the payment, with nobody approving it.',
+  available: true,
+  checkout: 'crypto' as const,
+  instructions: null,
+};
 
 /** What an instant route says when PayPal checkout takes it. */
 const PAYPAL_CHECKOUT_DESCRIPTION: Readonly<Record<string, string>> = {
@@ -52,29 +65,35 @@ export class CheckoutService {
     const bankPublished = Object.values(bank).some((v) => v !== null);
     const paypalFf = clean(env.PAYPAL_FF_HANDLE ?? '');
 
+    const listed = FUNDING_ROUTES.map((route) => {
+      if (route.instant && CHECKOUT_LANDING[route.key] && paypalCheckoutOffered(env)) {
+        return {
+          ...route,
+          description: PAYPAL_CHECKOUT_DESCRIPTION[route.key] ?? route.description,
+          available: true,
+          checkout: 'paypal' as const,
+          instructions: null,
+        };
+      }
+      if (route.instant) {
+        return { ...route, available: env.PAYMENT_PROVIDER === 'sandbox', checkout: 'direct' as const, instructions: null };
+      }
+      if (route.key === 'bank_transfer') {
+        return { ...route, available: bankPublished, checkout: null, instructions: bankPublished ? bank : null };
+      }
+      if (route.key === 'paypal_ff') {
+        return { ...route, available: paypalFf !== null, checkout: null, instructions: paypalFf ? { handle: paypalFf } : null };
+      }
+      return { ...route, available: false, checkout: null, instructions: null };
+    });
+    const paypalAt = listed.findIndex((r) => r.key === 'paypal_gs');
+    const routes = cryptoCheckoutOffered(env)
+      ? [...listed.slice(0, paypalAt + 1), CRYPTO_ROUTE, ...listed.slice(paypalAt + 1)]
+      : listed;
+
     return {
       limits: WALLET_REQUEST_LIMITS.cash_in,
-      routes: FUNDING_ROUTES.map((route) => {
-        if (route.instant && CHECKOUT_LANDING[route.key] && paypalCheckoutOffered(env)) {
-          return {
-            ...route,
-            description: PAYPAL_CHECKOUT_DESCRIPTION[route.key] ?? route.description,
-            available: true,
-            checkout: 'paypal' as const,
-            instructions: null,
-          };
-        }
-        if (route.instant) {
-          return { ...route, available: env.PAYMENT_PROVIDER === 'sandbox', checkout: 'direct' as const, instructions: null };
-        }
-        if (route.key === 'bank_transfer') {
-          return { ...route, available: bankPublished, checkout: null, instructions: bankPublished ? bank : null };
-        }
-        if (route.key === 'paypal_ff') {
-          return { ...route, available: paypalFf !== null, checkout: null, instructions: paypalFf ? { handle: paypalFf } : null };
-        }
-        return { ...route, available: false, checkout: null, instructions: null };
-      }),
+      routes,
       referenceNote:
         'Put your username in the payment reference. It is the only thing that ties an arriving payment to your account.',
     };

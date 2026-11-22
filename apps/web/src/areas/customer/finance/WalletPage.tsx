@@ -15,7 +15,7 @@ import {
   type WalletRequestDetail,
 } from '../../../shared/walletRequests';
 import { WalletRequestForm } from './WalletRequestForms';
-import { TopUpPanel } from './MoneyPanels';
+import { TopUpPanel, cryptoReturnFrom } from './MoneyPanels';
 import { paypalReturnFromSearch } from '../../../shared/paypalCheckout';
 import { InTransit, StatementSlip } from './StatementSlip';
 import {
@@ -129,6 +129,9 @@ export function WalletPage() {
     [paypalParam, paymentParam],
   );
   const clearPayPalReturn = useCallback(() => setParams({ paypal: null, payment: null }), [setParams]);
+  const cryptoParam = route.params.crypto ?? '';
+  const cryptoReturn = useMemo(() => cryptoReturnFrom(cryptoParam, paymentParam), [cryptoParam, paymentParam]);
+  const clearCryptoReturn = useCallback(() => setParams({ crypto: null, payment: null, charge: null }), [setParams]);
 
   const [balance, setBalance] = useState<Money | null>(null);
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
@@ -256,6 +259,8 @@ export function WalletPage() {
             onChanged={() => void load()}
             paypalReturn={paypalReturn}
             onPayPalReturnHandled={clearPayPalReturn}
+            cryptoReturn={cryptoReturn}
+            onCryptoReturnHandled={clearCryptoReturn}
           />
 
           <Panel title={t('wallet.cashIn.title')} subtitle={t('wallet.cashIn.subtitle')}>
