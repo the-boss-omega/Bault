@@ -7,10 +7,12 @@ export const shippingAddress = pgTable('shipping_address', {
   label: text('label').notNull(),
   recipient: text('recipient').notNull(),
   line1: text('line1').notNull(),
+  line2: text('line2'),
   city: text('city').notNull(),
   region: text('region'),
   country: text('country').notNull(),
   postalCode: text('postal_code').notNull(),
+  phone: text('phone'),
   isDefault: boolean('is_default').notNull().default(false),
   createdAt: createdAt(),
 });

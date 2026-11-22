@@ -236,10 +236,12 @@ describe('the addresses, a label for each place', () => {
       label: 'Office',
       recipient: 'Red Ashwood',
       line1: '77 Rothschild Blvd',
+      line2: null,
       city: 'Tel Aviv',
       region: null,
       country: 'IL',
       postalCode: '6688120',
+      phone: null,
       isDefault: false,
     });
   });

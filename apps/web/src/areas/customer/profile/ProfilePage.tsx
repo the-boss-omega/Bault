@@ -30,6 +30,7 @@ import {
   AddressFields,
   AddressLabel,
   EMPTY_ADDRESS,
+  addressOptionals,
   missingAddressFields,
   type Address,
   type AddressDraft,
@@ -477,6 +478,7 @@ function AddressCard({
         region: draft.region?.trim() || null,
         country: draft.country,
         postalCode: draft.postalCode,
+        ...addressOptionals(draft),
         isDefault: draft.isDefault,
       });
       setEditing(false);
@@ -547,7 +549,7 @@ function AddressForm({
 
   async function add() {
     try {
-      await api.post('/me/addresses', { ...draft, region: draft.region?.trim() || null });
+      await api.post('/me/addresses', { ...draft, region: draft.region?.trim() || null, ...addressOptionals(draft) });
       setDraft(empty);
       await onAdded();
     } catch (e) {
