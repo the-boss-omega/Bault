@@ -148,7 +148,7 @@ This script downloads the three font families from Google Fonts, Geist, Geist Mo
 
 About 1 minute. It builds on T18.3.
 
-This is `pnpm users:remove-test`, which deletes old test accounts. It only lists them unless you pass `--apply`. It matches only `LEGACY_FIXTURE` addresses, never `PROTECTED` ones, and it skips accounts with rows in the `ACTIVITY` tables. It refuses production unless `ALLOW_DESTRUCTIVE_SEED=yes-i-am-sure`. `ACTIVITY` lists six tables, so rows in other tables that hold the user's id are not checked and can outlive the account.
+This is `pnpm users:remove-test`, which deletes old test accounts. It only lists them unless you pass `--apply`. It matches only `LEGACY_FIXTURE` addresses, never `PROTECTED` ones, and it skips accounts with rows in the `ACTIVITY` tables. It refuses production unless `ALLOW_DESTRUCTIVE_SEED=yes-i-am-sure`. `ACTIVITY` lists six tables, and the script deletes only the account's verification tokens and sessions. Since `0042` every other row that names the account has a foreign key to it, so such a row makes the delete fail and the whole batch roll back, rather than outlive the account.
 
 #### `scripts/test.mjs`, `packages/adapters/src/index.ts`, `packages/config/src/index.ts`, `packages/adapters/package.json`, `packages/config/package.json`, `packages/contracts/package.json`, `pnpm-lock.yaml`, `.gitignore`
 
