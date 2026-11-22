@@ -137,6 +137,27 @@ export class GroupShipmentService {
     return { status: 'left' as const };
   }
 
+  async describeFor(groupId: string, viewer: ShipmentActor) {
+    const staff = viewer.role === 'warehouse_operator' || viewer.role === 'admin';
+    if (!staff) {
+      const [group] = await this.db
+        .select({ payerUserId: shipmentGroup.payerUserId })
+        .from(shipmentGroup)
+        .where(eq(shipmentGroup.id, groupId))
+        .limit(1);
+      if (!group) throw AppError.notFound('Group not found');
+      if (group.payerUserId !== viewer.id) {
+        const [mine] = await this.db
+          .select({ id: shipment.id })
+          .from(shipment)
+          .where(and(eq(shipment.groupId, groupId), eq(shipment.userId, viewer.id)))
+          .limit(1);
+        if (!mine) throw AppError.notFound('Group not found');
+      }
+    }
+    return this.describe(groupId);
+  }
+
   async describe(groupId: string) {
     const [group] = await this.db.select().from(shipmentGroup).where(eq(shipmentGroup.id, groupId)).limit(1);
     if (!group) throw AppError.notFound('Group not found');

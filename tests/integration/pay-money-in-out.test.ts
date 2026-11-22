@@ -191,6 +191,68 @@ describe('PAY money in and out', () => {
     expect(again.status).toBe(409);
   });
 
+  it('takes back a completed cash-in request when the bank recalls the transfer', async () => {
+    const admin = await signIn(SEED.admin);
+    const collector = await signIn(SEED.collector2);
+    const month = new Date().toISOString().slice(0, 7);
+    const reversedThisMonth = async () =>
+      ((await admin.get(`/admin/accounting/summary?month=${month}`)).body as { customerMoney: { reversedMinor: number } })
+        .customerMoney.reversedMinor;
+
+    const created = await collector.post('/finance/wallet-requests', {
+      type: 'cash_in',
+      amountMinor: 40_000,
+      currency: 'USD',
+      fundingSource: 'bank_transfer',
+      reference: `recall-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+    });
+    expect(created.status).toBe(201);
+    const requestId = created.body.id as string;
+    expect((await admin.post(`/admin/wallet-requests/${requestId}/approve`, {})).status).toBe(201);
+    expect((await admin.post(`/admin/wallet-requests/${requestId}/complete`, {})).status).toBe(201);
+
+    const reversible = (await admin.get('/finance/chargebacks/reversible')).body as Array<{
+      id: string;
+      kind: string;
+      amount: number;
+    }>;
+    expect(reversible.some((r) => r.id === requestId && r.kind === 'wallet_request' && r.amount === 40_000)).toBe(true);
+
+    const before = await balanceOf(collector);
+    const reversedBefore = await reversedThisMonth();
+
+    const recalled = await admin.post(`/finance/chargebacks/wallet-requests/${requestId}`, {
+      reason: 'The sending bank recalled the transfer.',
+      providerCaseRef: 'RECALL-5521',
+    });
+    expect(recalled.status).toBe(201);
+    expect(recalled.body.reversedMinor).toBe(40_000);
+    expect(recalled.body.feeMinor).toBeGreaterThan(0);
+    expect(await balanceOf(collector)).toBe(before - 40_000 - recalled.body.feeMinor);
+
+    const ledger = (await collector.get('/finance/ledger')).body as Array<{
+      type: string;
+      amount: number;
+      referenceType: string;
+      referenceId: string;
+    }>;
+    expect(
+      ledger.some(
+        (r) =>
+          r.type === 'chargeback' && r.amount === 40_000 && r.referenceType === 'wallet_request' && r.referenceId === requestId,
+      ),
+    ).toBe(true);
+
+    expect((await reversedThisMonth()) - reversedBefore).toBe(40_000);
+
+    const again = await admin.post(`/finance/chargebacks/wallet-requests/${requestId}`, { reason: 'Again.' });
+    expect(again.status).toBe(409);
+    expect(await balanceOf(collector)).toBe(before - 40_000 - recalled.body.feeMinor);
+
+    const after = (await admin.get('/finance/chargebacks/reversible')).body as Array<{ id: string }>;
+    expect(after.some((r) => r.id === requestId)).toBe(false);
+  });
+
   it('can waive the handling fee when Bault won the dispute', async () => {
     const admin = await signIn(SEED.admin);
     const collector = await signIn(SEED.collector2);
