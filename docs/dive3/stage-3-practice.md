@@ -298,11 +298,7 @@ The options:
 - `describe` and `mine` work whatever has happened to a member's cards since they joined.
 - `cancel` changes only a group that is `forming` or `locked`, and the dead `dispatched` check goes or becomes part of that condition.
 
-**Test first:**
-- integration: in `tests/integration/shp-outbound.test.ts`, beside 'lets two collectors ship to one address without either owning the other cards': golden joins red's group and cancels her shipment, and red's lock must answer 400 'A shared parcel needs at least two people in it.' (it locks now);
-- worker: in `tests/worker/shipment-expiry.test.ts`, an expired shipment that was in a group has `group_id` null afterwards (it keeps it now).
-
-**Done when:** the tests, `pnpm test:integration`, `pnpm test:concurrency` (`group-lock.test.ts` drives lock against cancel) and `pnpm test:worker` pass.
+**Done:** a shipment leaves its group in the same UPDATE that ends it: `ShipmentEditService.cancel` and the source side of `merge` set `groupId` to null, and `expireUnpaidShipments` sets `group_id = NULL` in its own UPDATE. `GroupShipmentService.lock` also counts only shipments that are not `cancelled`, in its first read and again under the lock, which guards any older row or other path that ends a shipment. `describe` reads the members' cards with the new `ParcelProfileService.loadItems`, a plain read with no ownership or state check, and passes them to `measure`, so `GET /shipping/groups` and `GET /shipping/groups/:id` answer after a dispatch or a sale. `cancel` now moves a group to `cancelled` with one UPDATE conditional on `forming` or `locked` and answers 409 otherwise; the dead `dispatched` check is gone. The tests are in `tests/integration/shp-outbound.test.ts`, 'does not lock a shared parcel whose only other member cancelled her shipment' and 'still shows a shared parcel after one member’s card has gone out', which dispatches golden's shipment and reads the group as both members, and in `tests/worker/shipment-expiry.test.ts`, 'takes a released shipment out of its shared parcel'. Rows that were cancelled before this change keep their `group_id`; `lock` ignores them, and `describe` still lists them.
 <details><summary>Hints</summary>
 
 1. Clearing `groupId` in both cancel paths fixes the count at its source; filtering by status in `lock` as well guards any other path that ends a shipment.

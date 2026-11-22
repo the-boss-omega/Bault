@@ -593,6 +593,83 @@ describe('SHP outbound shipping', () => {
     expect(locked.body.memberCount).toBe(2);
   });
 
+  async function sharedParcel() {
+    const operator = await signIn(SEED.operator);
+    const mine = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
+    const theirs = await intakeFor(operator, SEED.collector2, { typeClass: 'trading_card' });
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+    const shared = {
+      label: 'Convention hotel',
+      recipient: 'Front desk — Bault group',
+      line1: '400 Boardwalk',
+      city: 'Atlantic City',
+      region: 'NJ',
+      country: 'US',
+      postalCode: '08401',
+    };
+    const redAddr = await addressFor(red, shared);
+    const goldenAddr = await addressFor(golden, shared);
+    const redShip = (await red.post('/shipping/shipments', { itemIds: [mine.id], addressId: redAddr })).body;
+    const goldenShip = (
+      await golden.post('/shipping/shipments', { itemIds: [theirs.id], addressId: goldenAddr })
+    ).body;
+    const group = (await red.post('/shipping/groups', { shipmentId: redShip.id })).body;
+    const joined = await golden.post('/shipping/groups/join', { groupCode: group.code, shipmentId: goldenShip.id });
+    expect(joined.status).toBe(201);
+    return { operator, red, golden, group, goldenShip, theirs };
+  }
+
+  it('does not lock a shared parcel whose only other member cancelled her shipment', async () => {
+    const { red, golden, group, goldenShip } = await sharedParcel();
+
+    const cancelled = await golden.post(`/shipping/shipments/${goldenShip.id}/cancel`, { reason: 'Changed my mind.' });
+    expect(cancelled.status).toBe(201);
+    expect((await golden.get(`/shipping/shipments/${goldenShip.id}`)).body.groupId ?? null).toBeNull();
+
+    const locked = await red.post(`/shipping/groups/${group.id}/lock`);
+    expect(locked.status).toBe(400);
+    expect(locked.body.error.message).toBe('A shared parcel needs at least two people in it.');
+    expect((await red.get(`/shipping/groups/${group.id}`)).body.memberCount).toBe(1);
+
+    expect((await red.post(`/shipping/groups/${group.id}/cancel`, { reason: 'Nobody left.' })).status).toBe(201);
+    expect((await red.post(`/shipping/groups/${group.id}/cancel`, { reason: 'Again.' })).status).toBe(409);
+  });
+
+  it('still shows a shared parcel after one member’s card has gone out', async () => {
+    const { operator, red, golden, group, goldenShip, theirs } = await sharedParcel();
+    await fundWallet(SEED.collector2, 100_000);
+
+    const rates = (await golden.get(`/shipping/shipments/${goldenShip.id}/rates`)).body as {
+      carrier: string;
+      serviceLevel: string;
+      eligible: boolean;
+    }[];
+    const pick = rates.find((r) => r.eligible)!;
+    const selected = await golden.post(`/shipping/shipments/${goldenShip.id}/select-rate`, {
+      carrier: pick.carrier,
+      serviceLevel: pick.serviceLevel,
+    });
+    expect(selected.status).toBe(201);
+    const dispatched = await operator.post(`/shipping/shipments/${goldenShip.id}/dispatch`, {
+      scannedItemIds: [theirs.id],
+      carrier: 'USPS',
+      packageWeightGrams: 220,
+      fulfillmentNotes: 'Top-loader in a rigid mailer.',
+    });
+    expect(dispatched.status).toBe(201);
+
+    for (const member of [red, golden]) {
+      const one = await member.get(`/shipping/groups/${group.id}`);
+      expect(one.status, JSON.stringify(one.body)).toBe(200);
+      expect(one.body.memberCount).toBe(2);
+      expect(one.body.totalItems).toBe(2);
+      const all = await member.get('/shipping/groups');
+      expect(all.status, JSON.stringify(all.body)).toBe(200);
+      expect((all.body as { id: string }[]).some((g) => g.id === group.id)).toBe(true);
+    }
+  });
+
   it('refuses to join a shared parcel going somewhere else', async () => {
     const operator = await signIn(SEED.operator);
     const mine = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
