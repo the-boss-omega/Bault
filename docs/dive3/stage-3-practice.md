@@ -70,8 +70,7 @@ The estimates include writing the failing test, the fix, and running the named s
 - `infra/production/README.md` has the step, right after the first deploy.
 - CI's `migrate-image` job proves both against its empty database.
 
-**Test first:** integration: a new `tests/integration/bootstrap.test.ts`, beside `seed-reset.test.ts`, runs the command with `spawnSync` against the seeded test database (the way `tests/config/destructive-seed.test.ts` runs the seed) and asserts a non-zero exit that names the existing administrator, and an unchanged `user_account`. In CI, a new step in `migrate-image` that expects one `platform@bault.dev` row after migrating the empty database fails until the migration exists.
-**Done when:** the new test, `pnpm test:integration` and `pnpm test` pass; on a scratch database (`createdb`, then `DIRECT_DATABASE_URL=… pnpm --filter @bault/api db:migrate`) the platform row exists, the command creates an administrator once and refuses the second time; the CI emulation passes, and on the pull request the `migrate-image` job passes.
+**Done:** migration `0038_every_database_has_its_platform_custodian` writes `platform@bault.dev` with `ON CONFLICT ("email") DO NOTHING`, so running it on a database that already has the account changes nothing, and `pnpm db:reset` still works. The account was decided to be a plain `user` with status `closed`, so it is never counted as staff, a sign-in is refused and no mail goes to it, and its `password_hash` is a well-formed argon2id digest that no known password produces. The new command `apps/api/src/db/create-admin.ts` ships in the API image as `dist/db/create-admin.js`. It takes the email, username and names as arguments and the password, at least 12 characters, on standard input, so no password is in the repository, the shell history or the process list. Under an advisory lock it refuses, writing nothing, when an administrator other than the platform account exists, and it names that administrator. `infra/production/README.md` has the step, "The first administrator", right after the first deploy. CI's `migrate-image` job counts one platform row after migrating its empty database and again after running `0038` a second time, then runs the image's command twice and expects the second run to fail and one administrator to exist. The test is `tests/integration/bootstrap.test.ts`, where 'refuses, naming the administrator who exists, and changes no account' runs the command with `spawnSync` against the seeded database, and 'is the one closed account migration 0038 writes, and cannot sign in' checks the platform row. The work is pull request #51.
 <details><summary>Hints</summary>
 
 1. Data in a migration is fine when it is fixed and holds no secret. Insert with `ON CONFLICT DO NOTHING` on `user_account_email_unique`; the seed TRUNCATEs `user_account` and inserts its own platform row, so the two never meet.
@@ -84,14 +83,7 @@ The estimates include writing the failing test, the fix, and running the named s
 **Why:** `I18nProvider` reads and writes `localStorage` with no `try`. A browser that blocks site storage throws on that access, and `I18nProvider` sits outside `ErrorBoundary` in `apps/web/src/main.tsx`, so the visitor sees a blank page.
 **Where:** `initialLocale` and the persisting `useEffect` in `I18nProvider` (`apps/web/src/shared/i18n.tsx`); `storedChoice` and `ThemeProvider` in `apps/web/src/shared/theme.tsx`, which already guard every access; `apps/web/src/main.tsx`.
 **Task:** With storage blocked, the app renders in `DEFAULT_LOCALE`, switching language works for the rest of the visit, and nothing is thrown.
-**Test first:** ux: in `tests/ux/screen-guards.test.tsx`, make `localStorage.getItem` and `setItem` throw (`vi.spyOn(Storage.prototype, …)`), render a screen inside `I18nProvider`, and assert it renders and `document.documentElement` has `lang="he"` and `dir="rtl"`. It fails with the thrown error now.
-**Done when:** the new test, `pnpm test:ux` and `pnpm test:web` pass; manual: with site data blocked for localhost, `pnpm dev:web` shows the landing page.
-<details><summary>Hints</summary>
-
-1. `theme.tsx` has the shape you need; copy it rather than invent one.
-2. There are two accesses: the first read and the write in the effect.
-3. Grep `localStorage` across `apps/web/src`; every other access is already wrapped.
-</details>
+**Done:** `I18nProvider` first wrapped its read and its write of `localStorage` in `try`, as `theme.tsx` does (pull request #58). Since the site became English only (pull request #59) it touches no storage at all: it serves the one `en` catalogue, `apps/web/src/main.tsx` removes the old `bault.locale` key inside a `try`, and every other access in `apps/web/src` is wrapped. The test is 'still renders the app' in describe 'a browser that blocks site storage' in `tests/ux/screen-guards.test.tsx`, which makes `Storage.prototype.getItem` and `setItem` throw a `SecurityError` and renders inside `I18nProvider`. It no longer checks `lang` or `dir`, since there is one language.
 
 ### Group: Money in and out of a wallet
 
@@ -158,17 +150,7 @@ The estimates include writing the failing test, the fix, and running the named s
 - `tryPrice` returns null only when no rule is in force; any other error reaches the caller.
 - The console offers "percentage" only where the API accepts it.
 
-**Test first:**
-- integration: in `tests/integration/pay-amount-bounds.test.ts`, beside 'refuses a pricing rule with a negative value, or a percentage over 100%', `POST /pricing/rules` with `model: 'percentage'` for `intake` answers 400 (201 now).
-- core-contract: a case beside `tests3/contract/pricing-coverage.test.ts` that builds a `PricingService` over a stub database whose `select` throws, as `tests3/contract/webhook-refusal.test.ts` builds a `TopupService`, and asserts `tryPrice` rejects (it resolves to null now).
-
-**Done when:** both tests, `pnpm test:integration`, `pnpm test:core-contract` and `pnpm test:ux` (`admin-console.test.tsx` covers the form) pass.
-<details><summary>Hints</summary>
-
-1. Which actions take a base is a fact about the catalogue: a field on `BillableAction` keeps it next to the rest, and the console already reads the catalogue from `GET /admin/pricing/coverage`.
-2. `price` throws `AppError.validation` for a missing rule; `tryPrice` can catch that error alone and rethrow anything else.
-3. In `price`, the percentage branch passes `money(0, …)` when there is no base; that is the line to make refuse.
-</details>
+**Done:** which actions take a base is now a field of the catalogue: `BillableAction.percentOf` names the amount for the commission actions and is null for every other action. `PricingService.createRule` refuses a percentage rule for an action without one with a 400 whose `field` is `model`. `tryPrice` catches nothing any more, so it returns null only when `ruleInForce` finds no rule and any other error reaches the caller, and a percentage rule given no base throws a validation error naming the action and the rule instead of pricing $0; `price` calls it and adds the "No pricing rule" error. The console's `PricingSection`, now in `apps/web/src/areas/admin/PricingSection.tsx`, reads the catalogue from `GET /admin/pricing/coverage`, offers "percentage" only for an action with a `percentOf`, and goes back to fixed when another action is picked. The tests are 'refuses a percentage rule for an action that has no amount to take it of' in `tests/integration/pay-amount-bounds.test.ts`, the new `tests3/contract/pricing-refusals.test.ts`, where a stub database whose `select` throws makes `tryPrice` reject, and 'offers a percentage only for an action priced on an amount' in `tests/ux/admin-console.test.tsx`. The work is pull request #21.
 
 ### P7. Refunds come off revenue, and the console shows the netting · 50 min · adm, web · T8.2, T8.10, T16.4
 **Why:** `AccountingService.summary` builds revenue from `fee`, `service_charge` and `interest` rows only. A `shipping_refund` or `service_refund` credit never comes off it, so a cancelled shipment's charge or a declined custom request's fee is still reported as revenue. On the console, `AccountingSection` has its own copy of the summary type without `payoutsReturnedMinor` and `cashOutFeesReturnedMinor`, so the netting the API does is not on screen, and money out cannot be squared with the by-type table.
@@ -177,18 +159,7 @@ The estimates include writing the failing test, the fix, and running the named s
 - In the month a refund is written, it comes off the revenue line its charge was counted on: a shipping refund off `service_charge`, a custom request's refund off `custom_request_fee`, any other service refund off `service_charge`. The summary reports the total taken off, as it does for returned cash-out fees.
 - The summary panel shows the refunds, the returned cash-out fees and the returned payouts, in Hebrew and in English.
 
-**Test first:**
-- integration: in `tests/integration/adm-accounting.test.ts`, describe 'N40 monthly summary', cancel a paid shipment (set it up as 'charges a restocking fee to cancel a request that was already paid for' in `tests/integration/shp-outbound.test.ts` does) and assert the month's `service_charge` line falls by the refund. It does not fall now.
-- ux: in `tests/ux/admin-accounting.test.tsx`, beside 'shows the month summary with revenue apart from customer money', a mocked summary with non-zero `payoutsReturnedMinor` and `cashOutFeesReturnedMinor` shows both figures. Neither is shown now.
-
-**Done when:** both tests, `pnpm test:integration`, `pnpm test:ux`, `pnpm test:web` and `pnpm typecheck` pass (`en` is typed from `he`'s keys, so a key in only one of them fails the typecheck); manual: open the summary in each language.
-<details><summary>Hints</summary>
-
-1. 'keeps Bault revenue, customer money and balances held apart' asserts revenue equals the net of three ledger types less `cashOutFeesReturnedMinor`; that identity changes with your rule, so update it rather than delete it.
-2. A `service_refund` references its `service_request`; join it to tell a custom request from the rest, as the revenue query already does for `consignment` and `custom`.
-3. `AccountingSummary` is the SPA's only description of the response (`packages/contracts` exports nothing), so extend it field by field.
-4. Write the Hebrew strings yourself, or mark them for translation in the pull request; both objects need every key either way.
-</details>
+**Done:** `AccountingService.summary` now reads `shipping_refund` and `service_refund` credits with the revenue rows and takes each off the line its charge was counted on: a shipping refund off `service_charge`, a `service_refund` whose `service_request` is of type `custom` off `custom_request_fee`, and any other service refund off `service_charge`. The month's total taken off is reported as `revenue.refundsMinor`, beside `cashOutFeesReturnedMinor`. On the console, `AccountingSummary` in `AccountingSection.tsx` gained `refundsMinor`, `cashOutFeesReturnedMinor` and `payoutsReturnedMinor`, and `SummaryView` shows all three; the site is English only now, so there is one set of strings. The tests are "takes a cancelled shipment's refund off the shipping revenue it was counted in" in `tests/integration/adm-accounting.test.ts`, describe 'N40 monthly summary', where the identity in 'keeps Bault revenue, customer money and balances held apart' now also subtracts `refundsMinor`, and 'shows what the month gave back: refunds, returned cash-out fees and returned payouts' in `tests/ux/admin-accounting.test.tsx`. The work is pull request #21.
 
 ### Group: Service requests
 
@@ -206,11 +177,7 @@ The options:
 **Why:** the collector pays for work Bault did not do, and a request a membership covered keeps using up the allowance.
 **Where:** `ServiceRequestService.create`, `deny`, `transition`, `get`, `setStatus` (`dis/service.service.ts`); `BillingService.charge`, which returns nothing, and `BillingPort` (`shared/billing/billing.port.ts`); `MembershipService.consume` and `restoreCounted`; `allowanceFor` (`mem/tiers.ts`); `GradingService.approve`; `DisposalServicesService.completeDeslab`; the refund pattern in `CustomRequestService.declineToQuote` and `refundable`; `DisController.deny` (`POST /services/requests/:id/deny`).
 **Task:** under the chosen rule, a denied request, a refused grading approval and a deslab whose card changed hands end `cancelled`, with the wallet and the allowance as the rule says, once each.
-**Test first:** integration:
-- in `tests/integration/dis-services.test.ts`, beside 'operator can deny a pending request': after the deny, the balance is back to what it was before the request and the ledger has one `service_refund` for it (under "refund"; no refund exists now);
-- in `tests/integration/dis-item-services.test.ts`, beside 'does not crack a slab that was sold after the request was accepted': the request can then be closed, and ends `cancelled` with the rule's money (it stays `in_progress` now).
-
-**Done when:** the tests, `pnpm test:integration`, `pnpm test:property` and `pnpm test:core` pass, and the pull request states the decision.
+**Done:** the decision was to refund and close in all three. `BillingService.charge` now returns what it did, a charge with its amount or the membership period and allowance that covered it, and `ServiceRequestService.create` keeps it in the request's `typeFields.billed`. `refundAndCancel` reads it under the request's row lock, then locks the wallet, writes one `service_refund` for what was charged or gives the allowance back with `restoreCounted`, also refunds any `fee` the requester paid against the request itself, and sets the request `cancelled` with `refundedMinor` or `allowanceRestored`. `deny` now accepts a request that is `requested` or `in_progress`, so an operator closes a deslab whose card changed hands from the service queue, and a second deny answers 409. `GradingService.approve` with `approve: false` calls `refundAndCancel` too. The tests are 'gives back what a denied request charged, once' and 'gives a member back the allowance a denied request used, and charges nothing' in `tests/integration/dis-services.test.ts`; 'refunds and closes a walkthrough request an admin refuses' and 'does not crack a slab that was sold after the request was accepted', which now closes the request with a refund, in `tests/integration/dis-item-services.test.ts`; and 'lets the operator cancel and refund a request that is already under way' in `tests/ux/warehouse-bench.test.tsx`. The work is pull request #22.
 <details><summary>Hints</summary>
 
 1. `BillingService.charge` writes the item's id into `charge.reference_id`, not the request's, so a refund cannot find its charge afterwards. Have `charge` return what it did (the charge's id and amount, or the period that covered it) and keep that in the request's `typeFields`.
@@ -310,11 +277,7 @@ The options:
 **Why:** `HumanFulfilmentService.acceptQuote` charges whatever `quoteMinor` is on the shipment when the click arrives. If an operator revises the quote while the collector is reading the old one, the collector is charged a figure they never saw. The accept request has no body, so the server cannot tell.
 **Where:** `ShpController.acceptQuote` (`POST /shipping/white-glove/:id/accept`) and the DTO classes beside it in `shp/shp.controller.ts` (`QuoteDto` is the pattern); `HumanFulfilmentService.acceptQuote` and `quoteHandDelivery`; the Accept button in `apps/web/src/areas/customer/shipping/HumanFulfilmentPanels.tsx`; the callers that accept with no body in `tests/integration/esc-and-human-fulfilment.test.ts`, `tests/concurrency/hand-delivery-quote.test.ts` and `tests/concurrency/money-races.test.ts`.
 **Task:** accepting requires the figure the collector saw. It is compared with `quoteMinor` under the shipment lock, and a different figure is a 409 that says the quote changed and gives the new one; nothing is charged. The SPA sends the figure it shows.
-**Test first:**
-- concurrency: in `tests/concurrency/hand-delivery-quote.test.ts`, quote 12,000, re-quote 15,000, accept naming 12,000: 409 and the balance unchanged (it is 201 at 15,000 now); then accept naming 15,000: 201;
-- ux: in `tests/ux/customer-screens.test.tsx`, 'shows the quoted figure with a way to accept it' also asserts the accept request carries the figure shown.
-
-**Done when:** the tests, `pnpm test:concurrency`, `pnpm test:integration` and `pnpm test:ux` pass; manual: quote a request, re-quote it as the operator through the API (`POST /shipping/white-glove/:id/quote`), and press Accept on the collector's open page.
+**Done:** `POST /shipping/white-glove/:id/accept` now takes `AcceptQuoteDto`, one required positive integer `quoteMinor`, so an accept that names no figure is a 400. `HumanFulfilmentService.acceptQuote` compares it with the shipment's `quoteMinor` right after its `FOR UPDATE` read and before the balance check, and a different figure is a 409 `quote_changed` that names the new figure and carries it as `details.quoteMinor`; nothing is charged. `WhiteGloveQuotes` in `HumanFulfilmentPanels.tsx` sends the figure it shows and, on `quote_changed`, shows the new one. The tests are 'charges only the figure the collector saw, and names the new one when the quote changed' and 'refuses an accept that names no figure' in `tests/concurrency/hand-delivery-quote.test.ts`, and in `tests/ux/customer-screens.test.tsx` 'shows the quoted figure with a way to accept it', which asserts the accept carries `quoteMinor`, and 'shows the new figure when the quote changed while the collector was reading'. The callers in the integration and concurrency suites that accepted with no body now send the figure. The work is pull request #24.
 <details><summary>Hints</summary>
 
 1. A DTO with one required positive integer; the global validation pipe turns a missing one into a 400.
@@ -332,11 +295,7 @@ Either way, a cancelled pickup gives its membership allowance back.
 **Why:** collectors pay a restocking fee for parcels nobody restocked. And a show pickup a membership paid for loses that `show_pickup` allowance on cancel: `requestPickup` stores no `membershipCover`, and `cancel` returns only that.
 **Where:** `ShipmentEditService.cancel` (`feeMinor`, `paid`, `returnShippingCover`); `ShipmentService.labelRefusal`; `HumanFulfilmentService.requestPickup` (its `memberships.waive(…, 'show_pickup', …)` returns a `periodId`) and `acceptQuote`; `MembershipService.restoreCounted`; `RESTOCKING_FEE_MINOR` (`shp/shipping-options.ts`); the "shipping restocking fee" sentence in `apps/web/src/areas/customer/help/legalContent.ts`.
 **Task:** cancelling each of the three follows the chosen rule, and a cancelled pickup that a membership covered gives the allowance back once.
-**Test first:** integration:
-- in `tests/integration/shp-dispatch-label.test.ts`, describe 'a label refused at dispatch': cancel a refused-label shipment and assert the restocking fee your rule gives ($25 is charged now);
-- in `tests/integration/esc-and-human-fulfilment.test.ts`, beside 'books a pickup at a show and closes it with a hand-over': a member's covered pickup is cancelled and the period's `consumed.show_pickup` is back where it was (it is not now).
-
-**Done when:** the tests, `pnpm test:integration` and `pnpm test:property` pass, and the pull request states the decision.
+**Done:** the decision was a fee only for work done. `ShipmentEditService.restockingFee` charges `RESTOCKING_FEE_MINOR` on a `rates_selected` shipment only once work has started: never on a label the carrier refused (`ShipmentService.labelRefusal`), on a show pickup only once the show's `requestDeadline` has passed, on a hand delivery only once its `pickupFrom` window has opened, and on any other carrier parcel always. `GET /shipping/shipments/:id/cancel-fee` returns the same figure, so the SPA says what a cancel costs before it is confirmed. `requestPickup` now stores a `membershipCover` built from the waiver's period by `pickupCover`, so `cancel` gives the `show_pickup` allowance back once through `returnShippingCover`. The shipping paragraph of `legalContent.ts` says when there is no restocking fee. The tests are 'charges no restocking fee to cancel a shipment whose label the carrier refused' in `tests/integration/shp-dispatch-label.test.ts`; 'gives a member back the pickup a cancelled pickup used, and charges no restocking fee', 'charges the restocking fee to cancel a pickup only once the van is being packed' and 'charges no restocking fee to cancel an accepted hand delivery before its pickup window' in `tests/integration/esc-and-human-fulfilment.test.ts`; and describe 'cancelling a shipment says what it will cost' in `tests/ux/customer-screens.test.tsx`. The work is pull request #24.
 <details><summary>Hints</summary>
 
 1. `labelRefusal(cur)` is a pure function of the row `cancel` already holds under the lock.
@@ -354,7 +313,7 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 | An API service, controller and DTO | P14, P5 |
 | Money and the ledger | P5, P8, P7 |
 | The worker | P13 |
-| A web screen with i18n in both languages | P7 (and P2, P6, P14 on the web side) |
+| A web screen with its i18n strings | P7 (and P2, P6, P14 on the web side) |
 | integration | P1, P3, P5, P7, P8, P13, P15 |
 | concurrency | P9, P11, P14 |
 | worker | P13 |
@@ -366,7 +325,7 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **Escrow lock order:** `EscrowService.settle` spends the raiser's waiver and debits the escrow fee without `LedgerService.lockWallet`; it never takes a wallet lock, so it closes no cycle, and the worst case is a raced balance going negative, which the debt sweep handles (`esc/escrow.service.ts`).
 - **Swap deadlock:** `TradeService.approve` charges the proposer and then the responder through `BillingService.charge`, writing their periods in no fixed order; two opposite swaps at the same instant between covered members can deadlock, and Postgres aborts one with nothing half-written (`mkt/trade.service.ts`).
 - **A lock duty in billing:** `BillingService.charge` takes no wallet lock, so a caller needing one must take it first; no caller now takes one after it (`pay/billing.service.ts`).
-- **Storage rules from the console:** `PricingSection` sends no `parameters` for `storage` or `storage_oversized`, so `runStorageFees` uses its defaults, which equal the seed's; until fixed, change storage prices with `pnpm prices:load`, which sends them, not from the console (`AdminConsole.tsx`, `apps/worker/src/jobs/storage-fee.ts`).
+- **Storage rules from the console:** `PricingSection` sends no `parameters` for `storage` or `storage_oversized`, so `runStorageFees` uses its defaults, which equal the seed's; until fixed, change storage prices with `pnpm prices:load`, which sends them, not from the console (`apps/web/src/areas/admin/PricingSection.tsx`, `apps/worker/src/jobs/storage-fee.ts`).
 - **Dead billing path:** `AdmService.runStorageFees` has no caller and still selects split lots; delete it and its mention in `billableActions` (`adm/adm.service.ts`).
 - **Review-queue end date:** `to=YYYY-MM-DD` leaves that day out (`WalletRequestService.listForReview`, `ReviewQueueQuery` in `pay/wallet-request.controller.ts`).
 - **Suspended session on public pages:** a suspended or closed account with a live cookie gets 403 on public routes until it signs out, which always works (`SessionAuthGuard.canActivate`).
@@ -374,7 +333,7 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **Sold listings by id:** `BrowseService.detail` serves sold and removed listings with browse fields and `status`; the SPA does not call it.
 - **Recovery codes after a key change:** they read as a wrong code; the production README says to keep the key, and the remedy is the administrator's reset either way (`MfaService.spendRecoveryCode`).
 - **Empty `SMTP_REQUIRE_TLS=`** reads as `false` in development (`booleanFromEnv`, `packages/config/src/env.ts`).
-- **Three missing notices:** an operator's re-rate charge or refund (`ShipmentService.reRate`), offers closed by a sale or take-down (`closeOpenOffers`, `mkt/open-offers.ts`), and a gift waiting for its recipient (`TradeService.confirmTransfer`); each needs a new event in `not/event-types.ts`, the worker's `notification-events.ts` and `notification-message.ts`, and `apps/web/src/shared/notifications.ts` with both languages.
+- **Three missing notices:** an operator's re-rate charge or refund (`ShipmentService.reRate`), offers closed by a sale or take-down (`closeOpenOffers`, `mkt/open-offers.ts`), and a gift waiting for its recipient (`TradeService.confirmTransfer`); each needs a new event in `not/event-types.ts`, the worker's `notification-events.ts` and `notification-message.ts`, and `apps/web/src/shared/notifications.ts` with its label in the `en` catalogue.
 - **E-mail on delivery and exception:** `shipment_delivered` and `shipment_exception` e-mail by default, which follows the catalogue's own rule, and each collector can switch it off (`NOTIFICATION_EVENT_TYPES`).
 - **Vault forecast after a cycle ends:** wrong for up to an hour, until the hourly renewal runs (`VaultService.coveredByMembership`).
 - **Renewal with no tier price** only warns (`renewMemberships`); the pricing coverage check reports `ready: false` while a tier is unpriced, and nothing ends a rule once loaded.
@@ -386,7 +345,7 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **One upload on several records:** `MediaService.assertAttachable` (`med/media.service.ts`) does not record attachment, and the photography and video completions never call it; staff-only paths.
 - **Staff funding a deal:** `EscrowService.fund` lets staff fund from the buyer's wallet; both sides have agreed, the money is held rather than paid, and the event names the operator.
 - **Cash-in document field:** the customer types a storage key by hand, with no upload and no `assertAttachable` check (`WalletRequestForms.tsx`).
-- **PayPal instant top-up (E3):** the order, approve and capture flow is not built; `CheckoutService` reports it unavailable, and its `pending` rows after a provider error belong to the same work.
+- **PayPal cash-in after launch:** cash-in by PayPal checkout is built (`PayPalCheckoutService`, `pay/paypal-checkout.service.ts`) but off until the owner sets `PAYPAL_CHECKOUT_ENABLED`; a `PAYMENT.CAPTURE.REVERSED` or `REFUNDED` event for a credited checkout is only logged and reported by `takenBackAfterCredit`, and an administrator records it with `POST /finance/chargebacks/:paymentId`. The sandbox's direct top-up in `CheckoutService.checkout` still leaves its row `pending` after a provider error.
 - **Warehouse transfers bill the operator:** `ConsignmentService.warehouseTransfer` makes the operator the requester; no screen calls it.
 - **A card left free during a deal:** `EscrowService.receiveItem` neither holds nor marks the card; `settle` then refuses and the deal can be returned, so nothing is lost.
 - **Offer accept retry:** a retry answers 409 instead of a replay (`OfferService.accept`).
@@ -407,10 +366,8 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **CI gaps:** `scripts/design-lint.mjs` runs nowhere (it reports clean), and CI never builds the web or worker images.
 - **Unused settings:** `SESSION_COOKIE_SECRET`, `EMAIL_API_KEY`, `PAYPAL_PAYOUT_NOTE` (`packages/config/src/env.ts`).
 - **`tests/README.md`** lists four of the ten suites.
-- **English API errors on Hebrew screens:** most screens show `(e as Error).message`; only `App.tsx` and `ProfilePage.tsx` use `apiErrorKey`.
-- **Shipment composed in two calls:** `ShipmentComposer`'s `commit` creates, then selects a rate; a failed second call leaves a `requested` shipment holding the cards.
+- **Shipment composed in two calls:** `ShipmentComposer`'s `book` creates the shipment, then selects a rate or opens or joins a shared parcel; a failed second call leaves a `requested` shipment holding the cards, which the composer reports as unfinished.
 - **Intake batch** has no idempotency key; only the button's `busy` state stops a second submit (`POST /intake/items/batch`, `IntakeBench.tsx`).
-- **English-only content:** the FAQ, guide, legal pages and the `ErrorBoundary` fallback.
 - **Unused hook:** `usePrefersReducedMotion` (`apps/web/src/shared/hooks.ts`).
 - **A spent confirmation:** `ConfirmationService.consume` commits before the caller's work, so a failed action spends the token.
 - **Password change and the lockout:** a wrong current password in `PasswordService.change` is not written to `login_attempt`.
