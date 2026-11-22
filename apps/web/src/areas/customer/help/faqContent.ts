@@ -432,7 +432,7 @@ const ENTRIES: Draft[] = [
     baultNote:
       'For a private deal of at least $500: the buyer’s money is held, the item is sent to Card Embassy and inspected, and only then is the money released to the seller. The fee is 1% of the agreed value, at least $25, paid by whoever raised the deal.',
     blocks: [
-      p('Raise a deal under [[Marketplace > Escrow|#/marketplace/escrow]]. The other side can be a Card Embassy account or somebody outside Card Embassy, named by their name and email.'),
+      p('Raise a deal under [[Escrow|#/escrow]]. The other side can be a Card Embassy account or somebody outside Card Embassy, named by their name and email.'),
       p('When the deal settles the item goes into the buyer’s vault, or is shipped to a buyer who has none. If the deal is called off, held money goes back to the buyer’s wallet. A membership may waive the fee.'),
     ],
   },

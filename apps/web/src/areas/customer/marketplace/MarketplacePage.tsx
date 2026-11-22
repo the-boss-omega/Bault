@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useVaultItems } from '../../../shared/useVaultItems';
 import { ITEM_CLASSES, itemClassLabel, itemName } from '../../../shared/itemClasses';
-import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
 import { Amount, Code, ItemPick, Serial } from '../../../shared/ui/Serial';
@@ -28,7 +27,6 @@ import { IconSearch, IconTag } from '../../../shared/ui/icons';
 import { MyListingsPanel, OffersPanel, SwapsPanel } from './SellerPanels';
 import { ProposeTradePanel } from './ProposeTradePanel';
 import { StorefrontPanel } from './StorefrontPanel';
-import { HouseStorePanel } from './HouseStorePanel';
 import { loadProfile } from '../../../shared/session';
 
 interface Listing {
@@ -44,7 +42,7 @@ interface Listing {
   imageUrl?: string;
 }
 
-const TABS = ['browse', 'house', 'sell', 'listings', 'offers', 'trade', 'escrow', 'store'] as const;
+const TABS = ['browse', 'sell', 'listings', 'offers', 'trade', 'store'] as const;
 type MarketTab = (typeof TABS)[number];
 
 export function MarketplacePage() {
@@ -72,14 +70,10 @@ export function MarketplacePage() {
   const [offering, setOffering] = useState<Listing | null>(null);
   const { items, reload: reloadItems } = useVaultItems(true);
   const [myUsername, setMyUsername] = useState<string | undefined>(undefined);
-  const [meId, setMeId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadProfile()
-      .then((p) => {
-        setMyUsername(p.username);
-        setMeId(p.id);
-      })
+      .then((p) => setMyUsername(p.username))
       .catch(() => undefined);
   }, []);
 
@@ -294,18 +288,6 @@ export function MarketplacePage() {
         </TabPanel>
       )}
 
-      {tab === 'house' && (
-        <TabPanel tab="house">
-          <HouseStorePanel
-            onBought={async (m) => {
-              setStatus(m);
-              await reloadItems();
-            }}
-            onError={setError}
-          />
-        </TabPanel>
-      )}
-
       {tab === 'sell' && (
         <TabPanel tab="sell">
           <SellPanel
@@ -369,12 +351,6 @@ export function MarketplacePage() {
             }}
             onError={setError}
           />
-        </TabPanel>
-      )}
-
-      {tab === 'escrow' && (
-        <TabPanel tab="escrow">
-          <EscrowTab meId={meId} />
         </TabPanel>
       )}
 
