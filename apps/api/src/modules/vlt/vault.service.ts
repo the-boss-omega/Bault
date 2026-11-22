@@ -7,7 +7,7 @@ import { clampLimit } from '../../shared/query';
 import { STORAGE_ADAPTER } from '../../shared/adapters/adapters.module';
 import type { StorageAdapter } from '@bault/adapters';
 import { InventoryService, type TimelineEvent } from '../cst/inventory.service';
-import { bin, custodyEvent, item, itemImage } from '../cst/cst.schema';
+import { custodyEvent, item, itemImage } from '../cst/cst.schema';
 import { heldAt, holdingWindows } from '../cst/holding';
 import { charge } from '../pay/pay.schema';
 import { pricingRule } from '../prc/prc.schema';
@@ -185,15 +185,11 @@ export class VaultService {
       .select({
         id: item.id,
         serialNumber: item.serialNumber,
-        barcode: item.barcode,
         typeClass: item.typeClass,
         description: item.description,
         conditionGrade: item.conditionGrade,
         lifecycleState: item.lifecycleState,
         holdFlag: item.holdFlag,
-        binId: item.binId,
-        binBarcode: bin.barcode,
-        binZone: bin.zone,
         isLot: item.isLot,
         lotSize: item.lotSize,
         lotBroken: item.lotBroken,
@@ -202,7 +198,6 @@ export class VaultService {
         createdAt: item.createdAt,
       })
       .from(item)
-      .leftJoin(bin, sql`${bin.id}::text = ${item.binId}`)
       .where(and(...conditions))
       .orderBy(sql`${item.createdAt} desc`)
       .limit(clampLimit(filter.limit, { max: 200, fallback: 50 }));
@@ -254,7 +249,6 @@ export class VaultService {
       .select({
         id: item.id,
         serialNumber: item.serialNumber,
-        barcode: item.barcode,
         typeClass: item.typeClass,
         description: item.description,
         conditionGrade: item.conditionGrade,
@@ -278,9 +272,6 @@ export class VaultService {
         ...row,
         departedAt: toIso(row.departedAt),
         holdFlag: false,
-        binId: null,
-        binBarcode: null,
-        binZone: null,
         historical: true as const,
         departure: withReason ? await this.departure(row.id, userId) : null,
       })),

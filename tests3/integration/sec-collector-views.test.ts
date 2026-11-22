@@ -79,6 +79,20 @@ describe('A1 the vault item card a collector reads', () => {
   });
 });
 
+describe('A1b the vault list a collector reads', () => {
+  it('names no shelf, bin or warehouse barcode', async () => {
+    const red = await signIn(SEED.collector);
+    const res = await red.get('/vault/items');
+    expect(res.status).toBe(200);
+    expect((res.body as unknown[]).length).toBeGreaterThan(0);
+    expectWithout(res.body, ['binId', 'binBarcode', 'binZone', 'barcode', 'ownerId']);
+    expectWith(res.body[0], ['id', 'serialNumber', 'description', 'typeClass', 'lifecycleState']);
+    const history = await red.get('/vault/items?scope=history');
+    expect(history.status).toBe(200);
+    expectWithout(history.body, ['binId', 'binBarcode', 'binZone', 'barcode']);
+  });
+});
+
 describe('A2 the vault item timeline a collector reads', () => {
   it('covers only the caller’s holding and leaves out shelves, corrections and moves', async () => {
     const operator = await signIn(SEED.operator);
