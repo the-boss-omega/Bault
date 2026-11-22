@@ -623,6 +623,11 @@ export function ShipmentDrawer({
         </DetailRow>
         <DetailRow label={t('ss.tracking.itemCount')}>{shipment.itemIds.length}</DetailRow>
         <DetailRow label={t('ss.tracking.destination')}>{shipment.destinationAddress}</DetailRow>
+        {shipment.contactPhone && (
+          <DetailRow label={t('ff.wg.courierPhone')}>
+            <span dir="ltr">{shipment.contactPhone}</span>
+          </DetailRow>
+        )}
         <DetailRow label={t('ss.tracking.created')}>
           <span className="date">{formatDate(shipment.createdAt, locale)}</span>
         </DetailRow>

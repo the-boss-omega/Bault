@@ -393,6 +393,68 @@ describe('ESC escrow and human fulfilment', () => {
     expect(after.trackingNumber).toBeNull();
   });
 
+  it('keeps a phone for the courier with a hand delivery, for the requester and the staff only', async () => {
+    const operator = await signIn(SEED.operator);
+    const card = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab' });
+    const collector = await signIn(SEED.collector);
+    const other = await signIn(SEED.collector2);
+    const soon = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+    const form = {
+      itemIds: [card.id],
+      pickupAddress: 'Bault NJ vault',
+      pickupFrom: soon(5),
+      pickupTo: soon(6),
+      deliveryAddress: 'Red Ashwood, 12 Vine St, Apt 4B, Trenton, NJ 08608, United States',
+      deliverFrom: soon(6),
+      deliverTo: soon(7),
+      destinationCountry: 'US',
+      recipientName: 'Red Ashwood',
+    };
+
+    for (const contactPhone of ['call me', '12345', '+1 (415) 555-0134', '1'.repeat(21)]) {
+      const refused = await collector.post('/shipping/white-glove', { ...form, contactPhone });
+      expect(refused.status).toBe(400);
+      expect(refused.body.error.details.problems).toEqual([
+        { field: 'contactPhone', message: expect.stringContaining('at least six digits') },
+      ]);
+    }
+
+    const requested = await collector.post('/shipping/white-glove', { ...form, contactPhone: ' +1 415-555-0134 ' });
+    expect(requested.status).toBe(201);
+    const shipmentId = requested.body.id as string;
+    expect(requested.body.contactPhone).toBe('+1 415-555-0134');
+    expect(requested.body.destinationDetail).toBeUndefined();
+
+    const own = (await collector.get(`/shipping/shipments/${shipmentId}`)).body;
+    expect(own).toMatchObject({ destinationAddress: form.deliveryAddress, contactPhone: '+1 415-555-0134' });
+    const ownListed = ((await collector.get('/shipping/shipments')).body as Record<string, unknown>[]).find(
+      (s) => s.id === shipmentId,
+    );
+    expect(ownListed).toMatchObject({ contactPhone: '+1 415-555-0134' });
+
+    const staff = (await operator.get(`/shipping/shipments/${shipmentId}`)).body;
+    expect(staff).toMatchObject({ destinationAddress: form.deliveryAddress, contactPhone: '+1 415-555-0134' });
+    const queued = ((await operator.get('/shipping/shipments')).body as Record<string, unknown>[]).find(
+      (s) => s.id === shipmentId,
+    );
+    expect(queued).toMatchObject({ fulfilmentMethod: 'hand_delivery', contactPhone: '+1 415-555-0134' });
+
+    expect((await other.get(`/shipping/shipments/${shipmentId}`)).status).toBe(404);
+    const otherList = (await other.get('/shipping/shipments')).body as Record<string, unknown>[];
+    expect(otherList.map((s) => s.id)).not.toContain(shipmentId);
+    expect(JSON.stringify(otherList)).not.toContain('415-555-0134');
+
+    const cancelled = await collector.post(`/shipping/shipments/${shipmentId}/cancel`, { reason: 'Test over.' });
+    expect(cancelled.status).toBe(201);
+
+    const card2 = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab' });
+    const without = await collector.post('/shipping/white-glove', { ...form, itemIds: [card2.id], contactPhone: '' });
+    expect(without.status).toBe(201);
+    expect(without.body.contactPhone).toBeNull();
+    expect((await operator.get(`/shipping/shipments/${without.body.id}`)).body.contactPhone).toBeNull();
+    await collector.post(`/shipping/shipments/${without.body.id}/cancel`, { reason: 'Test over.' });
+  });
+
   it('lists only the shows that actually take pickups', async () => {
     const collector = await signIn(SEED.collector);
     const res = await collector.get('/shipping/pickup/shows');
