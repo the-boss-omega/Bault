@@ -346,8 +346,23 @@ describe('packing a shipment from its pick list', () => {
     expect(docket.querySelector('.drawer-tag-title')).toHaveTextContent('SHP-PACK0001');
     expect(docket.querySelector('.drawer-tag-amount')).toHaveTextContent('0 / 2');
     expect(within(lineOf(docket, 'Goes to')).getByText(/12 Vine St/)).toBeInTheDocument();
+    expect(within(docket).queryByText('Phone for the courier')).toBeNull();
     expect(docket.querySelectorAll('.pill')).toHaveLength(2);
     expect(within(docket).getAllByText('Not scanned yet')).toHaveLength(2);
+  });
+
+  it('gives the phone for the courier under where a hand delivery goes', async () => {
+    get.mockImplementation((path: string) =>
+      path === '/shipping/shipments/shp-1'
+        ? Promise.resolve({ ...DETAIL, carrier: null, serviceKey: null, contactPhone: '+1 609-555-0134' })
+        : Promise.resolve([]),
+    );
+    const user = userEvent.setup();
+    const view = render(wrap(<FulfillmentBench onLog={vi.fn()} />));
+    await user.type(screen.getByLabelText('Shipment ID'), 'shp-1{Enter}');
+    await screen.findByLabelText(/scan each item/i);
+    const docket = docketOf(view.container);
+    expect(within(lineOf(docket, 'Phone for the courier')).getByText('+1 609-555-0134')).toBeInTheDocument();
   });
 
   it('ticks a card as it is scanned, shows what is not in the shipment as wrong, with the way to take it back', async () => {

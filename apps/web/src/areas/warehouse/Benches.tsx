@@ -567,6 +567,7 @@ interface ShipmentDetail {
   }[];
   directParcel?: { code: string; trackingNumber: string | null } | null;
   destinationAddress: string;
+  contactPhone?: string | null;
   boxSize: string | null;
 }
 
@@ -837,6 +838,9 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
                   label: t('grp.slip.goesTo'),
                   value: <bdi dir="auto">{detail.destinationAddress}</bdi>,
                 },
+                ...(detail.contactPhone
+                  ? [{ label: t('ff.wg.courierPhone'), value: <span dir="ltr">{detail.contactPhone}</span> }]
+                  : []),
                 ...pickLines,
               ]
             : []

@@ -231,6 +231,7 @@ export function WhiteGlovePanel({
   const [to, setTo] = useState('');
   const [toText, setToText] = useState('');
   const [toCountry, setToCountry] = useState('US');
+  const [toPhone, setToPhone] = useState('');
   const [pickup, setPickup] = useState({ date: '', from: '09:00', to: '17:00' });
   const [delivery, setDelivery] = useState({ date: '', from: '09:00', to: '17:00' });
   const [notes, setNotes] = useState('');
@@ -270,6 +271,7 @@ export function WhiteGlovePanel({
   const pickupAddress = vault ? vaultText(vault) : fromAddress ? addressText(fromAddress, countries) : fromText.trim();
   const deliveryAddress = toAddress ? addressText(toAddress, countries) : toText.trim();
   const destinationCountry = toAddress ? toAddress.country : toCountry;
+  const contactPhone = (toAddress ? toAddress.phone ?? '' : toPhone).trim();
   const pickupWindow = windowIso(pickup.date, pickup.from, pickup.to);
   const deliveryWindow = windowIso(delivery.date, delivery.from, delivery.to);
 
@@ -299,6 +301,7 @@ export function WhiteGlovePanel({
         pickupFrom: pickupWindow.from,
         pickupTo: pickupWindow.to,
         deliveryAddress,
+        ...(contactPhone ? { contactPhone } : {}),
         deliverFrom: deliveryWindow.from,
         deliverTo: deliveryWindow.to,
         destinationCountry: destinationCountry.trim().toUpperCase(),
@@ -313,6 +316,7 @@ export function WhiteGlovePanel({
       );
       onError(null);
       clear();
+      setToPhone('');
       setTried(false);
       onCreated();
     } catch (e) {
@@ -404,6 +408,20 @@ export function WhiteGlovePanel({
               </select>
             </Field>
           </div>
+        )}
+        {to === OTHER && (
+          <Field label={t('ff.wg.contactPhone')} htmlFor="wg-contact-phone">
+            <input
+              id="wg-contact-phone"
+              type="tel"
+              value={toPhone}
+              maxLength={20}
+              onChange={(e) => setToPhone(e.target.value)}
+              autoComplete="tel"
+              inputMode="tel"
+              dir="ltr"
+            />
+          </Field>
         )}
         <TimeWindow
           legend={t('ff.wg.deliveryWindow')}

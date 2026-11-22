@@ -22,6 +22,7 @@ import { shipment } from './shp.schema';
 import type { AuthUser } from '../sec/auth-context';
 import { ParcelProfileService, customsDeclarationFor, type CustomsLine } from './parcel-profile.service';
 import { SHIPPING_BOXES } from './boxes';
+import { shipmentContactPhone } from './fulfilment';
 import {
   CARRIER_SERVICES,
   DIRECT_OVERNIGHT_FACILITY,
@@ -154,7 +155,7 @@ const SHIPMENT_ROW_STAFF_ONLY = [
 ] as const;
 
 export function collectorShipmentRowView(row: typeof shipment.$inferSelect) {
-  const view: Record<string, unknown> = { ...row };
+  const view: Record<string, unknown> = { ...row, contactPhone: shipmentContactPhone(row) };
   for (const key of SHIPMENT_ROW_STAFF_ONLY) delete view[key];
   return view;
 }
@@ -555,6 +556,7 @@ export class ShipmentService {
       items: itemIds.map((id) => labels.get(id) ?? { id, serialNumber: null, barcode: null, description: null }),
       directParcel: direct ? { code: direct.code, trackingNumber: direct.trackingNumber } : null,
       destinationAddress: s.destinationAddress,
+      contactPhone: shipmentContactPhone(s),
       destinationCountry: s.destinationCountry,
       destinationPostalCode: s.destinationPostalCode,
       declaredValueMinor: s.declaredValueMinor,

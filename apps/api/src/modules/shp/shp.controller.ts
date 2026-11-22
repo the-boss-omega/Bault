@@ -103,6 +103,7 @@ class HandDeliveryDto {
   @IsString() pickupFrom!: string;
   @IsString() pickupTo!: string;
   @IsString() @MaxLength(400) deliveryAddress!: string;
+  @IsOptional() @IsString() @MaxLength(40) contactPhone?: string;
   @IsString() deliverFrom!: string;
   @IsString() deliverTo!: string;
   @IsString() @MaxLength(2) destinationCountry!: string;

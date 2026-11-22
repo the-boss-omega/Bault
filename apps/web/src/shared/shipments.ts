@@ -18,6 +18,7 @@ export interface ShipmentSummary {
   items: { id: string; serialNumber: string | null; description: string | null }[];
   directParcel: { code: string; trackingNumber: string | null } | null;
   destinationAddress: string;
+  contactPhone?: string | null;
   destinationCountry: string;
   destinationPostalCode: string;
   serviceMode: string;

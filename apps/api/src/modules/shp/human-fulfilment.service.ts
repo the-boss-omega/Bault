@@ -21,6 +21,7 @@ import {
   WHITE_GLOVE_BASE_INTERNATIONAL_MINOR,
   WHITE_GLOVE_QUOTE_HOURS,
   checkHandDelivery,
+  contactPhoneOf,
   whiteGloveFeeAction,
 } from './fulfilment';
 import { usdAmount } from './shipping-options';
@@ -73,6 +74,7 @@ export class HumanFulfilmentService {
       pickupFrom: string;
       pickupTo: string;
       deliveryAddress: string;
+      contactPhone?: string;
       deliverFrom: string;
       deliverTo: string;
       destinationCountry: string;
@@ -91,8 +93,10 @@ export class HumanFulfilmentService {
       deliverTo: new Date(input.deliverTo),
       pickupAddress: input.pickupAddress,
       deliveryAddress: input.deliveryAddress,
+      contactPhone: input.contactPhone,
     });
     if (problems.length > 0) throw AppError.validation(problems[0]!.message, { problems });
+    const contactPhone = contactPhoneOf(input.contactPhone);
 
     return this.db.transaction(async (tx) => {
       await this.profiles.loadShippableItems(userId, input.itemIds, tx as Database);
@@ -107,6 +111,7 @@ export class HumanFulfilmentService {
           destinationAddress: input.deliveryAddress.trim(),
           destinationCountry: input.destinationCountry.trim().toUpperCase(),
           destinationPostalCode: '',
+          destinationDetail: contactPhone ? { phone: contactPhone } : null,
           recipientName: input.recipientName?.trim() || null,
           pickupAddress: input.pickupAddress.trim(),
           pickupFrom: new Date(input.pickupFrom),
