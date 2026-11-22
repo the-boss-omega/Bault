@@ -101,6 +101,16 @@ export class PayController {
   }
 
   @Roles('admin')
+  @Post('finance/chargebacks/wallet-requests/:requestId')
+  recordCashInRecall(
+    @CurrentUser() user: AuthUser,
+    @Param('requestId') requestId: string,
+    @Body() dto: ChargebackDto,
+  ) {
+    return this.chargebacks.recordCashInRecall(user.id, requestId, dto);
+  }
+
+  @Roles('admin')
   @Post('finance/chargebacks/:paymentId')
   recordChargeback(
     @CurrentUser() user: AuthUser,
