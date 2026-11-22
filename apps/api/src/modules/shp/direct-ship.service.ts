@@ -14,8 +14,7 @@ import { newShipmentCode } from '../../shared/ids';
 import { shipment } from './shp.schema';
 import { ParcelProfileService } from './parcel-profile.service';
 import { carrierService, DIRECT_OVERNIGHT_FACILITY, DIRECT_OVERNIGHT_KEY, DOMESTIC_COUNTRY } from './carriers';
-import { insurancePremiumMinor, signatureForced, MAX_INSURED_VALUE_MINOR } from './shipping-options';
-import { formatMinor } from '../../shared/money';
+import { insurancePremiumMinor, signatureForced, MAX_INSURED_VALUE_MINOR, usdAmount } from './shipping-options';
 
 @Injectable()
 export class DirectShipService {
@@ -122,7 +121,7 @@ export class DirectShipService {
       if (balance.amount < total) {
         throw new AppError(
           ErrorCode.CONFLICT,
-          `Direct overnight is ${formatMinor(total)} and your balance is ${formatMinor(balance.amount)}. Top up first — this one cannot wait, the parcel is sitting at the dock.`,
+          `Direct overnight is ${usdAmount(total)} and your balance is ${usdAmount(balance.amount)}. Top up first — this one cannot wait, the parcel is sitting at the dock.`,
           409,
         );
       }

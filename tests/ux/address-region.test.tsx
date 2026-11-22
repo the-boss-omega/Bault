@@ -157,13 +157,16 @@ describe('the shipment composer stops at an address with no state', () => {
 
   it('says what is missing and offers to edit the address, without asking for a quote', async () => {
     answer([OLD_US]);
-    renderIn(<ShipmentComposer items={ITEMS} onError={() => {}} onStatus={() => {}} onCreated={() => {}} />);
+    renderIn(<ShipmentComposer items={ITEMS} onCreated={() => {}} />);
     fireEvent.click(await screen.findByRole('checkbox', { name: /Rayquaza/ }));
 
-    expect(await screen.findByText(/has no state or province/)).toBeInTheDocument();
+    const slip = screen.getByRole('region', { name: 'Price' });
+    await waitFor(() => expect(slip).toHaveTextContent('needs a state or province before it can be priced'));
     await new Promise((r) => setTimeout(r, 450));
     expect(post).not.toHaveBeenCalled();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText(/has no state or province/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Edit the address' }));
     expect(window.location.hash).toBe('#/profile/addresses');
   });
@@ -173,12 +176,12 @@ describe('the shipment composer stops at an address with no state', () => {
     post.mockRejectedValue(
       new ApiError('client', 422, 'Add the state or province to the address "Home".', 'address_region_required'),
     );
-    const errors: (string | null)[] = [];
-    renderIn(
-      <ShipmentComposer items={ITEMS} onError={(m) => errors.push(m)} onStatus={() => {}} onCreated={() => {}} />,
-    );
+    renderIn(<ShipmentComposer items={ITEMS} onCreated={() => {}} />);
     fireEvent.click(await screen.findByRole('checkbox', { name: /Rayquaza/ }));
 
+    const slip = screen.getByRole('region', { name: 'Price' });
+    await waitFor(() => expect(slip).toHaveTextContent('needs a state or province before it can be priced'));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(await screen.findByText(/has no state or province/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit the address' })).toBeInTheDocument();
   });

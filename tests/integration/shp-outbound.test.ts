@@ -251,6 +251,7 @@ describe('SHP outbound shipping', () => {
       signatureRequired: true,
     });
     expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe('Cover stops at $5,000.00 on one parcel. Split it across two.');
   });
 
   it('will not sell a tracker on an uninsured parcel', async () => {

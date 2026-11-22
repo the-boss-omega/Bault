@@ -72,7 +72,7 @@ describe('an item is named by its serial and description, never by its class key
       }
       return Promise.resolve([]);
     });
-    renderIn(<ShipmentComposer items={[ITEM]} onError={() => {}} onStatus={() => {}} onCreated={() => {}} />);
+    renderIn(<ShipmentComposer items={[ITEM]} onCreated={() => {}} />);
     const label = await screen.findByRole('checkbox', { name: /Rayquaza ex #97\/97/ });
     expect(label.closest('label')!.textContent).toContain('SN-DR97-0001');
     // The cards are one group with a name, so a screen reader says what it has entered.

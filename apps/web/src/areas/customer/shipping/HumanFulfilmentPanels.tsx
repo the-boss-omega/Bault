@@ -1,29 +1,42 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
-import { itemName } from '../../../shared/itemClasses';
-import { ItemPick } from '../../../shared/ui/Serial';
 import { formatDate, formatUsd } from '../../../shared/money';
 import type { PickupShow, WhiteGloveTerms } from '../../../shared/escrow';
 import type { ShipmentSummary } from '../../../shared/shipments';
+import type { InboundAddress } from '../../../shared/parcels';
 import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
-import { IconBox, IconCalendar, IconShield } from '../../../shared/ui/icons';
-import { useShippingCountries } from '../../../shared/countries';
+import { IconCalendar, IconShield } from '../../../shared/ui/icons';
+import { countryName, useShippingCountries, type ShippingCountry } from '../../../shared/countries';
+import type { Address } from '../profile/AddressFields';
+import { CardPicker, useClaimedItems, type PickableItem } from './CardPicker';
 
-interface VaultItem {
-  id: string;
-  serialNumber?: string;
-  typeClass: string;
-  description: string;
+type VaultItem = PickableItem;
+
+function usePicked(items: readonly VaultItem[], claimed: ReadonlyMap<string, string>) {
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const toggle = useCallback((id: string) => {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const clear = useCallback(() => setPicked(new Set()), []);
+  const chosen = items.filter((i) => picked.has(i.id) && !claimed.has(i.id)).map((i) => i.id);
+  return { picked, toggle, clear, chosen };
 }
 
 export function ShowPickupPanel({
   items,
+  reloadToken = 0,
   onError,
   onStatus,
   onCreated,
 }: {
   items: VaultItem[];
+  reloadToken?: number;
   onError: (m: string | null) => void;
   onStatus: (m: string | null) => void;
   onCreated: () => void;
@@ -31,7 +44,8 @@ export function ShowPickupPanel({
   const { t, locale } = useI18n();
   const [shows, setShows] = useState<PickupShow[] | null>(null);
   const [eventId, setEventId] = useState('');
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const claimed = useClaimedItems(reloadToken);
+  const { picked, toggle, clear, chosen } = usePicked(items, claimed);
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -49,7 +63,6 @@ export function ShowPickupPanel({
     })();
   }, [onError]);
 
-  const chosen = Object.entries(selected).filter(([, v]) => v).map(([id]) => id);
   const show = (shows ?? []).find((s) => s.id === eventId);
 
   async function book() {
@@ -62,7 +75,7 @@ export function ShowPickupPanel({
       });
       onStatus(t('ff.pickupBooked', { id: created.code ?? created.id, show: show?.name ?? '' }));
       onError(null);
-      setSelected({});
+      clear();
       onCreated();
     } catch (e) {
       onError((e as Error).message);
@@ -101,27 +114,13 @@ export function ShowPickupPanel({
             </p>
           )}
 
-          {items.length === 0 ? (
-            <EmptyState title={t('shipping.noItems')} text={t('shipping.noItemsText')} icon={<IconBox />} />
-          ) : (
-            <fieldset className="field field--cards">
-              <legend className="sr-only">{t('shipping.selectItems')}</legend>
-              <ul className="check-list">
-                {items.map((item) => (
-                  <li key={item.id}>
-                    <label className="check">
-                      <input
-                        type="checkbox"
-                        checked={!!selected[item.id]}
-                        onChange={() => setSelected((p) => ({ ...p, [item.id]: !p[item.id] }))}
-                      />
-                      <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </fieldset>
-          )}
+          <CardPicker
+            items={items}
+            selected={picked}
+            onToggle={toggle}
+            claimed={claimed}
+            legend={t('shipping.selectItems')}
+          />
 
           <label className="field">
             <span className="field-label">{t('ship.notes')}</span>
@@ -145,29 +144,96 @@ export function ShowPickupPanel({
   );
 }
 
+const OTHER = 'other';
+
+export function addressText(a: Address, countries: readonly ShippingCountry[]): string {
+  const town = [a.city, a.region].filter(Boolean).join(', ');
+  return `${a.recipient}, ${a.line1}, ${town} ${a.postalCode}, ${countryName(a.country, countries)}`.replace(/\s+/g, ' ');
+}
+
+function vaultText(v: InboundAddress): string {
+  return [v.name, ...v.lines, `${[v.city, v.region].filter(Boolean).join(', ')} ${v.postalCode}`, v.country]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
+export function windowIso(date: string, from: string, to: string): { from: string; to: string } | null {
+  if (!date || !from || !to) return null;
+  const start = new Date(`${date}T${from}`);
+  const end = new Date(`${date}T${to}`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  return { from: start.toISOString(), to: end.toISOString() };
+}
+
+function TimeWindow({
+  legend,
+  date,
+  from,
+  to,
+  onChange,
+  error,
+}: {
+  legend: string;
+  date: string;
+  from: string;
+  to: string;
+  onChange: (next: { date?: string; from?: string; to?: string }) => void;
+  error?: string | null;
+}) {
+  const { t } = useI18n();
+  return (
+    <fieldset className="time-window">
+      <legend className="field-label">{legend}</legend>
+      <div className="field-row">
+        <Field label={t('ff.wg.date')}>
+          <input type="date" value={date} onChange={(e) => onChange({ date: e.target.value })} />
+        </Field>
+        <Field label={t('ff.wg.between')}>
+          <input type="time" value={from} onChange={(e) => onChange({ from: e.target.value })} />
+        </Field>
+        <Field label={t('ff.wg.and')}>
+          <input type="time" value={to} onChange={(e) => onChange({ to: e.target.value })} />
+        </Field>
+      </div>
+      {error && (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      )}
+    </fieldset>
+  );
+}
+
 export function WhiteGlovePanel({
   items,
+  reloadToken = 0,
   onError,
   onStatus,
   onCreated,
 }: {
   items: VaultItem[];
+  reloadToken?: number;
   onError: (m: string | null) => void;
   onStatus: (m: string | null) => void;
   onCreated: () => void;
 }) {
   const { t } = useI18n();
-  const [terms, setTerms] = useState<WhiteGloveTerms | null>(null);
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [pickupAddress, setPickupAddress] = useState('');
-  const [pickupFrom, setPickupFrom] = useState('');
-  const [pickupTo, setPickupTo] = useState('');
-  const [deliveryAddress, setDeliveryAddress] = useState('');
-  const [deliverFrom, setDeliverFrom] = useState('');
-  const [deliverTo, setDeliverTo] = useState('');
-  const [country, setCountry] = useState('US');
   const countries = useShippingCountries();
+  const claimed = useClaimedItems(reloadToken);
+  const { picked, toggle, clear, chosen } = usePicked(items, claimed);
+  const [terms, setTerms] = useState<WhiteGloveTerms | null>(null);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [vaults, setVaults] = useState<InboundAddress[]>([]);
+  const [from, setFrom] = useState('');
+  const [fromText, setFromText] = useState('');
+  const [to, setTo] = useState('');
+  const [toText, setToText] = useState('');
+  const [toCountry, setToCountry] = useState('US');
+  const [pickup, setPickup] = useState({ date: '', from: '09:00', to: '17:00' });
+  const [delivery, setDelivery] = useState({ date: '', from: '09:00', to: '17:00' });
   const [notes, setNotes] = useState('');
+  const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -178,27 +244,64 @@ export function WhiteGlovePanel({
         onError((e as Error).message);
       }
     })();
+    void api
+      .get<Address[]>('/me/addresses')
+      .then((list) => {
+        const rows = Array.isArray(list) ? list : [];
+        setAddresses(rows);
+        const preferred = rows.find((a) => a.isDefault) ?? rows[0];
+        setTo(preferred ? preferred.id : OTHER);
+      })
+      .catch(() => setTo(OTHER));
+    void api
+      .get<InboundAddress[]>('/me/inbound-addresses')
+      .then((list) => {
+        const rows = Array.isArray(list) ? list.filter((v) => v.role === 'primary') : [];
+        setVaults(rows);
+        setFrom((cur) => cur || (rows[0] ? `vault:${rows[0].facilityId}` : OTHER));
+      })
+      .catch(() => setFrom((cur) => cur || OTHER));
   }, [onError]);
 
-  const chosen = Object.entries(selected).filter(([, v]) => v).map(([id]) => id);
+  const vault = vaults.find((v) => `vault:${v.facilityId}` === from);
+  const fromAddress = addresses.find((a) => a.id === from);
+  const toAddress = addresses.find((a) => a.id === to);
+  const pickupAddress = vault ? vaultText(vault) : fromAddress ? addressText(fromAddress, countries) : fromText.trim();
+  const deliveryAddress = toAddress ? addressText(toAddress, countries) : toText.trim();
+  const destinationCountry = toAddress ? toAddress.country : toCountry;
+  const pickupWindow = windowIso(pickup.date, pickup.from, pickup.to);
+  const deliveryWindow = windowIso(delivery.date, delivery.from, delivery.to);
+
+  const pickupError = !pickupWindow
+    ? t('ff.wg.windowNeeded')
+    : pickupWindow.to <= pickupWindow.from
+      ? t('ff.wg.windowOrder')
+      : null;
+  const deliveryError = !deliveryWindow
+    ? t('ff.wg.windowNeeded')
+    : deliveryWindow.to <= deliveryWindow.from
+      ? t('ff.wg.windowOrder')
+      : pickupWindow && deliveryWindow.from < pickupWindow.from
+        ? t('ff.wg.deliverAfterPickup')
+        : null;
   const ready =
-    chosen.length > 0 &&
-    pickupAddress.trim() !== '' &&
-    deliveryAddress.trim() !== '' &&
-    [pickupFrom, pickupTo, deliverFrom, deliverTo].every((v) => v !== '');
+    chosen.length > 0 && pickupAddress !== '' && deliveryAddress !== '' && !pickupError && !deliveryError;
 
   async function request() {
+    setTried(true);
+    if (!ready || !pickupWindow || !deliveryWindow) return;
     setBusy(true);
     try {
       const created = await api.post<{ code?: string; id: string }>('/shipping/white-glove', {
         itemIds: chosen,
-        pickupAddress: pickupAddress.trim(),
-        pickupFrom: new Date(pickupFrom).toISOString(),
-        pickupTo: new Date(pickupTo).toISOString(),
-        deliveryAddress: deliveryAddress.trim(),
-        deliverFrom: new Date(deliverFrom).toISOString(),
-        deliverTo: new Date(deliverTo).toISOString(),
-        destinationCountry: country.trim().toUpperCase(),
+        pickupAddress,
+        pickupFrom: pickupWindow.from,
+        pickupTo: pickupWindow.to,
+        deliveryAddress,
+        deliverFrom: deliveryWindow.from,
+        deliverTo: deliveryWindow.to,
+        destinationCountry: destinationCountry.trim().toUpperCase(),
+        recipientName: toAddress?.recipient,
         customerNotes: notes.trim() || undefined,
       });
       onStatus(
@@ -208,7 +311,8 @@ export function WhiteGlovePanel({
         }),
       );
       onError(null);
-      setSelected({});
+      clear();
+      setTried(false);
       onCreated();
     } catch (e) {
       onError((e as Error).message);
@@ -233,73 +337,86 @@ export function WhiteGlovePanel({
           </p>
         )}
 
-        {items.length === 0 ? (
-          <EmptyState title={t('shipping.noItems')} text={t('shipping.noItemsText')} icon={<IconBox />} />
-        ) : (
-          <fieldset className="field field--cards">
-            <legend className="sr-only">{t('shipping.selectItems')}</legend>
-            <ul className="check-list">
-              {items.map((item) => (
-                <li key={item.id}>
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={!!selected[item.id]}
-                      onChange={() => setSelected((p) => ({ ...p, [item.id]: !p[item.id] }))}
-                    />
-                    <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </fieldset>
-        )}
+        <CardPicker
+          items={items}
+          selected={picked}
+          onToggle={toggle}
+          claimed={claimed}
+          legend={t('shipping.selectItems')}
+        />
 
         <Field label={t('ff.wg.pickupAddress')} hint={t('ff.wg.pickupHint')}>
-          <input value={pickupAddress} maxLength={400} onChange={(e) => setPickupAddress(e.target.value)} />
+          <select value={from} onChange={(e) => setFrom(e.target.value)}>
+            {vaults.map((v) => (
+              <option key={v.facilityId} value={`vault:${v.facilityId}`}>
+                {t('ff.wg.fromVault', { name: v.name, city: v.city })}
+              </option>
+            ))}
+            {addresses.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label}: {a.city}, {countryName(a.country, countries)}
+              </option>
+            ))}
+            <option value={OTHER}>{t('ff.wg.otherAddress')}</option>
+          </select>
         </Field>
-        <div className="field-row">
-          <label className="field">
-            <span className="field-label">{t('ff.wg.pickupFrom')}</span>
-            <input type="datetime-local" value={pickupFrom} onChange={(e) => setPickupFrom(e.target.value)} />
-          </label>
-          <label className="field">
-            <span className="field-label">{t('ff.wg.pickupTo')}</span>
-            <input type="datetime-local" value={pickupTo} onChange={(e) => setPickupTo(e.target.value)} />
-          </label>
-        </div>
-
-        <label className="field">
-          <span className="field-label">{t('ff.wg.deliveryAddress')}</span>
-          <input value={deliveryAddress} maxLength={400} onChange={(e) => setDeliveryAddress(e.target.value)} />
-        </label>
-        <div className="field-row">
-          <label className="field">
-            <span className="field-label">{t('ff.wg.deliverFrom')}</span>
-            <input type="datetime-local" value={deliverFrom} onChange={(e) => setDeliverFrom(e.target.value)} />
-          </label>
-          <label className="field">
-            <span className="field-label">{t('ff.wg.deliverTo')}</span>
-            <input type="datetime-local" value={deliverTo} onChange={(e) => setDeliverTo(e.target.value)} />
-          </label>
-          <Field label={t('ff.wg.country')} htmlFor="wg-country">
-            <select id="wg-country" value={country} onChange={(e) => setCountry(e.target.value)}>
-              {countries.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+        {from === OTHER && (
+          <Field
+            label={t('ff.wg.otherPickup')}
+            error={tried && !fromText.trim() ? t('ff.wg.addressNeeded') : undefined}
+          >
+            <input value={fromText} maxLength={400} dir="auto" onChange={(e) => setFromText(e.target.value)} />
           </Field>
-        </div>
+        )}
+        <TimeWindow
+          legend={t('ff.wg.pickupWindow')}
+          {...pickup}
+          onChange={(next) => setPickup((p) => ({ ...p, ...next }))}
+          error={tried ? pickupError : null}
+        />
 
-        <label className="field">
-          <span className="field-label">{t('ship.notes')}</span>
+        <Field label={t('ff.wg.deliveryAddress')}>
+          <select value={to} onChange={(e) => setTo(e.target.value)}>
+            {addresses.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label}: {a.recipient}, {a.city}, {countryName(a.country, countries)}
+              </option>
+            ))}
+            <option value={OTHER}>{t('ff.wg.otherAddress')}</option>
+          </select>
+        </Field>
+        {to === OTHER && (
+          <div className="field-row">
+            <Field
+              label={t('ff.wg.otherDelivery')}
+              error={tried && !toText.trim() ? t('ff.wg.addressNeeded') : undefined}
+            >
+              <input value={toText} maxLength={400} dir="auto" onChange={(e) => setToText(e.target.value)} />
+            </Field>
+            <Field label={t('ff.wg.country')} htmlFor="wg-country">
+              <select id="wg-country" value={toCountry} onChange={(e) => setToCountry(e.target.value)}>
+                {countries.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        )}
+        <TimeWindow
+          legend={t('ff.wg.deliveryWindow')}
+          {...delivery}
+          onChange={(next) => setDelivery((d) => ({ ...d, ...next }))}
+          error={tried ? deliveryError : null}
+        />
+
+        <Field label={t('ship.notes')}>
           <input value={notes} maxLength={500} onChange={(e) => setNotes(e.target.value)} />
-        </label>
+        </Field>
 
         <div className="row">
-          <Button variant="primary" disabled={busy || !ready} onClick={() => void request()}>
+          <Button variant="primary" disabled={busy || chosen.length === 0} onClick={() => void request()}>
             {t('ff.wg.ask')}
           </Button>
           <span className="field-hint">{t('ff.wg.nothingCharged')}</span>

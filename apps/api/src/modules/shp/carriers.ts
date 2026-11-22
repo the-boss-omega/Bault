@@ -1,4 +1,5 @@
 import { DIM_DIVISOR, type BillingIncrement, type Rate } from '@bault/adapters';
+import { usdAmount } from './shipping-options';
 
 export interface Destination {
   country: string;
@@ -236,7 +237,7 @@ export interface ServiceProblem {
 }
 
 function usd(minor: number): string {
-  return `$${(minor / 100).toFixed(2)}`;
+  return usdAmount(minor);
 }
 
 function inches(cm: number): string {
