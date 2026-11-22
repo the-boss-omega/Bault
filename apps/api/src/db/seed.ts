@@ -251,6 +251,20 @@ async function main(): Promise<void> {
       billingTrigger: 'per_event' as const,
     },
     {
+      actionType: 'consignment_fee:alt',
+      model: 'percentage' as const,
+      value: 100,
+      description: 'Card Embassy commission on an Alt consignment sale',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      actionType: 'consignment_fee:fanatics_collect',
+      model: 'percentage' as const,
+      value: 100,
+      description: 'Card Embassy commission on a Fanatics Collect consignment sale',
+      billingTrigger: 'per_event' as const,
+    },
+    {
       actionType: 'grading_fee:psa_value',
       model: 'fixed' as const,
       value: 2500,

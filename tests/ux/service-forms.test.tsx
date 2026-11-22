@@ -93,6 +93,15 @@ const CHANNELS = [
     payoutDaysMin: 20,
     payoutDaysMax: 40,
   },
+  {
+    key: 'fanatics_collect',
+    label: 'Fanatics Collect',
+    gradedOnly: true,
+    minAskingMinor: 25_000,
+    requiresEvent: false,
+    payoutDaysMin: 30,
+    payoutDaysMax: 60,
+  },
 ];
 
 let openRequests: { code: string; type: string; status: string; createdAt: string }[] = [];
@@ -363,6 +372,15 @@ describe('consignment, as a slip', () => {
     // What the channel asks of a card is on the slip: its minimum, and that it takes graded cards only.
     expect(within(line('Minimum asking')).getByText('$50.00')).toBeInTheDocument();
     expect(within(line('Accepts')).getByText('graded items only')).toBeInTheDocument();
+  });
+
+  it('names each channel as the channel list names it, so a channel added to the list needs nothing here', async () => {
+    const user = await openConsignment();
+    const select = screen.getByLabelText('Where to sell it', { selector: 'select' });
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(CHANNELS.map((c) => c.label));
+    await user.selectOptions(select, 'fanatics_collect');
+    expect(within(line('Where to sell it')).getByText('Fanatics Collect')).toBeInTheDocument();
+    expect(within(line('Minimum asking')).getByText('$250.00')).toBeInTheDocument();
   });
 });
 
