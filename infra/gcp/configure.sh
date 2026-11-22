@@ -15,7 +15,8 @@ only for a value that is missing, or one named with --change.
 
   --from <file>     provision.sh's output (default ~/bault-gcp.env)
   --change <name>   ask again for a key, or a group: domain, paypal, checkout,
-                    easypost, smtp, bank, support, sentry, age. Repeatable.
+                    crypto, easypost, smtp, bank, support, sentry, age.
+                    Repeatable.
 EOF
 }
 
@@ -179,6 +180,7 @@ hostname_ok() {
 }
 paypal_env_ok() { case "$1" in sandbox|live) return 0 ;; *) say "  sandbox or live"; return 1 ;; esac; }
 true_or_false() { case "$1" in true|false) return 0 ;; *) say "  true or false"; return 1 ;; esac; }
+yes_or_no() { case "$1" in yes|no) return 0 ;; *) say "  yes or no"; return 1 ;; esac; }
 easypost_ok() { [[ "$1" =~ ^EZ[AT]K[A-Za-z0-9]+$ ]] || { say "  an EasyPost key starts EZTK (test) or EZAK (live)"; return 1; }; }
 smtp_port_ok() {
   case "$1" in
@@ -282,6 +284,41 @@ if wanted PAYPAL_CHECKOUT_ENABLED checkout; then
   say "PAYMENT.CAPTURE.COMPLETED, .PENDING, .DENIED, .DECLINED, .REFUNDED and .REVERSED."
   ask "Take cash-ins through PayPal checkout (true or false)" 0 "$(file_get "$PROD" PAYPAL_CHECKOUT_ENABLED)" true_or_false
   set_prod PAYPAL_CHECKOUT_ENABLED "$ANSWER"
+fi
+[ -n "$(file_get "$PROD" CRYPTO_CHECKOUT_ENABLED)" ] || set_prod CRYPTO_CHECKOUT_ENABLED false
+[ -n "$(file_get "$PROD" CRYPTO_PROVIDER)" ] || set_prod CRYPTO_PROVIDER sandbox
+coinbase_keys=0
+placeholder "$(file_get "$PROD" COINBASE_COMMERCE_API_KEY)" \
+  || placeholder "$(file_get "$PROD" COINBASE_COMMERCE_WEBHOOK_SECRET)" || coinbase_keys=1
+crypto_on=no
+[ "$(file_get "$PROD" CRYPTO_CHECKOUT_ENABLED)" != true ] || crypto_on=yes
+if [ "$FIRST_RUN" -eq 1 ] || wanted - crypto \
+  || { [ "$coinbase_keys" -eq 0 ] && { [ "$crypto_on" = yes ] || [ "$(file_get "$PROD" CRYPTO_PROVIDER)" = coinbase_commerce ]; }; }; then
+  say ""
+  say "Cash-in by crypto: a collector pays on Coinbase Commerce's page, and the wallet is"
+  say "credited when Coinbase confirms the charge. Off unless you turn it on."
+  ask "Take cash-ins in crypto through Coinbase Commerce (yes or no)" 0 "$crypto_on" yes_or_no
+  if [ "$ANSWER" = yes ]; then
+    say ""
+    say "In Coinbase Commerce, Settings: make an API key, and add a webhook subscription for"
+    say "  https://$domain/api/v1/webhooks/crypto"
+    say "with the events charge:confirmed, charge:failed, charge:delayed and charge:pending,"
+    say "then paste the webhook shared secret below."
+    ask "Coinbase Commerce API key (hidden)" 1 "" nonempty
+    set_prod COINBASE_COMMERCE_API_KEY "$ANSWER"
+    ask "Coinbase Commerce webhook shared secret (hidden)" 1 "" nonempty
+    set_prod COINBASE_COMMERCE_WEBHOOK_SECRET "$ANSWER"
+    set_prod CRYPTO_PROVIDER coinbase_commerce
+    set_prod CRYPTO_CHECKOUT_ENABLED true
+  else
+    [ "$(file_get "$PROD" CRYPTO_CHECKOUT_ENABLED)" = false ] || set_prod CRYPTO_CHECKOUT_ENABLED false
+    if [ "$(file_get "$PROD" CRYPTO_PROVIDER)" = coinbase_commerce ] && [ "$coinbase_keys" -eq 1 ]; then
+      say "CRYPTO_PROVIDER stays coinbase_commerce, so a charge already open is still credited"
+      say "when Coinbase confirms it; nobody can start a new one."
+    else
+      [ "$(file_get "$PROD" CRYPTO_PROVIDER)" = sandbox ] || set_prod CRYPTO_PROVIDER sandbox
+    fi
+  fi
 fi
 [ -z "$(file_get "$PROD" PAYPAL_FF_HANDLE)" ] \
   || say "warning: PAYPAL_FF_HANDLE is set. Friends-and-family payments for goods break PayPal's terms; leave it empty."
@@ -457,6 +494,14 @@ for refused in PAYMENT_PROVIDER=sandbox SHIPPING_PROVIDER=sandbox STORAGE_PROVID
   [ "$(file_get "$PROD" "${refused%%=*}")" != "${refused#*=}" ] || problems+=("$refused is refused in production")
 done
 [[ "$(file_get "$PROD" APP_BASE_URL)" == https://* ]] || problems+=("APP_BASE_URL must start with https://")
+if [ "$(file_get "$PROD" CRYPTO_CHECKOUT_ENABLED)" = true ] && [ "$(file_get "$PROD" CRYPTO_PROVIDER)" != coinbase_commerce ]; then
+  problems+=("CRYPTO_CHECKOUT_ENABLED=true needs CRYPTO_PROVIDER=coinbase_commerce in production")
+fi
+if [ "$(file_get "$PROD" CRYPTO_PROVIDER)" = coinbase_commerce ]; then
+  for key in COINBASE_COMMERCE_API_KEY COINBASE_COMMERCE_WEBHOOK_SECRET; do
+    placeholder "$(file_get "$PROD" "$key")" && problems+=("$key is not set in production.env")
+  done
+fi
 grep -q '^[A-Za-z_][A-Za-z0-9_]*=.*CHANGE_ME' "$PROD" \
   && problems+=("production.env still has CHANGE_ME in: $(grep -o '^[A-Za-z_][A-Za-z0-9_]*=.*CHANGE_ME' "$PROD" | cut -d= -f1 | tr '\n' ' ')")
 for name in api worker migrate; do
