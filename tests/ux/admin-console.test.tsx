@@ -75,7 +75,7 @@ describe('the pricing form', () => {
 
     const missing = UNPRICED.actions.filter((a) => a.status === 'missing').map((a) => a.actionType);
     expect(missing).toEqual(
-      expect.arrayContaining(['parcel_processing', 'parcel_forwarding', 'membership:folio', 'membership:trust']),
+      expect.arrayContaining(['parcel_processing', 'parcel_forwarding', 'membership:bronze', 'membership:gold']),
     );
 
     let offered: string[] = [];
@@ -127,20 +127,20 @@ describe('the pricing form', () => {
     window.location.hash = '#/admin/pricing';
     renderIn(<AdminConsole currentUserId="me" />);
 
-    const folio = MEMBERSHIP_TIERS.find((t) => t.key === 'folio')!;
-    await addRule(user, folio.feeActionType, '39.00');
+    const bronze = MEMBERSHIP_TIERS.find((t) => t.key === 'bronze')!;
+    await addRule(user, bronze.feeActionType, '39.00');
     await waitFor(() => expect(post).toHaveBeenCalled());
     const [path, body] = post.mock.calls[0]!;
     expect(path).toBe('/pricing/rules');
     expect(body).toMatchObject({
-      actionType: 'membership:folio',
+      actionType: 'membership:bronze',
       value: 3900,
       parameters: {
-        storedItems: folio.storedItems,
-        insuredShipments: folio.insuredShipments,
-        insuredValueCapMinor: folio.insuredValueCapMinor,
-        postageCreditMinor: folio.postageCreditMinor,
-        commissionWaivedOnMinor: folio.commissionWaivedOnMinor,
+        storedItems: bronze.storedItems,
+        insuredShipments: bronze.insuredShipments,
+        insuredValueCapMinor: bronze.insuredValueCapMinor,
+        postageCreditMinor: bronze.postageCreditMinor,
+        commissionWaivedOnMinor: bronze.commissionWaivedOnMinor,
       },
     });
   });

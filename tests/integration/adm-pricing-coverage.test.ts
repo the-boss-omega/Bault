@@ -53,7 +53,7 @@ describe('E6 pricing coverage', () => {
       'shipping_addon:gps_tracker',
       'show_pickup',
       'white_glove:domestic',
-      'membership:folio',
+      'membership:bronze',
       'escrow_fee',
       'cash_out_fee',
       'chargeback_fee',

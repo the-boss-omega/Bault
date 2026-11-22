@@ -405,7 +405,7 @@ describe('SHP outbound shipping', () => {
   it('gives back the membership cover a cancelled parcel had spent', async () => {
     const operator = await signIn(SEED.operator);
     await fundWallet(SEED.operator, 20_000);
-    const joined = await operator.post('/membership/subscribe', { tier: 'folio' });
+    const joined = await operator.post('/membership/subscribe', { tier: 'bronze' });
     expect([200, 201]).toContain(joined.status);
 
     const item = await intakeFor(operator, SEED.operator);

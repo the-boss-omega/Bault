@@ -52,9 +52,9 @@ describe('the membership screen', () => {
     renderPage();
 
     const table = await screen.findByRole('table');
-    expect(within(table).getByText('Folio')).toBeInTheDocument();
-    expect(within(table).getByText('Registry')).toBeInTheDocument();
-    expect(within(table).getByText('Trust')).toBeInTheDocument();
+    expect(within(table).getByText('Bronze')).toBeInTheDocument();
+    expect(within(table).getByText('Silver')).toBeInTheDocument();
+    expect(within(table).getByText('Gold')).toBeInTheDocument();
     // The figure is a left-to-right isolate inside the phrase, so it keeps its place when the phrase reads right to left.
     const phrase = (text: string) => (content: string) => content.replace(/[\u2066-\u2069]/g, '') === text;
     expect(within(table).getAllByText(phrase('$39.00 a month')).length).toBeGreaterThan(0);
@@ -101,15 +101,15 @@ describe('the membership screen', () => {
     expect(confirmText.textContent).toMatch(/\$39\.00/);
     expect(confirmText.textContent).toMatch(/only after you approve it/i);
 
-    post.mockResolvedValue({ tier: 'folio', status: 'active', chargedMinor: 3_900 });
+    post.mockResolvedValue({ tier: 'bronze', status: 'active', chargedMinor: 3_900 });
     await user.click(screen.getByRole('button', { name: /confirm and charge/i }));
 
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/membership/subscribe', { tier: 'folio' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/membership/subscribe', { tier: 'bronze' }));
   });
 
   it('states that running out never charges automatically', async () => {
     answer({
-      tier: 'folio',
+      tier: 'bronze',
       status: 'active',
       cycleLive: true,
       currentPeriodStart: '2026-09-01T00:00:00.000Z',
@@ -143,18 +143,18 @@ describe('the membership screen', () => {
     renderPage();
 
     const joins = await screen.findAllByRole('button', { name: /^join$/i });
-    const folio = joins[0]!.closest('.offer') as HTMLElement;
-    const registry = joins[1]!.closest('.offer') as HTMLElement;
+    const bronze = joins[0]!.closest('.offer') as HTMLElement;
+    const silver = joins[1]!.closest('.offer') as HTMLElement;
 
-    expect(within(folio).getByText('Items in storage').nextElementSibling).toHaveTextContent('60');
-    expect(within(folio).getByText('Items booked in (a month)').nextElementSibling).toHaveTextContent('4');
-    expect(within(folio).getByText('Postage credit (a month)').nextElementSibling).toHaveTextContent('$10.00');
-    expect(within(registry).getByText('Items in storage').nextElementSibling).toHaveTextContent('200');
+    expect(within(bronze).getByText('Items in storage').nextElementSibling).toHaveTextContent('60');
+    expect(within(bronze).getByText('Items booked in (a month)').nextElementSibling).toHaveTextContent('4');
+    expect(within(bronze).getByText('Postage credit (a month)').nextElementSibling).toHaveTextContent('$10.00');
+    expect(within(silver).getByText('Items in storage').nextElementSibling).toHaveTextContent('200');
   });
 
   it('marks the card of the tier you are on, and no other', async () => {
     answer({
-      tier: 'registry',
+      tier: 'silver',
       status: 'active',
       cycleLive: true,
       currentPeriodStart: '2026-09-01T00:00:00.000Z',
@@ -176,7 +176,7 @@ describe('the membership screen', () => {
 
   it('does not offer to join the tier you are already on', async () => {
     answer({
-      tier: 'registry',
+      tier: 'silver',
       status: 'active',
       cycleLive: true,
       currentPeriodStart: '2026-09-01T00:00:00.000Z',
