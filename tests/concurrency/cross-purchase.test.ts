@@ -20,7 +20,7 @@ async function memberWithListing(label: string, admin: Client, operator: Client)
   expect(cashIn.status).toBe(201);
   expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/approve`, {})).status).toBe(201);
   expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/complete`, {})).status).toBe(201);
-  expect([200, 201]).toContain((await c.post('/membership/subscribe', { tier: 'registry' })).status);
+  expect([200, 201]).toContain((await c.post('/membership/subscribe', { tier: 'silver' })).status);
 
   const bins = (await operator.get('/custody/bins')).body as { id: string }[];
   const card = await operator.post('/intake/items', {

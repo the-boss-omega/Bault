@@ -120,7 +120,7 @@ describe('scripts/ops/prices.mjs', () => {
     expect(() => parsePriceFile(doc([rule({ description: ' ' })]))).toThrow(/description/);
     expect(() => parsePriceFile(doc([rule({ billingTrigger: 'yearly' })]))).toThrow(/billingTrigger/);
     expect(() =>
-      parsePriceFile(doc([rule({ actionType: 'membership:folio', parameters: { storedItems: 1 } })])),
+      parsePriceFile(doc([rule({ actionType: 'membership:bronze', parameters: { storedItems: 1 } })])),
     ).toThrow(/tier catalogue/);
     expect(() => parsePriceFile(doc([rule({ actionType: 'storage' })]))).toThrow(/freeDays/);
     expect(() => parsePriceFile(doc([rule()], 'yes'))).toThrow(/reviewed/);

@@ -60,7 +60,7 @@ export async function createMembership(
              now() + make_interval(mins => $4::int) - interval '30 days',
              now() + make_interval(mins => $4::int))
      RETURNING id`,
-    [userId, opts.tier ?? 'folio', opts.status ?? 'active', opts.endsInMinutes],
+    [userId, opts.tier ?? 'bronze', opts.status ?? 'active', opts.endsInMinutes],
   );
   return rows[0]!.id;
 }

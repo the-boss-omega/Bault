@@ -95,13 +95,13 @@ describe('a member subscribing while their membership is being renewed', () => {
     if (existing.rows[0]) {
       await pool.query(
         `UPDATE membership
-            SET tier = 'folio', status = 'active', scheduled_tier = NULL, cancelled_at = NULL, ended_at = NULL,
+            SET tier = 'bronze', status = 'active', scheduled_tier = NULL, cancelled_at = NULL, ended_at = NULL,
                 current_period_start = now() - interval '30 days 1 minute', current_period_end = now() - interval '1 minute'
           WHERE user_id = $1`,
         [userId],
       );
     } else {
-      await createMembership(pool, userId, { tier: 'folio', endsInMinutes: -1 });
+      await createMembership(pool, userId, { tier: 'bronze', endsInMinutes: -1 });
     }
     const membershipId = (await pool.query<{ id: string }>(`SELECT id FROM membership WHERE user_id = $1`, [userId]))
       .rows[0]!.id;
@@ -119,7 +119,7 @@ describe('a member subscribing while their membership is being renewed', () => {
       await holder.query('BEGIN');
       await holder.query('LOCK TABLE ledger_record IN ACCESS EXCLUSIVE MODE');
 
-      subscribing = member.post('/membership/subscribe', { tier: 'registry' });
+      subscribing = member.post('/membership/subscribe', { tier: 'silver' });
       await waitFor('subscribe to reach its balance read', async () => {
         const r = await pool.query<{ n: number }>(
           `SELECT count(*)::int AS n FROM pg_locks WHERE relation = 'ledger_record'::regclass AND NOT granted`,
@@ -152,7 +152,7 @@ describe('a member subscribing while their membership is being renewed', () => {
       `SELECT tier, current_period_end > now() AS live FROM membership WHERE id = $1`,
       [membershipId],
     );
-    expect(m.rows[0]).toEqual({ tier: 'registry', live: true });
+    expect(m.rows[0]).toEqual({ tier: 'silver', live: true });
     expect(await fees(pool, membershipId)).toBe(feesBefore + 1);
   });
 });
@@ -227,8 +227,8 @@ describe('two first subscribes at once', () => {
       await holder.query('BEGIN');
       await holder.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`wallet:${userId}`]);
       const both = Promise.all([
-        member.post('/membership/subscribe', { tier: 'folio' }),
-        member.post('/membership/subscribe', { tier: 'folio' }),
+        member.post('/membership/subscribe', { tier: 'bronze' }),
+        member.post('/membership/subscribe', { tier: 'bronze' }),
       ]);
       const until = Date.now() + 10_000;
       for (;;) {

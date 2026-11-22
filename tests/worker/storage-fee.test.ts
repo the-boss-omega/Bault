@@ -115,7 +115,7 @@ describe('a lot that has been split into its cards (F006)', () => {
     const { rows } = await pool.query<{ slots: number }>(
       `SELECT (parameters ->> 'storedItems')::int AS slots
          FROM pricing_rule
-        WHERE action_type = 'membership:folio' AND effective_from <= now()
+        WHERE action_type = 'membership:bronze' AND effective_from <= now()
           AND (effective_to IS NULL OR effective_to > now())
         ORDER BY effective_from DESC LIMIT 1`,
     );
