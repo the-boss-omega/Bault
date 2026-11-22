@@ -48,18 +48,6 @@ import { InspectionForm } from './InspectionForm';
 import { CustomRequestForm } from './CustomRequestForm';
 import { RemoveCommonsPanel } from './RemoveCommonsPanel';
 
-interface BreakEvenRow {
-  itemId: string;
-  storageSpentMinor: number;
-  totalSpentMinor: number;
-  projectedYearMinor: number;
-  estimatedValueMinor: number | null;
-  valueBasis: 'sold_comparable' | 'own_asking_price' | 'unknown';
-  comparableCount: number;
-  pastBreakEven: boolean;
-  monthsToBreakEven: number | null;
-}
-
 interface VaultItem {
   id: string;
   serialNumber: string;
@@ -284,7 +272,6 @@ export function VaultPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [culling, setCulling] = useState(false);
   const [cullWindowDays, setCullWindowDays] = useState<number | null>(null);
-  const [watch, setWatch] = useState<Map<string, BreakEvenRow>>(() => new Map());
   const [selecting, setSelecting] = useState(false);
   const [shipPicks, setShipPicks] = useState<Set<string>>(() => new Set());
 
@@ -309,16 +296,6 @@ export function VaultPage() {
     const handle = setTimeout(() => void load(), 250);
     return () => clearTimeout(handle);
   }, [load]);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const summary = await api.get<{ items: BreakEvenRow[] }>('/vault/break-even');
-        setWatch(new Map(summary.items.map((row) => [row.itemId, row])));
-      } catch {
-      }
-    })();
-  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -469,7 +446,6 @@ export function VaultPage() {
               <CardTile
                 key={item.id}
                 item={item}
-                watch={watch.get(item.id)}
                 t={t}
                 locale={locale}
                 onOpen={() => openRecord('item', item.id)}
@@ -515,14 +491,12 @@ export function VaultPage() {
 
 function CardTile({
   item,
-  watch,
   t,
   locale,
   onOpen,
   select,
 }: {
   item: VaultItem;
-  watch?: BreakEvenRow;
   t: TranslateFn;
   locale: string;
   onOpen: () => void;
@@ -621,52 +595,7 @@ function CardTile({
         )}
       </div>
 
-      {watch && !historical ? <Watch row={watch} t={t} /> : <div className="watch" />}
     </li>
-  );
-}
-
-function Watch({ row, t }: { row: BreakEvenRow; t: TranslateFn }) {
-  const value = row.estimatedValueMinor;
-  const known = value !== null && value > 0;
-  const ratio = known ? Math.min(row.totalSpentMinor / value, 1) : 0;
-  const tone = row.pastBreakEven ? 'proportion--over' : ratio >= 0.66 ? 'proportion--watch' : '';
-
-  return (
-    <div className="watch">
-      <div className="watch-line">
-        <span className="money-label">{t('vault.col.cost')}</span>
-        <span className="watch-amount">{formatUsd(row.totalSpentMinor)}</span>
-      </div>
-      {known ? (
-        <>
-          <span
-            className={`proportion ${tone}`.trim()}
-            role="img"
-            aria-label={
-              row.pastBreakEven
-                ? t('vault.watch.past')
-                : row.monthsToBreakEven !== null
-                  ? t('vault.watch.months', { count: row.monthsToBreakEven })
-                  : t('vault.watch.spent')
-            }
-          >
-            <span style={{ inlineSize: `${Math.round(ratio * 100)}%` }} />
-          </span>
-          <span className="watch-line">
-            {row.pastBreakEven
-              ? t('vault.watch.past')
-              : row.valueBasis === 'sold_comparable' && row.comparableCount === 1
-                ? t('vault.watch.basis.sold_comparable_one')
-                : t(`vault.watch.basis.${row.valueBasis}` as MessageKey, {
-                    count: row.comparableCount,
-                  })}
-          </span>
-        </>
-      ) : (
-        <span className="watch-line">{t('vault.watch.basis.unknown')}</span>
-      )}
-    </div>
   );
 }
 

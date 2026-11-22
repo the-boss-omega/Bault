@@ -62,17 +62,17 @@ describe('contract: ShippingAdapter', () => {
   it('bills in whole units, because carriers do not sell fractions', async () => {
     const lighter = await adapter.getRates({ ...international, items: [{ weightGrams: 900 }], packagingGrams: 60 });
     const heavier = await adapter.getRates({ ...international, items: [{ weightGrams: 910 }], packagingGrams: 60 });
-    const ePost = (rates: Awaited<ReturnType<typeof adapter.getRates>>) =>
-      rates.find((r) => r.carrier === 'ePost')!.costMinor;
+    const priorityIntl = (rates: Awaited<ReturnType<typeof adapter.getRates>>) =>
+      rates.find((r) => r.serviceLevel === 'Priority Mail International')!.costMinor;
 
-    expect(ePost(lighter)).toBe(ePost(heavier));
+    expect(priorityIntl(lighter)).toBe(priorityIntl(heavier));
 
     const overBoundary = await adapter.getRates({
       ...international,
       items: [{ weightGrams: 1_400 }],
       packagingGrams: 60,
     });
-    expect(ePost(overBoundary)).toBeGreaterThan(ePost(heavier));
+    expect(priorityIntl(overBoundary)).toBeGreaterThan(priorityIntl(heavier));
   });
 
   it('weighs the box it was told about instead of the flat allowance', async () => {

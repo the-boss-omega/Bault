@@ -148,3 +148,59 @@ describe('ACC an address names its state or province where carriers need one', (
     expect(byCode.get('NL')?.regions).toBeUndefined();
   });
 });
+
+describe('ACC an address carries an apartment line and a phone for the carrier', () => {
+  const FLAT = {
+    label: 'Flat',
+    recipient: 'Red',
+    line1: '500 Howard St',
+    line2: ' Apt 4B ',
+    city: 'San Francisco',
+    region: 'CA',
+    country: 'US',
+    postalCode: '94105',
+    phone: ' +1 415-555-0134 ',
+  };
+
+  it('saves both, trimmed, and reads them back with the address', async () => {
+    const c = await signIn(SEED.collector);
+    const created = await c.post('/me/addresses', FLAT);
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ line2: 'Apt 4B', phone: '+1 415-555-0134' });
+    expect(created.body).not.toHaveProperty('userId');
+    expect(created.body).not.toHaveProperty('createdAt');
+
+    const listed = ((await c.get('/me/addresses')).body as { id: string; line2: string; phone: string }[]).find(
+      (a) => a.id === created.body.id,
+    );
+    expect(listed).toMatchObject({ line2: 'Apt 4B', phone: '+1 415-555-0134' });
+
+    const edited = await c.patch(`/me/addresses/${created.body.id}`, { line2: 'Suite 9', phone: '020 7946 0958' });
+    expect(edited.status).toBe(200);
+    expect(edited.body).toMatchObject({ line2: 'Suite 9', phone: '020 7946 0958' });
+
+    const cleared = await c.patch(`/me/addresses/${created.body.id}`, { line2: '', phone: '' });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body).toMatchObject({ line2: null, phone: null });
+
+    await c.del(`/me/addresses/${created.body.id}`);
+  });
+
+  it('leaves both optional, and refuses a long apartment line or a phone that is not one', async () => {
+    const c = await signIn(SEED.collector);
+    const { line2: _line2, phone: _phone, ...plain } = FLAT;
+    const without = await c.post('/me/addresses', plain);
+    expect(without.status).toBe(201);
+    expect(without.body).toMatchObject({ line2: null, phone: null });
+    await c.del(`/me/addresses/${without.body.id}`);
+
+    const long = await c.post('/me/addresses', { ...FLAT, line2: 'x'.repeat(101) });
+    expect(long.status).toBe(400);
+    expect(long.body.error.message).toMatch(/apartment|line/i);
+    for (const phone of ['12345', '1'.repeat(21), 'call me', '(415) 555-0134', '+++ ---']) {
+      const bad = await c.post('/me/addresses', { ...FLAT, phone });
+      expect(bad.status, phone).toBe(400);
+      expect(bad.body.error.message).toMatch(/phone/i);
+    }
+  });
+});

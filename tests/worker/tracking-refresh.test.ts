@@ -122,6 +122,32 @@ describe('tracking refresh', () => {
     expect(await eventsFor(id)).toEqual([{ event_type: 'shipment_exception', user_id: await ownerOf(id) }]);
   });
 
+  it('keeps looking at a parcel in exception, and tells the collector once when it is delivered after all', async () => {
+    const { refreshTracking } = await import('../../apps/worker/src/jobs/tracking-refresh');
+    const code = `EZ${Date.now()}LATEDELIVERY`;
+    answers[code] = { status: 200, body: { status: 'delivered' } };
+    const id = await shipment(pool, code, 'exception');
+
+    await refreshTracking(pool);
+    await refreshTracking(pool);
+
+    expect(await statusOf(pool, id)).toBe('delivered');
+    expect(await eventsFor(id)).toEqual([{ event_type: 'shipment_delivered', user_id: await ownerOf(id) }]);
+  });
+
+  it('says nothing new about a parcel that is still in exception', async () => {
+    const { refreshTracking } = await import('../../apps/worker/src/jobs/tracking-refresh');
+    const code = `EZ${Date.now()}STILLSTUCK`;
+    answers[code] = { status: 200, body: { status: 'return_to_sender' } };
+    const id = await shipment(pool, code, 'exception');
+
+    await refreshTracking(pool);
+
+    expect(calls.some((c) => c.code === code)).toBe(true);
+    expect(await statusOf(pool, id)).toBe('exception');
+    expect(await eventsFor(id)).toEqual([]);
+  });
+
   it('writes no event for a parcel that is merely still on its way', async () => {
     const { refreshTracking } = await import('../../apps/worker/src/jobs/tracking-refresh');
     const code = `EZ${Date.now()}STILLMOVING`;

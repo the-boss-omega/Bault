@@ -144,17 +144,11 @@ This file is the owner's view of their own goods. `listOwned` takes a `VaultScop
 
 `storageFor` shows one item's storage costs. It counts the past from `charge` rows and computes only the next charge date, `nextChargeAt`, using `storageCover` and `coveredByMembership`. `coveredByMembership` is a SQL copy of the worker's `COVERED`, and it needs a cycle that is running now. The sweep renews memberships before it bills. So between a cycle's end and its renewal, the vault shows a charge the sweep will not make. `itemCard` returns a reduced view for the owner: the item without owner, bin, source or weight, signed image URLs without storage keys or hashes, only the custody events of the caller's own holding with their type, time and states, and the owner's open service requests.
 
-#### `apps/api/src/modules/vlt/break-even.service.ts`
-
-About 1 minute. It builds on T12.6.
-
-This file compares what each held card has cost with what it is worth. `forOwner` sums each card's charges. It values the card at its class's median sale from `soldMedianByClass`, or else at the owner's asking price, or else as `unknown`. `summaryFor` totals the rows and sorts the worst first. Charges match on `referenceId`, not `charge.userId`, so a buyer also sees what the seller paid. The monthly rate divides the storage billed by all months held, free months included. So `projectedYearMinor` reads too low and `monthsToBreakEven` reads too high.
-
 #### `apps/api/src/modules/vlt/vlt.controller.ts`, `apps/api/src/modules/vlt/vlt.module.ts`
 
 About 1 minute. It builds on T6.2.
 
-`VltController` serves routes under `vault` to any signed-in account, and each route answers only about the caller's own goods. They are `break-even`, `items`, `counts`, and for each item the card, `storage` and `timeline`. `toScope` turns an unknown `scope` into `active`.
+`VltController` serves routes under `vault` to any signed-in account, and each route answers only about the caller's own goods. They are `items`, `counts`, and for each item the card, `storage` and `timeline`. `toScope` turns an unknown `scope` into `active`.
 
 #### `apps/api/src/modules/mem/tiers.ts`
 

@@ -31,12 +31,18 @@ export interface AddressInput {
   label: string;
   recipient: string;
   line1: string;
+  line2?: string | null;
   city: string;
   region?: string | null;
   country: string;
   postalCode: string;
+  phone?: string | null;
   isDefault?: boolean;
 }
+
+export const ADDRESS_LINE2_MAX = 100;
+
+const PHONE = /^(?=(?:.*\d){6})[0-9+\- ]{6,20}$/;
 
 export type AddressPatch = Partial<AddressInput>;
 
@@ -109,10 +115,12 @@ export class ProfileService {
           label: dto.label,
           recipient: dto.recipient,
           line1: dto.line1,
+          line2: line2Of(dto.line2),
           city: dto.city,
           region,
           country,
           postalCode: dto.postalCode,
+          phone: phoneOf(dto.phone),
           isDefault: dto.isDefault ?? false,
         })
         .returning();
@@ -139,6 +147,8 @@ export class ProfileService {
         const country = (set.country as string | undefined) ?? existing.country;
         set.region = regionFor(country, patch.region !== undefined ? patch.region : existing.region);
       }
+      if (patch.line2 !== undefined) set.line2 = line2Of(patch.line2);
+      if (patch.phone !== undefined) set.phone = phoneOf(patch.phone);
       if (patch.isDefault !== undefined) set.isDefault = patch.isDefault;
       if (Object.keys(set).length === 0) throw AppError.validation('Nothing to update');
 
@@ -170,10 +180,12 @@ function addressView(row: typeof shippingAddress.$inferSelect) {
     label: row.label,
     recipient: row.recipient,
     line1: row.line1,
+    line2: row.line2,
     city: row.city,
     region: row.region,
     country: row.country,
     postalCode: row.postalCode,
+    phone: row.phone,
     isDefault: row.isDefault,
   };
 }
@@ -182,4 +194,21 @@ function regionFor(country: string, value: string | null | undefined): string | 
   const result = normalizeRegion(country, value);
   if ('problem' in result) throw AppError.validation(result.problem);
   return result.region;
+}
+
+function line2Of(value: string | null | undefined): string | null {
+  const line = (value ?? '').trim();
+  if (line.length > ADDRESS_LINE2_MAX) {
+    throw AppError.validation(`The apartment, suite or unit line is at most ${ADDRESS_LINE2_MAX} characters`);
+  }
+  return line || null;
+}
+
+function phoneOf(value: string | null | undefined): string | null {
+  const phone = (value ?? '').trim();
+  if (!phone) return null;
+  if (!PHONE.test(phone)) {
+    throw AppError.validation('A phone number is 6 to 20 characters of digits, spaces, plus and dashes');
+  }
+  return phone;
 }

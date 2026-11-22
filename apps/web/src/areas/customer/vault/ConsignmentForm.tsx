@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
 import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import { useI18n } from '../../../shared/i18n';
-import { channelLabel, type ConsignmentChannel, type ConsignmentEvent } from '../../../shared/market';
+import type { ConsignmentChannel, ConsignmentEvent } from '../../../shared/market';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { Button, Field, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 
@@ -86,7 +86,7 @@ export function ConsignmentForm({
   const quiet = <span className="drawer-tag-quiet">—</span>;
   const show = events.find((ev) => ev.id === eventId);
   const lines: { label: string; value: ReactNode }[] = [
-    { label: t('consign.channel'), value: channel ? channelLabel(t, channel.key) : quiet },
+    { label: t('consign.channel'), value: channel ? channel.label : quiet },
   ];
   if (channel?.requiresEvent) {
     lines.push({
@@ -130,7 +130,7 @@ export function ConsignmentForm({
             <select value={channelKey} onChange={(e) => setChannelKey(e.target.value)}>
               {channels.map((c) => (
                 <option key={c.key} value={c.key}>
-                  {channelLabel(t, c.key)}
+                  {c.label}
                 </option>
               ))}
             </select>

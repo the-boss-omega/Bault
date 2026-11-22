@@ -74,8 +74,8 @@ describe('the tier catalogue', () => {
     for (const tier of MEMBERSHIP_TIERS) {
       const worstCase = fullUseCostMinor(tier, UNIT_PRICES);
       const utilisation = tier.listPriceMinor / worstCase;
-      expect(utilisation, `${tier.key} break-even utilisation`).toBeGreaterThan(0.4);
-      expect(utilisation, `${tier.key} break-even utilisation`).toBeLessThan(0.9);
+      expect(utilisation, `${tier.key} price against its worst case`).toBeGreaterThan(0.4);
+      expect(utilisation, `${tier.key} price against its worst case`).toBeLessThan(0.9);
     }
   });
 });

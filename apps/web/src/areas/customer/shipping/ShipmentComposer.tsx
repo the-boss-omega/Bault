@@ -21,6 +21,7 @@ import { countryName, lacksRegion, useShippingCountries } from '../../../shared/
 import {
   AddressFields,
   EMPTY_ADDRESS,
+  addressOptionals,
   missingAddressFields,
   type Address,
   type AddressDraft,
@@ -327,6 +328,7 @@ function ComposerRound({
       const created = await api.post<Address>('/me/addresses', {
         ...newAddress,
         region: newAddress.region?.trim() || null,
+        ...addressOptionals(newAddress),
       });
       const list = await api.get<Address[]>('/me/addresses').catch(() => null);
       setAddresses(list ?? [...(addresses ?? []), created]);
@@ -514,10 +516,12 @@ function ComposerRound({
                                 {a.recipient}
                               </bdi>
                               <bdi dir="auto">{a.line1}</bdi>
+                              {a.line2 && <bdi dir="auto">{a.line2}</bdi>}
                               <bdi dir="auto">
                                 {[a.city, a.region].filter(Boolean).join(', ')} {a.postalCode}
                               </bdi>
                               <span>{countryName(a.country, countries)}</span>
+                              {a.phone && <span dir="ltr">{a.phone}</span>}
                             </span>
                           </label>
                         </li>
@@ -889,11 +893,22 @@ function ComposerRound({
         label: t('ship.line.to'),
         value: (
           <bdi dir="auto">
-            {address.recipient}, {[address.city, address.region].filter(Boolean).join(', ')},{' '}
-            {countryName(address.country, countries)}
+            {[
+              address.recipient,
+              address.line1,
+              address.line2,
+              address.city,
+              address.region,
+              countryName(address.country, countries),
+            ]
+              .filter(Boolean)
+              .join(', ')}
           </bdi>
         ),
       });
+      if (address.phone) {
+        lines.push({ label: t('ship.line.phone'), value: <span dir="ltr">{address.phone}</span> });
+      }
     }
     lines.push({
       label: t('ship.line.insured'),

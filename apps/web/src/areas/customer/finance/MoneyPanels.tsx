@@ -24,7 +24,7 @@ interface FundingRoute {
   description: string;
   available: boolean;
   /** `paypal`: paid on PayPal's page and captured on return. `direct` (or absent): settled in one call. */
-  checkout?: 'paypal' | 'direct' | null;
+  checkout?: 'paypal' | 'crypto' | 'direct' | null;
   instructions: BankInstructions | { handle: string } | null;
 }
 
@@ -41,6 +41,46 @@ interface PayPalCheckoutCaptured {
   amountMinor: number;
 }
 
+interface CryptoCheckoutStarted {
+  paymentId: string;
+  hostedUrl: string | null;
+  status: string;
+  amountMinor: number;
+}
+
+interface CryptoCheckoutState {
+  paymentId: string;
+  status: string;
+  amountMinor: number;
+  message: string;
+}
+
+export interface CryptoReturn {
+  outcome: 'returned' | 'cancelled';
+  paymentId: string;
+}
+
+const CRYPTO_PAYMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function cryptoReturnFrom(outcome: string, paymentId: string): CryptoReturn | null {
+  if ((outcome !== 'returned' && outcome !== 'cancelled') || !CRYPTO_PAYMENT_ID.test(paymentId)) return null;
+  return { outcome, paymentId };
+}
+
+export function isCryptoHostedUrl(href: string, appOrigin: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return false;
+  }
+  if (url.protocol === 'https:' && url.hostname === 'commerce.coinbase.com' && url.port === '') return true;
+  return url.origin === appOrigin;
+}
+
+export const CRYPTO_POLL_MS = 5_000;
+const CRYPTO_POLL_ROUNDS = 120;
+
 interface RouteCatalogue {
   limits: { minMinor: number; maxMinor: number };
   routes: FundingRoute[];
@@ -53,6 +93,8 @@ export function TopUpPanel({
   onChanged,
   paypalReturn = null,
   onPayPalReturnHandled,
+  cryptoReturn = null,
+  onCryptoReturnHandled,
 }: {
   onError: (m: string | null) => void;
   onStatus: (m: string | null) => void;
@@ -60,6 +102,8 @@ export function TopUpPanel({
   /** The collector is back from PayPal's page for this payment. */
   paypalReturn?: PayPalReturn | null;
   onPayPalReturnHandled?: () => void;
+  cryptoReturn?: CryptoReturn | null;
+  onCryptoReturnHandled?: () => void;
 }) {
   const { t } = useI18n();
   const [catalogue, setCatalogue] = useState<RouteCatalogue | null>(null);
@@ -117,8 +161,76 @@ export function TopUpPanel({
     })();
   }, [paypalReturn, onError, onStatus, onChanged, onPayPalReturnHandled, t]);
 
+  const [watching, setWatching] = useState<string | null>(null);
+  const cryptoFinished = useRef<string | null>(null);
+  useEffect(() => {
+    if (!cryptoReturn) return;
+    const id = `${cryptoReturn.outcome}:${cryptoReturn.paymentId}`;
+    if (cryptoFinished.current === id) return;
+    cryptoFinished.current = id;
+    void (async () => {
+      try {
+        if (cryptoReturn.outcome === 'cancelled') {
+          await api.post(`/finance/checkout/crypto/${encodeURIComponent(cryptoReturn.paymentId)}/cancel`, {});
+          onError(null);
+          onStatus(t('money.cryptoCancelled'));
+          return;
+        }
+        setWatching(cryptoReturn.paymentId);
+      } catch (e) {
+        onStatus(null);
+        onError((e as Error).message);
+      } finally {
+        onCryptoReturnHandled?.();
+      }
+    })();
+  }, [cryptoReturn, onError, onStatus, onCryptoReturnHandled, t]);
+
+  useEffect(() => {
+    if (!watching) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const look = async (round: number) => {
+      try {
+        const seen = await api.get<CryptoCheckoutState>(`/finance/checkout/crypto/${encodeURIComponent(watching)}`);
+        if (stopped) return;
+        if (seen.status === 'succeeded') {
+          onError(null);
+          onStatus(t('money.paid', { amount: formatUsd(seen.amountMinor) }));
+          setWatching(null);
+          onChanged();
+          return;
+        }
+        if (seen.status !== 'pending') {
+          onStatus(null);
+          onError(seen.message);
+          setWatching(null);
+          return;
+        }
+        onError(null);
+        if (round >= CRYPTO_POLL_ROUNDS) {
+          onStatus(t('money.cryptoStillWaiting', { amount: formatUsd(seen.amountMinor) }));
+          setWatching(null);
+          return;
+        }
+        onStatus(t('money.cryptoWaiting', { amount: formatUsd(seen.amountMinor) }));
+      } catch (e) {
+        if (stopped) return;
+        onError((e as Error).message);
+      }
+      timer = setTimeout(() => void look(round + 1), CRYPTO_POLL_MS);
+    };
+    void look(0);
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [watching, onError, onStatus, onChanged, t]);
+
   const chosen = catalogue?.routes.find((r) => r.key === route);
   const viaPayPal = chosen?.checkout === 'paypal';
+  const viaCrypto = chosen?.checkout === 'crypto';
+  const payable = Boolean(chosen?.available && (chosen.instant || viaCrypto));
   const cents = dollarsToCents(amount);
   const withinLimits =
     catalogue !== null &&
@@ -166,6 +278,46 @@ export function TopUpPanel({
         return;
       }
       leaveForPayPal(started.approveUrl);
+    } catch (e) {
+      const unknown = e instanceof ApiError && (e.kind === 'unreachable' || e.kind === 'server');
+      if (!unknown) attempt.current = null;
+      onError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function payWithCrypto() {
+    if (cents === null) return;
+    const key = attemptKey(cents);
+    setBusy(true);
+    try {
+      const started = await api.post<CryptoCheckoutStarted>('/finance/checkout/crypto', {
+        amountMinor: cents,
+        idempotencyKey: key,
+      });
+      if (!started.hostedUrl) {
+        attempt.current = null;
+        if (started.status === 'succeeded') {
+          onError(null);
+          onStatus(t('money.paid', { amount: formatUsd(started.amountMinor) }));
+          setAmount('');
+          onChanged();
+        } else if (started.status === 'pending') {
+          setWatching(started.paymentId);
+        } else {
+          onStatus(null);
+          onError(t('money.notTaken'));
+        }
+        return;
+      }
+      if (!isCryptoHostedUrl(started.hostedUrl, window.location.origin)) {
+        attempt.current = null;
+        onStatus(null);
+        onError(t('money.cryptoNotSafe'));
+        return;
+      }
+      leaveForPayPal(started.hostedUrl);
     } catch (e) {
       const unknown = e instanceof ApiError && (e.kind === 'unreachable' || e.kind === 'server');
       if (!unknown) attempt.current = null;
@@ -237,14 +389,14 @@ export function TopUpPanel({
 
             {chosen && (
               <p className="field-hint">
-                <StatusBadge tone={chosen.instant ? 'success' : 'warning'} plain>
-                  {chosen.instant ? t('money.instant') : t('money.reviewed')}
+                <StatusBadge tone={chosen.instant || viaCrypto ? 'success' : 'warning'} plain>
+                  {chosen.instant ? t('money.instant') : viaCrypto ? t('money.automatic') : t('money.reviewed')}
                 </StatusBadge>{' '}
                 {t(`${viaPayPal ? 'money.routeDescPaypal' : 'money.routeDesc'}.${chosen.key}` as MessageKey)}
               </p>
             )}
 
-            {chosen?.instant && chosen.available ? (
+            {chosen && payable ? (
               <MoneyField
                 label={t('money.amount')}
                 value={amount}
@@ -267,7 +419,7 @@ export function TopUpPanel({
             )}
           </div>
 
-          {chosen?.instant && chosen.available ? (
+          {chosen && payable ? (
             <>
               <aside className="request-slip">
                 <DrawerTag
@@ -276,7 +428,7 @@ export function TopUpPanel({
                   lines={[{ label: t('money.how'), value: t(`money.route.${chosen.key}` as MessageKey) }]}
                   status={
                     <StatusBadge tone="success" plain>
-                      {t('money.instant')}
+                      {viaCrypto ? t('money.automatic') : t('money.instant')}
                     </StatusBadge>
                   }
                 />
@@ -286,12 +438,14 @@ export function TopUpPanel({
                   <Button
                     variant="primary"
                     icon={<IconWallet />}
-                    disabled={busy || !withinLimits}
-                    onClick={() => void (viaPayPal ? payWithPayPal() : pay())}
+                    disabled={busy || !withinLimits || (viaCrypto && watching !== null)}
+                    onClick={() => void (viaCrypto ? payWithCrypto() : viaPayPal ? payWithPayPal() : pay())}
                   >
-                    {viaPayPal ? t('money.continueToPaypal') : t('money.payNow')}
+                    {viaCrypto ? t('money.continueToCrypto') : viaPayPal ? t('money.continueToPaypal') : t('money.payNow')}
                   </Button>
-                  <span className="field-hint">{viaPayPal ? t('money.paypalHint') : t('money.instantHint')}</span>
+                  <span className="field-hint">
+                    {viaCrypto ? t('money.cryptoHint') : viaPayPal ? t('money.paypalHint') : t('money.instantHint')}
+                  </span>
                 </div>
               </div>
             </>
