@@ -68,7 +68,7 @@ describe('dispatching the outbox', () => {
     expect(rows[0]!.dispatched_at).toBeNull();
     expect(rows[0]!.attempts).toBe(1);
     expect(rows[0]!.last_error).toMatch(/uuid/i);
-    expect(await count(pool, `SELECT 1 FROM notification WHERE user_id = 'not-a-uuid'`)).toBe(0);
+    expect(await count(pool, `SELECT 1 FROM notification WHERE user_id::text = 'not-a-uuid'`)).toBe(0);
   });
 });
 

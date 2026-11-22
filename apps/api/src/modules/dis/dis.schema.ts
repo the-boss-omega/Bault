@@ -1,5 +1,8 @@
-import { pgEnum, pgTable, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, jsonb, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
+import { batch, item } from '../cst/cst.schema';
+import { charge } from '../pay/pay.schema';
 
 export const serviceRequestType = pgEnum('service_request_type', [
   'batch_split',
@@ -27,14 +30,14 @@ export const serviceRequest = pgTable('service_request', {
   id: pkId(),
   code: text('code'),
   type: serviceRequestType('type').notNull(),
-  requesterId: text('requester_id').notNull(),
-  itemId: text('item_id'),
-  batchId: text('batch_id'),
+  requesterId: uuid('requester_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
+  itemId: uuid('item_id').references(() => item.id, { onDelete: 'restrict' }),
+  batchId: uuid('batch_id').references(() => batch.id, { onDelete: 'restrict' }),
   status: serviceRequestStatus('status').notNull().default('requested'),
-  chargeId: text('charge_id'),
+  chargeId: uuid('charge_id').references(() => charge.id, { onDelete: 'restrict' }),
   typeFields: jsonb('type_fields'),
   fulfillment: jsonb('fulfillment'),
-  fulfilledBy: text('fulfilled_by'),
+  fulfilledBy: uuid('fulfilled_by').references(() => userAccount.id, { onDelete: 'restrict' }),
   fulfilledAt: timestamp('fulfilled_at', { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

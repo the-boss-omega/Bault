@@ -44,7 +44,7 @@ This file defines the item and the records of where it has been. A `bin` is a sh
 
 An `item` always has one `ownerId`, and the trigger `trg_no_delete_item` refuses any delete. Its main columns are `lifecycleState`, `binId`, `holdFlag`, `sourceParcelId`, and the lot fields `isLot`, `lotSize` and `lotBroken`. A lot is several cards stored and billed as one item. `oversized` is copied from the class at intake and never derived again. So a later change to the class list cannot reprice goods already stored. `custodyEvent` and `binTransfer` are append-only. `itemChangeHistory`, `itemImage` and `batch` complete the file.
 
-`binId` is free text with no foreign key. `ConsignmentService.warehouseTransfer` writes `EXT:<warehouse>/<bin>` into it, so every join from an item to its `bin` compares the bin's id as text.
+`binId` is free text with no foreign key. `ConsignmentService.warehouseTransfer` writes `EXT:<warehouse>/<bin>` into it, so every join from an item to its `bin` compares the bin's id as text. The same holds for the bin columns of `custodyEvent` and `binTransfer`. Every other id in this file is a `uuid` with a foreign key since `0042`, to `user_account`, `item`, `batch`, `parcel` or `facility`.
 
 #### `apps/api/src/modules/inv/item-classes.ts`, `apps/api/src/modules/inv/intake-policy.ts`
 
@@ -144,17 +144,11 @@ This file is the owner's view of their own goods. `listOwned` takes a `VaultScop
 
 `storageFor` shows one item's storage costs. It counts the past from `charge` rows and computes only the next charge date, `nextChargeAt`, using `storageCover` and `coveredByMembership`. `coveredByMembership` is a SQL copy of the worker's `COVERED`, and it needs a cycle that is running now. The sweep renews memberships before it bills. So between a cycle's end and its renewal, the vault shows a charge the sweep will not make. `itemCard` returns a reduced view for the owner: the item without owner, bin, source or weight, signed image URLs without storage keys or hashes, only the custody events of the caller's own holding with their type, time and states, and the owner's open service requests.
 
-#### `apps/api/src/modules/vlt/break-even.service.ts`
-
-About 1 minute. It builds on T12.6.
-
-This file compares what each held card has cost with what it is worth. `forOwner` sums each card's charges. It values the card at its class's median sale from `soldMedianByClass`, or else at the owner's asking price, or else as `unknown`. `summaryFor` totals the rows and sorts the worst first. Charges match on `referenceId`, not `charge.userId`, so a buyer also sees what the seller paid. The monthly rate divides the storage billed by all months held, free months included. So `projectedYearMinor` reads too low and `monthsToBreakEven` reads too high.
-
 #### `apps/api/src/modules/vlt/vlt.controller.ts`, `apps/api/src/modules/vlt/vlt.module.ts`
 
 About 1 minute. It builds on T6.2.
 
-`VltController` serves routes under `vault` to any signed-in account, and each route answers only about the caller's own goods. They are `break-even`, `items`, `counts`, and for each item the card, `storage` and `timeline`. `toScope` turns an unknown `scope` into `active`.
+`VltController` serves routes under `vault` to any signed-in account, and each route answers only about the caller's own goods. They are `items`, `counts`, and for each item the card, `storage` and `timeline`. `toScope` turns an unknown `scope` into `active`.
 
 #### `apps/api/src/modules/mem/tiers.ts`
 

@@ -1,6 +1,7 @@
 import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
 
 export const membershipStatus = pgEnum('membership_status', [
   'active',
@@ -12,7 +13,7 @@ export const membership = pgTable(
   'membership',
   {
     id: pkId(),
-    userId: uuid('user_id').notNull(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
     tier: text('tier').notNull(),
     status: membershipStatus('status').notNull().default('active'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
@@ -33,8 +34,8 @@ export const membershipPeriod = pgTable(
   'membership_period',
   {
     id: pkId(),
-    membershipId: uuid('membership_id').notNull(),
-    userId: uuid('user_id').notNull(),
+    membershipId: uuid('membership_id').notNull().references(() => membership.id, { onDelete: 'restrict' }),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
     tier: text('tier').notNull(),
     periodStart: timestamp('period_start', { withTimezone: true }).notNull(),
     periodEnd: timestamp('period_end', { withTimezone: true }).notNull(),

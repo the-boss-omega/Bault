@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { I18nProvider } from './shared/i18n';
 import { ThemeProvider } from './shared/theme';
-import { ErrorBoundary } from './shared/ui/ErrorBoundary';
+import { AppErrorBoundary } from './shared/ui/AppErrorBoundary';
+import { startErrorReporting } from './shared/errorReporting';
 import { adoptPayPalReturn } from './shared/paypalCheckout';
 import './index.css';
 import './theme.css';
@@ -23,6 +24,8 @@ try {
 } catch {
 }
 
+void startErrorReporting();
+
 adoptPayPalReturn();
 
 const rootElement = document.getElementById('root');
@@ -32,12 +35,12 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <ThemeProvider>
-      <I18nProvider>
-        <ErrorBoundary>
+    <AppErrorBoundary>
+      <ThemeProvider>
+        <I18nProvider>
           <App />
-        </ErrorBoundary>
-      </I18nProvider>
-    </ThemeProvider>
+        </I18nProvider>
+      </ThemeProvider>
+    </AppErrorBoundary>
   </StrictMode>,
 );

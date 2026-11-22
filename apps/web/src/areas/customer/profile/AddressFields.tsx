@@ -9,10 +9,12 @@ export interface Address {
   label: string;
   recipient: string;
   line1: string;
+  line2: string | null;
   city: string;
   region: string | null;
   country: string;
   postalCode: string;
+  phone: string | null;
   isDefault: boolean;
 }
 
@@ -20,12 +22,18 @@ export const EMPTY_ADDRESS: AddressDraft = {
   label: '',
   recipient: '',
   line1: '',
+  line2: '',
   city: '',
   region: '',
   country: '',
   postalCode: '',
+  phone: '',
   isDefault: false,
 };
+
+export function addressOptionals(draft: Pick<AddressDraft, 'line2' | 'phone'>) {
+  return { line2: draft.line2?.trim() || null, phone: draft.phone?.trim() || null };
+}
 
 export function missingAddressFields(draft: AddressDraft, countries: readonly ShippingCountry[]): MessageKey[] {
   const missing: MessageKey[] = [];
@@ -80,12 +88,14 @@ export function AddressLabel({
     >
       <address className="address-lines">
         <span>{address.line1.trim() || quiet(t('profile.addressForm.line1'))}</span>
+        {address.line2?.trim() && <span>{address.line2.trim()}</span>}
         <span>{townLine || quiet(t('profile.addressForm.city'))}</span>
         <span>
           {address.country
             ? countryName(address.country, countries)
             : quiet(t('profile.addressForm.country'))}
         </span>
+        {address.phone?.trim() && <span dir="ltr">{address.phone.trim()}</span>}
       </address>
     </DrawerTag>
   );
@@ -153,6 +163,16 @@ export function AddressFields({
           dir="auto"
         />
       </Field>
+      <Field label={t('profile.addressForm.line2')} htmlFor={`${id}-line2`}>
+        <input
+          id={`${id}-line2`}
+          value={draft.line2 ?? ''}
+          maxLength={100}
+          onChange={(e) => set({ line2: e.target.value })}
+          autoComplete="address-line2"
+          dir="auto"
+        />
+      </Field>
       <Field label={t('profile.addressForm.city')} htmlFor={`${id}-city`}>
         <input
           id={`${id}-city`}
@@ -202,6 +222,22 @@ export function AddressFields({
           value={draft.postalCode}
           onChange={(e) => set({ postalCode: e.target.value })}
           autoComplete="postal-code"
+          dir="ltr"
+        />
+      </Field>
+      <Field
+        label={t('profile.addressForm.phone')}
+        htmlFor={`${id}-phone`}
+        hint={draft.country && draft.country !== 'US' ? t('profile.addressForm.phoneAbroadHint') : undefined}
+      >
+        <input
+          id={`${id}-phone`}
+          type="tel"
+          value={draft.phone ?? ''}
+          maxLength={20}
+          onChange={(e) => set({ phone: e.target.value })}
+          autoComplete="tel"
+          inputMode="tel"
           dir="ltr"
         />
       </Field>
