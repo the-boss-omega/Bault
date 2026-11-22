@@ -188,6 +188,11 @@ export class OfferService {
         })
         .returning();
       if (!child) throw AppError.validation('Failed to create counter-offer');
+      const [listed] = await tx
+        .select({ description: item.description })
+        .from(item)
+        .where(eq(item.id, l.itemId))
+        .limit(1);
       await this.outbox.emit(tx, {
         aggregateType: 'offer',
         aggregateId: child.id,
@@ -198,6 +203,7 @@ export class OfferService {
           sellerId: l.sellerId,
           amount,
           counteredBy: side,
+          itemDescription: listed?.description,
           recipientIds: [side === 'seller' ? o.buyerId : l.sellerId],
         },
       });

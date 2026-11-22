@@ -133,6 +133,7 @@ export class ChargebackService {
           amountMinor: payment.amount,
           feeMinor,
           reason: input.reason.trim(),
+          kind: payment.provider === 'bank_transfer' ? 'bank_transfer' : 'payment',
         },
       });
 

@@ -131,7 +131,13 @@ export class PurchaseService {
         aggregateType: 'listing',
         aggregateId: listingId,
         eventType: 'item_sold',
-        payload: { itemId: l.itemId, buyerId, sellerId: l.sellerId, price },
+        payload: {
+          itemId: l.itemId,
+          buyerId,
+          sellerId: l.sellerId,
+          price,
+          itemDescription: it.description,
+        },
       });
 
       const result: PurchaseResult = { transactionId: txn.id, itemId: l.itemId, price, fee: feeMinor };
