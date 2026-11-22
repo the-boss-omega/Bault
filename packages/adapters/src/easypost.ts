@@ -32,6 +32,7 @@ export class EasyPostError extends Error {
     message: string,
     readonly status: number,
     readonly detail?: string,
+    readonly path?: string,
   ) {
     super(message);
     this.name = 'EasyPostError';
@@ -93,7 +94,7 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
         if (parsed.error?.message) detail = parsed.error.message;
       } catch {
       }
-      throw new EasyPostError(`EasyPost ${res.status} on ${path}: ${detail}`, res.status, detail);
+      throw new EasyPostError(`EasyPost ${res.status} on ${path}: ${detail}`, res.status, detail, path);
     }
     return JSON.parse(text) as T;
   }

@@ -4,6 +4,7 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
+import { isUniqueViolationOf } from '../../shared/errors/pg-error';
 import { formatMinor } from '../../shared/money';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { LedgerService } from '../pay/ledger.service';
@@ -12,6 +13,8 @@ import { item } from '../cst/cst.schema';
 import { listing, offer } from './mkt.schema';
 
 type Side = 'buyer' | 'seller';
+
+const ONE_OPEN_OFFER_PER_BUYER = 'offer_one_open_per_buyer';
 
 @Injectable()
 export class OfferService {
@@ -38,6 +41,17 @@ export class OfferService {
     await this.assertCanCover(buyerId, amount, 'offer');
     await this.assertNoOpenOffer(buyerId, listingId);
 
+    try {
+      return await this.createOffer(buyerId, l, amount);
+    } catch (e) {
+      if (!isUniqueViolationOf(e, ONE_OPEN_OFFER_PER_BUYER)) throw e;
+      await this.assertNoOpenOffer(buyerId, listingId);
+      throw new AppError(ErrorCode.CONFLICT, 'You already have an offer open on this listing.', 409);
+    }
+  }
+
+  private createOffer(buyerId: string, l: typeof listing.$inferSelect, amount: number) {
+    const listingId = l.id;
     return this.db.transaction(async (tx) => {
       const [still] = await tx.select({ status: listing.status }).from(listing).where(eq(listing.id, listingId)).for('share').limit(1);
       if (still?.status !== 'active') throw new AppError(ErrorCode.CONFLICT, 'Listing not active', 409);

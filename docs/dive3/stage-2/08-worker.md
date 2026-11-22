@@ -84,7 +84,7 @@ These files hold the two jobs that act on a negative wallet, and the arithmetic 
 
 About 1.5 minutes. It builds on T13.2, T13.5 and T15.3.
 
-These jobs cancel unpaid shipments and track parcels. `expireUnpaidShipments` claims `awaiting_payment` shipments past `payment_due_at` with `FOR UPDATE SKIP LOCKED`. Each becomes `cancelled`, with a `shipment_expired` outbox row. A held shipment was never charged, so nothing is refunded. A shipment that `ShipmentService.pay` holds locked is left for the next run, so a payment in progress is never cancelled.
+These jobs cancel unpaid shipments and track parcels. `expireUnpaidShipments` claims `awaiting_payment` shipments past `payment_due_at` with `FOR UPDATE SKIP LOCKED`. Each becomes `cancelled` and leaves any shared parcel it was in, since the same UPDATE clears `group_id`, with a `shipment_expired` outbox row. A held shipment was never charged, so nothing is refunded. A shipment that `ShipmentService.pay` holds locked is left for the next run, so a payment in progress is never cancelled.
 
 `refreshTracking` polls `shipped` and `in_transit` shipments, oldest update first, up to `PER_RUN`, which is 200. It asks the adapter that `createShippingAdapter` builds. `getTracking` runs outside any transaction, so a slow carrier holds no lock. The answer is written under `SKIP LOCKED`, and only while the status is still in `MOVABLE`. Reaching `delivered` or `exception` writes `shipment_delivered` or `shipment_exception` in the same transaction. `exception` is never polled again, so a parcel that recovers stays `exception`.
 

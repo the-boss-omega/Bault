@@ -76,6 +76,12 @@ export class ParcelProfileService {
     return rows;
   }
 
+  async loadItems(itemIds: string[]) {
+    const ids = [...new Set(itemIds.filter(Boolean))];
+    if (ids.length === 0) return [];
+    return this.db.select().from(item).where(inArray(item.id, ids)).orderBy(item.id);
+  }
+
   measure(items: (typeof item.$inferSelect)[]): ItemMeasurements {
     const perItem = items.map((it) => ({
       itemId: it.id,

@@ -77,7 +77,11 @@ describe('a shipping provider error, as the customer sees it', () => {
     expect({ status: out.status, code: out.code }).toEqual({ status: 502, code: 'provider_unavailable' });
     expect(out.message).not.toMatch(/api key/i);
     expect(out.log).toContain('EasyPost 401');
-    expect(out.reported).toEqual([failure]);
+    expect(out.reported).toHaveLength(1);
+    const reported = out.reported[0] as Error;
+    expect(reported.name).toBe('EasyPostError');
+    expect(reported.message).toBe('EasyPost 401 on /shipments');
+    expect(reported.stack).toContain((failure as Error).stack!.split('\n').find((l) => /^\s+at /.test(l)));
   });
 
   it('answers a forbidden account the same way', async () => {
@@ -101,9 +105,52 @@ describe('a shipping provider error, as the customer sees it', () => {
     }
   });
 
+  it('reports an outage whose message quotes the address with its kind, status and path, and without the address', async () => {
+    const failure = await easyPostFailure(500, 'Upstream carrier timed out validating 1140 W Addison St, Chicago IL 60613 for Red Ashwood.');
+    const out = await answer(failure);
+    expect({ status: out.status, code: out.code }).toEqual({ status: 502, code: 'provider_unavailable' });
+    expect(out.reported).toHaveLength(1);
+    const reported = out.reported[0] as Error;
+    const text = `${reported.name} ${reported.message} ${reported.stack} ${JSON.stringify(reported)}`;
+    for (const typed of ['1140 W Addison', 'Chicago', '60613', 'Red Ashwood', 'timed out']) {
+      expect(text, typed).not.toContain(typed);
+      expect(out.log, typed).not.toContain(typed);
+    }
+    expect(reported.message).toContain('500');
+    expect(reported.message).toContain('/shipments');
+    expect(out.log).toContain('shipping');
+    expect(out.log).toContain('EasyPost 500 on /shipments');
+  });
+
   it('never answers a payment provider\'s 401 as the customer being signed out', async () => {
     const out = await answer(new PaymentProviderError('PayPal 401: invalid client credentials', { status: 401 }));
     expect({ status: out.status, code: out.code }).toEqual({ status: 502, code: 'provider_unavailable' });
     expect(out.message).not.toMatch(/credential/i);
+  });
+});
+
+describe('a unique violation nobody caught where it happened', () => {
+  async function duplicateKey(): Promise<Error> {
+    const { DrizzleQueryError } = await import('../../apps/api/node_modules/drizzle-orm/errors.js');
+    const pg = Object.assign(new Error('duplicate key value violates unique constraint "voucher_code_unique"'), {
+      code: '23505',
+      constraint: 'voucher_code_unique',
+      table: 'voucher',
+      detail: 'Key (code)=(GIFT-SECRET-42) already exists.',
+    });
+    return new DrizzleQueryError('insert into "voucher" ("code", "owner") values ($1, $2)', ['GIFT-SECRET-42', 'ann@example.test'], pg);
+  }
+
+  it('answers 409 conflict, and is still logged and reported without the values', async () => {
+    const out = await answer(await duplicateKey());
+    expect({ status: out.status, code: out.code }).toEqual({ status: 409, code: 'conflict' });
+    expect(out.reported).toHaveLength(1);
+    const reported = out.reported[0] as Error;
+    expect(reported.message).toContain('23505');
+    expect(reported.message).toContain('voucher_code_unique');
+    expect(out.log).toContain('voucher_code_unique');
+    const text = `${reported.message} ${reported.stack} ${out.log} ${out.message}`;
+    expect(text).not.toContain('GIFT-SECRET-42');
+    expect(text).not.toContain('ann@example.test');
   });
 });

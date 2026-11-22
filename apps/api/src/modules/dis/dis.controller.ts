@@ -203,8 +203,8 @@ export class DisController {
   }
 
   @Get('requests/:id')
-  get(@Param('id') id: string) {
-    return this.requests.get(id);
+  get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.requests.getFor(id, user);
   }
 
   @Roles('warehouse_operator', 'admin')
