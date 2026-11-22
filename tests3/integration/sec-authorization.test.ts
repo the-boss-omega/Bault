@@ -347,6 +347,73 @@ describe('one customer against another customer', () => {
     const still = await collector.get('/me/addresses');
     expect((still.body as { id: string }[]).some((a) => a.id === mine.body.id)).toBe(true);
   });
+
+  it('cannot read another collector’s service request, and is told it does not exist', async () => {
+    const operator = await signIn(SEED.operator);
+    const admin = await signIn(SEED.admin);
+    const item = await intakeFor(operator, SEED.collector, { description: 'Red asks for photos' });
+    const red = await signIn(SEED.collector);
+    const created = await red.post('/services/photography', { itemId: item.id });
+    expect(created.status).toBe(201);
+    const path = `/services/requests/${created.body.id}`;
+
+    const golden = await signIn(SEED.collector2);
+    const res = await golden.get(path);
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(res.body)).not.toContain('typeFields');
+
+    const own = await red.get(path);
+    expect(own.status).toBe(200);
+    expect(own.body.id).toBe(created.body.id);
+    expect((await operator.get(path)).status).toBe(200);
+    expect((await admin.get(path)).status).toBe(200);
+  });
+
+  it('cannot read a shared parcel it is not in, and is told it does not exist', async () => {
+    const operator = await signIn(SEED.operator);
+    const admin = await signIn(SEED.admin);
+    const redItem = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
+    const goldenItem = await intakeFor(operator, SEED.collector2, { typeClass: 'trading_card' });
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+
+    const shared = {
+      label: 'Show hotel',
+      recipient: 'Front desk, Bault group',
+      line1: '1 Convention Way',
+      city: 'Secaucus',
+      region: 'NJ',
+      country: 'US',
+      postalCode: '07094',
+    };
+    const redAddress = await red.post('/me/addresses', shared);
+    const redShip = await red.post('/shipping/shipments', { itemIds: [redItem.id], addressId: redAddress.body.id });
+    expect(redShip.status).toBe(201);
+    const group = await red.post('/shipping/groups', { shipmentId: redShip.body.id, notes: 'Table 7' });
+    expect(group.status).toBe(201);
+    const path = `/shipping/groups/${group.body.id}`;
+
+    const res = await golden.get(path);
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(res.body)).not.toContain('Convention Way');
+
+    expect((await red.get(path)).status).toBe(200);
+    expect((await operator.get(path)).status).toBe(200);
+    expect((await admin.get(path)).status).toBe(200);
+
+    const goldenAddress = await golden.post('/me/addresses', shared);
+    const goldenShip = await golden.post('/shipping/shipments', {
+      itemIds: [goldenItem.id],
+      addressId: goldenAddress.body.id,
+    });
+    expect(goldenShip.status).toBe(201);
+    const joined = await golden.post('/shipping/groups/join', {
+      groupCode: group.body.code,
+      shipmentId: goldenShip.body.id,
+    });
+    expect(joined.status).toBe(201);
+    expect((await golden.get(path)).status).toBe(200);
+  });
 });
 
 describe('session handling', () => {
