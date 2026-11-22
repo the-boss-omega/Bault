@@ -100,7 +100,7 @@ Do not fill in `PAYPAL_FF_HANDLE`. `configure.sh` warns that friends-and-family 
    - USPS: `GroundAdvantage` and `Priority`;
    - FedEx: `FEDEX_2_DAY`, `FEDEX_INTERNATIONAL_PRIORITY` or `INTERNATIONAL_PRIORITY`, and `PRIORITY_OVERNIGHT` or `STANDARD_OVERNIGHT` (the Direct Overnight service, from the Delaware facility only).
 
-   Check in EasyPost's dashboard that USPS and FedEx carrier accounts are connected for the production key. ePacket and ePost are listed in `carriers.ts`, but they have no EasyPost mapping, so EasyPost never offers them (see "Before handing over", item 6).
+   Check in EasyPost's dashboard that USPS and FedEx carrier accounts are connected for the production key. The two international postal services in `carriers.ts` (keys `epacket` and `epost`) map to USPS First-Class Package International and USPS Priority Mail International (pull request #76), so a USPS account is enough for them.
 4. Webhook: none is needed. The code has no EasyPost webhook route. Tracking is polled every 30 minutes by the worker job `shipment.tracking-refresh`, through EasyPost's `/trackers`.
 5. Where the key goes: `EASYPOST_API_KEY` in `/etc/bault/production.env` (`configure.sh --change easypost`). `SHIPPING_PROVIDER=easypost` is set already. `configure.sh` warns if PayPal is in sandbox while EasyPost has a live key, because staging labels would then cost real money.
 
@@ -115,7 +115,7 @@ Do not fill in `PAYPAL_FF_HANDLE`. `configure.sh` warns that friends-and-family 
 
 1. Create a Sentry organisation and one project for Node.
 2. Copy out the project's DSN.
-3. Where it goes: `SENTRY_DSN` in `/etc/bault/production.env`. The API and the worker both read it and tag their events `process: api` or `process: worker`. `configure.sh` does not ask for it, so edit the file by hand (section 6.1, step 17). Use a separate project, or at least a separate DSN, for staging.
+3. Where it goes: `SENTRY_DSN` in `/etc/bault/production.env`. The API and the worker both read it and tag their events `process: api` or `process: worker`. `configure.sh` asks for it on the first run, and `configure.sh --change sentry` changes it later (pull request #77). Use a separate project, or at least a separate DSN, for staging.
 4. Error reports are scrubbed before they leave: no cookies, no request bodies, no query values, and no provider replies (`packages/adapters/src/error-report.ts`).
 
 ### 2.5 Google Cloud
@@ -197,7 +197,7 @@ On the server the files live in `/etc/bault` (directory mode 700, files mode 600
 | `PAYPAL_CLIENT_ID` | The PayPal app's client ID | Required | PayPal developer dashboard (2.1) | `CHANGE_ME` |
 | `PAYPAL_CLIENT_SECRET` | The PayPal app's secret | Required | PayPal developer dashboard | `CHANGE_ME` |
 | `PAYPAL_WEBHOOK_ID` | Verifies every webhook | Required | The webhook you added (2.1) | `CHANGE_ME` |
-| `PAYPAL_PAYOUT_NOTE` | Meant as the payout's note | Read by nothing (see "Before handing over", item 1) | — | `Your Card Embassy cash-out` |
+| `PAYPAL_PAYOUT_NOTE` | The subject line of the e-mail PayPal sends with a payout | The PayPal payout adapter (pull request #77) | — | `Your Card Embassy cash-out` |
 | `PAYPAL_CHECKOUT_ENABLED` | Cash-in by PayPal checkout, credited when PayPal confirms it | Optional, default `false` | Business and legal decision (section 5) | `false` |
 | `PAYOUT_MODE` | `provider` sends cash-outs through the PayPal Payouts API. `manual` queues them for a person to pay and record. | Optional. The schema's default is `provider`. The example and `configure.sh` set `manual`. | Business decision | `manual` |
 
@@ -270,8 +270,6 @@ On the server the files live in `/etc/bault` (directory mode 700, files mode 600
 |---|---|---|
 | `API_PORT` | The API's port | Set to 3000 by `compose.yml`. Do not set it. |
 | `SESSION_COOKIE_NAME` | The session cookie's name | Default `session`. The cookie notice names it, so keep it. |
-| `SESSION_COOKIE_SECRET` | Nothing | Read by nothing |
-| `EMAIL_API_KEY` | Nothing | Read by nothing |
 | `DATABASE_URL`, `DIRECT_DATABASE_URL` | The database connection | Required, but kept in the per-service files below, never in `production.env` |
 
 **Set by `deploy.sh`, not by you:** `BAULT_TAG` (the release being deployed) and `BAULT_ENV_DIR` (default `/etc/bault`).
@@ -380,7 +378,7 @@ cd /opt/bault
 infra/gcp/configure.sh --change paypal --change easypost --change smtp
 ```
 
-Then edit `SUPPORT_EMAIL`, `SUPPORT_PHONE`, `SUPPORT_HOURS` and `SUPPORT_TEAM` by hand, and redeploy (or run `bault up -d api worker`).
+Then run `configure.sh --change support` for `SUPPORT_EMAIL`, `SUPPORT_PHONE`, `SUPPORT_HOURS` and `SUPPORT_TEAM`, and redeploy (or run `bault up -d api worker`).
 
 **Proof:**
 
@@ -415,12 +413,12 @@ Today the first command finds one line, a code comment in `apps/web/src/areas/ad
 
 ### 4.5 Test accounts and test money on a live database
 
-`scripts/remove-test-users.mjs` is a development tool. It removes only accounts matching `t<10 to 19 digits>@bault.dev` that own nothing, skips its `PROTECTED` list (`eldar@`, `hermon@`, `red@`, `golden@` and `platform@bault.dev`), deletes nothing without `--apply`, and refuses `NODE_ENV=production`. It does not cover the `chk…` accounts that `pnpm staging:check` creates.
+`scripts/remove-test-users.mjs` removes only accounts matching `t<10 to 19 digits>@bault.dev` that own nothing, skips its `PROTECTED` list (`eldar@`, `hermon@`, `red@`, `golden@` and `platform@bault.dev`), and deletes nothing without `--apply`. On production it refuses unless it is run with `--production-i-know`, which also covers the `chk…` accounts that `pnpm staging:check` creates; with `--apply` it prints the list and deletes only when you type `delete` back (pull request #77). An account with ledger or other activity is still skipped and must be closed by hand.
 
 On a production database, accounts with any history cannot be deleted. The ledger and the custody log are append-only, and `bault_app` may not delete an item. So:
 
-1. **Best:** do not carry the beta's database into production. If the beta holds only test data, start the customer's production on a fresh database (section 7, option B), where 4.1's query shows only `platform@bault.dev` and the people you create.
-2. **Otherwise:** in Management, Users, set every test account and every owner account to `closed`. Correct any test money through the admin flows, never by hand.
+1. **Unused settings: fixed in pull request #77.** `SESSION_COOKIE_SECRET` and `EMAIL_API_KEY` are removed from `env.ts` and the examples (an old env file that still sets them still loads), and `PAYPAL_PAYOUT_NOTE` is sent to PayPal as the payout e-mail subject. Merge it; `.github/workflows/ci.yml` still exports the retired cookie secret, which is harmless.
+2. **`configure.sh` asks for `SENTRY_DSN` and the `SUPPORT_*` settings: fixed in pull request #77.** It asks on the first run, and `--change sentry` and `--change support` ask again.
 
 **Proof:** 4.1's query. Every row that is not a real customer, a member of the customer's staff or `platform@bault.dev` should read `closed`.
 
@@ -478,7 +476,7 @@ Each should name a project the customer owns: `gcloud projects describe <id>` an
 
 ### 4.10 The GHCR owner and the repository URL
 
-**Where:** `BAULT_REGISTRY=ghcr.io/the-boss-omega` on the server (configure.sh derives it from the checkout's `origin`), the `origin` remote of `/opt/bault`, and the clone commands in `infra/gcp/README.md` (`git clone https://github.com/the-boss-omega/Bault.git`). `infra/production/README.md` already uses `<owner>/<repo>`.
+**Where:** `BAULT_REGISTRY=ghcr.io/the-boss-omega` on the server (configure.sh derives it from the checkout's `origin`), the `origin` remote of `/opt/bault`, and the clone commands in `infra/gcp/README.md`, which use a `<GITHUB_OWNER>/<REPO>` placeholder (pull request #77). `infra/production/README.md` already uses `<owner>/<repo>`.
 
 **How to change:** after the repository transfer (section 7), publish a release from the new repository. `release.yml` pushes to `ghcr.io/<new owner>`, because it names the registry from `GITHUB_REPOSITORY_OWNER`. Then, on the server:
 
@@ -507,7 +505,7 @@ All three should name the new owner. The last one lists `ghcr.io/<new-owner>/bau
 
 ### 4.12 The owner's alert address and age key
 
-- `infra/ops/crontab.example` sets `MAILTO=ops@example.com`. Before installing the crontab, change it to the customer's address, or better, use the commented `hc-ping.com` variant, which pings a dead man's switch only on success (section 6.4).
+- `infra/ops/crontab.example` sets `MAILTO=CHANGE_ME@your-ops-address`. Before installing the crontab, change it to the customer's address, or better, use the commented `hc-ping.com` variant, which pings a dead man's switch only on success (section 6.4). A failed dump also leaves a `BACKUP-FAILED` marker in the backup directory, which the watchdog logs every two minutes until the next good dump (pull request #77).
 - `BACKUP_AGE_RECIPIENT` in `backup.env` is the owner's public key on the beta. Replace it with the customer's: `infra/gcp/configure.sh --change age`.
 
 **Proof:** `crontab -l | grep -E '^MAILTO|hc-ping'` as `deploy`, and `grep ^BACKUP_AGE_RECIPIENT= /etc/bault/backup.env`, which shows the customer's `age1…`.
@@ -523,10 +521,10 @@ These are things this review found wrong, missing or stale in the code, the infr
 1. **Unused settings.** `PAYPAL_PAYOUT_NOTE`, `SESSION_COOKIE_SECRET` and `EMAIL_API_KEY` are in `env.ts` and read by nothing. The payout email subject is the fixed text "Your Card Embassy cash-out" in `packages/adapters/src/payment.ts`. Either wire `PAYPAL_PAYOUT_NOTE` in or remove all three.
 2. **`configure.sh` does not ask for `SENTRY_DSN` or the `SUPPORT_*` settings.** They are added to `production.env` by hand. Add them to the script, or keep the manual step (section 6.1, step 17).
 3. **No error reporting from the web app.** Only the API and the worker report to Sentry, so an exception in a collector's browser reaches nobody. The API also never calls `flushErrorReporting` on shutdown (stage 3, "After launch").
-4. **The crontab's `MAILTO` is `ops@example.com`,** and the server is not set up to send mail. A failed nightly backup is therefore silent. Use the dead-man's-switch variant in `infra/ops/crontab.example`.
-5. **The repository URL `the-boss-omega/Bault`** is written into `infra/gcp/README.md`'s clone commands. Change it to the new owner after the transfer.
-6. **ePacket and ePost cannot be bought.** They are in `CARRIER_SERVICES` with no `easypost` mapping, so with EasyPost they are never offered (`docs/dive3/stage-2/07-shipping.md`). Decide whether to remove them or to contract those carriers.
-7. **Tracking stops at `exception`.** The 30-minute refresh never polls a shipment in `exception` again (stage 3, "After launch"). There is no EasyPost webhook to cover it.
+4. **Silent backup failures: fixed in pull request #77.** `backup.sh` leaves a `BACKUP-FAILED` marker on any failure and the watchdog logs it until the next good dump; `MAILTO` is a `CHANGE_ME` placeholder that must still be set, or replaced by the dead-man's-switch line.
+5. **The repository URL in `infra/gcp/README.md`: fixed in pull request #77.** The clone commands use `<GITHUB_OWNER>/<REPO>`.
+6. **ePacket and ePost: fixed in pull request #76.** The two keys now map to USPS First-Class Package International and USPS Priority Mail International and are shown under those names; limits and prices are unchanged. The owner may pick other services; the catalogue test now refuses any service without a carrier mapping.
+7. **Tracking after `exception`: fixed in pull request #76.** The refresh keeps polling shipments in `exception` and announces only a change of status. There is still no EasyPost webhook, which is fine at the 30-minute cadence.
 8. **Addresses have no second line or phone** (the FF19 leftovers). `shipping_address` has `line1`, `city`, `region`, `country` and `postal_code`, and nothing for an apartment, a suite or a phone, although the EasyPost adapter can send `street2`. Some carriers need a phone for international labels.
 9. **No suggested insurance** from a card's value when shipping (the other FF19 leftover). Nothing on master suggests it.
 10. **The legal text is a draft** with 19 counsel blanks (4.6), and the product does not ask existing accounts to accept a new version of the terms.
@@ -534,13 +532,13 @@ These are things this review found wrong, missing or stale in the code, the infr
 12. **Compliance gaps** from `docs/production-readiness.md` that are still open on master: no KYC or AML checks, sanctions screening or transaction limits before PayPal payouts (C1); no data export, account deletion or anonymisation (C2); no declared or insured value per stored item (C3). These need the customer's lawyer and policy before code.
 13. **Few foreign keys.** The migrations still have six `REFERENCES` clauses (S2), so referential integrity rests on application code.
 14. **Rate limiting is in memory, per process** (S8). This is correct for the one API container `compose.yml` runs. Before running a second replica it needs a shared store.
-15. **The stage 3 document is out of date.** P1 (platform custodian and first administrator) is on master (migration `0038`, `dist/db/create-admin.js`, and CI's `migrate-image` job), and P2 (storage blocked) was merged in PR #58, but neither is marked "Done". Its "After launch" bullet says that the PayPal instant top-up "is not built", although PayPal Checkout cash-in was merged in PR #60. P2's test still expects `lang="he"`, from before the product became English only. P3, P4, P6, P7, P8, P14 and P15 have no "Done" paragraph. P3 (the cash-out fee on a payout PayPal takes back), P4 (one administrator approving and completing the same cash-out), P8 (what a service the warehouse does not do costs) and P15 (cancelling a shipment nobody packed) are decisions the customer should take.
+15. **The stage 3 document: fixed in pull request #75.** P1, P2, P6, P7, P8, P14 and P15 are marked Done with their tests, and the PayPal bullet says checkout is built behind its flag. P3 and P4 (the cash-out decisions) are being done separately.
 16. **Open Dependabot pull requests.** Fifteen are open, #56 among them (17 npm minor and patch updates). Several are major upgrades that need their own testing: pg-boss 10 to 12 (#37), vitest 3 to 5 (#35), eslint 9 to 10 (#33), `@nestjs/platform-express` 11 to 12 (#32), `@sentry/node` 10 to 11 (#31), and the GitHub Actions bumps (#25, #27, #28, #49). Merge or close each before the transfer, so that the customer starts from a clean list.
 17. **No restore drill has been logged for production.** `infra/ops/RESTORE.md` says that "launch waits for one successful run of each drill", and its log holds only a local proof on development data.
 18. **Backups made before the handover are encrypted to the owner's age key.** The customer cannot read them (section 7, step 14).
 19. **No licence file.** The repository has no `LICENSE`. Who owns the code and on what terms is for the written agreement between the owner and the customer.
 20. **Staging.** `infra/production/README.md`, sections 8 and 9, assume a staging server with sandbox credentials, and the load test refuses anything else. No staging server is described as existing besides the beta. Decide whether the beta becomes the customer's staging or a second server is provisioned.
-21. **Test accounts on production** cannot be removed by `scripts/remove-test-users.mjs` (4.5), and nothing removes the staging check's `chk…` accounts. On staging they are harmless. On production, close them by hand.
+21. **Test accounts on production: fixed in pull request #77.** `scripts/remove-test-users.mjs --production-i-know --apply` lists the accounts, covers the staging check's `chk…` ones, and deletes only when `delete` is typed back (4.5). Accounts with activity are still closed by hand.
 
 ### 5.2 What is not built yet, and what each part needs
 
@@ -736,9 +734,9 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
 
     It prints `✔ administrator … created`. It refuses, and changes nothing, once any administrator exists, so add further staff from Management, Users. Sign in at `https://<domain>` and enrol two-factor, which production requires of every administrator and warehouse operator.
 
-**Settings `configure.sh` does not ask for**
+**The one setting `configure.sh` does not ask for**
 
-17. On the server, edit `/etc/bault/production.env` with an editor (`nano /etc/bault/production.env`, not `echo`, so that nothing goes into the shell history). Set `SENTRY_DSN`, `SUPPORT_EMAIL`, `SUPPORT_PHONE`, `SUPPORT_HOURS` and `SUPPORT_TEAM`, and decide `PAYOUT_MODE` (`manual` or `provider`). Then:
+17. On the server, edit `/etc/bault/production.env` with an editor (`nano /etc/bault/production.env`, not `echo`, so that nothing goes into the shell history) and decide `PAYOUT_MODE` (`manual` or `provider`). `SENTRY_DSN` and the `SUPPORT_*` details were asked for in step 10; `configure.sh --change sentry` or `--change support` changes them later. Then:
 
     ```sh
     BAULT_TAG=$(cat /opt/bault/CURRENT_TAG) bault up -d api worker
@@ -746,7 +744,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
 
 **Backups and the watchdog**
 
-18. Before installing the crontab, edit `MAILTO` in `/opt/bault/infra/ops/crontab.example`, or switch to the `hc-ping.com` line (4.12). Then:
+18. Before installing the crontab, replace `MAILTO=CHANGE_ME@your-ops-address` in `/opt/bault/infra/ops/crontab.example` with the customer's address, or switch to the `hc-ping.com` line (4.12). Then:
 
     ```sh
     crontab infra/ops/crontab.example      # replaces deploy's crontab
@@ -949,7 +947,7 @@ First decide on the Google Cloud route:
 | 6 | **Google Cloud, option A:** in IAM & Admin, IAM, grant the customer's Google account Owner on both projects. In Billing, move both projects to the customer's billing account. **Option B:** section 6.1 in the customer's projects. | A: grants Owner. B: nothing. | A: accepts, moves billing. B: provisions. | `gcloud projects get-iam-policy <project>` lists the customer as owner, and Billing, Account management shows the customer's billing account for both projects |
 | 7 | **Point the server at the customer's repository and registry** (4.10), then deploy the new tag. | — | Runs the commands in 4.10 and 6.2 | `deployed <tag>`, and `bault images` lists `ghcr.io/<new-owner>/…` |
 | 8 | **Domain and Cloudflare** (6.6). The domain is registered by the customer. If the owner registered it, transfer it at the registrar. | Starts any registrar transfer | Points the A record, runs `configure.sh --change domain`, sets up Cloudflare | `curl -s https://<domain>/api/v1/readyz` answers `{"status":"ok","db":true}`, and `pnpm ops:security-check --url https://<domain>` exits 0 |
-| 9 | **Provider settings on the server:** the customer's PayPal (live), EasyPost (`EZAK`), SMTP, Sentry and support details. | — | `configure.sh --change paypal --change easypost --change smtp`, then edits `SENTRY_DSN` and `SUPPORT_*` (6.1, step 17) | The commands in 4.3 show the customer's values |
+| 9 | **Provider settings on the server:** the customer's PayPal (live), EasyPost (`EZAK`), SMTP, Sentry and support details. | — | `configure.sh --change paypal --change easypost --change smtp`, then `configure.sh --change sentry --change support` | The commands in 4.3 show the customer's values |
 | 10 | **Backups to the customer's age key:** `configure.sh --change age`, then run one dump by hand. | — | Runs both | `grep ^BACKUP_AGE_RECIPIENT= /etc/bault/backup.env` shows the customer's key, and the dump decrypts with the customer's private key (6.4, Drill 2) |
 | 11 | **Close the owner's provider accounts** once the customer's are live: the PayPal apps and webhooks, the EasyPost keys, the SMTP account, the Sentry project. | Closes or deletes each | Confirms nothing still uses them | The PayPal app list, the EasyPost keys and Sentry show nothing for Card Embassy under the owner |
 | 12 | **Rotate every secret the owner ever held** (below). | — | Rotates each | Every item below is done |
