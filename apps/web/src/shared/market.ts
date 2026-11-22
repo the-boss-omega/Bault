@@ -133,14 +133,3 @@ export interface ConsignmentEvent {
   endsAt: string | null;
   requestDeadline: string;
 }
-
-const CHANNEL_KEY: Record<string, MessageKey> = {
-  card_show: 'consign.channel.card_show',
-  auction_house: 'consign.channel.auction_house',
-  ebay_partner: 'consign.channel.ebay_partner',
-};
-
-export function channelLabel(t: TranslateFn, key: string): string {
-  const messageKey = CHANNEL_KEY[key];
-  return messageKey ? t(messageKey) : key;
-}
