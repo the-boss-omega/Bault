@@ -37,7 +37,7 @@ async function renderPanel() {
   get.mockImplementation((path: string) => {
     if (path === '/vault/items') return Promise.resolve(ITEMS);
     if (path === '/marketplace/collectors/blue') {
-      return Promise.resolve({ id: 'u2', username: 'blue', firstName: null, lastName: null });
+      return Promise.resolve({ username: 'blue' });
     }
     return Promise.resolve([]);
   });

@@ -4,9 +4,10 @@ import type { StatusTone } from './ui/primitives';
 export interface EscrowDeal {
   id: string;
   code: string;
-  raisedBy: string;
   raiserRole: 'buyer' | 'seller';
-  counterpartyUserId: string | null;
+  myRole: 'buyer' | 'seller';
+  raisedByMe: boolean;
+  counterpartyIsMember: boolean;
   counterpartyName: string | null;
   counterpartyEmail: string | null;
   description: string;
@@ -18,27 +19,22 @@ export interface EscrowDeal {
   fundingSource: string | null;
   fundedAt: string | null;
   fundingReference: string | null;
-  itemId: string | null;
   inspectedAt: string | null;
   inspectionMatches: string | null;
   inspectionNotes: string | null;
   buyerReleasedAt: string | null;
-  buyerReleaseAttestedBy: string | null;
   sellerReleasedAt: string | null;
-  sellerReleaseAttestedBy: string | null;
   closeReason: string | null;
   createdAt: string;
 }
 
 export interface EscrowEvent {
-  id: string;
   eventType: string;
   fromStatus: string | null;
   toStatus: string | null;
-  actorId: string | null;
-  onBehalfOf: string | null;
   notes: string | null;
   occurredAt: string;
+  byStaff: boolean;
 }
 
 export const ESCROW_TONE: Record<string, StatusTone> = {
@@ -68,7 +64,8 @@ export function escrowStatusLabel(t: TranslateFn, status: string): string {
   return key ? t(key) : status;
 }
 
-export function nextStep(t: TranslateFn, deal: EscrowDeal, viewerIsBuyer: boolean): string {
+export function nextStep(t: TranslateFn, deal: EscrowDeal): string {
+  const viewerIsBuyer = deal.myRole === 'buyer';
   switch (deal.status) {
     case 'proposed':
       return t('esc.next.proposed');
@@ -110,11 +107,8 @@ export interface PickupShow {
   endsAt: string | null;
   requestDeadline: string;
   feeMinor: number;
-  capacity: number;
-  booked: number;
   remaining: number | null;
   open: boolean;
-  notes: string | null;
 }
 
 export interface WhiteGloveTerms {

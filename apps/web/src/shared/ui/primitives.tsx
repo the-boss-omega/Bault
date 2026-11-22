@@ -505,9 +505,6 @@ export function ContextTabs({
       list.style.setProperty('--tab-w', `${t.width}px`);
       list.dataset.ready = 'true';
     };
-    // On a phone the strip scrolls sideways, and the page can open on a tab that is out of sight (a link to
-    // the storefront or to escrow). Bring it into view: only when the selection changes, so a person
-    // who scrolls the strip by hand is not pulled back by a resize.
     const reveal = () => {
       const tab = list.querySelector<HTMLElement>('[aria-selected="true"]');
       if (!live || !tab) return;

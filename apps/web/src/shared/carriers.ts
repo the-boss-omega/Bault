@@ -106,6 +106,24 @@ export function serviceLabel(
   return key ? t(key) : `${service.carrier} ${service.serviceLevel}`;
 }
 
+const SERVICE_BY_NAME: Record<string, MessageKey> = {
+  'USPS|Ground Advantage': 'ship.svc.usps_ground',
+  'USPS|Priority Mail': 'ship.svc.usps_priority',
+  'FedEx|2Day': 'ship.svc.fedex_2day',
+  'ePacket|International': 'ship.svc.epacket',
+  'ePost|International': 'ship.svc.epost',
+  'FedEx|International Priority': 'ship.svc.fedex_intl_priority',
+  'FedEx|Direct Overnight': 'ship.svc.direct_overnight',
+};
+
+export function shipmentServiceLabel(
+  t: TranslateFn,
+  shipment: { carrier: string | null; serviceLevel: string | null },
+): string {
+  const key = SERVICE_BY_NAME[`${shipment.carrier ?? ''}|${shipment.serviceLevel ?? ''}`];
+  return key ? t(key) : (shipment.carrier ?? '');
+}
+
 const BOX_KEY: Record<string, MessageKey> = {
   rigid_mailer: 'ship.box.rigid_mailer',
   small: 'ship.box.small',

@@ -60,7 +60,6 @@ interface LedgerRow {
   direction: string;
   currency: string;
   referenceType: string | null;
-  referenceId: string | null;
   occurredAt: string;
 }
 
@@ -558,14 +557,7 @@ function TransactionTable({
                 </td>
                 <td data-label={t('wallet.col.description')}>
                   {row.referenceType ? (
-                    <>
-                      <span>{refLabel(t, row.referenceType)}</span>
-                      {row.referenceId && (
-                        <span className="dt-sub">
-                          <Code value={row.referenceId.slice(0, 8)} />
-                        </span>
-                      )}
-                    </>
+                    <span>{refLabel(t, row.referenceType)}</span>
                   ) : (
                     <span className="muted">{t('wallet.tx.noReference')}</span>
                   )}
@@ -602,12 +594,11 @@ function TransactionDrawer({
 
   function downloadReceipt() {
     const lines = [
-      'BAULT — TRANSACTION RECEIPT',
+      'CARD EMBASSY — TRANSACTION RECEIPT',
       '',
       `${t('wallet.col.type')}: ${typeLabel(t, row.type)}`,
       `${t('wallet.col.date')}: ${formatDateTime(row.occurredAt, locale)}`,
-      `${t('wallet.tx.recordId')}: ${row.id}`,
-      `${t('wallet.tx.reference')}: ${row.referenceId ?? '—'}`,
+      `${t('wallet.tx.reference')}: ${row.referenceType ? refLabel(t, row.referenceType) : t('wallet.tx.noReference')}`,
       `${t('wallet.tx.direction')}: ${credit ? t('wallet.direction.credit') : t('wallet.direction.debit')}`,
       `${t('wallet.col.amount')}: ${formatLedgerAmount(row.amount, row.direction)} ${row.currency}`,
     ];
@@ -615,7 +606,7 @@ function TransactionDrawer({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `bault-receipt-${row.id.slice(0, 8)}.txt`;
+    link.download = `card-embassy-receipt-${row.occurredAt.slice(0, 10)}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -648,14 +639,8 @@ function TransactionDrawer({
         <DetailRow label={t('wallet.col.date')}>
           <span className="date">{formatDateTime(row.occurredAt, locale)}</span>
         </DetailRow>
-        <DetailRow label={t('wallet.tx.recordId')}>
-          <code dir="ltr">{row.id}</code>
-        </DetailRow>
-        <DetailRow
-          label={t('wallet.tx.reference')}
-          sub={row.referenceType ? refLabel(t, row.referenceType) : undefined}
-        >
-          {row.referenceId ? <code dir="ltr">{row.referenceId}</code> : t('wallet.tx.noReference')}
+        <DetailRow label={t('wallet.tx.reference')}>
+          {row.referenceType ? refLabel(t, row.referenceType) : t('wallet.tx.noReference')}
         </DetailRow>
         <DetailRow label={t('wallet.tx.direction')}>
           <StatusBadge tone={credit ? 'success' : 'info'}>
@@ -879,18 +864,12 @@ function RequestDrawer({
               {detail.rejectionReason && (
                 <DetailRow label={t('wallet.requests.rejectionReason')}>{detail.rejectionReason}</DetailRow>
               )}
-              {detail.settledLedgerId && (
-                <DetailRow label={t('wallet.requests.settledLedger')}>
-                  {/* The ledger shows this entry by the start of its id (the transactions table does); the whole of it is in the entry. */}
-                  <code dir="ltr">{detail.settledLedgerId.slice(0, 8)}</code>
-                </DetailRow>
-              )}
             </dl>
 
             <Panel title={t('wallet.requests.history')} subtitle={t('wallet.requests.historyNote')} flush>
               <ul className="timeline">
-                {detail.history.map((event) => (
-                  <li key={event.id}>
+                {detail.history.map((event, i) => (
+                  <li key={`${event.occurredAt}-${event.toStatus}-${i}`}>
                     <p className="dt-primary">
                       {event.fromStatus
                         ? t('wallet.requests.event', {

@@ -3,13 +3,13 @@ import { api } from '../../../shared/api';
 import { SERVICE_FEE_ACTION, priceLabel, useServicePrices } from '../../../shared/servicePrices';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
-import { BarcodeLabel } from '../../../shared/Barcode';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { itemClassLabel, itemName } from '../../../shared/itemClasses';
 import {
   STATE_META,
   departureLabel,
   stateLabel,
+  collectorTimeline,
   timelineDetail,
   timelineKindLabel,
   type Departure,
@@ -27,7 +27,7 @@ import {
   SuccessNote,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import { Code, Serial } from '../../../shared/ui/Serial';
+import { Serial } from '../../../shared/ui/Serial';
 import {
   IconAlert,
   IconAsk,
@@ -67,9 +67,6 @@ interface VaultItem {
   description: string;
   conditionGrade: string | null;
   lifecycleState: string;
-  barcode: string;
-  binBarcode: string | null;
-  binZone: string | null;
   holdFlag?: boolean;
   isLot: boolean;
   lotSize: number;
@@ -618,10 +615,8 @@ function CardTile({
             {item.departure && <span className="card-sub">{departureLabel(t, item.departure)}</span>}
           </>
         ) : (
-          item.binBarcode ? (
-            <Code value={`${item.binBarcode} · ${item.binZone ?? ''}`.trim()} />
-          ) : (
-            <span>{t('vault.noBin')}</span>
+          item.receivedAt && (
+            <span className="date">{t('vault.since', { date: formatDate(item.receivedAt, locale) })}</span>
           )
         )}
       </div>
@@ -837,7 +832,7 @@ function ItemDrawer({
   useEffect(() => {
     void (async () => {
       try {
-        setEvents(await api.get<TimelineEvent[]>(`/vault/items/${item.id}/timeline`));
+        setEvents(collectorTimeline(await api.get<TimelineEvent[]>(`/vault/items/${item.id}/timeline`)));
         setError(null);
       } catch (e) {
         setError((e as Error).message);
@@ -997,12 +992,14 @@ function ItemDrawer({
               )}
             </>
           ) : (
-            <div className="detail-row">
-              <dt className="detail-label">{t('vault.item.bin')}</dt>
-              <dd className="detail-value">
-                {item.binBarcode ? <Code value={`${item.binBarcode} · ${item.binZone ?? ''}`.trim()} /> : t('vault.noBin')}
-              </dd>
-            </div>
+            item.receivedAt && (
+              <div className="detail-row">
+                <dt className="detail-label">{t('vault.item.received')}</dt>
+                <dd className="detail-value">
+                  <span className="date">{formatDate(item.receivedAt, locale)}</span>
+                </dd>
+              </div>
+            )
           )}
 
           {item.isLot && (
@@ -1133,9 +1130,6 @@ function ItemDrawer({
           />
         )}
 
-            <div className="stack-top-lg">
-              <BarcodeLabel value={item.barcode} caption={name} />
-            </div>
           </div>
 
           <div className="sheet-col sheet-col--register">

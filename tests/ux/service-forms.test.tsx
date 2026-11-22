@@ -83,7 +83,6 @@ const CHANNELS = [
     requiresEvent: true,
     payoutDaysMin: 3,
     payoutDaysMax: 10,
-    partnerFeeNote: '',
   },
   {
     key: 'auction_house',
@@ -93,7 +92,6 @@ const CHANNELS = [
     requiresEvent: false,
     payoutDaysMin: 20,
     payoutDaysMax: 40,
-    partnerFeeNote: '',
   },
 ];
 

@@ -37,7 +37,6 @@ describe('inbound, the processing floor', () => {
     renderProcessing({
       awaitingOpen: 4,
       awaitingProcessing: 0,
-      unclaimed: 0,
       oldestReceivedAt: '2026-10-25T09:00:00.000Z',
       oldestWaitingHours: 52,
     });
@@ -54,7 +53,7 @@ describe('inbound, the processing floor', () => {
   });
 
   it('lights the place that has parcels in it and leaves the empty one dark', async () => {
-    renderProcessing({ awaitingOpen: 4, awaitingProcessing: 0, unclaimed: 0, oldestReceivedAt: null, oldestWaitingHours: null });
+    renderProcessing({ awaitingOpen: 4, awaitingProcessing: 0, oldestReceivedAt: null, oldestWaitingHours: null });
 
     const places = await screen.findByRole('list', { name: 'Processing' });
     const [open, processing] = within(places).getAllByRole('listitem');
@@ -66,7 +65,6 @@ describe('inbound, the processing floor', () => {
     renderProcessing({
       awaitingOpen: 1,
       awaitingProcessing: 1,
-      unclaimed: 0,
       oldestReceivedAt: '2026-10-25T09:00:00.000Z',
       oldestWaitingHours: 52,
     });
@@ -76,7 +74,7 @@ describe('inbound, the processing floor', () => {
   });
 
   it('says nothing is waiting, with a dash for the wait, when nothing is', async () => {
-    renderProcessing({ awaitingOpen: 0, awaitingProcessing: 0, unclaimed: 0, oldestReceivedAt: null, oldestWaitingHours: null });
+    renderProcessing({ awaitingOpen: 0, awaitingProcessing: 0, oldestReceivedAt: null, oldestWaitingHours: null });
 
     expect(await screen.findByText('Nothing is waiting at the moment')).toBeInTheDocument();
     expect(document.querySelector('.queue-hours')).toHaveTextContent('—');

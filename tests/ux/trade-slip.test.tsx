@@ -25,7 +25,7 @@ beforeEach(() => {
   localStorage.clear();
   get.mockImplementation(async (path: string) => {
     if (path === '/vault/items') return MINE;
-    if (path === '/marketplace/collectors/golden') return { id: 'u2', username: 'golden', firstName: 'Golden', lastName: 'Marsh' };
+    if (path === '/marketplace/collectors/golden') return { username: 'golden' };
     if (path.startsWith('/marketplace/collectors/golden/items/')) return THEIRS;
     return [];
   });

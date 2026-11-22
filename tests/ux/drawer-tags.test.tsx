@@ -40,9 +40,10 @@ describe('a tag on its own, and a tag in a list', () => {
 const DEAL = {
   id: 'd1',
   code: 'ESC-H8RAZJYW',
-  raisedBy: 'u2',
   raiserRole: 'seller',
-  counterpartyUserId: 'u1',
+  myRole: 'buyer',
+  raisedByMe: false,
+  counterpartyIsMember: true,
   counterpartyName: null,
   counterpartyEmail: null,
   description: 'A second copy of the 2003 Pokémon EX Dragon — Rayquaza ex #97/97.',
@@ -54,23 +55,20 @@ const DEAL = {
   fundingSource: 'wallet',
   fundedAt: '2026-10-24T12:00:00Z',
   fundingReference: null,
-  itemId: null,
   inspectedAt: null,
   inspectionMatches: null,
   inspectionNotes: null,
   buyerReleasedAt: null,
-  buyerReleaseAttestedBy: null,
   sellerReleasedAt: null,
-  sellerReleaseAttestedBy: null,
   closeReason: null,
   createdAt: '2026-10-21T12:00:00Z',
 };
 
 const EVENTS = [
-  { id: 'e4', eventType: 'item_received', fromStatus: null, toStatus: null, actorId: null, onBehalfOf: null, notes: 'Card received at NJ and logged in.', occurredAt: '2026-10-26T12:00:00Z' },
-  { id: 'e3', eventType: 'funded', fromStatus: null, toStatus: null, actorId: null, onBehalfOf: null, notes: 'Held from the buyer wallet.', occurredAt: '2026-10-24T12:00:00Z' },
-  { id: 'e2', eventType: 'agreed', fromStatus: null, toStatus: null, actorId: null, onBehalfOf: 'u2', notes: null, occurredAt: '2026-10-22T12:00:00Z' },
-  { id: 'e1', eventType: 'raised', fromStatus: null, toStatus: null, actorId: null, onBehalfOf: null, notes: 'Seller raised the deal.', occurredAt: '2026-10-21T12:00:00Z' },
+  { eventType: 'item_received', fromStatus: null, toStatus: null, byStaff: false, notes: 'Card received at NJ and logged in.', occurredAt: '2026-10-26T12:00:00Z' },
+  { eventType: 'funded', fromStatus: null, toStatus: null, byStaff: false, notes: 'Held from the buyer wallet.', occurredAt: '2026-10-24T12:00:00Z' },
+  { eventType: 'agreed', fromStatus: null, toStatus: null, byStaff: true, notes: null, occurredAt: '2026-10-22T12:00:00Z' },
+  { eventType: 'raised', fromStatus: null, toStatus: null, byStaff: false, notes: 'Seller raised the deal.', occurredAt: '2026-10-21T12:00:00Z' },
 ];
 
 beforeEach(() => {
@@ -80,7 +78,7 @@ beforeEach(() => {
     if (path === '/escrow/mine') return Promise.resolve([DEAL]);
     if (path === '/escrow/terms') return Promise.resolve({ feeBps: 100, minimumFeeMinor: 2500, minimumValueMinor: 50000 });
     if (path === '/escrow/held') return Promise.resolve({ heldMinor: 0 });
-    if (path === '/escrow/d1') return Promise.resolve({ deal: DEAL, events: EVENTS, buyerId: 'u1', sellerId: 'u2' });
+    if (path === '/escrow/d1') return Promise.resolve({ deal: DEAL, events: EVENTS });
     return Promise.resolve([]);
   });
 });
@@ -115,7 +113,7 @@ describe('a drawer opens on the sum it is about', () => {
     const user = userEvent.setup();
     render(
       <I18nProvider>
-        <EscrowTab meId="u1" />
+        <EscrowTab />
       </I18nProvider>,
     );
 
@@ -137,8 +135,7 @@ describe('a drawer opens on the sum it is about', () => {
     ]);
     // What the server wrote beside each is its own island.
     expect(within(entries[0]!).getByText('Card received at NJ and logged in.').tagName).toBe('BDI');
-    // And a step recorded on someone's behalf says so.
-    expect(within(entries[2]!).getByText('recorded for them')).toBeInTheDocument();
+    expect(dialog).not.toHaveTextContent('recorded for them');
   });
 });
 

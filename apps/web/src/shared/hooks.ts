@@ -38,8 +38,6 @@ export interface AppNotification {
   id: string;
   eventType: string;
   content: unknown;
-  channel: string;
-  status: string;
   createdAt: string;
 }
 

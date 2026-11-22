@@ -3,7 +3,7 @@ import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { formatDayHeading, formatTime } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
-import { EVENT_TYPES, byDay, channelLabel, eventLabel, notificationBarcode, renderContent } from '../../../shared/notifications';
+import { EVENT_TYPES, byDay, channelLabel, eventLabel, notificationBarcode, notificationMessage } from '../../../shared/notifications';
 import type { AppNotification, useNotificationFeed } from '../../../shared/hooks';
 import { NotificationMark } from '../../../shared/ui/NotificationMark';
 import { Serial } from '../../../shared/ui/Serial';
@@ -131,6 +131,7 @@ export function NotificationsPage({
                       {items.map((n: AppNotification) => {
                         const barcode = notificationBarcode(n.content);
                         const kind = eventLabel(t, n.eventType);
+                        const message = notificationMessage(n.content);
                         return (
                           <li key={n.id}>
                             <span className="hint date">{formatTime(n.createdAt, locale)}</span>
@@ -138,10 +139,11 @@ export function NotificationsPage({
                               <NotificationMark n={n} />
                               <div className="register-text">
                                 <span className="register-kind">{kind}</span>
-                                {/* What the server wrote is usually English: an island of its own direction, so its full stop stays at its end. */}
-                                <p className="register-entry">
-                                  <bdi dir="auto">{renderContent(n.content, kind)}</bdi>
-                                </p>
+                                {message && (
+                                  <p className="register-entry">
+                                    <bdi dir="auto">{message}</bdi>
+                                  </p>
+                                )}
                                 {barcode && <Serial value={barcode} quiet />}
                               </div>
                             </div>

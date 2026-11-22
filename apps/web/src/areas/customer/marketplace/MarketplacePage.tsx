@@ -32,7 +32,6 @@ interface Listing {
   id: string;
   askingPrice: number;
   currency: string;
-  itemId: string;
   serialNumber: string;
   typeClass: string;
   conditionGrade: string | null;

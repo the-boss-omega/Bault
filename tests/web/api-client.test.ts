@@ -59,6 +59,8 @@ describe('api client — failure classification', () => {
     expect((error as ApiError).kind).toBe('unreachable');
     expect((error as ApiError).status).toBe(0);
     expect(isUnreachable(error)).toBe(true);
+    expect((error as ApiError).message).toBe('Card Embassy could not be reached. Check your connection and try again.');
+    expect((error as ApiError).message).not.toMatch(/fetch/i);
   });
 
   it('treats the dev proxy 503 envelope as unreachable too', async () => {
@@ -72,6 +74,7 @@ describe('api client — failure classification', () => {
     expect(error.kind).toBe('unreachable');
     expect(error.status).toBe(503);
     expect(apiErrorKey(error)).toBe('error.unreachable');
+    expect(error.message).not.toMatch(/127\.0\.0\.1|API is unavailable/);
   });
 
   it.each([

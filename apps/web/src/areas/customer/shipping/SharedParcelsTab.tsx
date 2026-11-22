@@ -12,7 +12,6 @@ interface GroupMember {
   shipmentId: string;
   shipmentCode: string | null;
   username: string | null;
-  name: string | null;
   itemCount: number;
   weightGrams: number;
   isPayer: boolean;
@@ -47,6 +46,7 @@ export function SharedParcelsTab({
   const { t } = useI18n();
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [shipments, setShipments] = useState<ShipmentSummary[]>([]);
+  const [mineIds, setMineIds] = useState<ReadonlySet<string>>(new Set());
   const [openShipmentId, setOpenShipmentId] = useState('');
   const [joinShipmentId, setJoinShipmentId] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -61,6 +61,7 @@ export function SharedParcelsTab({
       ]);
       setGroups(mine);
       setShipments(all.filter((s) => s.status === 'requested' && !s.groupId));
+      setMineIds(new Set(all.map((s) => s.id)));
     } catch (e) {
       onError((e as Error).message);
       setGroups([]);
@@ -253,7 +254,6 @@ export function SharedParcelsTab({
               const payer = g.members.find((m) => m.isPayer);
               return (
                 <li key={g.id} className="tag-item tag-item--group">
-                  {/* A parcel is a tag: its number, who it is for and where it goes, and each collector who is in it. */}
                   <DrawerTag
                     item
                     kicker={g.code}
@@ -294,21 +294,31 @@ export function SharedParcelsTab({
                       )}
                     </dl>
                     <ul className="group-members">
-                      {g.members.map((m) => (
-                        <li key={m.shipmentId} className="group-member">
-                          <span className="group-member-name">
-                            <bdi dir="auto">{m.name ?? m.username ?? '—'}</bdi>
-                            {m.isPayer && <StatusBadge tone="gold">{t('grp.payer')}</StatusBadge>}
-                          </span>
-                          <span className="group-member-state">
-                            {shipmentStatusLabel(t, m.status)}
-                          </span>
-                          <span className="group-member-meta" dir="ltr">
-                            {m.shipmentCode} · {m.itemCount} · {formatWeight(m.weightGrams)}
-                            {m.insuredValueMinor > 0 ? ` · ${formatUsd(m.insuredValueMinor)}` : ''}
-                          </span>
-                        </li>
-                      ))}
+                      {g.members.map((m) => {
+                        const mine = mineIds.has(m.shipmentId);
+                        return (
+                          <li key={m.shipmentId} className="group-member">
+                            <span className="group-member-name">
+                              <bdi dir="auto">{m.username ?? '—'}</bdi>
+                              {m.isPayer && <StatusBadge tone="gold">{t('grp.payer')}</StatusBadge>}
+                            </span>
+                            <span className="group-member-state">
+                              {shipmentStatusLabel(t, m.status)}
+                            </span>
+                            <span className="group-member-meta" dir="ltr">
+                              {mine ? (
+                                <>
+                                  {m.shipmentCode} · {t('grp.memberItems', { count: m.itemCount })} ·{' '}
+                                  {formatWeight(m.weightGrams)}
+                                  {m.insuredValueMinor > 0 ? ` · ${formatUsd(m.insuredValueMinor)}` : ''}
+                                </>
+                              ) : (
+                                t('grp.memberItems', { count: m.itemCount })
+                              )}
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </DrawerTag>
 

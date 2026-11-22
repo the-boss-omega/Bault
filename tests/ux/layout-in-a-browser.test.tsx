@@ -220,8 +220,8 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
 
   describe('a menu in the header', () => {
     const items = [
-      { id: 'n1', eventType: 'item_received', content: { barcode: 'SN-CL10-0005', message: 'Item SN-CL10-0005 was received.' }, channel: 'in_app', status: 'sent', createdAt: '2026-10-27T10:00:00Z' },
-      { id: 'n2', eventType: 'wallet_request_completed', content: { message: 'Your cash-in was approved.' }, channel: 'in_app', status: 'sent', createdAt: '2026-10-26T10:00:00Z' },
+      { id: 'n1', eventType: 'item_received', content: { barcode: 'SN-CL10-0005', message: 'Item SN-CL10-0005 was received.' }, createdAt: '2026-10-27T10:00:00Z' },
+      { id: 'n2', eventType: 'wallet_request_completed', content: { message: 'Your cash-in was approved.' }, createdAt: '2026-10-26T10:00:00Z' },
     ] as never;
 
     function Header() {
@@ -839,8 +839,6 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       subject,
       status: 'open',
       category: 'parcel',
-      relatedType: null,
-      relatedId: null,
       lastMessageAt: at,
       createdAt: at,
     });

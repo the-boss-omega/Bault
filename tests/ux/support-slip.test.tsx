@@ -20,8 +20,6 @@ const ticket = (id: string, code: string, subject: string, status: string, categ
   subject,
   status,
   category,
-  relatedType: null,
-  relatedId: null,
   lastMessageAt,
   createdAt: lastMessageAt,
 });
@@ -93,6 +91,27 @@ describe('the tickets, a register in days', () => {
     await user.click(await screen.findByRole('button', { name: 'Where is my parcel' }));
     expect(window.location.hash).toContain('ticket=t2');
     await waitFor(() => expect(get).toHaveBeenCalledWith('/support/tickets/t2'));
+  });
+
+  it('labels a staff reply as Support and names no member of staff', async () => {
+    get.mockImplementation(async (path: string) => {
+      if (path === '/support/tickets') return TICKETS;
+      if (path === '/support/tickets/t1') {
+        return {
+          ticket: TICKETS[0],
+          messages: [
+            { id: 'm1', authorRole: 'customer', fromStaff: false, body: 'It came in as Raw.', createdAt: '2026-10-27T10:00:00.000Z', authorUsername: 'red' },
+            { id: 'm2', authorRole: 'staff', fromStaff: true, body: 'We are checking the slab.', createdAt: '2026-10-27T12:00:00.000Z' },
+          ],
+        };
+      }
+      return [];
+    });
+    await support('#/support?ticket=t1');
+    const reply = (await screen.findByText('We are checking the slab.')).closest('li') as HTMLElement;
+    expect(within(reply).getByText('Support')).toBeInTheDocument();
+    expect(within(screen.getByText('It came in as Raw.').closest('li') as HTMLElement).getByText('You')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/hermon|Card Embassy staff/i);
   });
 
   it('is the tickets and nothing else when there are none', async () => {
