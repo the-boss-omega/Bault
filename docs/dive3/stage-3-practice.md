@@ -394,7 +394,6 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **A suspended seller's storefront** is still served: `MarketReadService.storefront` selects the seller's `status` and never reads it.
 - **Decide: a reason for every hold.** DESIGN.md wants a frozen card to say who froze it and why, but `CustodyService.setHold` records only "hold placed"; giving it a reason is a small feature.
 - **Dead code in money:** `TopupService.topup`, and `isDuplicateOf`, `isOpenStatus`, `REQUESTER_TRANSITIONS` in `wallet-request.rules.ts`.
-- **Tracking stuck at `exception`:** `refreshTracking` never polls it again (`MOVABLE`, `apps/worker/src/jobs/tracking-refresh.ts`).
 - **Worker readiness:** `/readyz/worker` checks only `outbox.dispatch`; every job failure is still logged and reported by `runScheduledJob` (`HealthController.worker`).
 - **Held shipment snapshot:** `ShipmentService.pay` puts handling and add-ons inside `carrierCost`; the amount charged is right.
 - **Dead shipping code:** `CustomsService.required` and `outstanding` have no route, and nothing writes the statuses `picking` and `packed`.

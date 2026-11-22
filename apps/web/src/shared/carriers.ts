@@ -110,6 +110,8 @@ const SERVICE_BY_NAME: Record<string, MessageKey> = {
   'USPS|Ground Advantage': 'ship.svc.usps_ground',
   'USPS|Priority Mail': 'ship.svc.usps_priority',
   'FedEx|2Day': 'ship.svc.fedex_2day',
+  'USPS|First-Class International': 'ship.svc.epacket',
+  'USPS|Priority Mail International': 'ship.svc.epost',
   'ePacket|International': 'ship.svc.epacket',
   'ePost|International': 'ship.svc.epost',
   'FedEx|International Priority': 'ship.svc.fedex_intl_priority',
