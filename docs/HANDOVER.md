@@ -537,7 +537,7 @@ These are things this review found wrong, missing or stale in the code, the infr
 5. **The repository URL in `infra/gcp/README.md`: fixed in pull request #77.** The clone commands use `<GITHUB_OWNER>/<REPO>`.
 6. **ePacket and ePost: fixed in pull request #76.** The two keys now map to USPS First-Class Package International and USPS Priority Mail International and are shown under those names; limits and prices are unchanged. The owner may pick other services; the catalogue test now refuses any service without a carrier mapping.
 7. **Tracking after `exception`: fixed in pull request #76.** The refresh keeps polling shipments in `exception` and announces only a change of status. There is still no EasyPost webhook, which is fine at the 30-minute cadence.
-8. **Addresses have an apartment line and a phone: fixed in pull request #81** (migration `0041`). Both reach the carrier; the phone is never shown to another collector. A hand delivery also carries a phone for the courier once its follow-up pull request lands.
+8. **Addresses have an apartment line and a phone: fixed in pull request #81** (migration `0041`). Both reach the carrier; the phone is never shown to another collector. A hand delivery also carries a phone for the courier (pull request #89), shown to staff and to the requester only.
 9. **No suggested insurance** from a card's value when shipping (the other FF19 leftover). Nothing on master suggests it.
 10. **The legal text is a draft** with 19 counsel blanks (4.6), and the product does not ask existing accounts to accept a new version of the terms.
 11. **Prices are unreviewed** (`"reviewed": false`, 4.2). This is a business decision, and nothing can be loaded into production until it is made.
