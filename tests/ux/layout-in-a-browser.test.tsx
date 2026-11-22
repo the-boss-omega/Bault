@@ -1043,11 +1043,16 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
     });
   });
 
-  describe('a shipment with its slip', () => {
+  describe('a shipment in four steps', () => {
     const address = { id: 'a1', label: 'Home', recipient: 'Red Ashwood', line1: '12 Vine St', city: 'Trenton', region: 'NJ', country: 'US', postalCode: '08608', isDefault: true };
-    const items = [{ id: 'i1', serialNumber: 'SN-CL10-0005', typeClass: 'trading_card', description: '2011 Pokémon Call of Legends — Rayquaza' }];
+    const items = Array.from({ length: 8 }, (_, i) => ({
+      id: `i${i}`,
+      serialNumber: `SN-CL10-000${i}`,
+      typeClass: 'trading_card',
+      description: `2011 Pokémon Call of Legends — Rayquaza ${i}`,
+    }));
 
-    it('has the slip beside the panels on a wide window and between the last two on a phone', async () => {
+    it('has the slip beside the step on a wide window, and on a phone the price and Next in a bar kept in view', async () => {
       vi.mocked(api.get).mockImplementation(async (path: string) =>
         path === '/shipping/services'
           ? { services: [], addOns: [], boxes: [], maxInsuredValueMinor: 100_000, signatureRequiredAboveMinor: 50_000, paymentWindowDays: 7 }
@@ -1057,31 +1062,35 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       );
       render(
         <I18nProvider>
-          <ShipmentComposer items={items} onError={() => {}} onStatus={() => {}} onCreated={() => {}} />
+          <ShipmentComposer items={items} onCreated={() => {}} />
         </I18nProvider>,
       );
-      await screen.findByRole('region', { name: /./ });
+      await screen.findByRole('region', { name: 'Price' });
       // The addresses arrive after the first frame: wait for them, so no update lands outside the test's own act.
       await screen.findAllByText(/Trenton/);
       for (const width of [1440, 390]) {
         const page = await inBrowser(width);
-        const boxes = await page.$$eval('.composer > .panel, .composer > .composer-slip', (els) =>
-          els.map((el) => ({ slip: el.classList.contains('composer-slip'), ...el.getBoundingClientRect().toJSON() })),
-        );
-        const slip = boxes.find((b) => b.slip)!;
-        const panels = boxes.filter((b) => !b.slip);
-        expect(panels).toHaveLength(4);
+        const { h } = await window$(page);
+        const box = (selector: string) => page.$eval(selector, (el) => el.getBoundingClientRect().toJSON());
+        const steps = await box('.composer > .composer-steps');
+        const panel = await box('.composer > .composer-step');
+        const slip = await box('.composer > .composer-slip');
+        const bar = await box('.composer-step > .composer-bar');
         if (width >= 1180) {
-          // Beside: on the side the page ends on, level with the first panel.
-          for (const panel of panels) {
-            expect(slip.left).toBeGreaterThanOrEqual(panel.right - 1);
-          }
-          expect(Math.abs(slip.top - panels[0]!.top)).toBeLessThan(2);
+          // Beside: on the side the page ends on, level with the steps.
+          expect(slip.left).toBeGreaterThanOrEqual(panel.right - 1);
+          expect(Math.abs(slip.top - steps.top)).toBeLessThan(2);
+          expect(bar.top).toBeGreaterThanOrEqual(panel.top);
         } else {
-          // Between the panel of options and the panel of prices, as wide as they are.
-          expect(slip.top).toBeGreaterThanOrEqual(panels[2]!.bottom - 1);
-          expect(panels[3]!.top).toBeGreaterThanOrEqual(slip.bottom - 1);
-          expect(Math.abs(slip.width - panels[2]!.width)).toBeLessThan(2);
+          // One step is more than a screen here, and the bar with the price and Next stays at the bottom of the window.
+          expect(panel.height).toBeGreaterThan(h);
+          expect(slip.height).toBe(0);
+          expect(bar.bottom).toBeLessThanOrEqual(h + 1);
+          expect(bar.bottom).toBeGreaterThanOrEqual(h - 1);
+          expect(await reachable(page, '.composer-bar .btn--primary')).toBe(true);
+          // The four step names fit the width without a scroll of their own.
+          expect(steps.width).toBeLessThanOrEqual(width);
+          expect(await page.$eval('.composer-steps ol', (el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
         }
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
         await page.close();

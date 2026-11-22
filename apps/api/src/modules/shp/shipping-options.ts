@@ -1,4 +1,13 @@
-import { formatMinor } from '../../shared/money';
+const USD_AMOUNT = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+export function usdAmount(minor: number): string {
+  return USD_AMOUNT.format(minor / 100);
+}
 
 export const MAX_INSURED_VALUE_MINOR = 500_000;
 
@@ -83,13 +92,13 @@ export function checkOptions(opts: {
   if (opts.insuredValueMinor > MAX_INSURED_VALUE_MINOR) {
     problems.push({
       field: 'insuredValueMinor',
-      message: `Cover stops at ${formatMinor(MAX_INSURED_VALUE_MINOR)} on one parcel. Split it across two.`,
+      message: `Cover stops at ${usdAmount(MAX_INSURED_VALUE_MINOR)} on one parcel. Split it across two.`,
     });
   }
   if (signatureForced(opts.insuredValueMinor) && !opts.signatureRequired) {
     problems.push({
       field: 'signatureRequired',
-      message: `Anything insured above ${formatMinor(SIGNATURE_REQUIRED_ABOVE_MINOR)} has to be signed for.`,
+      message: `Anything insured above ${usdAmount(SIGNATURE_REQUIRED_ABOVE_MINOR)} has to be signed for.`,
     });
   }
   if (needsCustoms(opts.destinationCountry) && opts.customsValueMinor <= 0) {
@@ -107,7 +116,7 @@ export function checkOptions(opts: {
     if (opts.insuredValueMinor < addOn.requiresInsuranceMinor) {
       problems.push({
         field: 'addOns',
-        message: `${addOn.label} needs at least ${formatMinor(addOn.requiresInsuranceMinor)} of insurance.`,
+        message: `${addOn.label} needs at least ${usdAmount(addOn.requiresInsuranceMinor)} of insurance.`,
       });
     }
   }

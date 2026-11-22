@@ -23,7 +23,7 @@ import {
   checkHandDelivery,
   whiteGloveFeeAction,
 } from './fulfilment';
-import { formatMinor } from '../../shared/money';
+import { usdAmount } from './shipping-options';
 import { MembershipService, type AppliedShippingCover } from '../mem/membership.service';
 
 function pickupCover(tier: string | null, periodId: string): AppliedShippingCover {
@@ -185,7 +185,7 @@ export class HumanFulfilmentService {
       if (s.quoteMinor !== seenMinor) {
         throw new AppError(
           ErrorCode.QUOTE_CHANGED,
-          `The quote changed to ${formatMinor(s.quoteMinor)}. Check it and accept again.`,
+          `The quote changed to ${usdAmount(s.quoteMinor)}. Check it and accept again.`,
           409,
           { quoteMinor: s.quoteMinor },
         );
@@ -196,7 +196,7 @@ export class HumanFulfilmentService {
       if (balance.amount < s.quoteMinor) {
         throw new AppError(
           ErrorCode.CONFLICT,
-          `Short by ${formatMinor(s.quoteMinor - balance.amount)}. Top up the wallet and accept again.`,
+          `Short by ${usdAmount(s.quoteMinor - balance.amount)}. Top up the wallet and accept again.`,
           409,
         );
       }
@@ -351,7 +351,7 @@ export class HumanFulfilmentService {
       const feeMinor = show.feeMinor - waiver.waivedMinor;
       const balance = await this.ledger.balanceOf(userId, tx as Database);
       if (balance.amount < feeMinor) {
-        throw new AppError(ErrorCode.CONFLICT, `Short by ${formatMinor(feeMinor - balance.amount)}.`, 409);
+        throw new AppError(ErrorCode.CONFLICT, `Short by ${usdAmount(feeMinor - balance.amount)}.`, 409);
       }
 
       const [created] = await tx
