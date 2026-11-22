@@ -1,9 +1,10 @@
-import { pgTable, text, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, text, boolean, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../db/schema/_helpers';
+import { userAccount } from './acc.schema';
 
 export const shippingAddress = pgTable('shipping_address', {
   id: pkId(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   label: text('label').notNull(),
   recipient: text('recipient').notNull(),
   line1: text('line1').notNull(),

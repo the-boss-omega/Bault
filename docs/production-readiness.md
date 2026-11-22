@@ -86,7 +86,7 @@ Design-lint: clean. Full workspace typecheck: clean.
 | | | Why not |
 |---|---|---|
 | **B2** | Real carrier integration | *(Superseded 19 September — see above. What remains: exercising EasyPost with a real key, and tracking against it.)* |
-| **S2** | Foreign keys | ~30 tables. Needs an orphan audit first, and each FK is a lock on a table in use. Correct to do, too large and too risky to land blind in this pass. |
+| **S2** | Foreign keys | *(Done 22 November in FF29, migration `0042`. 101 foreign keys, `ON DELETE RESTRICT` for the new ones, after an orphan audit of the seed and of a database that ran the integration and core suites. The columns that hold an external location, a worker's `system` or an id of whichever table another column names stay without a key, and the code tour's 2.2 lists them.)* |
 | **S4** | Sentry | Requires installing `@sentry/node`. The logger now gives structured output with request ids, which is the prerequisite; the reporter itself is one dependency away. |
 | **S8** | Shared rate-limit store | Needs Redis or a Postgres-backed `ThrottlerStorage`. Still per-process, so limits divide by replica count. |
 | **S11** | Idempotency beyond the marketplace | A design decision per route, not a mechanical change. |

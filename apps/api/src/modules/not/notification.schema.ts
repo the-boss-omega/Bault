@@ -1,9 +1,10 @@
-import { pgTable, text, jsonb, boolean, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, jsonb, boolean, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
 
 export const notification = pgTable('notification', {
   id: pkId(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   eventType: text('event_type').notNull(),
   content: jsonb('content').notNull(),
   channel: text('channel').notNull().default('in_app'),
@@ -17,7 +18,7 @@ export const notificationPreference = pgTable(
   'notification_preference',
   {
     id: pkId(),
-    userId: text('user_id').notNull(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
     eventType: text('event_type').notNull(),
     channel: text('channel').notNull().default('in_app'),
     enabled: boolean('enabled').notNull().default(true),
