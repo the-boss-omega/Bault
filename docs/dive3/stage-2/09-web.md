@@ -118,7 +118,7 @@ These screens sign a person in or up, and `AuthPage` switches between them. `Sig
 
 About 2 minutes. It builds on T9.6, T10.1 and T12.6.
 
-This page shows the collector's cards, with a search, three scopes, a grid and an item drawer. The scopes are `active`, `hold` and `history`. `GET /vault/items` and `GET /vault/counts` load together once typing pauses, so the counts follow the search. `GET /vault/break-even` feeds the `Watch` meter, which compares a card's cost so far with its estimated value. A History row and its drawer say why the card left with `departureLabel`, from the API's `departure`. The class is named with `itemClassLabel`, never as its key. A tile says since when the card has been in the vault, and never which shelf or zone holds it.
+This page shows the collector's cards, with a search, three scopes, a grid and an item drawer. The scopes are `active`, `hold` and `history`. `GET /vault/items` and `GET /vault/counts` load together once typing pauses, so the counts follow the search. A History row and its drawer say why the card left with `departureLabel`, from the API's `departure`. The class is named with `itemClassLabel`, never as its key. A tile says since when the card has been in the vault, and never which shelf or zone holds it.
 
 "Select to ship" turns the active grid into a picker. A card that is stored, not on hold and not historical gets a tick, the others are dimmed and cannot be pressed, and a bar keeps the count with a "Ship these" button. That button navigates to `#/shipping-services/shipping?items=` with the picked ids, and the shipping form starts with them ticked. Nothing is created from the Vault itself.
 
