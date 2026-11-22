@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
@@ -97,6 +98,8 @@ const FIRST_RUN = [
   'PAYPALCLIENTID',
   SECRETS.paypal,
   'PAYPALWEBHOOKID',
+  'maybe', // refused
+  'no', // no crypto cash-in
   SECRETS.easypost,
   'smtp.mailer.example',
   '25', // refused
@@ -247,7 +250,7 @@ describe('infra/gcp/configure.sh', () => {
 
     const again = configure(['n']);
     expect(again.status, again.output).toBe(0);
-    expect(again.output).not.toMatch(/PayPal client|SMTP host|age public key|Account number|Support email|Sentry DSN/);
+    expect(again.output).not.toMatch(/PayPal client|SMTP host|age public key|Account number|Support email|Sentry DSN|Coinbase/);
     expect(['production', 'api', 'worker', 'migrate', 'backup'].map((n) => readFileSync(join(envDir, `${n}.env`), 'utf8'))).toEqual(
       before,
     );
@@ -306,6 +309,81 @@ describe('infra/gcp/configure.sh', () => {
     const env = loadEnv({ ...after, ...envFile(join(envDir, 'api.env')) } as NodeJS.ProcessEnv);
     expect(env.PAYPAL_CHECKOUT_ENABLED).toBe(true);
     expect(env.PAYMENT_PROVIDER).toBe('paypal');
+  });
+
+  it('leaves crypto cash-in off on a first run told no, in a file production loads', async () => {
+    const r = configure(FIRST_RUN);
+    expect(r.status, r.output).toBe(0);
+    expect(r.output).toContain('yes or no');
+    expect(r.output).not.toContain('Coinbase Commerce API key');
+    const prod = envFile(join(envDir, 'production.env'));
+    expect(prod).toMatchObject({ CRYPTO_CHECKOUT_ENABLED: 'false', CRYPTO_PROVIDER: 'sandbox' });
+
+    vi.resetModules();
+    const { loadEnv } = await import('../../packages/config/src/env');
+    const env = loadEnv({ ...prod, ...envFile(join(envDir, 'api.env')) } as NodeJS.ProcessEnv);
+    expect(env.NODE_ENV).toBe('production');
+    expect(env.CRYPTO_CHECKOUT_ENABLED).toBe(false);
+    expect(env.CRYPTO_PROVIDER).toBe('sandbox');
+  });
+
+  it('turns crypto cash-in on only when asked with --change crypto, and prints neither Coinbase secret', async () => {
+    expect(configure(FIRST_RUN).status).toBe(0);
+    const before = envFile(join(envDir, 'production.env'));
+    const apiKey = ['fake', 'commerce', randomUUID()].join('-');
+    const webhookSecret = ['fake', 'shared', randomUUID()].join('-');
+
+    const r = configure(['yes', apiKey, webhookSecret, 'n'], '--change', 'crypto');
+    expect(r.status, r.output).toBe(0);
+    expect(r.output, 'a Coinbase secret reached the terminal').not.toContain(apiKey);
+    expect(r.output, 'a Coinbase secret reached the terminal').not.toContain(webhookSecret);
+    expect(r.output).toContain('https://34-1-2-3.sslip.io/api/v1/webhooks/crypto');
+    for (const event of ['charge:confirmed', 'charge:failed', 'charge:delayed', 'charge:pending']) {
+      expect(r.output).toContain(event);
+    }
+    const after = envFile(join(envDir, 'production.env'));
+    expect(after).toMatchObject({
+      CRYPTO_CHECKOUT_ENABLED: 'true',
+      CRYPTO_PROVIDER: 'coinbase_commerce',
+      COINBASE_COMMERCE_API_KEY: apiKey,
+      COINBASE_COMMERCE_WEBHOOK_SECRET: webhookSecret,
+    });
+    const crypto = ['CRYPTO_CHECKOUT_ENABLED', 'CRYPTO_PROVIDER', 'COINBASE_COMMERCE_API_KEY', 'COINBASE_COMMERCE_WEBHOOK_SECRET'];
+    const without = (o: Record<string, string>) => Object.fromEntries(Object.entries(o).filter(([k]) => !crypto.includes(k)));
+    expect(without(after)).toEqual(without(before));
+
+    vi.resetModules();
+    const { loadEnv } = await import('../../packages/config/src/env');
+    const env = loadEnv({ ...after, ...envFile(join(envDir, 'api.env')) } as NodeJS.ProcessEnv);
+    expect(env.NODE_ENV).toBe('production');
+    expect(env.CRYPTO_CHECKOUT_ENABLED).toBe(true);
+    expect(env.CRYPTO_PROVIDER).toBe('coinbase_commerce');
+    expect(env.COINBASE_COMMERCE_API_KEY).toBe(apiKey);
+    expect(env.COINBASE_COMMERCE_WEBHOOK_SECRET).toBe(webhookSecret);
+  });
+
+  it('turns crypto cash-in off again with --change crypto, still taking confirmations of charges already open', async () => {
+    expect(configure(FIRST_RUN).status).toBe(0);
+    const apiKey = ['fake', 'commerce', randomUUID()].join('-');
+    const webhookSecret = ['fake', 'shared', randomUUID()].join('-');
+    expect(configure(['yes', apiKey, webhookSecret, 'n'], '--change', 'crypto').status).toBe(0);
+
+    const r = configure(['no', 'n'], '--change', 'crypto');
+    expect(r.status, r.output).toBe(0);
+    expect(r.output).not.toContain('Coinbase Commerce API key');
+    const after = envFile(join(envDir, 'production.env'));
+    expect(after).toMatchObject({
+      CRYPTO_CHECKOUT_ENABLED: 'false',
+      CRYPTO_PROVIDER: 'coinbase_commerce',
+      COINBASE_COMMERCE_API_KEY: apiKey,
+      COINBASE_COMMERCE_WEBHOOK_SECRET: webhookSecret,
+    });
+
+    vi.resetModules();
+    const { loadEnv } = await import('../../packages/config/src/env');
+    const env = loadEnv({ ...after, ...envFile(join(envDir, 'api.env')) } as NodeJS.ProcessEnv);
+    expect(env.CRYPTO_CHECKOUT_ENABLED).toBe(false);
+    expect(env.CRYPTO_PROVIDER).toBe('coinbase_commerce');
   });
 
   it('deletes the provision file only when told yes', () => {

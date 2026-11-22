@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   docsVerdict,
   gradeHeaders,
@@ -126,17 +128,18 @@ describe('scripts/ops/load-test.mjs', () => {
 
 describe('scripts/remove-test-users.mjs', () => {
   const created_at = new Date('2026-11-01T10:00:00Z');
-  const row = (email: string, username: string, activity: string[] = []) => ({
+  const row = (email: string, username: string, blockers: string[] = [], drops: string[] = []) => ({
     id: email,
     email,
     username,
     status: 'active',
     created_at,
-    activity,
+    blockers,
+    drops,
   });
   const ROWS = [
     row('t1700000000000@bault.dev', 'legacy1'),
-    row('ops+chk-run1-seller@example.org', 'chkm3x9a1b2cseller'),
+    row('ops+chk-run1-seller@example.org', 'chkm3x9a1b2cseller', [], ['login_session', 'notification']),
     row('ops+chk-run1-buyer@example.org', 'chkm3x9a1b2cbuyer', ['ledger_record']),
     row('chk@example.org', 'chkmimic'),
     row('collector@example.org', 'chkcollector'),
@@ -166,32 +169,145 @@ describe('scripts/remove-test-users.mjs', () => {
       [
         `Accounts in table:            ${ROWS.length}`,
         'Matching a test pattern:      1',
-        'Safe to remove (own nothing): 1',
+        'To delete (nothing kept):     1',
         '  - t1700000000000@bault.dev  (legacy fixture, username=legacy1, status=active, created=2026-11-01T10:00:00.000Z)',
+        'To close (rows still kept):   0',
         '',
-        'Dry run. Nothing was deleted. Re-run with --apply to remove the accounts listed above.',
+        'Dry run. Nothing was changed. Re-run with --apply to delete and close the accounts listed above.',
       ].join('\n'),
     );
   });
 
-  it("adds the staging check's accounts under the flag, skips any with activity, and never a protected one", () => {
+  it("adds the staging check's accounts under the flag, closes any a row still names, and never a protected one", () => {
     const args = parseArgs(['--production-i-know']);
-    const { lines, removable } = report({ total: ROWS.length, candidates: candidates(true), args });
+    const { lines, removable, closable } = report({ total: ROWS.length, candidates: candidates(true), args });
     expect(lines.join('\n')).toBe(
       [
         `Accounts in table:            ${ROWS.length}`,
         'Matching a test pattern:      3',
-        'Safe to remove (own nothing): 2',
+        'To delete (nothing kept):     2',
         '  - t1700000000000@bault.dev  (legacy fixture, username=legacy1, status=active, created=2026-11-01T10:00:00.000Z)',
-        '  - ops+chk-run1-seller@example.org  (staging check, username=chkm3x9a1b2cseller, status=active, created=2026-11-01T10:00:00.000Z)',
-        '  ! SKIPPED ops+chk-run1-buyer@example.org — has activity in: ledger_record',
+        '  - ops+chk-run1-seller@example.org  (staging check, username=chkm3x9a1b2cseller, status=active, created=2026-11-01T10:00:00.000Z, drops login_session, notification)',
+        'To close (rows still kept):   1',
+        '  ! ops+chk-run1-buyer@example.org  closed, not deleted, because of ledger_record',
         '',
-        'Dry run. Nothing was deleted. Re-run with --production-i-know --apply to remove the accounts listed above.',
+        'Dry run. Nothing was changed. Re-run with --production-i-know --apply to delete and close the accounts listed above.',
       ].join('\n'),
     );
     expect(removable.map((c) => c.email)).toEqual(['t1700000000000@bault.dev', 'ops+chk-run1-seller@example.org']);
+    expect(closable.map((c) => c.email)).toEqual(['ops+chk-run1-buyer@example.org']);
     for (const email of PROTECTED) {
       expect(testAccountKind({ email, username: 'chkstaff' }, { includeStagingChecks: true })).toBeNull();
     }
   });
+});
+
+describe('scripts/remove-test-users.mjs against a real database', () => {
+  const API_DIR = join(ROOT, 'apps', 'api');
+  const TSX = pathToFileURL(createRequire(join(API_DIR, 'package.json')).resolve('tsx')).href;
+  const pg = createRequire(join(API_DIR, 'package.json'))('pg') as typeof import('pg');
+  const url = process.env.DATABASE_URL ?? '';
+  const stamp = String(Date.now());
+  const clean = `t${stamp}1@bault.dev`;
+  const kept = `t${stamp}2@bault.dev`;
+  let db: InstanceType<typeof pg.Client>;
+
+  function run(file: string) {
+    const r = spawnSync(process.execPath, ['--import', TSX, join(API_DIR, 'src', 'db', file)], {
+      cwd: API_DIR,
+      env: {
+        ...process.env,
+        DATABASE_URL: url,
+        DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL ?? url,
+      },
+      encoding: 'utf8',
+      timeout: 120_000,
+    });
+    expect(r.status, `${file}\n${r.stdout}\n${r.stderr}`).toBe(0);
+  }
+
+  beforeAll(async () => {
+    expect(url, 'this case migrates and seeds the database DATABASE_URL names; set it').not.toBe('');
+    run('migrate.ts');
+    run('seed.ts');
+    db = new pg.Client({ connectionString: url });
+    await db.connect();
+  }, 240_000);
+
+  afterAll(async () => {
+    await db?.end();
+  });
+
+  it('deletes the account with nothing kept, closes the one an audit record names, and says why', async () => {
+    const ids: Record<string, string> = {};
+    for (const [email, username] of [
+      [clean, `clean${stamp}`],
+      [kept, `kept${stamp}`],
+    ] as const) {
+      const { rows } = await db.query(
+        `INSERT INTO user_account (email, password_hash, username, status) VALUES ($1, 'x', $2, 'active') RETURNING id`,
+        [email, username],
+      );
+      ids[email] = rows[0].id;
+    }
+    await db.query(
+      `INSERT INTO notification (user_id, event_type, content) VALUES ($1, 'test', '{}'), ($2, 'test', '{}')`,
+      [ids[clean], ids[kept]],
+    );
+    await db.query(
+      `INSERT INTO login_session (user_id, token_hash, expires_at) VALUES ($1, $2, now() + interval '1 day')`,
+      [ids[clean], `hash-${stamp}`],
+    );
+    await db.query(`INSERT INTO audit_record (actor_id, action) VALUES ($1, 'test.kept')`, [
+      ids[kept],
+    ]);
+
+    const dry = spawnSync(
+      process.execPath,
+      [join(ROOT, 'scripts', 'remove-test-users.mjs'), '--production-i-know'],
+      {
+        env: { PATH: process.env.PATH ?? '', NODE_ENV: 'production', DATABASE_URL: url },
+        encoding: 'utf8',
+      },
+    );
+    expect(dry.status, dry.stderr).toBe(0);
+    expect(dry.stdout).toContain(`${kept}  closed, not deleted, because of audit_record`);
+    const untouched = await db.query(
+      'SELECT email, status FROM user_account WHERE id = ANY($1::uuid[]) ORDER BY email',
+      [Object.values(ids)],
+    );
+    expect(untouched.rows).toEqual([
+      { email: clean, status: 'active' },
+      { email: kept, status: 'active' },
+    ]);
+
+    const r = spawnSync(
+      process.execPath,
+      [join(ROOT, 'scripts', 'remove-test-users.mjs'), '--production-i-know', '--apply'],
+      {
+        env: { PATH: process.env.PATH ?? '', NODE_ENV: 'production', DATABASE_URL: url },
+        input: 'delete\n',
+        encoding: 'utf8',
+      },
+    );
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain(`${kept}  closed, not deleted, because of audit_record`);
+
+    const left = await db.query(
+      'SELECT email, status FROM user_account WHERE id = ANY($1::uuid[])',
+      [Object.values(ids)],
+    );
+    expect(left.rows).toEqual([{ email: kept, status: 'closed' }]);
+    const gone = await db.query(
+      `SELECT (SELECT count(*) FROM notification WHERE user_id = $1)::int AS notifications,
+              (SELECT count(*) FROM login_session WHERE user_id = $1)::int AS sessions`,
+      [ids[clean]],
+    );
+    expect(gone.rows[0]).toEqual({ notifications: 0, sessions: 0 });
+    const audit = await db.query(
+      'SELECT count(*)::int AS n FROM audit_record WHERE actor_id = $1',
+      [ids[kept]],
+    );
+    expect(audit.rows[0].n).toBe(1);
+  }, 60_000);
 });

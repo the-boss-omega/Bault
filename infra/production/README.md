@@ -78,7 +78,15 @@ keep a copy — losing it locks every enrolled authenticator out). Never
 `ALLOW_DESTRUCTIVE_SEED`. `PAYPAL_PAYOUT_NOTE` is the subject of the email
 PayPal sends with each cash-out (empty means `Your Card Embassy cash-out`), and
 `SUPPORT_EMAIL`, `SUPPORT_PHONE`, `SUPPORT_HOURS` and `SUPPORT_TEAM` are the
-contact page's details, each shown as not published when empty. There is no
+contact page's details, each shown as not published when empty. Crypto
+cash-in stays off with `CRYPTO_CHECKOUT_ENABLED=false` and
+`CRYPTO_PROVIDER=sandbox`, which production accepts because the sandbox is
+never built there. To turn it on, set `CRYPTO_PROVIDER=coinbase_commerce`,
+`COINBASE_COMMERCE_API_KEY`, `COINBASE_COMMERCE_WEBHOOK_SECRET` and
+`CRYPTO_CHECKOUT_ENABLED=true`, and subscribe a Coinbase Commerce webhook for
+`https://<domain>/api/v1/webhooks/crypto` to `charge:confirmed`,
+`charge:failed`, `charge:delayed` and `charge:pending` (on Compute Engine,
+`infra/gcp/configure.sh --change crypto` asks for all of it). There is no
 session secret: sessions are random tokens looked up by hash, and an old
 `SESSION_COOKIE_SECRET` or `EMAIL_API_KEY` line is ignored.
 
@@ -288,6 +296,17 @@ Still by hand, because nothing outside the server can drive them:
 
 With it, the journeys take about 30 minutes, not 2 hours, and the provider
 checks about 2 hours, not 4.
+
+The `chk…` collectors stay behind. `pnpm users:remove-test --production-i-know`
+lists them, and with `--apply` as well it asks you to type `delete` and then
+handles each account in its own transaction. An account with nothing kept is
+deleted, together with its sessions, tokens, two-factor rows, notifications,
+notification settings, idempotency keys and support tickets that hold no
+message. An account that money, custody, an audit record or any other kept row
+still names is set to `closed`, as the admin console would, and printed as
+"closed, not deleted, because of <table>". The staging check moves money, so
+expect its buyer and seller to be closed rather than deleted. Without `--apply`
+it prints the same decisions and changes nothing.
 
 ## 9. Checks before launch (on staging)
 

@@ -8,7 +8,7 @@ import { activeAccount, codeAt, enrol, MFA_PASSWORD, passwordOnly } from './help
 
 const SCRIPT = join(__dirname, '..', '..', 'scripts', 'ops', 'prices.mjs');
 const SITE = new URL(BASE).origin;
-const ENDED = ['storage', 'membership:folio', 'grading_fee:psa_value', 'shipping_rush'];
+const ENDED = ['storage', 'membership:bronze', 'grading_fee:psa_value', 'shipping_rush'];
 
 function run(args: string[], env: Record<string, string> = {}) {
   const r = spawnSync(process.execPath, [SCRIPT, '--url', SITE, ...args], {
@@ -73,10 +73,10 @@ describe('pnpm prices:load', () => {
       periodDays: 90,
       percentOfIntakeBps: 1000,
     });
-    const folio = MEMBERSHIP_TIERS.find((t) => t.key === 'folio')!;
-    expect((await newestCatchAll('membership:folio'))!.parameters).toMatchObject({
-      storedItems: folio.storedItems,
-      commissionWaivedOnMinor: folio.commissionWaivedOnMinor,
+    const bronze = MEMBERSHIP_TIERS.find((t) => t.key === 'bronze')!;
+    expect((await newestCatchAll('membership:bronze'))!.parameters).toMatchObject({
+      storedItems: bronze.storedItems,
+      commissionWaivedOnMinor: bronze.commissionWaivedOnMinor,
     });
 
     const again = run(['--allow-unreviewed']);

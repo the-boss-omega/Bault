@@ -8,9 +8,9 @@ export function allowanceFor(billedAs: string): string {
   return ALLOWANCE_ALIASES[billedAs] ?? billedAs;
 }
 
-export type TierKey = 'folio' | 'registry' | 'trust';
+export type TierKey = 'bronze' | 'silver' | 'gold';
 
-export const TIER_KEYS: readonly TierKey[] = ['folio', 'registry', 'trust'];
+export const TIER_KEYS: readonly TierKey[] = ['bronze', 'silver', 'gold'];
 
 export interface MembershipTier {
   key: TierKey;
@@ -35,8 +35,8 @@ export interface MembershipTier {
 
 export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
   {
-    key: 'folio',
-    feeActionType: 'membership:folio',
+    key: 'bronze',
+    feeActionType: 'membership:bronze',
     listPriceMinor: 3_900,
     perCycle: {
       intake: 4,
@@ -52,8 +52,8 @@ export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
     perks: ['storage_clock_stops', 'handling_included'],
   },
   {
-    key: 'registry',
-    feeActionType: 'membership:registry',
+    key: 'silver',
+    feeActionType: 'membership:silver',
     listPriceMinor: 19_900,
     perCycle: {
       intake: 10,
@@ -72,8 +72,8 @@ export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
     perks: ['storage_clock_stops', 'handling_included', 'oversized_storage', 'rush_included', 'priority_queue'],
   },
   {
-    key: 'trust',
-    feeActionType: 'membership:trust',
+    key: 'gold',
+    feeActionType: 'membership:gold',
     listPriceMinor: 69_900,
     perCycle: {
       intake: 25,

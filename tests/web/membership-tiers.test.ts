@@ -27,8 +27,8 @@ describe('the tier catalogue', () => {
     const prices = MEMBERSHIP_TIERS.map((t) => t.listPriceMinor);
     expect([...prices].sort((a, b) => a - b)).toEqual(prices);
     expect(MEMBERSHIP_TIERS.map((t) => t.key)).toEqual([...TIER_KEYS]);
-    expect(tierRank('folio')).toBeLessThan(tierRank('registry'));
-    expect(tierRank('registry')).toBeLessThan(tierRank('trust'));
+    expect(tierRank('bronze')).toBeLessThan(tierRank('silver'));
+    expect(tierRank('silver')).toBeLessThan(tierRank('gold'));
     expect(tierRank('nonsense')).toBe(-1);
   });
 
@@ -81,31 +81,31 @@ describe('the tier catalogue', () => {
 });
 
 describe('what a tier covers right now', () => {
-  const folio = membershipTier('folio')!;
+  const bronze = membershipTier('bronze')!;
 
   it('covers an action until the allowance is spent, and then simply does not', () => {
-    expect(covers(folio, 'intake', 0)).toBe(true);
-    expect(covers(folio, 'intake', 3)).toBe(true);
-    expect(remaining(folio, 'intake', 3)).toBe(1);
-    expect(covers(folio, 'intake', 4)).toBe(false);
-    expect(remaining(folio, 'intake', 4)).toBe(0);
-    expect(remaining(folio, 'intake', 99)).toBe(0);
+    expect(covers(bronze, 'intake', 0)).toBe(true);
+    expect(covers(bronze, 'intake', 3)).toBe(true);
+    expect(remaining(bronze, 'intake', 3)).toBe(1);
+    expect(covers(bronze, 'intake', 4)).toBe(false);
+    expect(remaining(bronze, 'intake', 4)).toBe(0);
+    expect(remaining(bronze, 'intake', 99)).toBe(0);
   });
 
   it('treats "not in this tier" and "used up" as the same answer on purpose', () => {
-    expect(covers(folio, 'service_fee:video_review', 0)).toBe(false);
-    expect(remaining(folio, 'service_fee:video_review', 0)).toBe(0);
+    expect(covers(bronze, 'service_fee:video_review', 0)).toBe(false);
+    expect(remaining(bronze, 'service_fee:video_review', 0)).toBe(0);
   });
 
   it('an unlimited allowance stays unlimited however much is used', () => {
-    const trust = membershipTier('trust')!;
-    expect(remaining(trust, 'service_fee:deslab', 0)).toBe(UNLIMITED);
-    expect(remaining(trust, 'service_fee:deslab', 500)).toBe(UNLIMITED);
-    expect(covers(trust, 'service_fee:deslab', 500)).toBe(true);
+    const gold = membershipTier('gold')!;
+    expect(remaining(gold, 'service_fee:deslab', 0)).toBe(UNLIMITED);
+    expect(remaining(gold, 'service_fee:deslab', 500)).toBe(UNLIMITED);
+    expect(covers(gold, 'service_fee:deslab', 500)).toBe(true);
   });
 
   it('resolves tier keys and refuses anything else', () => {
-    expect(isTierKey('registry')).toBe(true);
+    expect(isTierKey('silver')).toBe(true);
     expect(isTierKey('platinum')).toBe(false);
     expect(membershipTier('platinum')).toBeUndefined();
     expect(membershipTier(null)).toBeUndefined();
