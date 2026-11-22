@@ -82,7 +82,7 @@ const TERMS_OF_SERVICE: LegalDocument = {
       '6. Adding and withdrawing money',
       'A bank transfer or a PayPal Friends & Family payment is a cash-in request. Submitting it moves nothing; a person checks that the money arrived and completes the request, and only then is your wallet credited. Put your username in the payment reference.',
       'A card or PayPal Goods & Services payment, where it is offered, credits your wallet when the provider confirms it. If you or your bank later reverse such a payment, the amount is taken back off your balance and a handling fee is charged unless the provider charged Card Embassy none. Both are entries on your ledger.',
-      'A cash-out is a request reviewed by a person. The fee is quoted before you submit it, is charged as its own ledger entry, and your balance must cover the amount and the fee when the request is completed. Payouts are made through PayPal.',
+      'A cash-out is a request reviewed by a person. The fee is quoted before you submit it, is charged as its own ledger entry, and your balance must cover the amount and the fee when the request is completed. Payouts are made through PayPal. If PayPal returns, reverses or refunds a payout after it was paid, the whole amount is credited back to your wallet, the cash-out fee included.',
       'The smallest and largest cash-in and cash-out are shown on the forms.',
     ),
     section(
