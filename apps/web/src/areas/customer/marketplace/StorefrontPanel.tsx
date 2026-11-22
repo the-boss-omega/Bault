@@ -7,6 +7,8 @@ import { formatUsd } from '../../../shared/money';
 import { storefrontHref } from '../../../shared/market';
 import { useI18n } from '../../../shared/i18n';
 import { isValidUsername, normalizeUsername } from '../../../shared/names';
+import { navigate } from '../../../shared/routing';
+import { ListingDealFlow, type ListingDeal } from './ListingDeal';
 import { Button, EmptyState, Panel, SuccessNote } from '../../../shared/ui/primitives';
 import { IconSearch } from '../../../shared/ui/icons';
 
@@ -22,10 +24,12 @@ interface StorefrontListing {
 export function StorefrontPanel({
   seller,
   myUsername,
+  onDone,
   onError,
 }: {
   seller?: string;
   myUsername?: string;
+  onDone: (message: string, kind: ListingDeal['kind']) => Promise<void> | void;
   onError: (m: string) => void;
 }) {
   const { t } = useI18n();
@@ -34,6 +38,7 @@ export function StorefrontPanel({
   const [username, setUsername] = useState(target ?? '');
   const [viewing, setViewing] = useState<string | null>(null);
   const [listings, setListings] = useState<StorefrontListing[] | null>(null);
+  const [deal, setDeal] = useState<ListingDeal | null>(null);
 
   const normalized = normalizeUsername(username);
   const ok = isValidUsername(normalized);
@@ -57,6 +62,18 @@ export function StorefrontPanel({
   useEffect(() => {
     if (target) void open(target);
   }, [target, open]);
+
+  const visitor = Boolean(viewing && myUsername && viewing !== myUsername);
+
+  function startDeal(kind: ListingDeal['kind'], l: StorefrontListing) {
+    if (!viewing) return;
+    setDeal({ kind, listing: { ...l, sellerUsername: viewing } });
+  }
+
+  function proposeTrade(l: StorefrontListing) {
+    if (!viewing) return;
+    navigate({ section: 'marketplace', tab: 'trade', params: { with: viewing, serial: l.serialNumber } });
+  }
 
   return (
     <>
@@ -114,13 +131,37 @@ export function StorefrontPanel({
                   <div className="card-state">
                     <span className="card-sub">{itemClassLabel(t, l.typeClass)}</span>
                   </div>
-                  <div />
+                  {visitor ? (
+                    <div className="actions">
+                      <Button variant="primary" size="sm" onClick={() => startDeal('buy', l)}>
+                        {t('market.buy')}
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => startDeal('offer', l)}>
+                        {t('market.makeOffer')}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => proposeTrade(l)}>
+                        {t('market.store.proposeTrade')}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div />
+                  )}
                 </li>
               ))}
             </ul>
           )}
         </Panel>
       )}
+
+      <ListingDealFlow
+        deal={deal}
+        onClose={() => setDeal(null)}
+        onDone={async (message, kind) => {
+          if (kind === 'buy' && viewing) await open(viewing);
+          await onDone(message, kind);
+        }}
+        onError={onError}
+      />
     </>
   );
 }
