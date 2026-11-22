@@ -202,3 +202,45 @@ describe('cash-in by PayPal checkout', () => {
     await expect(load({ ...on, APP_BASE_URL: 'http://app.example.com' })).rejects.toThrow(/APP_BASE_URL/);
   });
 });
+
+describe('cash-in by crypto', () => {
+  it('leaves crypto checkout off and on the sandbox processor until it is configured', async () => {
+    const dev = await load(DEV);
+    expect(dev.CRYPTO_CHECKOUT_ENABLED).toBe(false);
+    expect(dev.CRYPTO_PROVIDER).toBe('sandbox');
+    expect(dev.COINBASE_COMMERCE_API_KEY).toBe('');
+    expect(dev.COINBASE_COMMERCE_WEBHOOK_SECRET).toBe('');
+    const prod = await load(PROD);
+    expect(prod.CRYPTO_CHECKOUT_ENABLED).toBe(false);
+    expect(prod.CRYPTO_PROVIDER).toBe('sandbox');
+  });
+
+  it('refuses Coinbase Commerce without its API key or its webhook secret', async () => {
+    const coinbase = {
+      ...DEV,
+      CRYPTO_PROVIDER: 'coinbase_commerce',
+      COINBASE_COMMERCE_API_KEY: 'k',
+      COINBASE_COMMERCE_WEBHOOK_SECRET: 's',
+    };
+    expect((await load(coinbase)).CRYPTO_PROVIDER).toBe('coinbase_commerce');
+    await expect(load({ ...coinbase, COINBASE_COMMERCE_API_KEY: '' })).rejects.toThrow(/COINBASE_COMMERCE_API_KEY/);
+    await expect(load({ ...coinbase, COINBASE_COMMERCE_API_KEY: undefined })).rejects.toThrow(/COINBASE_COMMERCE_API_KEY/);
+    await expect(load({ ...coinbase, COINBASE_COMMERCE_WEBHOOK_SECRET: '' })).rejects.toThrow(
+      /COINBASE_COMMERCE_WEBHOOK_SECRET/,
+    );
+    await expect(load({ ...DEV, CRYPTO_PROVIDER: 'bitpay' })).rejects.toThrow(/CRYPTO_PROVIDER/);
+  });
+
+  it('refuses crypto checkout switched on in production without Coinbase Commerce', async () => {
+    await expect(load({ ...PROD, CRYPTO_CHECKOUT_ENABLED: 'true' })).rejects.toThrow(/CRYPTO_PROVIDER/);
+    const on = {
+      ...PROD,
+      CRYPTO_CHECKOUT_ENABLED: 'true',
+      CRYPTO_PROVIDER: 'coinbase_commerce',
+      COINBASE_COMMERCE_API_KEY: 'k',
+      COINBASE_COMMERCE_WEBHOOK_SECRET: 's',
+    };
+    expect((await load(on)).CRYPTO_CHECKOUT_ENABLED).toBe(true);
+    expect((await load({ ...DEV, CRYPTO_CHECKOUT_ENABLED: 'true' })).CRYPTO_CHECKOUT_ENABLED).toBe(true);
+  });
+});

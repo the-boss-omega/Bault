@@ -14,6 +14,8 @@ import { StructuredLogger, requestContext } from './shared/observability/logger'
 import { initErrorReporting } from './shared/observability/error-reporting';
 import { jsonBodiesOnly, sameOriginWrites, writeOrigins } from './shared/csrf/cross-site';
 
+const CRYPTO_WEBHOOK_PATH = '/api/v1/webhooks/crypto';
+
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
 
@@ -36,11 +38,19 @@ async function bootstrap(): Promise<void> {
   app.use(
     sameOriginWrites(writeOrigins(env.APP_BASE_URL, env.CORS_ORIGINS, env.NODE_ENV), [
       '/api/v1/webhooks/payment',
+      CRYPTO_WEBHOOK_PATH,
     ]),
   );
   app.use(jsonBodiesOnly());
 
-  app.use(json({ limit: '16mb' }));
+  app.use(
+    json({
+      limit: '16mb',
+      verify: (req: IncomingMessage & { rawBody?: Buffer }, _res, buf) => {
+        if ((req.url ?? '').split('?')[0]?.replace(/\/+$/, '').toLowerCase() === CRYPTO_WEBHOOK_PATH) req.rawBody = buf;
+      },
+    }),
+  );
 
   const origins = env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
   if (origins.length > 0) {
