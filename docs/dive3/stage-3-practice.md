@@ -372,6 +372,6 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **Password change and the lockout:** a wrong current password in `PasswordService.change` is not written to `login_attempt`.
 - **Account enumeration:** registration says "Email is already registered", and `VerificationService.resend` mails inside the request.
 - **Two default addresses** can result from two concurrent saves (`ProfileService.addAddress`, `updateAddress`).
-- **Shutdown flush:** the API never calls `flushErrorReporting` (`apps/api/src/main.ts`).
+- **Shutdown flush:** done; the API flushes its error reports when Nest shuts down on SIGTERM or SIGINT and on an uncaught exception, an unhandled rejection or `beforeExit`, two seconds at most, the worker does the same, and the web app now reports its own errors through `@sentry/browser` when built with `VITE_SENTRY_DSN` (`tests/contract/error-report-flush.test.ts`, `tests/ux/app-error-boundary.test.tsx`, `tests/web/error-reporting.test.ts`).
 - **Support tickets:** `TicketCategory` lacks `private_sale`, and `relatedType` and `relatedId` are not checked against the requester (`SupportService`).
 - **Dead code in the core:** `BillingModule` and `NoopBillingAdapter`, `verifyToken`, `isFixtureEmail`, `splitLegacyDisplayName`, `generateIntakeId`, `PiiInterceptor`.

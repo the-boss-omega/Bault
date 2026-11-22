@@ -112,6 +112,8 @@ About 1 minute. It builds on T7.10 and T17.5.
 
 This file strips secrets from the error reports sent to Sentry. `scrubErrorEvent` is the Sentry `beforeSend` of the API and the worker. It drops cookies, the `CREDENTIAL_HEADERS`, the query string from the URL, and every value in the body. On the `SECRET_BODY_ROUTES`, `/auth` and `/me/password`, nothing of the body or the query is left. On every other route the report keeps the body's field names as sorted paths, such as `destinationAddress.city` or `parcels[].weightGrams`, read from an object or from a JSON or form-encoded text body, and the names of the query parameters. It redacts the parameter values that Drizzle puts in a failed query's message, and it cuts the provider's reply from an `EasyPost 422 on /shipments: …` or a `PayPal … failed (422): …` message, which can quote what was sent.
 
+The same file holds the flush on the way out. `flushWithin` gives a flush `SHUTDOWN_FLUSH_MS`, two seconds, and stops waiting when that has passed, even if the reporter never answers or fails. `flushReportsOnExit` is what the API and the worker install on their process. On an uncaught exception or an unhandled rejection it logs the error once, flushes within the bound and exits with code 1, and on `beforeExit` it flushes without forcing an exit. `tests/contract/error-report-flush.test.ts` drives it with a stub flusher and a fake process.
+
 #### `packages/contracts/src/index.ts`
 
 About 1 minute. It builds on T3.3.
