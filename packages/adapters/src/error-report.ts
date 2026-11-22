@@ -156,3 +156,43 @@ function withoutQueryValues<E extends ReportableEvent>(event: E): E {
   }
   return out;
 }
+
+export type ReportFlusher = (timeoutMs: number) => Promise<void>;
+
+export const SHUTDOWN_FLUSH_MS = 2_000;
+
+export async function flushWithin(flush: ReportFlusher, timeoutMs: number = SHUTDOWN_FLUSH_MS): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  try {
+    await Promise.race([flush(timeoutMs).catch(() => undefined), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export interface FatalExitProcess {
+  on(event: 'uncaughtException' | 'unhandledRejection', listener: (error: unknown) => void): unknown;
+  once(event: 'beforeExit', listener: () => void): unknown;
+  exit(code: number): void;
+}
+
+export function flushReportsOnExit(
+  proc: FatalExitProcess,
+  flush: ReportFlusher,
+  logFatal: (what: string, error: unknown) => void,
+  timeoutMs: number = SHUTDOWN_FLUSH_MS,
+): void {
+  let dying = false;
+  const fatal = (what: string) => (error: unknown) => {
+    if (dying) return;
+    dying = true;
+    logFatal(what, error);
+    void flushWithin(flush, timeoutMs).finally(() => proc.exit(1));
+  };
+  proc.on('uncaughtException', fatal('uncaught exception'));
+  proc.on('unhandledRejection', fatal('unhandled rejection'));
+  proc.once('beforeExit', () => void flushWithin(flush, timeoutMs));
+}

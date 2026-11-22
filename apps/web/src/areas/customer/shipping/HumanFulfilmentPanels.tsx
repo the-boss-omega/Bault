@@ -148,7 +148,8 @@ const OTHER = 'other';
 
 export function addressText(a: Address, countries: readonly ShippingCountry[]): string {
   const town = [a.city, a.region].filter(Boolean).join(', ');
-  return `${a.recipient}, ${a.line1}, ${town} ${a.postalCode}, ${countryName(a.country, countries)}`.replace(/\s+/g, ' ');
+  const street = [a.line1, a.line2].filter(Boolean).join(', ');
+  return `${a.recipient}, ${street}, ${town} ${a.postalCode}, ${countryName(a.country, countries)}`.replace(/\s+/g, ' ');
 }
 
 function vaultText(v: InboundAddress): string {

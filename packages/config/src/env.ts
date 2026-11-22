@@ -35,7 +35,6 @@ const BaseSchema = z.object({
 
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
 
-  SESSION_COOKIE_SECRET: z.string().optional().default(''),
   SESSION_COOKIE_NAME: z.string().default('session'),
 
   MFA_ENCRYPTION_KEY: z.string().optional().default(''),
@@ -79,7 +78,6 @@ const BaseSchema = z.object({
   EASYPOST_BASE_URL: z.string().optional().default(''),
 
   EMAIL_PROVIDER: z.enum(['console', 'smtp']).default('console'),
-  EMAIL_API_KEY: z.string().optional().default(''),
 
   SMTP_HOST: z.string().optional().default(''),
   SMTP_PORT: z.coerce.number().int().positive().default(587),

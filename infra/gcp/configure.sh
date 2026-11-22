@@ -15,7 +15,7 @@ only for a value that is missing, or one named with --change.
 
   --from <file>     provision.sh's output (default ~/bault-gcp.env)
   --change <name>   ask again for a key, or a group: domain, paypal, checkout,
-                    easypost, smtp, bank, age. Repeatable.
+                    easypost, smtp, bank, support, sentry, age. Repeatable.
 EOF
 }
 
@@ -188,6 +188,11 @@ smtp_port_ok() {
   esac
 }
 from_ok() { [[ "$1" == *@*.* ]] || { say "  an address, such as Card Embassy <noreply@yourdomain>"; return 1; }; any "$1"; }
+sentry_ok() {
+  [ -z "$1" ] || [[ "$1" =~ ^https://[^[:space:]]+@[^[:space:]]+/[0-9]+$ ]] \
+    || { say "  a Sentry DSN, such as https://<key>@o0.ingest.sentry.io/0, or empty"; return 1; }
+  any "$1"
+}
 age_ok() { [[ "$1" =~ ^age1[0-9a-z]{58}$ ]] || { say "  an age public key: age1 and 58 more characters (age-keygen prints it)"; return 1; }; }
 
 SET_KEYS=()
@@ -317,6 +322,26 @@ if [ "$FIRST_RUN" -eq 1 ] || wanted - bank; then
     ask "${pair#*:}" 0 "$(file_get "$PROD" "$key")" any
     [ "$ANSWER" = "$(file_get "$PROD" "$key")" ] || set_prod "$key" "$ANSWER"
   done
+fi
+
+if [ "$FIRST_RUN" -eq 1 ] || wanted - support; then
+  say ""
+  say "Support details, shown to collectors on the contact page."
+  say "Press Enter to leave one out; an empty one is shown as not published."
+  for pair in "SUPPORT_EMAIL:Support email address" "SUPPORT_PHONE:Support phone number" \
+              "SUPPORT_HOURS:Support hours, such as Mon-Fri 9-17 ET" \
+              "SUPPORT_TEAM:Support team, as Name|Role pairs separated by ;"; do
+    key="${pair%%:*}"
+    ask "${pair#*:}" 0 "$(file_get "$PROD" "$key")" any
+    [ "$ANSWER" = "$(file_get "$PROD" "$key")" ] || set_prod "$key" "$ANSWER"
+  done
+fi
+
+if [ "$FIRST_RUN" -eq 1 ] || wanted SENTRY_DSN sentry; then
+  say ""
+  say "Error reporting: the DSN of a Sentry project. Press Enter to leave it off."
+  ask "Sentry DSN" 0 "$(file_get "$PROD" SENTRY_DSN)" sentry_ok
+  [ "$ANSWER" = "$(file_get "$PROD" SENTRY_DSN)" ] || set_prod SENTRY_DSN "$ANSWER"
 fi
 
 # --- api.env, worker.env, migrate.env ------------------------------------------

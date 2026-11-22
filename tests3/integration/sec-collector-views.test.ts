@@ -617,3 +617,69 @@ describe('A12 saved addresses as a collector reads them', () => {
     expect((await red.del(`/me/addresses/${added.body.id}`)).status).toBeLessThan(300);
   });
 });
+
+describe('A13 a shared parcel as a member reads it', () => {
+  it('shows the other members by username and item count and keeps weight and value on the caller’s own row', async () => {
+    const operator = await signIn(SEED.operator);
+    const redItem = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
+    const goldenItem = await intakeFor(operator, SEED.collector2, { typeClass: 'trading_card' });
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+    const shared = {
+      label: 'Members hotel',
+      recipient: 'Front desk, Bault group',
+      line1: '12 Harbour Row',
+      city: 'Hoboken',
+      region: 'NJ',
+      country: 'US',
+      postalCode: '07030',
+    };
+    const redAddress = await red.post('/me/addresses', shared);
+    const goldenAddress = await golden.post('/me/addresses', shared);
+    const redShip = await red.post('/shipping/shipments', { itemIds: [redItem.id], addressId: redAddress.body.id });
+    expect(redShip.status).toBe(201);
+    const goldenShip = await golden.post('/shipping/shipments', {
+      itemIds: [goldenItem.id],
+      addressId: goldenAddress.body.id,
+    });
+    expect(goldenShip.status).toBe(201);
+    const group = await golden.post('/shipping/groups', { shipmentId: goldenShip.body.id });
+    expect(group.status).toBe(201);
+    const joined = await red.post('/shipping/groups/join', { groupCode: group.body.code, shipmentId: redShip.body.id });
+    expect(joined.status).toBe(201);
+
+    type Member = Record<string, unknown> & { shipmentId: string };
+    const checkMembers = (members: Member[]) => {
+      const own = members.find((m) => m.shipmentId === redShip.body.id)!;
+      const other = members.find((m) => m.shipmentId === goldenShip.body.id)!;
+      expect(own).toBeDefined();
+      expect(other).toBeDefined();
+      expect(Object.keys(other).filter((k) => ['name', 'weightGrams', 'insuredValueMinor'].includes(k))).toEqual([]);
+      expect(other).toMatchObject({ itemCount: 1, isPayer: true });
+      expect(typeof other.username).toBe('string');
+      expect(Object.keys(own)).toEqual(expect.arrayContaining(['weightGrams', 'insuredValueMinor']));
+      expect(Object.keys(own)).not.toContain('name');
+    };
+
+    checkMembers(joined.body.members as Member[]);
+
+    const one = await red.get(`/shipping/groups/${group.body.id}`);
+    expect(one.status).toBe(200);
+    expect(one.body.memberCount).toBe(2);
+    expect(one.body.totalItems).toBe(2);
+    expect(typeof one.body.totalWeightGrams).toBe('number');
+    checkMembers(one.body.members as Member[]);
+
+    const all = await red.get('/shipping/groups');
+    expect(all.status).toBe(200);
+    const listed = (all.body as { id: string; members: Member[] }[]).find((g) => g.id === group.body.id)!;
+    expect(listed).toBeDefined();
+    checkMembers(listed.members);
+
+    const staff = await operator.get(`/shipping/groups/${group.body.id}`);
+    expect(staff.status).toBe(200);
+    for (const m of staff.body.members as Member[]) {
+      expect(Object.keys(m)).toEqual(expect.arrayContaining(['name', 'weightGrams', 'insuredValueMinor']));
+    }
+  });
+});
