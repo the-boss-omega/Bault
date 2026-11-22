@@ -112,7 +112,6 @@ function answer(path: string): Promise<unknown> {
   if (path === '/vault/items/i1') return Promise.resolve({ images: [], openRequests });
   if (path.startsWith('/vault/items')) return Promise.resolve([ITEM]);
   if (path.startsWith('/vault/counts')) return Promise.resolve({ active: 1, hold: 0, history: 0 });
-  if (path.startsWith('/vault/break-even')) return Promise.resolve({ items: [] });
   if (path.startsWith('/services/remove-commons/window'))
     return Promise.resolve({ windowDays: 30 });
   if (path === '/pricing/list') {

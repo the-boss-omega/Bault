@@ -201,21 +201,19 @@ The options:
 
 ### Group: Reads, conflicts and error reports
 
-### P10. Three reads that show one collector another's data · 40 min · dis, shp, vlt · T7.7, T10.1, T13.7
+### P10. Two reads that show one collector another's data · 40 min · dis, shp · T7.7, T10.1, T13.7
 **Why:**
 - `DisController.get` (`GET /services/requests/:id`) has no role and no owner check: any signed-in account with a request's id reads it, `typeFields` included (asking prices, buyout quotes, fulfilment details).
 - `ShpController.group` (`GET /shipping/groups/:id`) returns every member's username and name, the destination address and the recipient to any signed-in account.
-- `BreakEvenService.forOwner` adds up every `charge` whose `reference_id` is the card, whoever paid it, so a buyer sees what the seller spent on it.
 
-**Where:** `DisController.get`, `ServiceRequestService.get`; `ShpController.group`, `GroupShipmentService.describe`; `BreakEvenService.forOwner` (`vlt/break-even.service.ts`); the existing pattern in `WalletRequestService.loadFor` and `EscrowService.loadFor`.
-**Task:** a service request is readable by its requester and by staff, a group by its members and by staff; anyone else gets 404. Break-Even Watch counts only the charges the current owner paid.
-**Done:** the two reads now decide in the service, as `loadFor` does. `DisController.get` passes the signed-in user to `ServiceRequestService.getFor`, which answers 404 unless the viewer is the requester, a `warehouse_operator` or an `admin`; `get` itself stays unguarded for the internal callers that read with a `tx`. `ShpController.group` passes the user to `GroupShipmentService.describeFor`, which answers 404 unless the viewer is staff, the payer, or owns a shipment whose `groupId` is the group, so a member who leaves loses the read. `describe` later took the viewer as well, so a collector sees the other members by username and item count only, with weight and insured value on the collector's own row, and staff keep the full row; that is tested in `tests3/integration/sec-collector-views.test.ts`, describe 'A13 a shared parcel as a member reads it'. The tests are in `tests3/integration/sec-authorization.test.ts`, describe 'one customer against another customer': golden gets 404 for red's service request and red's group, red and both staff roles get 200, and golden reads the group once it has joined. The Break-Even Watch bullet is not fixed here, because it goes with the removal of that feature.
+**Where:** `DisController.get`, `ServiceRequestService.get`; `ShpController.group`, `GroupShipmentService.describe`; the existing pattern in `WalletRequestService.loadFor` and `EscrowService.loadFor`.
+**Task:** a service request is readable by its requester and by staff, a group by its members and by staff; anyone else gets 404.
+**Done:** the two reads now decide in the service, as `loadFor` does. `DisController.get` passes the signed-in user to `ServiceRequestService.getFor`, which answers 404 unless the viewer is the requester, a `warehouse_operator` or an `admin`; `get` itself stays unguarded for the internal callers that read with a `tx`. `ShpController.group` passes the user to `GroupShipmentService.describeFor`, which answers 404 unless the viewer is staff, the payer, or owns a shipment whose `groupId` is the group, so a member who leaves loses the read. `describe` later took the viewer as well, so a collector sees the other members by username and item count only, with weight and insured value on the collector's own row, and staff keep the full row; that is tested in `tests3/integration/sec-collector-views.test.ts`, describe 'A13 a shared parcel as a member reads it'. The tests are in `tests3/integration/sec-authorization.test.ts`, describe 'one customer against another customer': golden gets 404 for red's service request and red's group, red and both staff roles get 200, and golden reads the group once it has joined.
 <details><summary>Hints</summary>
 
 1. The controllers have the `AuthUser`; pass it down and decide in the service, as `loadFor` does.
 2. A member is the owner of a shipment whose `groupId` is the group; staff is `warehouse_operator` or `admin`.
 3. 404, not 403: telling a stranger that a request or a group exists is a leak of its own.
-4. One condition on `charge.userId` fixes the break-even sum; check `summaryFor`'s totals follow.
 </details>
 
 ### P11. Decide: where a unique violation becomes a 409 · 40 min · mkt, not, errors · T6.4, T11.2, T15.4
@@ -355,7 +353,6 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **Held shipment snapshot:** `ShipmentService.pay` puts handling and add-ons inside `carrierCost`; the amount charged is right.
 - **Dead shipping code:** `CustomsService.required` and `outstanding` have no route, and nothing writes the statuses `picking` and `packed`.
 - **Hand-over scans** compare raw item ids, and the SPA has no hand-over screen (`HumanFulfilmentService.handOver`).
-- **Break-Even projection** counts the included months in its monthly rate (`monthsHeld` in `BreakEvenService.forOwner`).
 - **Shelf Yield:** an administrator's bin change writes no `bin_transfer` (`AdmService.updateItem`), and `ShelfYieldService` passes every shelved item to `inArray`, which meets Postgres's 65,535-parameter limit as stock grows.
 - **Upgrade credit and allowances:** the credit ignores allowances already used, and the new cycle starts fresh; the exposure is one cycle's allowances per upgrade (`prorationCreditMinor` in `MembershipService.subscribe`).
 - **Parcel retention:** nothing disposes of old unclaimed parcels (`ParcelService.listRetentionDue` has no caller).
