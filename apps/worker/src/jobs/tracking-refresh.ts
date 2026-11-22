@@ -4,7 +4,7 @@ import { createShippingAdapter, type ShippingAdapter, type TrackingStatus } from
 import { log } from '../log';
 
 const PER_RUN = 200;
-const MOVABLE = ['shipped', 'in_transit'];
+const MOVABLE = ['shipped', 'in_transit', 'exception'];
 
 let configured: ShippingAdapter | undefined;
 function carrier(): ShippingAdapter {

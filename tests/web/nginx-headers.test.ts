@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const ROOT = join(__dirname, '..', '..');
 const WEB = join(ROOT, 'apps', 'web');
@@ -60,6 +61,8 @@ describe('web nginx security headers', () => {
     const rendered = include!.replace('/etc/nginx/conf.d/', '/etc/nginx/templates/') + '.template';
     expect(dockerfile).toContain(`nginx-security-headers.conf ${rendered}`);
     expect(dockerfile).toMatch(/nginx-storage-origin\.envsh \/docker-entrypoint\.d\/\S+\.envsh/);
+    expect(dockerfile).toMatch(/nginx-error-reports-origin\.envsh \/docker-entrypoint\.d\/\S+\.envsh/);
+    expect(dockerfile).toMatch(/NGINX_ENVSUBST_FILTER=.*ERROR_REPORTS_ORIGIN/);
   });
 
   it('sends CSP, frame and sniffing protection on every response, and the storage origin in the CSP', () => {
@@ -87,7 +90,7 @@ describe('web nginx security headers', () => {
     const csp = headers.match(/Content-Security-Policy "([^"]+)"/)![1]!;
     const directive = (name: string) => csp.split(';').map((d) => d.trim()).find((d) => d.startsWith(`${name} `));
     expect(directive('script-src')).toBe("script-src 'self'");
-    expect(directive('connect-src')).toBe("connect-src 'self'");
+    expect(directive('connect-src')).toBe("connect-src 'self' ${ERROR_REPORTS_ORIGIN}");
     expect(directive('frame-src')).toBeUndefined();
     expect(directive('child-src')).toBeUndefined();
     expect(directive('default-src')).toBe("default-src 'self'");
@@ -95,6 +98,23 @@ describe('web nginx security headers', () => {
 
     const index = read(WEB, 'index.html');
     expect(index).not.toMatch(/paypal/i);
+  });
+
+  it('lets the page reach only the error-report host named by the DSN it was built with, and none without one', () => {
+    const script = join(WEB, 'nginx-error-reports-origin.envsh');
+    const origin = (dsn: string) =>
+      spawnSync('sh', ['-c', `. "${script}" && printf '%s' "$ERROR_REPORTS_ORIGIN"`], {
+        env: { PATH: process.env.PATH, WEB_SENTRY_DSN: dsn },
+        encoding: 'utf8',
+      });
+    expect(origin('').stdout).toBe('');
+    expect(origin('https://publickey@o45.ingest.us.sentry.io/678').stdout).toBe('https://o45.ingest.us.sentry.io');
+    expect(origin('https://publickey@reports.example.com:8443/9').stdout).toBe('https://reports.example.com:8443');
+    for (const bad of ['http://publickey@o45.ingest.sentry.io/1', 'https://k@x.example;script-src *.evil/1', 'nonsense']) {
+      const run = origin(bad);
+      expect(run.status, bad).not.toBe(0);
+      expect(run.stderr).toMatch(/refusing to start/);
+    }
   });
 
   it("appends to X-Forwarded-For rather than replacing it with the proxy's own address", () => {

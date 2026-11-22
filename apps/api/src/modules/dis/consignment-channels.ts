@@ -42,6 +42,26 @@ export const CONSIGNMENT_CHANNELS: readonly ConsignmentChannel[] = [
     payoutDaysMax: 35,
     partnerFeeNote: "The partner seller deducts its own rate before remitting.",
   },
+  {
+    key: 'alt',
+    label: 'Alt',
+    gradedOnly: true,
+    minAskingMinor: 10_000,
+    requiresEvent: false,
+    payoutDaysMin: 7,
+    payoutDaysMax: 21,
+    partnerFeeNote: 'Alt deducts its own fee before remitting.',
+  },
+  {
+    key: 'fanatics_collect',
+    label: 'Fanatics Collect',
+    gradedOnly: true,
+    minAskingMinor: 25_000,
+    requiresEvent: false,
+    payoutDaysMin: 30,
+    payoutDaysMax: 60,
+    partnerFeeNote: 'Fanatics Collect deducts its own fee before remitting.',
+  },
 ];
 
 const BY_KEY = new Map(CONSIGNMENT_CHANNELS.map((c) => [c.key, c]));

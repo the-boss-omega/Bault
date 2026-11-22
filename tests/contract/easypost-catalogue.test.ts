@@ -121,6 +121,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('every catalogue service can be bought with the real provider', () => {
+  it.each(CARRIER_SERVICES.map((s) => [s.key, s] as const))('%s maps to an EasyPost carrier and service', (_key, s) => {
+    expect(s.easypost?.carrier).toBeTruthy();
+    expect(s.easypost?.services.length ?? 0).toBeGreaterThan(0);
+  });
+});
+
 describe('EasyPost rates reach the collector (F062, F068)', () => {
   it('pairs every domestic service EasyPost sells with its catalogue entry', async () => {
     stubEasyPost(DOMESTIC);
@@ -157,7 +164,7 @@ describe('EasyPost rates reach the collector (F062, F068)', () => {
     expect(quoted).toEqual([]);
   });
 
-  it('pairs FedEx International Priority under the name the account returns, and offers no unconfirmed postal product', async () => {
+  it('pairs FedEx International Priority under the name the account returns, and the two USPS international products', async () => {
     stubEasyPost(TO_JAPAN);
     const quoted = await priceServices(
       service(adapter()),
@@ -178,9 +185,23 @@ describe('EasyPost rates reach the collector (F062, F068)', () => {
         },
       ],
     );
-    expect(quoted.map((q) => q.serviceKey)).toEqual(['fedex_intl_priority']);
-    expect(quoted[0]).toMatchObject({ carrier: 'FedEx', serviceLevel: 'International Priority', providerRateId: 'rate_fx_ip' });
-    expect(CARRIER_SERVICES.find((s) => s.key === 'epacket')?.easypost).toBeUndefined();
+    const byKey = new Map(quoted.map((q) => [q.serviceKey, q]));
+    expect([...byKey.keys()].sort()).toEqual(['epacket', 'epost', 'fedex_intl_priority']);
+    expect(byKey.get('fedex_intl_priority')).toMatchObject({ carrier: 'FedEx', serviceLevel: 'International Priority', providerRateId: 'rate_fx_ip' });
+    expect(byKey.get('epacket')).toMatchObject({
+      carrier: 'USPS',
+      serviceLevel: 'First-Class International',
+      costMinor: 1875,
+      providerRateId: 'rate_usps_fcpis',
+    });
+    expect(byKey.get('epost')).toMatchObject({
+      carrier: 'USPS',
+      serviceLevel: 'Priority Mail International',
+      costMinor: 6210,
+      providerRateId: 'rate_usps_pmi',
+    });
+    expect(findService('USPS', 'First-Class International')?.key).toBe('epacket');
+    expect(findService('USPS', 'Priority Mail International')?.key).toBe('epost');
   });
 });
 

@@ -117,8 +117,8 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
   },
   {
     key: 'epacket',
-    carrier: 'ePacket',
-    serviceLevel: 'International',
+    carrier: 'USPS',
+    serviceLevel: 'First-Class International',
     scope: 'international',
     countries: EPACKET_COUNTRIES,
     maxWeightGrams: 1_814,
@@ -130,11 +130,12 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     billingIncrement: 'ounce',
     maxLongestSideCm: 60.96,
     maxDimensionSumCm: 91.44,
+    easypost: { carrier: 'USPS', services: ['FirstClassPackageInternationalService'] },
   },
   {
     key: 'epost',
-    carrier: 'ePost',
-    serviceLevel: 'International',
+    carrier: 'USPS',
+    serviceLevel: 'Priority Mail International',
     scope: 'international',
     countries: [],
     maxWeightGrams: 9_072,
@@ -146,6 +147,7 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     billingIncrement: 'pound',
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
+    easypost: { carrier: 'USPS', services: ['PriorityMailInternational'] },
   },
   {
     key: 'fedex_intl_priority',
