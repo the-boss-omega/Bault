@@ -60,6 +60,11 @@ const BaseSchema = z.object({
 
   PAYPAL_CHECKOUT_ENABLED: booleanFromEnv(false),
 
+  CRYPTO_PROVIDER: z.enum(['coinbase_commerce', 'sandbox']).default('sandbox'),
+  CRYPTO_CHECKOUT_ENABLED: booleanFromEnv(false),
+  COINBASE_COMMERCE_API_KEY: z.string().optional().default(''),
+  COINBASE_COMMERCE_WEBHOOK_SECRET: z.string().optional().default(''),
+
   CORS_ORIGINS: z.string().optional().default(''),
 
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
@@ -184,6 +189,12 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
     }
   }
 
+  if (env.CRYPTO_PROVIDER === 'coinbase_commerce') {
+    for (const key of ['COINBASE_COMMERCE_API_KEY', 'COINBASE_COMMERCE_WEBHOOK_SECRET'] as const) {
+      require(key, 'CRYPTO_PROVIDER=coinbase_commerce');
+    }
+  }
+
   if (env.MFA_ENCRYPTION_KEY && !isBase64Key(env.MFA_ENCRYPTION_KEY)) {
     ctx.addIssue({
       code: 'custom',
@@ -274,6 +285,16 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
           'provider with fake money.',
       });
     }
+    if (env.CRYPTO_CHECKOUT_ENABLED && env.CRYPTO_PROVIDER !== 'coinbase_commerce') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CRYPTO_PROVIDER'],
+        message:
+          'CRYPTO_CHECKOUT_ENABLED=true needs CRYPTO_PROVIDER=coinbase_commerce in production. The sandbox ' +
+          'processor confirms whatever it is told to, so it would credit wallets with money nobody paid.',
+      });
+    }
+
     if (env.EXPOSE_API_DOCS && !env.API_DOCS_PASSWORD) {
       ctx.addIssue({
         code: 'custom',

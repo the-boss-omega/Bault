@@ -2,6 +2,7 @@ import { Body, Controller, Get, Headers, Param, Post, Query, Req } from '@nestjs
 import { ApiTags } from '@nestjs/swagger';
 import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, MaxLength, Min } from 'class-validator';
 import type { Request } from 'express';
+import { CRYPTO_SIGNATURE_HEADER } from '@bault/adapters';
 import { Public } from '../acc/public.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
@@ -12,6 +13,7 @@ import { WalletRequestService } from './wallet-request.service';
 import { CheckoutService } from './checkout.service';
 import { ChargebackService } from './chargeback.service';
 import { PayPalCheckoutService } from './paypal-checkout.service';
+import { CryptoCheckoutService } from './crypto-checkout.service';
 import { Roles } from '../sec/roles.decorator';
 
 class TopupDto {
@@ -39,6 +41,11 @@ class PayPalCheckoutDto {
   @IsString() @MaxLength(120) idempotencyKey!: string;
 }
 
+class CryptoCheckoutDto {
+  @IsInt() @Min(1) amountMinor!: number;
+  @IsString() @MaxLength(120) idempotencyKey!: string;
+}
+
 class ChargebackDto {
   @IsString() @MaxLength(500) reason!: string;
   @IsOptional() @IsString() @MaxLength(140) providerCaseRef?: string;
@@ -55,6 +62,7 @@ export class PayController {
     private readonly requests: WalletRequestService,
     private readonly checkout: CheckoutService,
     private readonly paypalCheckout: PayPalCheckoutService,
+    private readonly cryptoCheckout: CryptoCheckoutService,
     private readonly chargebacks: ChargebackService,
   ) {}
 
@@ -81,6 +89,21 @@ export class PayController {
   @Post('finance/checkout/paypal/:paymentId/cancel')
   cancelPayPalCheckout(@CurrentUser() user: AuthUser, @Param('paymentId') paymentId: string) {
     return this.paypalCheckout.cancel(user.id, paymentId);
+  }
+
+  @Post('finance/checkout/crypto')
+  startCryptoCheckout(@CurrentUser() user: AuthUser, @Body() dto: CryptoCheckoutDto) {
+    return this.cryptoCheckout.start(user.id, dto);
+  }
+
+  @Get('finance/checkout/crypto/:paymentId')
+  describeCryptoCheckout(@CurrentUser() user: AuthUser, @Param('paymentId') paymentId: string) {
+    return this.cryptoCheckout.describe(user.id, paymentId);
+  }
+
+  @Post('finance/checkout/crypto/:paymentId/cancel')
+  cancelCryptoCheckout(@CurrentUser() user: AuthUser, @Param('paymentId') paymentId: string) {
+    return this.cryptoCheckout.cancel(user.id, paymentId);
   }
 
   @Get('finance/payments')
@@ -183,6 +206,13 @@ export class PayController {
       rawBody: JSON.stringify(req.body ?? {}),
       headers: req.headers as Record<string, string | undefined>,
     });
+    return { received: true, outcome };
+  }
+
+  @Public()
+  @Post('webhooks/crypto')
+  async cryptoWebhook(@Req() req: Request & { rawBody?: Buffer }, @Headers(CRYPTO_SIGNATURE_HEADER) signature?: string) {
+    const { outcome } = await this.cryptoCheckout.handleWebhook(req.rawBody ? req.rawBody.toString('utf8') : null, signature);
     return { received: true, outcome };
   }
 }
