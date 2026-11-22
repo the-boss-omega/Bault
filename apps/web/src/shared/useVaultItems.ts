@@ -8,7 +8,6 @@ export interface VaultItem {
   description: string;
   conditionGrade: string | null;
   lifecycleState: string;
-  barcode: string;
 }
 
 export function useVaultItems(storedOnly = false) {

@@ -20,7 +20,7 @@ import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { IsObjectKey } from '../../shared/object-key';
-import { ServiceRequestService } from './service.service';
+import { ServiceRequestService, collectorRequestView } from './service.service';
 import { PhotographyService } from './photography.service';
 import { GradingService } from './grading.service';
 import { DonationService } from './donation.service';
@@ -168,6 +168,13 @@ class CompletionNotesDto {
   @IsString() @MinLength(5) @MaxLength(1000) notes!: string;
 }
 
+type RequestRow = Parameters<typeof collectorRequestView>[0];
+
+async function forCollector(pending: Promise<RequestRow | undefined>) {
+  const row = await pending;
+  return row ? collectorRequestView(row) : row;
+}
+
 @ApiTags('DIS')
 @Controller('services')
 export class DisController {
@@ -213,7 +220,7 @@ export class DisController {
 
   @Post('photography')
   requestPhoto(@CurrentUser() user: AuthUser, @Body() dto: ItemDto) {
-    return this.photography.request(user.id, dto.itemId);
+    return forCollector(this.photography.request(user.id, dto.itemId));
   }
   @Roles('warehouse_operator', 'admin')
   @Post('photography/:requestId/complete')
@@ -228,7 +235,7 @@ export class DisController {
 
   @Post('grading')
   requestGrading(@CurrentUser() user: AuthUser, @Body() dto: GradingDto) {
-    return this.grading.request(user.id, dto.itemId, dto.tier, dto.declaredMinor);
+    return forCollector(this.grading.request(user.id, dto.itemId, dto.tier, dto.declaredMinor));
   }
 
   @Roles('admin')
@@ -298,7 +305,7 @@ export class DisController {
 
   @Post('video')
   requestVideo(@CurrentUser() user: AuthUser, @Body() dto: ItemDto) {
-    return this.media.requestVideo(user.id, dto.itemId);
+    return forCollector(this.media.requestVideo(user.id, dto.itemId));
   }
 
   @Roles('warehouse_operator', 'admin')
@@ -313,7 +320,7 @@ export class DisController {
 
   @Post('inspection')
   requestInspection(@CurrentUser() user: AuthUser, @Body() dto: InspectionRequestDto) {
-    return this.media.requestInspection(user.id, dto.itemId, dto.areas);
+    return forCollector(this.media.requestInspection(user.id, dto.itemId, dto.areas));
   }
 
   @Roles('warehouse_operator', 'admin')
@@ -333,7 +340,7 @@ export class DisController {
 
   @Post('deslab/confirm')
   confirmDeslab(@CurrentUser() user: AuthUser, @Body() dto: ConfirmDto) {
-    return this.disposals.confirmDeslab(user.id, dto.confirmationToken);
+    return forCollector(this.disposals.confirmDeslab(user.id, dto.confirmationToken));
   }
 
   @Roles('warehouse_operator', 'admin')
@@ -363,7 +370,7 @@ export class DisController {
 
   @Post('lot-split')
   requestLotSplit(@CurrentUser() user: AuthUser, @Body() dto: ItemDto) {
-    return this.lotSplits.request(user.id, dto.itemId);
+    return forCollector(this.lotSplits.request(user.id, dto.itemId));
   }
 
   @Roles('warehouse_operator', 'admin')
@@ -387,17 +394,20 @@ export class DisController {
 
   @Get('consignment/channels')
   async channels() {
-    return { channels: CONSIGNMENT_CHANNELS, events: await this.consignment.listEvents() };
+    return {
+      channels: CONSIGNMENT_CHANNELS.map(({ partnerFeeNote: _partnerFeeNote, ...channel }) => channel),
+      events: await this.consignment.collectorEvents(),
+    };
   }
 
   @Post('buyout')
   requestBuyout(@CurrentUser() user: AuthUser, @Body() dto: ItemDto) {
-    return this.buyouts.request(user.id, dto.itemId);
+    return forCollector(this.buyouts.request(user.id, dto.itemId));
   }
 
   @Post('custom')
   askForSomething(@CurrentUser() user: AuthUser, @Body() dto: CustomRequestDto) {
-    return this.custom.ask(user.id, dto);
+    return forCollector(this.custom.ask(user.id, dto));
   }
 
   @Roles('warehouse_operator', 'admin')
@@ -422,12 +432,12 @@ export class DisController {
 
   @Post('custom/:requestId/accept-quote')
   acceptCustomQuote(@CurrentUser() user: AuthUser, @Param('requestId') requestId: string) {
-    return this.custom.acceptQuote(user.id, requestId);
+    return forCollector(this.custom.acceptQuote(user.id, requestId));
   }
 
   @Post('custom/:requestId/decline-quote')
   declineCustomQuote(@CurrentUser() user: AuthUser, @Param('requestId') requestId: string) {
-    return this.custom.declineQuote(user.id, requestId);
+    return forCollector(this.custom.declineQuote(user.id, requestId));
   }
 
   @Roles('warehouse_operator', 'admin')
@@ -462,7 +472,7 @@ export class DisController {
 
   @Post('consignment')
   requestConsignment(@CurrentUser() user: AuthUser, @Body() dto: ConsignDto) {
-    return this.consignment.request(user.id, dto.itemId, dto.channel, dto.askingMinor, dto.eventId);
+    return forCollector(this.consignment.request(user.id, dto.itemId, dto.channel, dto.askingMinor, dto.eventId));
   }
   @Roles('warehouse_operator', 'admin')
   @Post('consignment/:requestId/complete')

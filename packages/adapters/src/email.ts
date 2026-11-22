@@ -172,13 +172,13 @@ export function renderEmail(template: string, variables: Record<string, string>)
               kicker: 'CONFIRMATION CODE',
               heading: 'Confirm a change to two-factor sign-in',
               body: 'Enter this code in Card Embassy to confirm the change you are making to how you sign in.',
-              footer: `It works once, for the next ${minutes} minutes. If you did not ask for it, somebody may be changing your two-factor sign-in: change your password. Bault never asks for this code by phone or email.`,
+              footer: `It works once, for the next ${minutes} minutes. If you did not ask for it, somebody may be changing your two-factor sign-in: change your password. Card Embassy never asks for this code by phone or email.`,
             }
           : {
               kicker: 'SIGN-IN CODE',
               heading: 'Your sign-in code',
               body: 'Enter this code on the Card Embassy sign-in page to finish signing in.',
-              footer: `It works once, for the next ${minutes} minutes. If more than one email came, use the code in the newest. If you did not just try to sign in, somebody knows your password: change it, and do not give this code to anyone. Bault never asks for it by phone or email.`,
+              footer: `It works once, for the next ${minutes} minutes. If more than one email came, use the code in the newest. If you did not just try to sign in, somebody knows your password: change it, and do not give this code to anyone. Card Embassy never asks for it by phone or email.`,
             },
         variables.code ?? '',
       );
@@ -196,12 +196,8 @@ export function renderEmail(template: string, variables: Record<string, string>)
         },
         link,
       );
-    default: {
-      const lines = Object.entries(variables).map(([k, v]) => `${k}: ${v}`);
-      const text = lines.join('\n');
-      const html = `<pre style="font-family:ui-monospace,monospace">${escapeHtml(text)}</pre>`;
-      return { text, html };
-    }
+    default:
+      throw new Error(`There is no email template named ${template}`);
   }
 }
 

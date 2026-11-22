@@ -115,8 +115,8 @@ function GuideDetail({ g, onBack }: { g: Guide; onBack: () => void }) {
                 {index + 1}
               </StatusBadge>
               {step.route && (
-                <a className="hint" href={step.route} dir="ltr">
-                  {step.route}
+                <a className="hint" href={step.route}>
+                  {t('guide.goThere')}
                 </a>
               )}
             </div>

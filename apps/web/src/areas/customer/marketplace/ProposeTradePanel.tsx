@@ -11,10 +11,7 @@ import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/u
 import { IconBox, IconSearch } from '../../../shared/ui/icons';
 
 interface Collector {
-  id: string;
   username: string;
-  firstName: string | null;
-  lastName: string | null;
 }
 
 interface TradableItem {

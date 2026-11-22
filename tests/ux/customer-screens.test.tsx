@@ -20,7 +20,7 @@ vi.mock('../../apps/web/src/shared/Barcode', () => ({
   BarcodePrintButton: () => <button type="button">Print</button>,
 }));
 
-const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
+const { I18nProvider, t } = await import('../../apps/web/src/shared/i18n');
 const { AccountPill } = await import('../../apps/web/src/shared/ui/PageHeader');
 const { IntakePolicyPanel } = await import('../../apps/web/src/areas/customer/help/IntakePolicyPanel');
 const { VaultPage } = await import('../../apps/web/src/areas/customer/vault/VaultPage');
@@ -137,6 +137,8 @@ describe('the vault', () => {
     conditionGrade: 'PSA 9',
     lifecycleState: 'stored',
     binBarcode: 'BIN-QJLTDJH4',
+    binZone: 'A',
+    receivedAt: '2026-10-01T10:00:00.000Z',
     isLot: false,
     lotSize: 1,
     oversized: false,
@@ -148,6 +150,24 @@ describe('the vault', () => {
     );
     renderIn(<VaultPage />);
     await waitFor(() => expect(screen.getAllByText(/Rayquaza ex/).length).toBeGreaterThan(0));
+  });
+
+  it('shows no shelf code on a tile, and no shelf, barcode label or print button in the drawer', async () => {
+    window.location.hash = '#/vault?item=i1';
+    get.mockImplementation((path: string) => {
+      if (path.endsWith('/timeline')) return Promise.resolve([]);
+      if (path.endsWith('/storage')) return Promise.reject(new Error('no storage in this test'));
+      if (path.startsWith('/vault/items/')) return Promise.resolve({ images: [], openRequests: [] });
+      if (path.startsWith('/vault/items')) return Promise.resolve([ITEM]);
+      return Promise.resolve({ active: 1, hold: 0, history: 0 });
+    });
+    renderIn(<VaultPage />);
+    const dialog = await screen.findByRole('dialog');
+    const tile = document.querySelector('.card-where') as HTMLElement;
+    expect(tile).toHaveTextContent('In the vault since');
+    expect(document.body).not.toHaveTextContent(/BIN-QJLTDJH4|Not on a shelf|Shelf/);
+    expect(within(dialog).queryByRole('button', { name: /print/i })).toBeNull();
+    expect(dialog.querySelector('svg[aria-label*="SN-DR97-0001"], .barcode-label')).toBeNull();
   });
 
   it('says the vault is empty rather than rendering a blank frame', async () => {
@@ -353,6 +373,76 @@ describe('the wallet running balance (F055)', () => {
   });
 });
 
+describe('the wallet drawers say what a movement is, without record ids', () => {
+  const ROW_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+  const REFERENCE = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
+  const ROW = {
+    id: ROW_ID,
+    type: 'withdrawal',
+    amount: 2_000,
+    direction: 'debit',
+    currency: 'USD',
+    referenceType: 'wallet_request',
+    referenceId: REFERENCE,
+    occurredAt: '2026-10-10T12:00:00.000Z',
+  };
+  const REQUEST = {
+    id: 'wr1',
+    code: 'WR-AAAA1111',
+    type: 'cash_out',
+    status: 'completed',
+    amount: 2_000,
+    currency: 'USD',
+    fundingSource: null,
+    destinationAccount: 'IBAN-0001',
+    beneficiaryName: 'Red Ashwood',
+    reference: null,
+    notes: null,
+    rejectionReason: null,
+    completedAt: '2026-10-10T12:00:00.000Z',
+    createdAt: '2026-10-09T12:00:00.000Z',
+    updatedAt: '2026-10-10T12:00:00.000Z',
+  };
+  const DETAIL = {
+    ...REQUEST,
+    history: [
+      { fromStatus: 'approved', toStatus: 'completed', occurredAt: '2026-10-10T12:00:00.000Z', byStaff: true, reason: null },
+      { fromStatus: null, toStatus: 'submitted', occurredAt: '2026-10-09T12:00:00.000Z', byStaff: false, reason: null },
+    ],
+  };
+
+  function walletApi(path: string) {
+    if (path === '/finance/wallet') return Promise.resolve({ amount: 0, currency: 'USD' });
+    if (path === '/finance/ledger') return Promise.resolve([ROW]);
+    if (path === '/finance/wallet/pending') return Promise.resolve({ cashInMinor: 0, cashOutMinor: 0, count: 0 });
+    if (path === '/finance/wallet-requests') return Promise.resolve([REQUEST]);
+    if (path === '/finance/wallet-requests/wr1') return Promise.resolve(DETAIL);
+    return Promise.resolve([]);
+  }
+
+  it('names a movement’s reference by its kind and shows no record id or reference uuid', async () => {
+    window.location.hash = `#/wallet/transactions?transaction=${ROW_ID}`;
+    get.mockImplementation(walletApi);
+    renderIn(<WalletPage />);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).not.toHaveTextContent('Record ID');
+    expect(document.body.textContent).not.toContain(ROW_ID);
+    expect(document.body.textContent).not.toContain(REFERENCE);
+    expect(document.body.textContent).not.toContain(REFERENCE.slice(0, 8));
+    expect(dialog).toHaveTextContent(t('wallet.ref.wallet_request', 'en'));
+  });
+
+  it('shows a settled request without its ledger record', async () => {
+    window.location.hash = '#/wallet/requests?request=wr1';
+    get.mockImplementation(walletApi);
+    renderIn(<WalletPage />);
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(dialog).toHaveTextContent('IBAN-0001'));
+    expect(dialog).not.toHaveTextContent('Ledger record');
+    expect(within(dialog).getAllByRole('listitem')).toHaveLength(2);
+  });
+});
+
 describe('a hand-delivery quote reaches the collector (F060)', () => {
   const QUOTED = {
     id: 'hd1',
@@ -400,7 +490,7 @@ describe('asking for hand delivery and a show pickup', () => {
     { id: 'i2', serialNumber: 'SN-DR97-0001', typeClass: 'trading_card', description: 'EX Dragon Rayquaza' },
   ];
   const HOME = { id: 'a1', label: 'Home', recipient: 'Red Ashwood', line1: '12 Vine St', city: 'Trenton', region: 'NJ', country: 'US', postalCode: '08608', isDefault: true };
-  const VAULT = { facilityId: 'f1', code: 'NJ1', name: 'Card Embassy Vault', role: 'primary', careOf: 'Card Embassy C/O red', lines: ['1 Vault Way'], city: 'Newark', region: 'NJ', postalCode: '07102', country: 'US', phone: null, salesTaxBps: 0, forwardingDays: null };
+  const VAULT = { code: 'NJ1', name: 'Card Embassy Vault', role: 'primary', careOf: 'Card Embassy C/O red', lines: ['1 Vault Way'], city: 'Newark', region: 'NJ', postalCode: '07102', country: 'US', salesTaxBps: 0, forwardingDays: null };
 
   function answer() {
     get.mockImplementation((path: string) => {
@@ -423,7 +513,7 @@ describe('asking for hand delivery and a show pickup', () => {
     expect(screen.getByRole('checkbox', { name: /SN-DR97-0001/ })).toBeDisabled();
     await user.click(screen.getByRole('checkbox', { name: /SN-CL10-0005/ }));
 
-    await waitFor(() => expect(screen.getByLabelText('Collect from')).toHaveValue('vault:f1'));
+    await waitFor(() => expect(screen.getByLabelText('Collect from')).toHaveValue('vault:NJ1'));
     expect(screen.getByLabelText('Deliver to')).toHaveValue('a1');
     expect(document.querySelectorAll('input[type="datetime-local"]')).toHaveLength(0);
 
@@ -495,7 +585,7 @@ describe('a label the carrier refused can be re-chosen (fix 4)', () => {
       const { t } = useI18n();
       return (
         <RechooseService
-          shipment={{ id: 's1', cost: 1_293, labelRefused: { at: null, reason: 'EasyPost 422: rate expired' } } as never}
+          shipment={{ id: 's1', cost: 1_293, labelRefused: { reason: 'The carrier could not print a label for this shipment.' } } as never}
           t={t}
           busy={false}
           onChosen={onChosen}
@@ -507,7 +597,8 @@ describe('a label the carrier refused can be re-chosen (fix 4)', () => {
     expect(await screen.findByText('$6.48 back')).toBeInTheDocument();
     expect(screen.getByText('No change in price')).toBeInTheDocument();
     expect(screen.getByText('$9.61 more')).toBeInTheDocument();
-    expect(screen.getByText(/rate expired/)).toBeInTheDocument();
+    expect(screen.getByText('The carrier could not print a label for this shipment.')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('The carrier said');
     await user.click(screen.getAllByRole('button')[0]!);
     await waitFor(() =>
       expect(post).toHaveBeenCalledWith('/shipping/shipments/s1/select-rate', { carrier: 'USPS', serviceLevel: 'Ground Advantage' }),

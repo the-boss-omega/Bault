@@ -258,12 +258,12 @@ export function WhiteGlovePanel({
       .then((list) => {
         const rows = Array.isArray(list) ? list.filter((v) => v.role === 'primary') : [];
         setVaults(rows);
-        setFrom((cur) => cur || (rows[0] ? `vault:${rows[0].facilityId}` : OTHER));
+        setFrom((cur) => cur || (rows[0] ? `vault:${rows[0].code}` : OTHER));
       })
       .catch(() => setFrom((cur) => cur || OTHER));
   }, [onError]);
 
-  const vault = vaults.find((v) => `vault:${v.facilityId}` === from);
+  const vault = vaults.find((v) => `vault:${v.code}` === from);
   const fromAddress = addresses.find((a) => a.id === from);
   const toAddress = addresses.find((a) => a.id === to);
   const pickupAddress = vault ? vaultText(vault) : fromAddress ? addressText(fromAddress, countries) : fromText.trim();
@@ -348,7 +348,7 @@ export function WhiteGlovePanel({
         <Field label={t('ff.wg.pickupAddress')} hint={t('ff.wg.pickupHint')}>
           <select value={from} onChange={(e) => setFrom(e.target.value)}>
             {vaults.map((v) => (
-              <option key={v.facilityId} value={`vault:${v.facilityId}`}>
+              <option key={v.code} value={`vault:${v.code}`}>
                 {t('ff.wg.fromVault', { name: v.name, city: v.city })}
               </option>
             ))}

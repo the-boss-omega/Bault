@@ -36,6 +36,7 @@ export class DonationService {
 
     return this.custody.run(async (tx) => {
       const platformId = await this.requests.platformAccountId(tx);
+      const [donated] = await tx.select({ description: item.description }).from(item).where(eq(item.id, itemId)).limit(1);
       const req = await this.requests.create(tx, { type: 'donation', requesterId: ownerId, itemId });
       if (!req) throw AppError.validation('Failed to create donation request');
 
@@ -63,7 +64,7 @@ export class DonationService {
         aggregateType: 'item',
         aggregateId: itemId,
         eventType: 'item_donated',
-        payload: { itemId, donorId: ownerId },
+        payload: { itemId, donorId: ownerId, itemDescription: donated?.description },
       });
       return { status: 'donated', itemId };
     });

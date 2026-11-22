@@ -68,30 +68,15 @@ export function eventLabel(t: TranslateFn, eventType: string): string {
   return key ? t(key) : eventType;
 }
 
+export function notificationMessage(content: unknown): string | null {
+  if (typeof content === 'string') return content.trim() === '' ? null : content;
+  if (content == null || typeof content !== 'object') return null;
+  const message = (content as Record<string, unknown>).message;
+  return typeof message === 'string' && message.trim() !== '' ? message : null;
+}
+
 export function renderContent(content: unknown, label: string): string {
-  if (content == null) return label;
-  if (typeof content === 'string') return content;
-  if (typeof content !== 'object') return String(content);
-
-  const record = content as Record<string, unknown>;
-  if (typeof record.message === 'string' && record.message.trim() !== '') return record.message;
-
-  const skip = new Set([
-    'recipientIds',
-    'ownerId',
-    'userId',
-    'sellerId',
-    'buyerId',
-    'donorId',
-    'responderId',
-  ]);
-  const parts = Object.entries(record)
-    .filter(([key, value]) => !skip.has(key) && value != null && typeof value !== 'object')
-    .map(([key, value]) => {
-      const readable = key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
-      return `${readable}: ${String(value)}`;
-    });
-  return parts.length > 0 ? `${label} — ${parts.join(', ')}` : label;
+  return notificationMessage(content) ?? label;
 }
 
 /** The serial of the card a notification is about, when it says: the item events carry it as `barcode`. */

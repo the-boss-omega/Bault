@@ -9,8 +9,8 @@ import {
   fundingSourceLabel,
   statusLabel,
   typeLabel,
-  type WalletRequest,
-  type WalletRequestDetail,
+  type StaffWalletRequest as WalletRequest,
+  type StaffWalletRequestDetail as WalletRequestDetail,
 } from '../../shared/walletRequests';
 import {
   Button,

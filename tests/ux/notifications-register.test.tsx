@@ -20,8 +20,6 @@ const note = (id: string, eventType: string, content: unknown, createdAt: string
   id,
   eventType,
   content,
-  channel: 'in_app',
-  status: 'sent',
   createdAt,
 });
 
@@ -111,6 +109,18 @@ describe('the notifications, a register', () => {
     const sentence = within(entriesOf(first!)[0]!).getByText('You received an offer of $2,750.00.');
     expect(sentence.tagName).toBe('BDI');
     expect(sentence).toHaveAttribute('dir', 'auto');
+  });
+
+  it('shows the message alone, never the fields of the event under it', async () => {
+    await renderFeed([
+      note('n4', 'item_sold', { message: 'Your Rayquaza ex sold for $260.00.', price: 26_000, shipmentCode: 'SHP-AAAA1111' }, '2026-10-27T13:00:00.000Z'),
+      note('n5', 'buyout_quoted', { amount: 12_000, requestCode: 'SR-BBBB2222' }, '2026-10-27T14:00:00.000Z'),
+    ]);
+    const all = screen.getAllByRole('list').flatMap((list) => entriesOf(list));
+    expect(all[0]).toHaveTextContent('Your Rayquaza ex sold for $260.00.');
+    expect(all[0]).not.toHaveTextContent(/Price:|Shipment Code:|26000/);
+    expect(all[1]!.querySelector('.register-entry')).toBeNull();
+    expect(all[1]).not.toHaveTextContent(/Amount:|Request Code:|12000|—/);
   });
 
   it('says so when there is nothing', async () => {

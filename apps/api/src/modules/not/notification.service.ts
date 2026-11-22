@@ -15,16 +15,40 @@ import {
   type NotificationChannel,
 } from './event-types';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const COLLECTOR_CONTENT_KEY = /^(message|barcode|code|trackingNumber|amount|price)$|Code$|Minor$/;
+
+function collectorContent(content: unknown): Record<string, string | number> {
+  if (!content || typeof content !== 'object' || Array.isArray(content)) return {};
+  const kept: Record<string, string | number> = {};
+  for (const [key, value] of Object.entries(content as Record<string, unknown>)) {
+    if (!COLLECTOR_CONTENT_KEY.test(key)) continue;
+    if (typeof value === 'number' && Number.isFinite(value)) kept[key] = value;
+    if (typeof value === 'string' && !UUID.test(value)) kept[key] = value;
+  }
+  return kept;
+}
+
+function collectorNotificationView(row: typeof notification.$inferSelect) {
+  return {
+    id: row.id,
+    eventType: row.eventType,
+    createdAt: row.createdAt,
+    content: collectorContent(row.content),
+  };
+}
+
 @Injectable()
 export class NotificationService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  listMine(userId: string) {
-    return this.db
+  async listMine(userId: string) {
+    const rows = await this.db
       .select()
       .from(notification)
-      .where(eq(notification.userId, userId))
+      .where(and(eq(notification.userId, userId), eq(notification.channel, 'in_app')))
       .orderBy(sql`${notification.createdAt} desc`);
+    return rows.map(collectorNotificationView);
   }
 
   async getPreferences(userId: string) {

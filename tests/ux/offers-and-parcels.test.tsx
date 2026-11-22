@@ -386,7 +386,6 @@ const PARCEL = {
   forwardedAt: null,
   condition: null,
   conditionNotes: null,
-  facilityCode: 'NJ',
   facilityName: 'Bault New Jersey',
 };
 

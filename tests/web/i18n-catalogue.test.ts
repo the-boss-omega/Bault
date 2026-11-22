@@ -60,7 +60,7 @@ describe('retired keys are really gone', () => {
     expect(hasMessage('ss.tracking.idLabel')).toBe(false);
     expect(hasMessage('ss.tracking.idPlaceholder')).toBe(false);
     expect(hasMessage('ss.tracking.searchPlaceholder')).toBe(true);
-    expect(hasMessage('ss.tracking.col.username')).toBe(true);
+    expect(hasMessage('ss.tracking.col.username')).toBe(false);
   });
 });
 

@@ -9,7 +9,6 @@ import { isPlaceholderAddress } from './facility-address';
 import { facility } from './facility.schema';
 
 export interface InboundAddress {
-  facilityId: string;
   code: string;
   name: string;
   role: 'primary' | 'forwarding';
@@ -19,7 +18,6 @@ export interface InboundAddress {
   region: string;
   postalCode: string;
   country: string;
-  phone: string | null;
   salesTaxBps: number;
   forwardingDays: number | null;
 }
@@ -61,7 +59,6 @@ export class FacilityService {
       (f) => !inProduction || !isPlaceholderAddress(f.line1),
     );
     return facilities.map((f) => ({
-      facilityId: f.id,
       code: f.code,
       name: f.name,
       role: f.role,
@@ -71,7 +68,6 @@ export class FacilityService {
       region: f.region,
       postalCode: f.postalCode,
       country: f.country,
-      phone: f.phone,
       salesTaxBps: f.salesTaxBps,
       forwardingDays: f.forwardingDays,
     }));

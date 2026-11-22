@@ -125,7 +125,8 @@ describe('ESC escrow and human fulfilment', () => {
 
     const detail = (await buyer.get(`/escrow/${deal.id}`)).body;
     expect(detail.deal.status).toBe('settled');
-    expect(detail.deal.itemId).toBe(card.id);
+    expect(detail.deal.itemId).toBeUndefined();
+    expect((await operator.get(`/escrow/${deal.id}`)).body.deal.itemId).toBe(card.id);
     const kinds = (detail.events as Array<{ eventType: string }>).map((e) => e.eventType);
     for (const step of ['raised', 'agreed', 'funded', 'item_received', 'inspected', 'settled']) {
       expect(kinds).toContain(step);
@@ -225,8 +226,11 @@ describe('ESC escrow and human fulfilment', () => {
 
     const detail = (await seller.get(`/escrow/${deal.id}`)).body;
     expect(detail.deal.fundingSource).toBe('external');
-    expect(detail.deal.fundingAttestedBy).toBeTruthy();
-    expect(detail.buyerId).toBeNull();
+    expect(detail.deal.fundingAttestedBy).toBeUndefined();
+    expect(detail.deal.counterpartyIsMember).toBe(false);
+    const staff = (await operator.get(`/escrow/${deal.id}`)).body;
+    expect(staff.deal.fundingAttestedBy).toBeTruthy();
+    expect(staff.buyerId).toBeNull();
   });
 
   it('does not pay the seller of an outside buyer until the card is on its way to them', async () => {
@@ -412,10 +416,17 @@ describe('ESC escrow and human fulfilment', () => {
       id: string;
       open: boolean;
       feeMinor: number;
-      booked: number;
     }>;
     const show = shows.find((s) => s.open)!;
     expect(show).toBeTruthy();
+    const bookedAt = async (eventId: string) =>
+      (
+        await sql<{ n: number }>(
+          `SELECT count(*)::int AS n FROM shipment WHERE pickup_event_id = $1 AND status <> 'cancelled'`,
+          [eventId],
+        )
+      )[0]!.n;
+    const bookedBefore = await bookedAt(show.id);
 
     const before = await balanceOf(collector);
     const booked = await collector.post('/shipping/pickup', {
@@ -426,8 +437,7 @@ describe('ESC escrow and human fulfilment', () => {
     expect(booked.body.fulfilmentMethod).toBe('show_pickup');
     expect(await balanceOf(collector)).toBe(before - show.feeMinor);
 
-    const after = (await collector.get('/shipping/pickup/shows')).body as Array<{ id: string; booked: number }>;
-    expect(after.find((s) => s.id === show.id)!.booked).toBe(show.booked + 1);
+    expect(await bookedAt(show.id)).toBe(bookedBefore + 1);
 
     const handed = await operator.post(`/shipping/shipments/${booked.body.id}/hand-over`, {
       scannedItemIds: [card.id],

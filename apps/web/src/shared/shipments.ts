@@ -5,24 +5,21 @@ export interface ShipmentSummary {
   id: string;
   code: string | null;
   status: string;
-  username: string | null;
-  customerName: string | null;
   recipientName: string | null;
   carrier: string | null;
   serviceLevel: string | null;
   trackingNumber: string | null;
-  labelRefused?: { at: string | null; reason: string | null } | null;
+  labelRefused?: { reason: string | null } | null;
   estimatedDeliveryAt: string | null;
   rush: boolean;
   cost: number | null;
   currency: string | null;
   itemIds: string[];
-  items: { id: string; serialNumber: string | null; barcode: string | null; description: string | null }[];
+  items: { id: string; serialNumber: string | null; description: string | null }[];
   directParcel: { code: string; trackingNumber: string | null } | null;
   destinationAddress: string;
   destinationCountry: string;
   destinationPostalCode: string;
-  serviceKey: string | null;
   serviceMode: string;
   fulfilmentMethod: string;
   quoteMinor: number | null;
@@ -39,7 +36,6 @@ export interface ShipmentSummary {
   cancelledAt: string | null;
   cancelReason: string | null;
   restockingFeeMinor: number;
-  mergedIntoShipmentId: string | null;
   createdAt: string;
   updatedAt: string | null;
   fulfilledAt: string | null;
@@ -67,8 +63,6 @@ export function matchesShipmentSearch(shipment: ShipmentSummary, needle: string)
   const q = needle.trim().toLowerCase();
   if (!q) return true;
   return [
-    shipment.username ?? '',
-    shipment.customerName ?? '',
     shipment.recipientName ?? '',
     shipment.trackingNumber ?? '',
     shipment.status,

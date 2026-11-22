@@ -116,3 +116,76 @@ describe('shipping and services, the overview', () => {
     expect(tracking.querySelector('.departure-icon')).toHaveAttribute('aria-hidden', 'true');
   });
 });
+
+describe('tracking, as a collector reads it', () => {
+  const SHIPMENT = {
+    id: 's1',
+    code: 'SHP-AAAA1111',
+    status: 'in_transit',
+    username: 'red',
+    recipientName: 'Dana Levi',
+    carrier: 'USPS',
+    serviceLevel: 'Ground Advantage',
+    trackingNumber: '9400100000000000000042',
+    labelRefused: null,
+    estimatedDeliveryAt: null,
+    rush: false,
+    cost: 1_293,
+    currency: 'USD',
+    itemIds: ['i1'],
+    items: [{ id: 'i1', serialNumber: 'SN-0001', description: 'A card' }],
+    directParcel: null,
+    destinationAddress: 'Dana Levi, 12 Vine St, Trenton, NJ 08608, US',
+    destinationCountry: 'US',
+    destinationPostalCode: '08608',
+    serviceMode: 'standard',
+    fulfilmentMethod: 'carrier',
+    quoteMinor: null,
+    quoteNotes: null,
+    declaredValueMinor: 0,
+    insuredValueMinor: 0,
+    insurancePremiumMinor: 0,
+    signatureRequired: false,
+    addOns: [],
+    boxSize: null,
+    customerNotes: null,
+    groupId: null,
+    paymentDueAt: null,
+    cancelledAt: null,
+    cancelReason: null,
+    restockingFeeMinor: 0,
+    createdAt: '2026-10-20T08:00:00.000Z',
+    updatedAt: '2026-10-21T08:00:00.000Z',
+    fulfilledAt: null,
+  };
+
+  function renderTracking(hash: string) {
+    get.mockImplementation((path: string) => {
+      if (path === '/shipping/shipments') return Promise.resolve([SHIPMENT]);
+      return Promise.resolve([]);
+    });
+    window.location.hash = hash;
+    return render(
+      <I18nProvider>
+        <ShippingServicesPage />
+      </I18nProvider>,
+    );
+  }
+
+  it('has no Username column, and names the service the way the product does', async () => {
+    renderTracking('#/shipping-services/tracking');
+    const table = await screen.findByRole('table');
+    await waitFor(() => expect(within(table).getAllByRole('row')).toHaveLength(2));
+    expect(within(table).queryByRole('columnheader', { name: 'Username' })).toBeNull();
+    expect(table).not.toHaveTextContent(/\bred\b/);
+    expect(table).toHaveTextContent('USPS Ground Advantage');
+  });
+
+  it('opens a shipment without a Username line', async () => {
+    renderTracking('#/shipping-services/tracking?shipment=s1');
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('SHP-AAAA1111');
+    expect(dialog).not.toHaveTextContent(/Username|\bred\b/);
+    expect(dialog).toHaveTextContent('USPS Ground Advantage');
+  });
+});

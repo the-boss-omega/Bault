@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -10,6 +10,7 @@ import { shipment } from '../shp/shp.schema';
 import { dispute } from '../adm/adm.schema';
 import { facility } from '../inv/facility.schema';
 import { bin, binTransfer, custodyEvent, item, itemChangeHistory } from './cst.schema';
+import { heldAt, holdingWindows } from './holding';
 import { renderReportPdf } from './report-pdf';
 import { StowService } from './stow.service';
 
@@ -198,6 +199,84 @@ export class InventoryService {
           kind: 'dispute',
           params: { status: d.status, ruling: d.ruling },
         });
+      }
+    }
+
+    return events.sort((a, b) => (a.at < b.at ? 1 : -1));
+  }
+
+  async collectorTimeline(userId: string, itemId: string): Promise<TimelineEvent[]> {
+    const contains = (col: unknown) => sql`${col} @> ${JSON.stringify([itemId])}::jsonb`;
+    const events: TimelineEvent[] = [];
+
+    const custody = await this.db.select().from(custodyEvent).where(eq(custodyEvent.itemId, itemId));
+    const windows = holdingWindows(custody, userId);
+    for (const e of custody) {
+      if (e.eventType === 'relocate') continue;
+      const mine = e.prevOwnerId === userId || e.newOwnerId === userId || heldAt(windows, e.occurredAt);
+      if (!mine) continue;
+      const params: TimelineParams = {};
+      if (e.prevState || e.newState) {
+        params.fromState = e.prevState;
+        params.toState = e.newState;
+      }
+      events.push({ at: (e.occurredAt as Date).toISOString(), kind: e.eventType, params });
+    }
+
+    const txns = await this.db
+      .select()
+      .from(transaction)
+      .where(
+        and(
+          contains(transaction.itemIds),
+          or(eq(transaction.buyerId, userId), eq(transaction.sellerId, userId)),
+        ),
+      );
+    for (const tx of txns) {
+      events.push({
+        at: (tx.executedAt as Date).toISOString(),
+        kind: tx.type,
+        params: { amountMinor: tx.price },
+      });
+    }
+
+    const ships = await this.db
+      .select()
+      .from(shipment)
+      .where(and(contains(shipment.itemIds), eq(shipment.userId, userId)));
+    for (const sh of ships) {
+      events.push({
+        at: (sh.createdAt as Date).toISOString(),
+        kind: 'shipment',
+        params: { code: sh.code, status: sh.status },
+      });
+    }
+
+    const listings = await this.db
+      .select({ id: listing.id })
+      .from(listing)
+      .where(and(eq(listing.itemId, itemId), eq(listing.sellerId, userId)));
+    if (listings.length) {
+      const offers = await this.db
+        .select({ amount: offer.amount, status: offer.status, createdAt: offer.createdAt })
+        .from(offer)
+        .where(inArray(offer.listingId, listings.map((l) => l.id)));
+      for (const o of offers) {
+        events.push({
+          at: (o.createdAt as Date).toISOString(),
+          kind: 'offer',
+          params: { amountMinor: o.amount, status: o.status },
+        });
+      }
+    }
+
+    if (txns.length) {
+      const disputes = await this.db
+        .select({ status: dispute.status, createdAt: dispute.createdAt })
+        .from(dispute)
+        .where(inArray(dispute.transactionId, txns.map((tx) => tx.id)));
+      for (const d of disputes) {
+        events.push({ at: (d.createdAt as Date).toISOString(), kind: 'dispute', params: { status: d.status } });
       }
     }
 

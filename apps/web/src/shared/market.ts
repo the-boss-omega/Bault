@@ -122,7 +122,6 @@ export interface ConsignmentChannel {
   requiresEvent: boolean;
   payoutDaysMin: number;
   payoutDaysMax: number;
-  partnerFeeNote: string;
 }
 
 export interface ConsignmentEvent {
@@ -131,8 +130,8 @@ export interface ConsignmentEvent {
   venue: string;
   city: string | null;
   startsAt: string;
+  endsAt: string | null;
   requestDeadline: string;
-  capacity: number;
 }
 
 const CHANNEL_KEY: Record<string, MessageKey> = {

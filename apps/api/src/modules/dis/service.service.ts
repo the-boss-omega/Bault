@@ -48,6 +48,64 @@ const SERVICE_LABEL: Record<ServiceType, string> = {
   custom: 'A custom request',
 };
 
+const COLLECTOR_TYPE_FIELDS = [
+  'stage',
+  'summary',
+  'detail',
+  'scope',
+  'declineReason',
+  'completionNotes',
+  'priceMinor',
+  'offerMinor',
+  'quotedAt',
+  'refundedMinor',
+  'outcome',
+  'count',
+  'submissionCode',
+  'gradingBody',
+  'tier',
+  'declaredMinor',
+  'turnaroundDaysMin',
+  'turnaroundDaysMax',
+  'approvalRequired',
+  'approvalState',
+  'areas',
+  'channel',
+  'eventName',
+  'askingMinor',
+  'payoutDaysMin',
+  'payoutDaysMax',
+  'lotSize',
+  'willCreate',
+] as const;
+
+function collectorBilled(billed: unknown) {
+  const b = billed as Billed | undefined;
+  if (b?.kind === 'charged') return { amountMinor: b.amountMinor, currency: b.currency };
+  if (b?.kind === 'covered') return { covered: true as const };
+  return undefined;
+}
+
+export function collectorRequestView(row: typeof serviceRequest.$inferSelect) {
+  const fields = (row.typeFields as Record<string, unknown> | null) ?? {};
+  const typeFields: Record<string, unknown> = {};
+  for (const key of COLLECTOR_TYPE_FIELDS) {
+    if (fields[key] !== undefined) typeFields[key] = fields[key];
+  }
+  const billed = collectorBilled(fields.billed);
+  if (billed) typeFields.billed = billed;
+  return {
+    id: row.id,
+    code: row.code,
+    type: row.type,
+    status: row.status,
+    itemId: row.itemId,
+    typeFields,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 @Injectable()
 export class ServiceRequestService {
   constructor(
@@ -140,15 +198,16 @@ export class ServiceRequestService {
     const row = await this.get(requestId);
     const staff = viewer.role === 'warehouse_operator' || viewer.role === 'admin';
     if (!staff && row.requesterId !== viewer.id) throw AppError.notFound('Service request not found');
-    return row;
+    return staff ? row : collectorRequestView(row);
   }
 
-  listMine(userId: string) {
-    return this.db
+  async listMine(userId: string) {
+    const rows = await this.db
       .select()
       .from(serviceRequest)
       .where(eq(serviceRequest.requesterId, userId))
       .orderBy(sql`${serviceRequest.createdAt} desc`);
+    return rows.map(collectorRequestView);
   }
 
   listQueue() {

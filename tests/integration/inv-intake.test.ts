@@ -23,7 +23,8 @@ describe('INV intake & custody', () => {
     const vault = await collector.get('/vault/items');
     const mine = (vault.body as any[]).find((i) => i.id === itemId);
     expect(mine).toBeTruthy();
-    expect(mine.binBarcode).toBeTruthy();
+    expect(mine.binBarcode).toBeUndefined();
+    expect((history.body as { eventType: string; newBinId: string | null }[]).find((e) => e.eventType === 'intake')?.newBinId).toBeTruthy();
   });
 
   it('rejects an intake that neither names a bin nor asks for one', async () => {

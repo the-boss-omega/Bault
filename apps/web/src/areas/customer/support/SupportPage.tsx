@@ -6,6 +6,7 @@ import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
   TICKET_CATEGORIES,
+  messageFromStaff,
   TICKET_TONE,
   ticketCategoryLabel,
   ticketStatusLabel,
@@ -396,8 +397,8 @@ export function ThreadDrawer({
             {thread.messages.map((m) => (
               <li key={m.id} className="detail-row" style={{ display: 'block' }}>
                 <div className="row" style={{ gap: 'var(--sp-2)' }}>
-                  <StatusBadge tone={m.authorRole === 'staff' ? 'gold' : 'info'} plain>
-                    {m.authorRole === 'staff' ? t('support.fromStaff') : t('support.fromYou')}
+                  <StatusBadge tone={messageFromStaff(m) ? 'gold' : 'info'} plain>
+                    {messageFromStaff(m) ? t('support.fromStaff') : t('support.fromYou')}
                   </StatusBadge>
                   <span className="hint date">{formatDateTime(m.createdAt, locale)}</span>
                 </div>

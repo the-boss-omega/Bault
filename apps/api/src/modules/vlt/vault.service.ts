@@ -7,7 +7,8 @@ import { clampLimit } from '../../shared/query';
 import { STORAGE_ADAPTER } from '../../shared/adapters/adapters.module';
 import type { StorageAdapter } from '@bault/adapters';
 import { InventoryService, type TimelineEvent } from '../cst/inventory.service';
-import { bin, custodyEvent, item, itemImage } from '../cst/cst.schema';
+import { custodyEvent, item, itemImage } from '../cst/cst.schema';
+import { heldAt, holdingWindows } from '../cst/holding';
 import { charge } from '../pay/pay.schema';
 import { pricingRule } from '../prc/prc.schema';
 import { storageCover } from '../adm/adm.schema';
@@ -105,6 +106,31 @@ export function departureOf(event: {
   return { kind: byState ?? 'left', code: null };
 }
 
+function collectorItemView(it: typeof item.$inferSelect) {
+  return {
+    id: it.id,
+    serialNumber: it.serialNumber,
+    description: it.description,
+    typeClass: it.typeClass,
+    conditionGrade: it.conditionGrade,
+    lifecycleState: it.lifecycleState,
+    holdFlag: it.holdFlag,
+    oversized: it.oversized,
+    isLot: it.isLot,
+    lotSize: it.lotSize,
+    lotBroken: it.lotBroken,
+    receivedAt: it.receivedAt,
+  };
+}
+
+function collectorImageView(img: typeof itemImage.$inferSelect, url: string) {
+  return { id: img.id, type: img.type, version: img.version, url, createdAt: img.createdAt };
+}
+
+function collectorCustodyView(e: typeof custodyEvent.$inferSelect) {
+  return { eventType: e.eventType, occurredAt: e.occurredAt, prevState: e.prevState, newState: e.newState };
+}
+
 @Injectable()
 export class VaultService {
   constructor(
@@ -117,7 +143,7 @@ export class VaultService {
     if (!(await this.hasHeld(userId, itemId))) {
       throw AppError.notFound('Item not found in your vault');
     }
-    return this.inventory.itemTimeline(itemId);
+    return this.inventory.collectorTimeline(userId, itemId);
   }
 
   private async hasHeld(userId: string, itemId: string): Promise<boolean> {
@@ -159,15 +185,11 @@ export class VaultService {
       .select({
         id: item.id,
         serialNumber: item.serialNumber,
-        barcode: item.barcode,
         typeClass: item.typeClass,
         description: item.description,
         conditionGrade: item.conditionGrade,
         lifecycleState: item.lifecycleState,
         holdFlag: item.holdFlag,
-        binId: item.binId,
-        binBarcode: bin.barcode,
-        binZone: bin.zone,
         isLot: item.isLot,
         lotSize: item.lotSize,
         lotBroken: item.lotBroken,
@@ -176,7 +198,6 @@ export class VaultService {
         createdAt: item.createdAt,
       })
       .from(item)
-      .leftJoin(bin, sql`${bin.id}::text = ${item.binId}`)
       .where(and(...conditions))
       .orderBy(sql`${item.createdAt} desc`)
       .limit(clampLimit(filter.limit, { max: 200, fallback: 50 }));
@@ -228,7 +249,6 @@ export class VaultService {
       .select({
         id: item.id,
         serialNumber: item.serialNumber,
-        barcode: item.barcode,
         typeClass: item.typeClass,
         description: item.description,
         conditionGrade: item.conditionGrade,
@@ -252,9 +272,6 @@ export class VaultService {
         ...row,
         departedAt: toIso(row.departedAt),
         holdFlag: false,
-        binId: null,
-        binBarcode: null,
-        binZone: null,
         historical: true as const,
         departure: withReason ? await this.departure(row.id, userId) : null,
       })),
@@ -438,17 +455,22 @@ export class VaultService {
 
     const images = await this.db.select().from(itemImage).where(eq(itemImage.itemId, itemId));
     const signedImages = await Promise.all(
-      images.map(async (img) => ({
-        ...img,
-        url: await this.storage.getSignedUrl(img.objectKey),
-      })),
+      images.map(async (img) => collectorImageView(img, await this.storage.getSignedUrl(img.objectKey))),
     );
 
-    const history = await this.db
+    const custody = await this.db
       .select()
       .from(custodyEvent)
       .where(eq(custodyEvent.itemId, itemId))
       .orderBy(sql`${custodyEvent.occurredAt} desc`);
+    const windows = holdingWindows(custody, userId);
+    const history = custody
+      .filter(
+        (e) =>
+          e.eventType !== 'relocate' &&
+          (e.prevOwnerId === userId || e.newOwnerId === userId || heldAt(windows, e.occurredAt)),
+      )
+      .map(collectorCustodyView);
 
     const openRequests = await this.db
       .select({
@@ -467,6 +489,6 @@ export class VaultService {
       )
       .orderBy(sql`${serviceRequest.createdAt} desc`);
 
-    return { item: it, images: signedImages, history, openRequests };
+    return { item: collectorItemView(it), images: signedImages, history, openRequests };
   }
 }

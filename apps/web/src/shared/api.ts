@@ -1,5 +1,7 @@
 const BASE = '/api/v1';
 
+export const NETWORK_FAILURE = 'Card Embassy could not be reached. Check your connection and try again.';
+
 export type ApiErrorKind =
   | 'unreachable'
   | 'unauthenticated'
@@ -68,20 +70,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       ...options,
       headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
     });
-  } catch (cause) {
-    throw new ApiError(
-      'unreachable',
-      0,
-      cause instanceof Error && cause.message ? cause.message : 'Network request failed',
-    );
+  } catch {
+    throw new ApiError('unreachable', 0, NETWORK_FAILURE);
   }
 
   const body = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
     const envelope = (body as { error?: { code?: string; message?: string } } | null)?.error;
     const code = envelope?.code;
-    const message = envelope?.message || res.statusText || `HTTP ${res.status}`;
-    throw new ApiError(kindForStatus(res.status, code), res.status, message, code);
+    const kind = kindForStatus(res.status, code);
+    const message =
+      kind === 'unreachable' ? NETWORK_FAILURE : envelope?.message || res.statusText || `HTTP ${res.status}`;
+    throw new ApiError(kind, res.status, message, code);
   }
   return body as T;
 }

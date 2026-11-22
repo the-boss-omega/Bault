@@ -1,6 +1,9 @@
 import { createRequire } from 'node:module';
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, signIn, intakeFor, fundWallet, type Client } from '../../tests/integration/helpers/http';
+import { closeDb, sql } from '../../tests/integration/helpers/db';
+
+afterAll(closeDb);
 
 async function listing(description: string, askingPrice: number) {
   const operator = await signIn(SEED.operator);
@@ -202,9 +205,12 @@ describe('a counter-offer is addressed to the other side', () => {
   }
 
   const counteredOn = async (c: Client, listingId: string) =>
-    (
-      (await c.get('/notifications')).body as { eventType: string; channel: string; content: Record<string, unknown> }[]
-    ).filter((n) => n.eventType === 'offer_countered' && n.channel === 'in_app' && n.content.listingId === listingId);
+    sql<{ id: string }>(
+      `SELECT id FROM notification
+        WHERE event_type = 'offer_countered' AND channel = 'in_app'
+          AND content->>'listingId' = $1 AND user_id = $2`,
+      [listingId, (await c.get('/me/profile')).body.id],
+    );
 
   it('tells the buyer about the seller’s counter, and the seller about the buyer’s', async () => {
     const { seller, listing: l } = await listing('N8: who hears about a counter', 100_00);

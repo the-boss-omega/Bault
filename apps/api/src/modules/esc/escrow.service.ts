@@ -7,7 +7,6 @@ import { ErrorCode } from '../../shared/errors/error-codes';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { CustodyService } from '../cst/custody.service';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
-import { PricingService } from '../prc/pricing.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { charge } from '../pay/pay.schema';
 import { userAccount } from '../acc/acc.schema';
@@ -15,7 +14,6 @@ import { item } from '../cst/cst.schema';
 import { shipment } from '../shp/shp.schema';
 import { escrowDeal, escrowEvent } from './escrow.schema';
 import {
-  ESCROW_FEE_ACTION,
   ESCROW_FEE_BPS,
   ESCROW_MINIMUM_FEE_MINOR,
   ESCROW_MINIMUM_VALUE_MINOR,
@@ -26,6 +24,60 @@ import { formatMinor } from '../../shared/money';
 import { MembershipService } from '../mem/membership.service';
 
 type Deal = typeof escrowDeal.$inferSelect;
+
+function dealSides(deal: Deal): { buyerId: string | null; sellerId: string | null } {
+  if (deal.raiserRole === 'buyer') {
+    return { buyerId: deal.raisedBy, sellerId: deal.counterpartyUserId };
+  }
+  return { buyerId: deal.counterpartyUserId, sellerId: deal.raisedBy };
+}
+
+export function collectorDealView(deal: Deal, userId: string) {
+  const { buyerId } = dealSides(deal);
+  return {
+    id: deal.id,
+    code: deal.code,
+    raiserRole: deal.raiserRole,
+    myRole: buyerId === userId ? ('buyer' as const) : ('seller' as const),
+    raisedByMe: deal.raisedBy === userId,
+    counterpartyIsMember: deal.counterpartyUserId !== null,
+    counterpartyName: deal.counterpartyName,
+    counterpartyEmail: deal.counterpartyEmail,
+    description: deal.description,
+    valueMinor: deal.valueMinor,
+    currency: deal.currency,
+    feeMinor: deal.feeMinor,
+    status: deal.status,
+    settlement: deal.settlement,
+    fundingSource: deal.fundingSource,
+    fundedAt: deal.fundedAt,
+    fundingReference: deal.fundingReference,
+    itemReceivedAt: deal.itemReceivedAt,
+    inspectedAt: deal.inspectedAt,
+    inspectionMatches: deal.inspectionMatches,
+    inspectionNotes: deal.inspectionNotes,
+    buyerReleasedAt: deal.buyerReleasedAt,
+    sellerReleasedAt: deal.sellerReleasedAt,
+    settledAt: deal.settledAt,
+    returnedAt: deal.returnedAt,
+    cancelledAt: deal.cancelledAt,
+    closeReason: deal.closeReason,
+    createdAt: deal.createdAt,
+    updatedAt: deal.updatedAt,
+  };
+}
+
+function collectorDealEventView(event: typeof escrowEvent.$inferSelect, deal: Deal) {
+  const { buyerId, sellerId } = dealSides(deal);
+  return {
+    eventType: event.eventType,
+    fromStatus: event.fromStatus,
+    toStatus: event.toStatus,
+    occurredAt: event.occurredAt,
+    notes: event.notes,
+    byStaff: event.actorId !== null && event.actorId !== buyerId && event.actorId !== sellerId,
+  };
+}
 
 export interface EscrowActor {
   id: string;
@@ -42,18 +94,15 @@ export class EscrowService {
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly custody: CustodyService,
     private readonly ledger: LedgerService,
-    private readonly pricing: PricingService,
     private readonly outbox: OutboxService,
     private readonly memberships: MembershipService,
   ) {}
 
-  async terms() {
-    const rule = await this.pricing.ruleInForce(ESCROW_FEE_ACTION);
+  terms() {
     return {
       feeBps: ESCROW_FEE_BPS,
       minimumFeeMinor: ESCROW_MINIMUM_FEE_MINOR,
       minimumValueMinor: ESCROW_MINIMUM_VALUE_MINOR,
-      configuredBps: rule?.model === 'percentage' ? rule.value : null,
     };
   }
 
@@ -83,10 +132,7 @@ export class EscrowService {
   }
 
   private sides(deal: Deal): { buyerId: string | null; sellerId: string | null } {
-    if (deal.raiserRole === 'buyer') {
-      return { buyerId: deal.raisedBy, sellerId: deal.counterpartyUserId };
-    }
-    return { buyerId: deal.counterpartyUserId, sellerId: deal.raisedBy };
+    return dealSides(deal);
   }
 
   private async load(dealId: string, tx?: Database): Promise<Deal> {
@@ -687,11 +733,12 @@ export class EscrowService {
   }
 
   async listMine(userId: string) {
-    return this.db
+    const rows = await this.db
       .select()
       .from(escrowDeal)
       .where(or(eq(escrowDeal.raisedBy, userId), eq(escrowDeal.counterpartyUserId, userId)))
       .orderBy(desc(escrowDeal.createdAt));
+    return rows.map((deal) => collectorDealView(deal, userId));
   }
 
   async queue() {
@@ -713,13 +760,16 @@ export class EscrowService {
       .from(escrowEvent)
       .where(eq(escrowEvent.dealId, dealId))
       .orderBy(desc(escrowEvent.occurredAt));
+    if (!isStaff(actor)) {
+      return { deal: collectorDealView(deal, actor.id), events: events.map((e) => collectorDealEventView(e, deal)) };
+    }
     const { buyerId, sellerId } = this.sides(deal);
     return { deal, events, buyerId, sellerId };
   }
 
   async heldFor(userId: string) {
     const rows = await this.db
-      .select({ valueMinor: escrowDeal.valueMinor, code: escrowDeal.code, id: escrowDeal.id })
+      .select({ valueMinor: escrowDeal.valueMinor })
       .from(escrowDeal)
       .where(
         and(
@@ -731,9 +781,6 @@ export class EscrowService {
           ),
         ),
       );
-    return {
-      heldMinor: rows.reduce((sum, r) => sum + r.valueMinor, 0),
-      deals: rows.map((r) => ({ id: r.id, code: r.code, amountMinor: r.valueMinor })),
-    };
+    return { heldMinor: rows.reduce((sum, r) => sum + r.valueMinor, 0) };
   }
 }

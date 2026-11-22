@@ -31,7 +31,7 @@ import {
 } from '../../../shared/ui/primitives';
 import { CountUp } from '../../../shared/ui/CountUp';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import { serviceLabel, type QuotedRate } from '../../../shared/carriers';
+import { serviceLabel, shipmentServiceLabel, type QuotedRate } from '../../../shared/carriers';
 import { ShipmentComposer } from './ShipmentComposer';
 import { SharedParcelsTab } from './SharedParcelsTab';
 import { ShowPickupPanel, WhiteGlovePanel, WhiteGloveQuotes } from './HumanFulfilmentPanels';
@@ -435,7 +435,6 @@ function TrackingTab({
               <thead>
                 <tr>
                   <th scope="col">{t('ss.tracking.col.recipient')}</th>
-                  <th scope="col">{t('ss.tracking.col.username')}</th>
                   <th scope="col">{t('ss.tracking.col.created')}</th>
                   <th scope="col">{t('ss.tracking.col.carrier')}</th>
                   <th scope="col">{t('ss.tracking.col.trackingNumber')}</th>
@@ -460,22 +459,18 @@ function TrackingTab({
                     }}
                   >
                     <td data-label={t('ss.tracking.col.recipient')} className="dt-primary">
-                      {shipment.recipientName || shipment.customerName || '—'}
+                      {shipment.recipientName || '—'}
                       {shipment.code && (
                         <span className="dt-sub" dir="ltr">
                           {shipment.code}
                         </span>
                       )}
                     </td>
-                    <td data-label={t('ss.tracking.col.username')}>
-                      {shipment.username ? <code dir="ltr">{shipment.username}</code> : '—'}
-                    </td>
                     <td data-label={t('ss.tracking.col.created')}>
                       <span className="date">{formatDate(shipment.createdAt, locale)}</span>
                     </td>
                     <td data-label={t('ss.tracking.col.carrier')}>
-                      {shipment.carrier ?? '—'}
-                      {shipment.serviceLevel && <span className="dt-sub">{shipment.serviceLevel}</span>}
+                      {shipment.carrier ? shipmentServiceLabel(t, shipment) : '—'}
                     </td>
                     <td data-label={t('ss.tracking.col.trackingNumber')}>
                       {shipment.trackingNumber ? (
@@ -604,10 +599,7 @@ export function ShipmentDrawer({
           </StatusBadge>
         </DetailRow>
         <DetailRow label={t('ss.tracking.col.recipient')}>
-          {shipment.recipientName || shipment.customerName || '—'}
-        </DetailRow>
-        <DetailRow label={t('ss.tracking.col.username')}>
-          {shipment.username ? <code dir="ltr">{shipment.username}</code> : '—'}
+          {shipment.recipientName || '—'}
         </DetailRow>
         <DetailRow label={t('ss.tracking.trackingNumber')}>
           {shipment.trackingNumber ? (
@@ -617,7 +609,7 @@ export function ShipmentDrawer({
           )}
         </DetailRow>
         <DetailRow label={t('ss.tracking.carrier')}>
-          {shipment.carrier ? (shipment.carrier + ' · ' + (shipment.serviceLevel ?? '')).trim() : '—'}
+          {shipment.carrier ? shipmentServiceLabel(t, shipment) : '—'}
         </DetailRow>
         <DetailRow label={t('ss.tracking.col.eta')}>
           {shipment.estimatedDeliveryAt ? (
@@ -783,7 +775,7 @@ export function RechooseService({
     <div className="stack stack--tight stack-top">
       <p className="field-hint">{t('ship.labelRefused')}</p>
       {shipment.labelRefused?.reason && (
-        <p className="hint">{t('ship.labelRefusedReason', { reason: shipment.labelRefused.reason })}</p>
+        <p className="hint">{shipment.labelRefused.reason}</p>
       )}
       {eligible.map((r) => {
         const difference = r.totalMinor - paid;
@@ -1049,6 +1041,17 @@ interface Readiness {
   guidance: { universal: string[]; specific: DestinationSpecific | null };
 }
 
+const CUSTOMS_WARNING_KEY: Record<string, MessageKey> = {
+  no_customs_lines: 'customs.warn.no_customs_lines',
+  unvalued_items: 'customs.warn.unvalued_items',
+  estimated_weight: 'customs.warn.estimated_weight',
+};
+
+function customsWarningText(t: TranslateFn, warning: ReadinessWarning): string {
+  const key = CUSTOMS_WARNING_KEY[warning.code];
+  return key ? t(key) : warning.message;
+}
+
 function CustomsReadiness({ shipmentId }: { shipmentId: string }) {
   const { t } = useI18n();
   const [data, setData] = useState<Readiness | null>(null);
@@ -1077,7 +1080,7 @@ function CustomsReadiness({ shipmentId }: { shipmentId: string }) {
             <li key={w.code}>
               <span>
                 <StatusBadge tone="warning">{t('customs.check')}</StatusBadge>{' '}
-                <span className="hint">{w.message}</span>
+                <span className="hint">{customsWarningText(t, w)}</span>
               </span>
             </li>
           ))}

@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn } from './helpers/http';
+import { closeDb, sql } from './helpers/db';
+
+afterAll(async () => {
+  await closeDb();
+});
 
 describe('MKT direct purchase', () => {
   it('purchases atomically: buyer debited, seller credited net fee, ownership moved', async () => {
@@ -26,6 +31,13 @@ describe('MKT direct purchase', () => {
     const admin = await signIn(SEED.admin);
     const txns = (await admin.get('/admin/transactions')).body as { id: string; type: string }[];
     expect(txns.some((t) => t.id === res.body.transactionId && t.type === 'sale')).toBe(true);
+
+    const [sold] = await sql<{ payload: Record<string, unknown> }>(
+      `SELECT payload FROM outbox_message WHERE event_type = 'item_sold' AND aggregate_id = $1`,
+      [listing.id],
+    );
+    expect(sold!.payload).toMatchObject({ itemId: item.id, price: 20000, itemDescription: item.description });
+    expect(sold!.payload.itemDescription).toEqual(expect.any(String));
   });
 
   it('blocks buying your own listing (self-dealing)', async () => {

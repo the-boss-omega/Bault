@@ -17,7 +17,12 @@ import { Public } from '../acc/public.decorator';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
-import { ShipmentService } from './shipment.service';
+import {
+  ShipmentService,
+  collectorQuoteView,
+  collectorRateView,
+  collectorShipmentRowView,
+} from './shipment.service';
 import { ShipmentEditService } from './shipment-edit.service';
 import { GroupShipmentService } from './group-shipment.service';
 import { CustomsService } from './customs.service';
@@ -159,13 +164,13 @@ export class ShpController {
   }
 
   @Post('quote')
-  quote(@CurrentUser() user: AuthUser, @Body() dto: CreateShipmentDto) {
-    return this.shipments.quote(user.id, dto);
+  async quote(@CurrentUser() user: AuthUser, @Body() dto: CreateShipmentDto) {
+    return collectorQuoteView(await this.shipments.quote(user.id, dto));
   }
 
   @Post('shipments')
-  create(@CurrentUser() user: AuthUser, @Body() dto: CreateShipmentDto) {
-    return this.shipments.create(user.id, dto);
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateShipmentDto) {
+    return collectorShipmentRowView(await this.shipments.create(user.id, dto));
   }
 
   @Get('shipments')
@@ -214,8 +219,8 @@ export class ShpController {
   }
 
   @Post('white-glove')
-  requestHandDelivery(@CurrentUser() user: AuthUser, @Body() dto: HandDeliveryDto) {
-    return this.human.requestHandDelivery(user.id, dto);
+  async requestHandDelivery(@CurrentUser() user: AuthUser, @Body() dto: HandDeliveryDto) {
+    return collectorShipmentRowView(await this.human.requestHandDelivery(user.id, dto));
   }
 
   @Roles('warehouse_operator', 'admin')
@@ -231,12 +236,12 @@ export class ShpController {
 
   @Get('pickup/shows')
   pickupShows() {
-    return this.human.pickupShows();
+    return this.human.collectorPickupShows();
   }
 
   @Post('pickup')
-  requestPickup(@CurrentUser() user: AuthUser, @Body() dto: PickupDto) {
-    return this.human.requestPickup(user.id, dto);
+  async requestPickup(@CurrentUser() user: AuthUser, @Body() dto: PickupDto) {
+    return collectorShipmentRowView(await this.human.requestPickup(user.id, dto));
   }
 
   @Get('direct/terms')
@@ -259,8 +264,10 @@ export class ShpController {
   }
 
   @Get('shipments/:id/rates')
-  rates(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.shipments.rates(id, user);
+  async rates(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    const rates = await this.shipments.rates(id, user);
+    const staff = user.role === 'warehouse_operator' || user.role === 'admin';
+    return staff ? rates : rates.map(collectorRateView);
   }
 
   @Post('shipments/:id/select-rate')

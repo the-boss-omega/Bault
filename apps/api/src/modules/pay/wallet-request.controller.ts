@@ -17,7 +17,7 @@ import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { IsObjectKey } from '../../shared/object-key';
-import { WalletRequestService } from './wallet-request.service';
+import { WalletRequestService, collectorWalletRequestView } from './wallet-request.service';
 import {
   FUNDING_SOURCES,
   MAX_NOTE_LENGTH,
@@ -79,8 +79,8 @@ export class WalletRequestController {
   constructor(private readonly requests: WalletRequestService) {}
 
   @Post('finance/wallet-requests')
-  submit(@CurrentUser() user: AuthUser, @Body() dto: SubmitWalletRequestDto) {
-    return this.requests.submit(user.id, {
+  async submit(@CurrentUser() user: AuthUser, @Body() dto: SubmitWalletRequestDto) {
+    const created = await this.requests.submit(user.id, {
       type: dto.type,
       amountMinor: dto.amountMinor,
       currency: dto.currency ?? 'USD',
@@ -91,6 +91,7 @@ export class WalletRequestController {
       documentKey: dto.documentKey ?? null,
       notes: dto.notes ?? null,
     });
+    return collectorWalletRequestView(created);
   }
 
   @Get('finance/wallet-requests')
@@ -100,12 +101,12 @@ export class WalletRequestController {
 
   @Get('finance/wallet-requests/:id')
   detail(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.requests.detail(id, user);
+    return this.requests.collectorDetail(id, user.id);
   }
 
   @Post('finance/wallet-requests/:id/cancel')
-  cancel(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CancelDto) {
-    return this.requests.cancel(id, user, dto.reason);
+  async cancel(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CancelDto) {
+    return collectorWalletRequestView(await this.requests.cancel(id, user, dto.reason));
   }
 
   @Roles('admin')

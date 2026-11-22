@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { renderEmail } from '@bault/adapters';
+import { notificationMessage } from '../../apps/worker/src/jobs/notification-message';
 
 const LINK = 'https://app.example.test/#/verify-email?token=abc123';
 
@@ -100,5 +101,39 @@ describe('the two-factor code mail', () => {
   it('escapes what it is given', () => {
     const { html } = renderEmail('mfa_email_code', { code: '<b>1</b>', purpose: 'sign_in', minutes: '10' });
     expect(html).not.toContain('<b>1</b>');
+  });
+
+  it('names Card Embassy, not the internal name, in both footers', () => {
+    for (const purpose of ['sign_in', 'settings']) {
+      const { html, text } = renderEmail('mfa_email_code', { code: '204816', purpose, minutes: '10' });
+      expect(text).toMatch(/Card Embassy never asks/);
+      expect(`${html}${text}`).not.toMatch(/\bBault\b/);
+    }
+  });
+});
+
+describe('a template the adapter does not know', () => {
+  it('is refused rather than sent as a list of its variables', () => {
+    expect(() => renderEmail('something_new', { userId: 'u1', token: 'secret' })).toThrow(/no email template named something_new/);
+  });
+});
+
+describe('the update emails carry the sentence the in-app row shows', () => {
+  const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|3fa85f64/i;
+
+  it('says a buyout quote, a custom request and a wallet request in sentences, with no id', () => {
+    const cases: [string, Record<string, unknown>, RegExp][] = [
+      ['buyout_quoted', { userId: 'u1', requestCode: 'SR-7K2M9QRS', amount: 12_000 }, /offers \$120\.00 to buy your card outright on request SR-7K2M9QRS/],
+      ['custom_request_quoted', { userId: 'u1', requestCode: 'SR-AAAA1111', amount: 4_500 }, /custom request SR-AAAA1111 is priced at \$45\.00/],
+      ['wallet_request_completed', { userId: 'u1', requestId: '3fa85f64-5717-4562-b3fc-2c963f66afa6', code: 'WR-AAAA1111', type: 'cash_in', amountMinor: 5_000 }, /Cash-in request WR-AAAA1111 has been settled: \$50\.00 is in your wallet/],
+    ];
+    for (const [event, payload, sentence] of cases) {
+      const message = notificationMessage(event, payload);
+      expect(message).toMatch(sentence);
+      const { html, text } = renderEmail('notification_event', { link: LINK, heading: 'Update', message });
+      expect(text).toContain(message);
+      expect(`${html}${text}`).not.toMatch(UUID);
+      expect(text).not.toMatch(/userId|requestId|: u1/);
+    }
   });
 });

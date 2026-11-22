@@ -8,7 +8,7 @@ About 1 minute. It builds on T9.1 and T2.2.
 
 These files describe the buildings that receive parcels. A `facility` has a `role`. A `primary` facility stores goods. A `forwarding` facility stores nothing and sends each parcel on to the facility in `forwardsToFacilityId`. `salesTaxBps` is shown to customers as guidance, and no charge reads it. A facility is closed by setting `active` to false, and it is never deleted.
 
-`FacilityService.inboundAddressesFor` builds the address a collector gives to a seller. Its `careOf` line is `Card Embassy C/O <username>`, and the username is read from the collector's account, never from the request. In production the list leaves out any facility whose `line1` still holds the seed placeholder, which `isPlaceholder` detects.
+`FacilityService.inboundAddressesFor` builds the address a collector gives to a seller. Its `careOf` line is `Card Embassy C/O <username>`, and the username is read from the collector's account, never from the request. In production the list leaves out any facility whose `line1` still holds the seed placeholder, which `isPlaceholder` detects. The address a collector receives leaves out the facility id and phone, and keeps `code`, which the parcel form posts back.
 
 #### `apps/api/src/modules/inv/parcel.schema.ts`
 
@@ -34,7 +34,7 @@ When the tracking number matches an `expected` registration, `receiveIn` locks t
 
 About 1 minute. It builds on T6.2 and T6.3.
 
-This file holds the parcel routes. Customer routes sit under `me/` and warehouse routes under `parcels`. `detail` and `photos` go through `detailFor`, which answers 404 for another owner's parcel unless the caller is staff. `@Roles('warehouse_operator', 'admin')` sits on each warehouse method, not on the class. So a new warehouse route that lacks it is open to every signed-in account. The `workflow` route lacks it on purpose. It returns only totals and the oldest wait, and the collector's processing tab shows them.
+This file holds the parcel routes. Customer routes sit under `me/` and warehouse routes under `parcels`. `detail` and `photos` go through `detailFor`, which answers 404 for another owner's parcel unless the caller is staff. `@Roles('warehouse_operator', 'admin')` sits on each warehouse method, not on the class. So a new warehouse route that lacks it is open to every signed-in account. The `workflow` route lacks it on purpose. It returns only totals and the oldest wait, and the collector's processing tab shows them. A collector receives it without the `unclaimed` count, through `collectorWorkflow`, and `listMine` leaves out the facility code.
 
 #### `apps/api/src/modules/cst/cst.schema.ts`
 
@@ -100,7 +100,7 @@ About 1.5 minutes. It builds on T9.3 and T9.6.
 
 This file is the staff view of stock, plus bin management. `report` and `reportPdf` count items by a `Cut`, which is `shelf`, `owner`, `condition` or `item_class`. The count includes every item ever received, even those that left, and a split lot as well as its cards.
 
-`itemTimeline` builds one item's history. It merges custody events, corrections, bin moves, sales and other transactions, shipments, offers and disputes into `TimelineEvent` rows, each a `kind` and its `params`. `binLabels` turns every shelf id into a `BinLabel` of barcode and zone in one query, and amounts stay in minor units. The API sends no sentences and no ids, because the web app's `timelineDetail` words each entry.
+`itemTimeline` builds one item's history. It merges custody events, corrections, bin moves, sales and other transactions, shipments, offers and disputes into `TimelineEvent` rows, each a `kind` and its `params`. `binLabels` turns every shelf id into a `BinLabel` of barcode and zone in one query, and amounts stay in minor units. The API sends no sentences and no ids, because the web app's `timelineDetail` words each entry. A collector reads `collectorTimeline`, a reduced view that keeps to the periods the caller held the item, as `holdingWindows` in `cst/holding.ts` works them out, leaves out corrections, bin moves, relocations and shelf labels, and keeps only the caller's own transactions and shipments, the offers on their own listings and the bare status of disputes on their own sales.
 
 `createBin` mints the serial with `makeBinSerial`, in the given facility or else the first `primary` one. `setBinActive` retires a shelf, and bins are never deleted. `reconcile` returns only the total item count and a timestamp. `renderReportPdf` in `report-pdf.ts` writes the PDF with no library. Its `escapeText` keeps only printable ASCII and prints any other character as a question mark. That includes the dash in the report's own title, so every PDF heading shows a question mark.
 
@@ -142,7 +142,7 @@ This file is the owner's view of their own goods. `listOwned` takes a `VaultScop
 
 `listHistory` shows owned items in a `TERMINAL` state, plus items the owner once held. A sale moves `owner_id` to the buyer, so `departedFrom` recovers the seller's past items from `custody_event`. A history row shows no bin and no current owner, and `hasHeld` still lets a past owner open the `timeline`. Each row's `departure` says why the card left. `departureOf` turns the custody event into a kind such as `shipped`, `donated`, `sold`, or `escrow` with the deal code, so no custody note reaches the screen. `counts` caps each badge at 200.
 
-`storageFor` shows one item's storage costs. It counts the past from `charge` rows and computes only the next charge date, `nextChargeAt`, using `storageCover` and `coveredByMembership`. `coveredByMembership` is a SQL copy of the worker's `COVERED`, and it needs a cycle that is running now. The sweep renews memberships before it bills. So between a cycle's end and its renewal, the vault shows a charge the sweep will not make. `itemCard` returns signed image URLs, custody history and the owner's open service requests.
+`storageFor` shows one item's storage costs. It counts the past from `charge` rows and computes only the next charge date, `nextChargeAt`, using `storageCover` and `coveredByMembership`. `coveredByMembership` is a SQL copy of the worker's `COVERED`, and it needs a cycle that is running now. The sweep renews memberships before it bills. So between a cycle's end and its renewal, the vault shows a charge the sweep will not make. `itemCard` returns a reduced view for the owner: the item without owner, bin, source or weight, signed image URLs without storage keys or hashes, only the custody events of the caller's own holding with their type, time and states, and the owner's open service requests.
 
 #### `apps/api/src/modules/vlt/break-even.service.ts`
 

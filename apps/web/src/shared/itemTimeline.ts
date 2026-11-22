@@ -1,27 +1,15 @@
 import { hasMessage, type MessageKey, type TranslateFn } from './i18n';
-import { itemClassLabel } from './itemClasses';
 import { offerStatusLabel } from './market';
 import { formatUsd } from './money';
 import { shipmentStatusLabel } from './shipments';
 import type { StatusTone } from './ui/primitives';
 
-export interface BinLabel {
-  barcode: string;
-  zone: string;
-}
-
 export interface TimelineParams {
-  fromBin?: BinLabel | null;
-  toBin?: BinLabel | null;
   fromState?: string | null;
   toState?: string | null;
-  field?: string;
-  from?: string | null;
-  to?: string | null;
   amountMinor?: number | null;
   code?: string | null;
   status?: string;
-  ruling?: string | null;
 }
 
 export interface TimelineEvent {
@@ -83,51 +71,29 @@ export function timelineKindLabel(t: TranslateFn, kind: string): string {
 
 const SALE_KINDS = new Set(['sale', 'swap', 'transfer', 'consignment']);
 
-const CORRECTABLE_FIELD: Record<string, MessageKey> = {
-  description: 'timeline.field.description',
-  conditionGrade: 'timeline.field.conditionGrade',
-  typeClass: 'timeline.field.typeClass',
-};
+const WAREHOUSE_KINDS = new Set(['correction', 'bin_transfer', 'relocate']);
+
+export function collectorTimeline(events: readonly TimelineEvent[]): TimelineEvent[] {
+  return events.filter((e) => !WAREHOUSE_KINDS.has(e.kind));
+}
 
 const DISPUTE_STATUS: Record<string, MessageKey> = {
-  open: 'admin.disputes.status.open',
-  investigating: 'admin.disputes.status.investigating',
-  ruled: 'admin.disputes.status.ruled',
-  closed: 'admin.disputes.status.closed',
+  open: 'timeline.dispute.open',
+  investigating: 'timeline.dispute.investigating',
+  ruled: 'timeline.dispute.ruled',
+  closed: 'timeline.dispute.closed',
 };
 
 function isolate(value: string): string {
   return `⁨${value}⁩`;
 }
 
-function binText(t: TranslateFn, label: BinLabel | null | undefined, missing: MessageKey): string {
-  return label ? isolate(`${label.barcode} · ${label.zone}`) : t(missing);
-}
-
-function fieldValue(t: TranslateFn, field: string, value: string | null | undefined): string {
-  if (!value) return '—';
-  return isolate(field === 'typeClass' ? itemClassLabel(t, value) : value);
-}
-
 export function timelineDetail(t: TranslateFn, event: TimelineEvent): string {
   const p = event.params ?? {};
   const change = (from: string, to: string) => t('timeline.detail.change', { from, to });
 
-  if ('toState' in p && !p.fromState && !p.fromBin) {
-    return p.toBin ? t('timeline.detail.shelvedIn', { bin: binText(t, p.toBin, 'vault.noBin') }) : '';
-  }
-  if ('fromBin' in p || 'toBin' in p) {
-    return change(binText(t, p.fromBin, 'timeline.detail.intake'), binText(t, p.toBin, 'vault.noBin'));
-  }
   if (p.fromState && p.toState) {
     return change(stateLabel(t, p.fromState), stateLabel(t, p.toState));
-  }
-  if (event.kind === 'correction' && p.field) {
-    const key = CORRECTABLE_FIELD[p.field] ?? 'timeline.field.other';
-    return t('timeline.detail.field', {
-      field: t(key),
-      change: change(fieldValue(t, p.field, p.from), fieldValue(t, p.field, p.to)),
-    });
   }
   if (SALE_KINDS.has(event.kind)) {
     return p.amountMinor != null ? isolate(formatUsd(p.amountMinor)) : '';
@@ -142,8 +108,7 @@ export function timelineDetail(t: TranslateFn, event: TimelineEvent): string {
   }
   if (event.kind === 'dispute' && p.status) {
     const key = DISPUTE_STATUS[p.status];
-    const status = key ? t(key) : '';
-    return p.ruling ? [status, isolate(p.ruling)].filter(Boolean).join(' · ') : status;
+    return key ? t(key) : '';
   }
   return '';
 }

@@ -40,7 +40,7 @@ function marketApi(me: string) {
     if (path === '/me/profile') return Promise.resolve({ id: `u-${me}`, username: me });
     if (path === '/marketplace/sellers/golden') return Promise.resolve({ username: 'golden', listings: STORE });
     if (path === '/marketplace/collectors/golden') {
-      return Promise.resolve({ id: 'u-golden', username: 'golden', firstName: null, lastName: null });
+      return Promise.resolve({ username: 'golden' });
     }
     return Promise.resolve([]);
   };

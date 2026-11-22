@@ -25,11 +25,9 @@ interface Terms {
 interface Detail {
   deal: EscrowDeal;
   events: EscrowEvent[];
-  buyerId: string | null;
-  sellerId: string | null;
 }
 
-export function EscrowTab({ meId }: { meId: string | null }) {
+export function EscrowTab() {
   const { t, locale } = useI18n();
   const [deals, setDeals] = useState<EscrowDeal[] | null>(null);
   const [terms, setTerms] = useState<Terms | null>(null);
@@ -291,41 +289,36 @@ export function EscrowTab({ meId }: { meId: string | null }) {
                 </tr>
               </thead>
               <tbody>
-                {deals.map((d) => {
-                  const viewerIsBuyer =
-                    (d.raiserRole === 'buyer' && d.raisedBy === meId) ||
-                    (d.raiserRole === 'seller' && d.counterpartyUserId === meId);
-                  return (
-                    <tr
-                      key={d.id}
-                      className="is-clickable"
-                      tabIndex={0}
-                      onClick={() => setOpenId(d.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setOpenId(d.id);
-                        }
-                      }}
-                    >
-                      <td data-label={t('esc.col.deal')} className="dt-primary">
-                        <code dir="ltr">{d.code}</code>
-                      </td>
-                      <td data-label={t('esc.col.what')}>{d.description}</td>
-                      <td data-label={t('esc.col.value')} className="td-end num">
-                        <Amount>{formatUsd(d.valueMinor)}</Amount>
-                      </td>
-                      <td data-label={t('esc.col.status')}>
-                        <StatusBadge tone={ESCROW_TONE[d.status] ?? 'neutral'}>
-                          {escrowStatusLabel(t, d.status)}
-                        </StatusBadge>
-                      </td>
-                      <td data-label={t('esc.col.next')} className="hint">
-                        {nextStep(t, d, viewerIsBuyer)}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {deals.map((d) => (
+                  <tr
+                    key={d.id}
+                    className="is-clickable"
+                    tabIndex={0}
+                    onClick={() => setOpenId(d.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setOpenId(d.id);
+                      }
+                    }}
+                  >
+                    <td data-label={t('esc.col.deal')} className="dt-primary">
+                      <code dir="ltr">{d.code}</code>
+                    </td>
+                    <td data-label={t('esc.col.what')}>{d.description}</td>
+                    <td data-label={t('esc.col.value')} className="td-end num">
+                      <Amount>{formatUsd(d.valueMinor)}</Amount>
+                    </td>
+                    <td data-label={t('esc.col.status')}>
+                      <StatusBadge tone={ESCROW_TONE[d.status] ?? 'neutral'}>
+                        {escrowStatusLabel(t, d.status)}
+                      </StatusBadge>
+                    </td>
+                    <td data-label={t('esc.col.next')} className="hint">
+                      {nextStep(t, d)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -335,7 +328,6 @@ export function EscrowTab({ meId }: { meId: string | null }) {
       {openId && (
         <DealDrawer
           dealId={openId}
-          meId={meId}
           locale={locale}
           onClose={() => setOpenId(null)}
           onChanged={() => void load()}
@@ -349,7 +341,6 @@ export function EscrowTab({ meId }: { meId: string | null }) {
 
 function DealDrawer({
   dealId,
-  meId,
   locale,
   onClose,
   onChanged,
@@ -357,7 +348,6 @@ function DealDrawer({
   onError,
 }: {
   dealId: string;
-  meId: string | null;
   locale: string;
   onClose: () => void;
   onChanged: () => void;
@@ -397,9 +387,9 @@ function DealDrawer({
   }
 
   if (!detail) return null;
-  const { deal, events, buyerId, sellerId } = detail;
-  const iAmBuyer = meId !== null && buyerId === meId;
-  const iAmSeller = meId !== null && sellerId === meId;
+  const { deal, events } = detail;
+  const iAmBuyer = deal.myRole === 'buyer';
+  const iAmSeller = deal.myRole === 'seller';
   const mismatch = deal.inspectionMatches === 'no';
   const myRelease = iAmBuyer ? deal.buyerReleasedAt : deal.sellerReleasedAt;
 
@@ -430,7 +420,7 @@ function DealDrawer({
         <div className="detail-row">
           <dt className="detail-label">{t('esc.otherSide')}</dt>
           <dd className="detail-value">
-            {deal.counterpartyUserId ? (
+            {deal.counterpartyIsMember ? (
               t('esc.otherAccount')
             ) : (
               <>
@@ -465,7 +455,7 @@ function DealDrawer({
         </p>
       )}
 
-      {deal.status === 'proposed' && deal.counterpartyUserId === meId && (
+      {deal.status === 'proposed' && !deal.raisedByMe && deal.counterpartyIsMember && (
         <div className="row stack-top">
           <Button
             variant="primary"
@@ -536,16 +526,11 @@ function DealDrawer({
 
       <h3 className="drawer-heading">{t('esc.trail')}</h3>
       <ul className="timeline timeline--drawer">
-        {events.map((e) => (
-          <li key={e.id}>
+        {events.map((e, i) => (
+          <li key={`${e.occurredAt}-${e.eventType}-${i}`}>
             <span className="hint date">{formatDate(e.occurredAt, locale)}</span>
             <div className="register-text">
               <span className="register-kind">{escrowEventLabel(t, e, deal)}</span>
-              {e.onBehalfOf && (
-                <StatusBadge tone="neutral" plain>
-                  {t('esc.onBehalf')}
-                </StatusBadge>
-              )}
               {e.notes && (
                 <p className="register-entry">
                   <bdi dir="auto">{e.notes}</bdi>

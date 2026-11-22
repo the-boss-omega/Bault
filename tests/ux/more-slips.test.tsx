@@ -103,7 +103,7 @@ describe('opening an escrow deal, as a slip', () => {
     const user = userEvent.setup();
     const view = render(
       <I18nProvider>
-        <EscrowTab meId="u1" />
+        <EscrowTab />
       </I18nProvider>,
     );
     await screen.findByLabelText('Their username');
@@ -191,6 +191,13 @@ describe('a shared parcel, opened, joined and kept', () => {
       groupId: null,
       destinationAddress: 'Dana Levi, 12 Vine St, Trenton, NJ 08608, US',
     },
+    {
+      id: 's9',
+      code: 'SHP-QYCSKRAX',
+      status: 'requested',
+      groupId: 'g1',
+      destinationAddress: 'Dana Levi, 12 Vine St, Trenton, NJ 08608, US',
+    },
   ];
   const GROUP = {
     id: 'g1',
@@ -207,7 +214,6 @@ describe('a shared parcel, opened, joined and kept', () => {
         shipmentId: 's9',
         shipmentCode: 'SHP-QYCSKRAX',
         username: 'red',
-        name: 'Red Ashwood',
         itemCount: 1,
         weightGrams: 5,
         isPayer: true,
@@ -218,11 +224,10 @@ describe('a shared parcel, opened, joined and kept', () => {
         shipmentId: 's10',
         shipmentCode: 'SHP-4ZFYRWGF',
         username: 'golden',
-        name: 'Golden Marsh',
         itemCount: 1,
-        weightGrams: 5,
+        weightGrams: 7,
         isPayer: false,
-        insuredValueMinor: 0,
+        insuredValueMinor: 45_000,
         status: 'requested',
       },
     ],
@@ -307,11 +312,15 @@ describe('a shared parcel, opened, joined and kept', () => {
     expect(within(lineOf(tag, 'Notes')).getByText('Table 14, the blue badge')).toBeInTheDocument();
     const members = within(tag).getAllByRole('listitem');
     expect(members).toHaveLength(2);
-    expect(members[0]).toHaveTextContent('Red Ashwood');
+    expect(members[0]).toHaveTextContent('red');
+    expect(members[0]).toHaveTextContent('SHP-QYCSKRAX');
+    expect(members[0]).toHaveTextContent(/1 items · [\u2066]?5 g/);
     expect(within(members[0]!).getByText('Payer')).toBeInTheDocument();
-    expect(members[1]).toHaveTextContent('Golden Marsh');
-    expect(members[1]).toHaveTextContent('SHP-4ZFYRWGF');
+    expect(members[1]).toHaveTextContent('golden');
+    expect(members[1]).toHaveTextContent('1 items');
     expect(tag).toHaveTextContent(/2 collectors · 2 items · [\u2066]?10 g[\u2069]?/);
+    expect(members[1]).not.toHaveTextContent('SHP-4ZFYRWGF');
+    expect(members[1]).not.toHaveTextContent(/7 g|\$450/);
     // Its two ways on are under it, not on it.
     expect(within(tag).queryByRole('button')).toBeNull();
     expect(screen.getByRole('button', { name: 'Close to new members' })).toBeEnabled();
@@ -419,7 +428,7 @@ describe.skipIf(!browser)('the three, in a browser', () => {
     });
     render(
       <I18nProvider>
-        <EscrowTab meId="u1" />
+        <EscrowTab />
       </I18nProvider>,
     );
     await screen.findByLabelText('Their username');

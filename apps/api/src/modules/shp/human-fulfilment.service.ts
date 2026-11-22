@@ -282,6 +282,22 @@ export class HumanFulfilmentService {
     );
   }
 
+  async collectorPickupShows() {
+    const shows = await this.pickupShows();
+    return shows.map((show) => ({
+      id: show.id,
+      name: show.name,
+      venue: show.venue,
+      city: show.city,
+      startsAt: show.startsAt,
+      endsAt: show.endsAt,
+      requestDeadline: show.requestDeadline,
+      feeMinor: show.feeMinor,
+      remaining: show.remaining,
+      open: show.open,
+    }));
+  }
+
   async requestPickup(
     userId: string,
     input: { itemIds: string[]; eventId: string; customerNotes?: string },

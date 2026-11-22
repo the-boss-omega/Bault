@@ -4,7 +4,7 @@ import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, M
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
-import { EscrowService } from './escrow.service';
+import { EscrowService, collectorDealView } from './escrow.service';
 
 class RaiseDealDto {
   @IsIn(['buyer', 'seller']) raiserRole!: 'buyer' | 'seller';
@@ -68,8 +68,8 @@ export class EscController {
   }
 
   @Post()
-  raise(@CurrentUser() user: AuthUser, @Body() dto: RaiseDealDto) {
-    return this.escrow.raise(user.id, dto);
+  async raise(@CurrentUser() user: AuthUser, @Body() dto: RaiseDealDto) {
+    return collectorDealView(await this.escrow.raise(user.id, dto), user.id);
   }
 
   @Get(':id')

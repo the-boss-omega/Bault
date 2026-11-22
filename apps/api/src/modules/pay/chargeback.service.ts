@@ -14,6 +14,7 @@ type ChargebackInput = { reason: string; providerCaseRef?: string; chargeFee?: b
 
 type ReversedCredit = {
   kind: 'external_payment' | 'wallet_request';
+  means: 'payment' | 'bank_transfer';
   id: string;
   userId: string;
   amount: number;
@@ -65,6 +66,7 @@ export class ChargebackService {
         operatorId,
         {
           kind: 'external_payment',
+          means: payment.provider === 'bank_transfer' ? 'bank_transfer' : 'payment',
           id: payment.id,
           userId: payment.userId,
           amount: payment.amount,
@@ -142,6 +144,7 @@ export class ChargebackService {
         operatorId,
         {
           kind: 'wallet_request',
+          means: 'bank_transfer',
           id: request.id,
           userId: request.userId,
           amount: credit.amount,
@@ -229,6 +232,7 @@ export class ChargebackService {
         amountMinor: credit.amount,
         feeMinor,
         reason: input.reason.trim(),
+        kind: credit.means,
       },
     });
 
