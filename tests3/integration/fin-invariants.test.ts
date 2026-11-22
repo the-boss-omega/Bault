@@ -241,6 +241,31 @@ describe('separation of duties on wallet requests', () => {
     const afterTwo = await walletAndLedger(collector);
     expect(afterTwo.balance).toBe(afterOne.balance);
   });
+
+  it('lets the administrator who approved a cash-out complete it, since the beta runs with one administrator by decision', async () => {
+    await fundWallet(SEED.collector, 60_00);
+    const collector = await signIn(SEED.collector);
+    const created = await collector.post('/finance/wallet-requests', {
+      type: 'cash_out',
+      amountMinor: 45_00,
+      currency: 'USD',
+      destinationAccount: 'red+one-admin@example.test',
+      beneficiaryName: 'Red Collector',
+      reference: `one-admin-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+    });
+    expect(created.status).toBe(201);
+    const before = await walletAndLedger(collector);
+
+    const admin = await signIn(SEED.admin);
+    expect((await admin.post(`/admin/wallet-requests/${created.body.id}/approve`, {})).status).toBe(201);
+    const completed = await admin.post(`/admin/wallet-requests/${created.body.id}/complete`, {});
+    expect(completed.status).toBe(201);
+    expect(completed.body.status).toBe('completed');
+
+    const after = await walletAndLedger(collector);
+    expect(after.balance).toBe(before.balance - 45_00);
+    expect(after.balance).toBe(after.derived);
+  });
 });
 
 describe('pricing is snapshotted, not looked up later', () => {

@@ -2,7 +2,6 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
-import { BreakEvenService } from './break-even.service';
 import { VaultService, type VaultScope } from './vault.service';
 
 const SCOPES: readonly VaultScope[] = ['active', 'hold', 'history'];
@@ -14,15 +13,7 @@ function toScope(value: string | undefined): VaultScope {
 @ApiTags('VLT')
 @Controller('vault')
 export class VltController {
-  constructor(
-    private readonly vault: VaultService,
-    private readonly breakEven: BreakEvenService,
-  ) {}
-
-  @Get('break-even')
-  breakEvenWatch(@CurrentUser() user: AuthUser) {
-    return this.breakEven.summaryFor(user.id);
-  }
+  constructor(private readonly vault: VaultService) {}
 
   @Get('items')
   list(

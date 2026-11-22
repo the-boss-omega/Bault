@@ -151,6 +151,18 @@
       "description": "Card Embassy commission on an eBay partner consignment sale"
     },
     {
+      "actionType": "consignment_fee:alt",
+      "percent": "1%",
+      "billingTrigger": "per_event",
+      "description": "Card Embassy commission on an Alt consignment sale"
+    },
+    {
+      "actionType": "consignment_fee:fanatics_collect",
+      "percent": "1%",
+      "billingTrigger": "per_event",
+      "description": "Card Embassy commission on a Fanatics Collect consignment sale"
+    },
+    {
       "actionType": "grading_fee:psa_value",
       "fixed": "$25.00",
       "billingTrigger": "per_event",

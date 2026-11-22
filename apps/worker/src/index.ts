@@ -1,5 +1,6 @@
 import PgBoss from 'pg-boss';
 import { loadEnv } from '@bault/config';
+import { flushReportsOnExit, flushWithin } from '@bault/adapters';
 import { createPool } from './db';
 import { runScheduledJob } from './heartbeat';
 import { log } from './log';
@@ -20,6 +21,9 @@ const DRAIN_MS = 30_000;
 async function main(): Promise<void> {
   const env = loadEnv();
   if (initErrorReporting(env)) log.info('error reporting enabled');
+  flushReportsOnExit(process, flushErrorReporting, (what, error) =>
+    log.error(`worker process failed: ${what}`, { error }),
+  );
 
   const pool = createPool(env.DIRECT_DATABASE_URL, env.DATABASE_POOL_MAX);
   const boss = new PgBoss({ connectionString: env.DIRECT_DATABASE_URL });
@@ -43,7 +47,7 @@ async function main(): Promise<void> {
     } catch (err) {
       log.error('closing the database pool failed', { error: err });
     }
-    await flushErrorReporting();
+    await flushWithin(flushErrorReporting);
     log.info('worker stopped', { signal });
     process.exit(0);
   };
@@ -78,6 +82,6 @@ async function main(): Promise<void> {
 
 main().catch(async (err) => {
   log.error('worker failed to start', { error: err });
-  await flushErrorReporting();
+  await flushWithin(flushErrorReporting);
   process.exit(1);
 });

@@ -294,14 +294,19 @@ describe('PAY a pending payout is not a completed one (F029, F040)', () => {
 });
 
 describe('PAY a payout that comes back after it was paid', () => {
-  it('credits the cash-out back once when a paid payout is reversed, however often that is said', async () => {
+  it('credits the cash-out back once, fee included, when a paid payout is reversed, however often that is said', async () => {
     const AMOUNT = 3_200;
+    const month = new Date().toISOString().slice(0, 7);
     const { collector, admin, id } = await approvedCashOut(
       SEED.collector2,
       AMOUNT,
       'golden+payout-pending@example.test',
     );
+    const feesReturned = async () =>
+      ((await admin.get(`/admin/accounting/summary?month=${month}`)).body as { revenue: { cashOutFeesReturnedMinor: number } })
+        .revenue.cashOutFeesReturnedMinor;
     const before = await balanceOf(collector);
+    const returnedBefore = await feesReturned();
     await admin.post(`/admin/wallet-requests/${id}/complete`, {});
     const d = await detail(admin, id);
     const item = { payout_batch_id: d.payout!.externalRef, payout_item: { sender_item_id: d.payout!.providerRef } };
@@ -327,6 +332,15 @@ describe('PAY a payout that comes back after it was paid', () => {
     const reversals = (await ledgerFor(collector, id)).filter((r) => r.type === 'payout_reversal');
     expect(reversals).toHaveLength(1);
     expect(reversals[0]!.amount).toBe(AMOUNT);
+
+    const charged = await sql<{ fee: number }>(
+      `SELECT COALESCE(sum(amount), 0)::int AS fee FROM charge
+        WHERE reference_id = $1 AND pricing_rule_snapshot ->> 'cashOutFee' = 'true'`,
+      [id],
+    );
+    const fee = charged[0]!.fee;
+    expect(fee).toBeGreaterThan(0);
+    expect(await feesReturned()).toBe(returnedBefore + fee);
 
     const audited = await sql<{ n: number }>(
       `SELECT count(*)::int AS n FROM audit_record WHERE action = 'wallet_request.payout_reversed' AND target_id = $1`,

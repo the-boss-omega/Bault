@@ -69,8 +69,13 @@ your password manager).
 
 ## 1. Create everything (Cloud Shell, 20 to 30 minutes, mostly waiting for Cloud SQL)
 
+In the clone commands here and in step 5, replace `<GITHUB_OWNER>/<REPO>` with
+the GitHub repository your images are built from, the way `<prod-project-id>`
+is replaced below; `configure.sh` takes the `ghcr.io` owner from that clone's
+origin.
+
 ```sh
-git clone https://github.com/the-boss-omega/Bault.git && cd Bault
+git clone https://github.com/<GITHUB_OWNER>/<REPO>.git && cd <REPO>
 ssh-keygen -t ed25519 -f ~/.ssh/bault -C bault      # give it a passphrase
 P=<prod-project-id>; B=<backups-project-id>
 infra/gcp/provision.sh --project "$P" --backup-project "$B" --admin-ip 35.235.240.0/20 \
@@ -177,7 +182,7 @@ ssh bault
 On the server:
 
 ```sh
-git clone https://github.com/the-boss-omega/Bault.git /opt/bault
+git clone https://github.com/<GITHUB_OWNER>/<REPO>.git /opt/bault
 cd /opt/bault && git checkout <tag>
 infra/gcp/configure.sh
 ```
@@ -192,12 +197,15 @@ although the proxy needs none. It generates `MFA_ENCRYPTION_KEY`, and asks for:
   in the PayPal app for `https://<host>/api/v1/webhooks/payment`;
 - the EasyPost key, and SMTP (587 or 465, since Compute Engine blocks 25);
 - the bank details, where Enter leaves one out;
+- the support email, phone, hours and team shown on the contact page, and a
+  Sentry DSN, where Enter leaves one out;
 - your age public key.
 
 Secrets are read without echo, and nothing it prints holds one. It ends with a
 check of every value production refuses to start without, and offers to delete
 `~/bault-gcp.env`. Run it again whenever you like: it keeps what is set, and
-`--change smtp` (or `domain`, `paypal`, `checkout`, `easypost`, `bank`, `age`)
+`--change smtp` (or `domain`, `paypal`, `checkout`, `easypost`, `bank`,
+`support`, `sentry`, `age`)
 asks for one group again. `--change checkout` turns on cash-in by PayPal
 checkout (`PAYPAL_CHECKOUT_ENABLED`, off until then): first subscribe the same
 PayPal webhook to `CHECKOUT.ORDER.APPROVED` and to `PAYMENT.CAPTURE.COMPLETED`,
@@ -261,6 +269,9 @@ changes nothing, once an administrator exists.
 
 ## 9. Nightly backup and the watchdog
 
+Set `MAILTO` in `infra/ops/crontab.example` first, as
+[the production README](../production/README.md) section 6 says.
+
 ```sh
 crontab infra/ops/crontab.example      # replaces deploy's crontab
 (set -a && . /etc/bault/backup.env && set +a && ./infra/ops/backup.sh dump)
@@ -286,8 +297,11 @@ a container that exits, never one that hangs, so the watchdog restarts `api` or
 the outbox has not been dispatched for five minutes. It leaves alone a
 container in its first ten minutes, waits 15 minutes between two restarts of
 one service, and after three restarts in six hours it stops and writes that a
-person is needed. It does nothing while `deploy.sh` runs. Everything it does is
-in `/var/log/bault/watchdog.log`.
+person is needed. It does nothing while `deploy.sh` runs. When a nightly dump
+fails, `backup.sh` leaves `BACKUP-FAILED` in `/var/backups/bault`, and the
+watchdog writes `backup: the nightly backup FAILED` with its time once; the
+next good dump removes the marker. Everything it does is in
+`/var/log/bault/watchdog.log`.
 
 ## 10. An alert when the site is down (the console, 5 minutes)
 

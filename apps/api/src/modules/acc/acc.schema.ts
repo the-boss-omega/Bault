@@ -48,7 +48,7 @@ export const verificationTokenType = pgEnum('verification_token_type', [
 
 export const verificationToken = pgTable('verification_token', {
   id: pkId(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   type: verificationTokenType('type').notNull(),
   tokenHash: text('token_hash').notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -58,7 +58,7 @@ export const verificationToken = pgTable('verification_token', {
 
 export const loginSession = pgTable('login_session', {
   id: pkId(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   tokenHash: text('token_hash').notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
@@ -81,7 +81,7 @@ export const loginAttempt = pgTable(
   {
     id: pkId(),
     identifier: text('identifier').notNull(),
-    userId: text('user_id'),
+    userId: uuid('user_id').references(() => userAccount.id, { onDelete: 'restrict' }),
     outcome: loginAttemptOutcome('outcome').notNull(),
     ip: text('ip'),
     userAgent: text('user_agent'),
@@ -99,7 +99,7 @@ export const mfaMethod = pgEnum('mfa_method', ['totp', 'email']);
 export const mfaFactor = pgTable(
   'mfa_factor',
   {
-    userId: text('user_id').notNull(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
     method: mfaMethod('method').notNull().default('totp'),
     secretCiphertext: text('secret_ciphertext'),
     emailAddress: text('email_address'),
@@ -121,7 +121,7 @@ export const mfaEmailCode = pgTable(
   'mfa_email_code',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: text('user_id').notNull(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
     purpose: mfaEmailCodePurpose('purpose').notNull(),
     codeHash: text('code_hash'),
     sentTo: text('sent_to'),
@@ -143,7 +143,7 @@ export const mfaRecoveryCode = pgTable(
   'mfa_recovery_code',
   {
     id: pkId(),
-    userId: text('user_id').notNull(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
     codeHash: text('code_hash').notNull(),
     usedAt: timestamp('used_at', { withTimezone: true }),
     createdAt: createdAt(),
@@ -157,7 +157,7 @@ export const mfaChallenge = pgTable(
   'mfa_challenge',
   {
     id: pkId(),
-    userId: text('user_id').notNull(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
     identifier: text('identifier').notNull(),
     tokenHash: text('token_hash').notNull(),
     failedAttempts: integer('failed_attempts').notNull().default(0),

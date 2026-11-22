@@ -20,6 +20,7 @@ class FakeCarrier implements ShippingAdapter {
   purchases = 0;
   keys: (string | undefined)[] = [];
   signals: (AbortSignal | undefined)[] = [];
+  requests: RateRequest[] = [];
   duringPurchase: () => Promise<void> = async () => {};
 
   constructor(public behaviour: Behaviour = 'sell') {}
@@ -28,8 +29,9 @@ class FakeCarrier implements ShippingAdapter {
     return [];
   }
 
-  async buyLabel(rate: Rate, _req: RateRequest, opts: ShippingCallOptions = {}): Promise<LabelResult> {
+  async buyLabel(rate: Rate, req: RateRequest, opts: ShippingCallOptions = {}): Promise<LabelResult> {
     this.purchases += 1;
+    this.requests.push(req);
     this.keys.push(opts.idempotencyKey);
     this.signals.push(opts.signal);
     await this.duringPurchase();
@@ -206,6 +208,54 @@ describe('dispatch buys the label outside the transaction (F049)', () => {
     expect((second as { getStatus?: () => number }).getStatus?.()).toBe(409);
     expect((await first).status).toBe('shipped');
     expect(carrier.purchases).toBe(1);
+  });
+});
+
+describe('the carrier receives the apartment line and the phone of a saved address', () => {
+  it('passes line2 as street2 and the phone as phone when the label is bought', async () => {
+    const card = await intakeFor(operator, SEED.collector, { description: 'FF19: apartment and phone' });
+    const collector = await signIn(SEED.collector);
+    await fundWallet(SEED.collector, 50_000);
+    const address = await collector.post('/me/addresses', {
+      label: 'Flat with a buzzer',
+      recipient: 'Red Ashwood',
+      line1: '1200 Market St',
+      line2: 'Apt 4B',
+      city: 'San Francisco',
+      region: 'CA',
+      country: 'US',
+      postalCode: '94102',
+      phone: '+1 415-555-0134',
+    });
+    expect(address.status).toBe(201);
+
+    const s = (await collector.post('/shipping/shipments', { itemIds: [card.id], addressId: address.body.id })).body;
+    expect(s.destinationAddress).toContain('1200 Market St, Apt 4B, San Francisco');
+    expect(s.destinationAddress).not.toContain('555-0134');
+    const pick = ((await collector.get(`/shipping/shipments/${s.id}/rates`)).body as {
+      carrier: string;
+      serviceLevel: string;
+      eligible: boolean;
+    }[]).find((r) => r.eligible)!;
+    expect(
+      (await collector.post(`/shipping/shipments/${s.id}/select-rate`, { carrier: pick.carrier, serviceLevel: pick.serviceLevel }))
+        .body.status,
+    ).toBe('rates_selected');
+
+    const carrier = new FakeCarrier('sell');
+    const { dispatch } = dispatchWith(carrier);
+    expect((await dispatch.dispatch(operatorId, s.id, FORM(card.id))).status).toBe('shipped');
+    expect(carrier.requests).toHaveLength(1);
+    expect(carrier.requests[0]!.destination).toMatchObject({
+      name: 'Red Ashwood',
+      street1: '1200 Market St',
+      street2: 'Apt 4B',
+      city: 'San Francisco',
+      region: 'CA',
+      postalCode: '94102',
+      country: 'US',
+      phone: '+1 415-555-0134',
+    });
   });
 });
 

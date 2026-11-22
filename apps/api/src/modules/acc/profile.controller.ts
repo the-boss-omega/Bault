@@ -13,10 +13,12 @@ class CreateAddressDto {
   @IsString() label!: string;
   @IsString() recipient!: string;
   @IsString() line1!: string;
+  @IsOptional() @IsString() line2?: string | null;
   @IsString() city!: string;
   @IsOptional() @IsString() region?: string | null;
   @IsShippableCountry() country!: string;
   @IsString() postalCode!: string;
+  @IsOptional() @IsString() phone?: string | null;
   @IsOptional() @IsBoolean() isDefault?: boolean;
 }
 
@@ -24,10 +26,12 @@ class UpdateAddressDto {
   @IsOptional() @IsString() label?: string;
   @IsOptional() @IsString() recipient?: string;
   @IsOptional() @IsString() line1?: string;
+  @IsOptional() @IsString() line2?: string | null;
   @IsOptional() @IsString() city?: string;
   @IsOptional() @IsString() region?: string | null;
   @IsOptional() @IsShippableCountry() country?: string;
   @IsOptional() @IsString() postalCode?: string;
+  @IsOptional() @IsString() phone?: string | null;
   @IsOptional() @IsBoolean() isDefault?: boolean;
 }
 

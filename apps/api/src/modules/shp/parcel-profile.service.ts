@@ -138,10 +138,14 @@ export class ParcelProfileService {
           postalCode: a.postalCode,
           name: a.recipient,
           street1: a.line1,
+          ...(a.line2 ? { street2: a.line2 } : {}),
           city: a.city,
           ...(a.region ? { region: a.region } : {}),
+          ...(a.phone ? { phone: a.phone } : {}),
         },
-        formatted: `${a.recipient}, ${a.line1}, ${a.city}, ${[a.region, a.postalCode].filter(Boolean).join(' ')}, ${a.country}`,
+        formatted: [a.recipient, a.line1, a.line2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.country]
+          .filter(Boolean)
+          .join(', '),
         recipientName: a.recipient,
       };
     }

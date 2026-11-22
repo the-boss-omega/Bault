@@ -8,6 +8,7 @@ const ROOT = join(__dirname, '..', '..');
 const CONFIGURE = join(ROOT, 'infra', 'gcp', 'configure.sh');
 const PROVISION = join(ROOT, 'infra', 'gcp', 'provision.sh');
 const WATCHDOG = join(ROOT, 'infra', 'ops', 'watchdog.sh');
+const BACKUP = join(ROOT, 'infra', 'ops', 'backup.sh');
 
 const SECRETS = {
   owner: 'Own3rPassw0rdFromProvision',
@@ -109,6 +110,12 @@ const FIRST_RUN = [
   '',
   '',
   '1 Main St, Newark, NJ 07102',
+  'help@bault.example',
+  '',
+  'Mon-Fri 9-17 ET',
+  'Dana|Support lead;Sam|Shipping',
+  'not-a-dsn', // refused
+  '',
   AGE,
   'n', // keep the provision file
 ];
@@ -204,7 +211,13 @@ describe('infra/gcp/configure.sh', () => {
       BANK_ADDRESS: '1 Main St, Newark, NJ 07102',
       BANK_IBAN: '',
       PAYPAL_FF_HANDLE: '',
+      SUPPORT_EMAIL: 'help@bault.example',
+      SUPPORT_PHONE: '',
+      SUPPORT_HOURS: 'Mon-Fri 9-17 ET',
+      SUPPORT_TEAM: 'Dana|Support lead;Sam|Shipping',
+      SENTRY_DSN: '',
     });
+    expect(r.output).toContain('a Sentry DSN');
     expect(prod.BAULT_REGISTRY).toMatch(/^ghcr\.io\/[a-z0-9-]+$/);
     expect(envFile(join(envDir, 'backup.env'))).toMatchObject({
       BACKUP_AGE_RECIPIENT: AGE,
@@ -234,7 +247,7 @@ describe('infra/gcp/configure.sh', () => {
 
     const again = configure(['n']);
     expect(again.status, again.output).toBe(0);
-    expect(again.output).not.toMatch(/PayPal client|SMTP host|age public key|Account number/);
+    expect(again.output).not.toMatch(/PayPal client|SMTP host|age public key|Account number|Support email|Sentry DSN/);
     expect(['production', 'api', 'worker', 'migrate', 'backup'].map((n) => readFileSync(join(envDir, `${n}.env`), 'utf8'))).toEqual(
       before,
     );
@@ -251,6 +264,26 @@ describe('infra/gcp/configure.sh', () => {
     const { SMTP_PORT: _p, SMTP_SECURE: _s, SMTP_PASSWORD: _w, ...rest } = after;
     const { SMTP_PORT: _p0, SMTP_SECURE: _s0, SMTP_PASSWORD: _w0, ...restBefore } = before;
     expect(rest).toEqual(restBefore);
+  });
+
+  it('asks again for the support details and the Sentry DSN only when named with --change', async () => {
+    expect(configure(FIRST_RUN).status).toBe(0);
+    const before = envFile(join(envDir, 'production.env'));
+    const dsn = 'https://publickey@o123.ingest.sentry.io/456';
+
+    const r = configure(['', '+1 555 0100', '', '', dsn, 'n'], '--change', 'support', '--change', 'sentry');
+    expect(r.status, r.output).toBe(0);
+    const after = envFile(join(envDir, 'production.env'));
+    expect(after).toMatchObject({ SUPPORT_EMAIL: 'help@bault.example', SUPPORT_PHONE: '+1 555 0100', SENTRY_DSN: dsn });
+    const { SUPPORT_PHONE: _p, SENTRY_DSN: _d, ...rest } = after;
+    const { SUPPORT_PHONE: _p0, SENTRY_DSN: _d0, ...restBefore } = before;
+    expect(rest).toEqual(restBefore);
+
+    vi.resetModules();
+    const { loadEnv } = await import('../../packages/config/src/env');
+    const env = loadEnv({ ...after, ...envFile(join(envDir, 'api.env')) } as NodeJS.ProcessEnv);
+    expect(env.SUPPORT_TEAM).toBe('Dana|Support lead;Sam|Shipping');
+    expect(env.SENTRY_DSN).toBe(dsn);
   });
 
   it('leaves cash-in by PayPal checkout off, and turns it on only when asked with --change checkout', async () => {
@@ -555,6 +588,7 @@ esac
         STUB: stub,
         BAULT_WATCHDOG_STATE: state,
         BAULT_DEPLOY_LOCK: join(scratch, 'deploy.lock'),
+        BAULT_BACKUP_ENV: join(scratch, 'backup.env'),
       },
       encoding: 'utf8',
       timeout: 30_000,
@@ -615,6 +649,25 @@ esac
     expect(restarts()).toBe('api1\n');
   });
 
+  it('reports a failed backup once, from the directory backup.env names, and once when it clears', () => {
+    const backups = join(scratch, 'backups');
+    mkdirSync(backups);
+    writeFileSync(join(scratch, 'backup.env'), `BACKUP_DIR='${backups}'\nBACKUP_RETAIN_DAYS=14\n`);
+    expect(watchdog().output).toBe('');
+
+    writeFileSync(join(backups, 'BACKUP-FAILED'), '2026-11-22T01:17:04Z backup.sh dump failed (exit 1) on host\n');
+    expect(watchdog().output).toMatch(/backup: the nightly backup FAILED: 2026-11-22T01:17:04Z backup\.sh dump failed/);
+    expect(watchdog().output, 'reported twice').toBe('');
+
+    writeFileSync(join(backups, 'BACKUP-FAILED'), '2026-11-23T01:17:04Z backup.sh dump failed (exit 1) on host\n');
+    expect(watchdog().output).toMatch(/FAILED: 2026-11-23T01:17:04Z/);
+
+    rmSync(join(backups, 'BACKUP-FAILED'));
+    expect(watchdog().output).toMatch(/backup: a backup has succeeded since the failure/);
+    expect(watchdog().output).toBe('');
+    expect(restarts()).toBe('');
+  });
+
   it('stays out of a deploy that holds the lock', () => {
     writeFileSync(join(stub, 'health-api1'), 'unhealthy\n');
     const r = watchdog(['flock', join(scratch, 'deploy.lock')]);
@@ -623,5 +676,67 @@ esac
 
     watchdog();
     expect(restarts(), 'once the deploy is over').toBe('api1\n');
+  });
+});
+
+describe('infra/ops/backup.sh dump', () => {
+  let scratch: string;
+  let backups: string;
+  let bin: string;
+  const marker = () => join(backups, 'BACKUP-FAILED');
+
+  beforeEach(() => {
+    scratch = mkdtempSync(join(tmpdir(), 'bault-backup-'));
+    backups = join(scratch, 'backups');
+    bin = join(scratch, 'bin');
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, 'pg_dump'),
+      `#!/bin/bash
+[ -e "$STUB_FAIL" ] && { echo "pg_dump: connection refused" >&2; exit 1; }
+for a in "$@"; do case "$a" in --file=*) echo dump > "\${a#--file=}" ;; esac; done
+`,
+    );
+    writeFileSync(join(bin, 'pg_restore'), '#!/bin/bash\nexit 0\n');
+    chmodSync(join(bin, 'pg_dump'), 0o755);
+    chmodSync(join(bin, 'pg_restore'), 0o755);
+  });
+  afterEach(() => rmSync(scratch, { recursive: true, force: true }));
+
+  function dump(extra: Record<string, string> = {}) {
+    const r = spawnSync('bash', [BACKUP, 'dump'], {
+      env: {
+        PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+        BACKUP_DIR: backups,
+        BACKUP_RETAIN_DAYS: '0',
+        DIRECT_DATABASE_URL: 'postgres://bault_owner:pw@127.0.0.1:5432/bault',
+        STUB_FAIL: join(scratch, 'fail'),
+        ...extra,
+      },
+      encoding: 'utf8',
+      timeout: 30_000,
+    });
+    return { status: r.status, output: `${r.stdout}${r.stderr}` };
+  }
+
+  it('leaves a BACKUP-FAILED marker when the dump fails, and removes it after the next good one', () => {
+    writeFileSync(join(scratch, 'fail'), '');
+    const failed = dump();
+    expect(failed.status).not.toBe(0);
+    expect(readFileSync(marker(), 'utf8')).toMatch(
+      /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ backup\.sh dump failed \(exit 1\) on .+; see \/var\/log\/bault\/backup\.log\n$/,
+    );
+
+    rmSync(join(scratch, 'fail'));
+    const good = dump();
+    expect(good.status, good.output).toBe(0);
+    expect(existsSync(marker())).toBe(false);
+  });
+
+  it('marks a run that fails before it dumps anything', () => {
+    const r = dump({ DIRECT_DATABASE_URL: '' });
+    expect(r.status).not.toBe(0);
+    expect(r.output).toContain('DIRECT_DATABASE_URL is not set');
+    expect(existsSync(marker())).toBe(true);
   });
 });
