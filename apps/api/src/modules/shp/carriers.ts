@@ -6,8 +6,10 @@ export interface Destination {
   postalCode: string;
   name?: string;
   street1?: string;
+  street2?: string;
   city?: string;
   region?: string;
+  phone?: string;
 }
 
 export function destinationOf(s: {

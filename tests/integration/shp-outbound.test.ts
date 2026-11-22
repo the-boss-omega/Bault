@@ -595,6 +595,39 @@ describe('SHP outbound shipping', () => {
     expect(locked.body.memberCount).toBe(2);
   });
 
+  it('keeps a member\'s phone off the shared parcel the others read, and the apartment line on it', async () => {
+    const operator = await signIn(SEED.operator);
+    const mine = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
+    const theirs = await intakeFor(operator, SEED.collector2, { typeClass: 'trading_card' });
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+
+    const shared = {
+      label: 'Convention suite',
+      recipient: 'Front desk — Bault group',
+      line1: '400 Boardwalk',
+      line2: 'Suite 1201',
+      city: 'Atlantic City',
+      region: 'NJ',
+      country: 'US',
+      postalCode: '08401',
+    };
+    const redAddr = await addressFor(red, { ...shared, phone: '+1 609-555-0188' });
+    const goldenAddr = await addressFor(golden, shared);
+    const redShip = (await red.post('/shipping/shipments', { itemIds: [mine.id], addressId: redAddr })).body;
+    const goldenShip = (await golden.post('/shipping/shipments', { itemIds: [theirs.id], addressId: goldenAddr })).body;
+    expect(redShip.destinationAddress).toContain('Suite 1201');
+
+    const group = (await red.post('/shipping/groups', { shipmentId: redShip.id })).body;
+    expect((await golden.post('/shipping/groups/join', { groupCode: group.code, shipmentId: goldenShip.id })).status).toBe(201);
+
+    const seen = await golden.get(`/shipping/groups/${group.id}`);
+    expect(seen.status).toBe(200);
+    expect(seen.body.destinationAddress).toContain('400 Boardwalk, Suite 1201');
+    expect(JSON.stringify(seen.body)).not.toContain('555-0188');
+    expect(JSON.stringify((await red.get(`/shipping/shipments/${redShip.id}`)).body)).not.toContain('555-0188');
+  });
+
   async function sharedParcel() {
     const operator = await signIn(SEED.operator);
     const mine = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
