@@ -180,7 +180,7 @@ export class ShpController {
 
   @Get('groups')
   myGroups(@CurrentUser() user: AuthUser) {
-    return this.groups.mine(user.id);
+    return this.groups.mine(user);
   }
 
   @Post('groups')

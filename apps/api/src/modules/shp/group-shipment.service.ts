@@ -96,7 +96,7 @@ export class GroupShipmentService {
       if (!joined) throw new AppError(ErrorCode.CONFLICT, 'That request has moved on and cannot join a group', 409);
     });
 
-    return this.describe(group.id);
+    return this.describe(group.id, actor);
   }
 
   private async assertForming(tx: Database, groupId: string, message: string) {
@@ -138,8 +138,7 @@ export class GroupShipmentService {
   }
 
   async describeFor(groupId: string, viewer: ShipmentActor) {
-    const staff = viewer.role === 'warehouse_operator' || viewer.role === 'admin';
-    if (!staff) {
+    if (!isStaff(viewer)) {
       const [group] = await this.db
         .select({ payerUserId: shipmentGroup.payerUserId })
         .from(shipmentGroup)
@@ -155,10 +154,11 @@ export class GroupShipmentService {
         if (!mine) throw AppError.notFound('Group not found');
       }
     }
-    return this.describe(groupId);
+    return this.describe(groupId, viewer);
   }
 
-  async describe(groupId: string) {
+  async describe(groupId: string, viewer: ShipmentActor) {
+    const staff = isStaff(viewer);
     const [group] = await this.db.select().from(shipmentGroup).where(eq(shipmentGroup.id, groupId)).limit(1);
     if (!group) throw AppError.notFound('Group not found');
 
@@ -182,17 +182,40 @@ export class GroupShipmentService {
       const measured = this.profiles.measure(items);
       totalWeightGrams += measured.totalWeightGrams;
       totalItems += items.length;
-      rows.push({
-        shipmentId: m.shipment.id,
-        shipmentCode: m.shipment.code,
-        username: m.username,
-        name: fullName(m.firstName, m.lastName) || null,
-        itemCount: items.length,
-        weightGrams: measured.totalWeightGrams,
-        isPayer: m.shipment.userId === group.payerUserId,
-        insuredValueMinor: m.shipment.insuredValueMinor,
-        status: m.shipment.status,
-      });
+      const isPayer = m.shipment.userId === group.payerUserId;
+      if (staff) {
+        rows.push({
+          shipmentId: m.shipment.id,
+          shipmentCode: m.shipment.code,
+          username: m.username,
+          name: fullName(m.firstName, m.lastName) || null,
+          itemCount: items.length,
+          weightGrams: measured.totalWeightGrams,
+          isPayer,
+          insuredValueMinor: m.shipment.insuredValueMinor,
+          status: m.shipment.status,
+        });
+      } else if (m.shipment.userId === viewer.id) {
+        rows.push({
+          shipmentId: m.shipment.id,
+          shipmentCode: m.shipment.code,
+          username: m.username,
+          itemCount: items.length,
+          weightGrams: measured.totalWeightGrams,
+          isPayer,
+          insuredValueMinor: m.shipment.insuredValueMinor,
+          status: m.shipment.status,
+        });
+      } else {
+        rows.push({
+          shipmentId: m.shipment.id,
+          shipmentCode: m.shipment.code,
+          username: m.username,
+          itemCount: items.length,
+          isPayer,
+          status: m.shipment.status,
+        });
+      }
     }
 
     return {
@@ -209,15 +232,15 @@ export class GroupShipmentService {
     };
   }
 
-  async mine(userId: string) {
+  async mine(viewer: ShipmentActor) {
     const rows = await this.db
       .select({ groupId: shipment.groupId })
       .from(shipment)
-      .where(and(eq(shipment.userId, userId)));
+      .where(and(eq(shipment.userId, viewer.id)));
     const ids = [...new Set(rows.map((r) => r.groupId).filter((id): id is string => Boolean(id)))];
     if (ids.length === 0) return [];
     const groups = await this.db.select().from(shipmentGroup).where(inArray(shipmentGroup.id, ids));
-    return Promise.all(groups.map((g) => this.describe(g.id)));
+    return Promise.all(groups.map((g) => this.describe(g.id, viewer)));
   }
 
   async lock(userId: string, groupId: string) {
@@ -288,4 +311,8 @@ export class GroupShipmentService {
       return { status: 'cancelled' as const };
     });
   }
+}
+
+function isStaff(viewer: ShipmentActor) {
+  return viewer.role === 'warehouse_operator' || viewer.role === 'admin';
 }
