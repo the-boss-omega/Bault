@@ -82,6 +82,16 @@ contact page's details, each shown as not published when empty. There is no
 session secret: sessions are random tokens looked up by hash, and an old
 `SESSION_COOKIE_SECRET` or `EMAIL_API_KEY` line is ignored.
 
+The web app's error reporting is not configured here: `bault-web` is a built
+bundle, so its two variables are build arguments of `apps/web/Dockerfile`, and
+nothing in `compose.yml` or `/etc/bault` changes them. `release.yml` passes
+`VITE_RELEASE` (the tag being released) and `VITE_SENTRY_DSN`, taken from the
+GitHub repository variable of that name (Settings, Secrets and variables,
+Actions, Variables). The DSN is the public key of a Sentry browser project;
+leave the variable unset and the web app loads and sends nothing. Set it before
+tagging, because a released image keeps the DSN it was built with, and the
+image's CSP then allows that one Sentry host in `connect-src`.
+
 Check the owner's connection from the host before going further:
 
 ```sh
@@ -269,6 +279,8 @@ Still by hand, because nothing outside the server can drive them:
   events;
 - the verify and reset emails landed in the inbox, not in spam;
 - Sentry shows the forged webhook (a `WebhookVerificationError`);
+- with `VITE_SENTRY_DSN` set, a browser error reaches Sentry tagged with the
+  release, and the browser console shows no CSP refusal for it;
 - a label refused at dispatch, re-rated from the shipment drawer;
 - a delivered parcel sending its notification;
 - the requeue drill: stop SMTP, let a message park, restore SMTP, requeue it

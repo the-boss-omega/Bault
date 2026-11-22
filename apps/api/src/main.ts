@@ -2,24 +2,36 @@ import 'reflect-metadata';
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Module, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import { json } from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { loadEnv } from '@bault/config';
+import { flushReportsOnExit } from '@bault/adapters';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './shared/errors/all-exceptions.filter';
 import { validationException } from './shared/errors/validation-error';
 import { StructuredLogger, requestContext } from './shared/observability/logger';
-import { initErrorReporting } from './shared/observability/error-reporting';
+import {
+  FlushReportsOnShutdown,
+  flushErrorReporting,
+  initErrorReporting,
+} from './shared/observability/error-reporting';
 import { jsonBodiesOnly, sameOriginWrites, writeOrigins } from './shared/csrf/cross-site';
+
+@Module({ imports: [AppModule], providers: [FlushReportsOnShutdown] })
+class ApiProcessModule {}
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
 
   const reporting = initErrorReporting(env);
+  const processLog = new StructuredLogger('api');
+  flushReportsOnExit(process, flushErrorReporting, (what, error) =>
+    processLog.error(`api process failed: ${what}`, error instanceof Error ? (error.stack ?? error.message) : String(error)),
+  );
 
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create(ApiProcessModule, {
     logger: new StructuredLogger('api'),
     bufferLogs: false,
     bodyParser: false,
@@ -52,7 +64,7 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api/v1');
 
   app.useGlobalFilters(new AllExceptionsFilter());
-  if (reporting) new StructuredLogger('api').log('error reporting enabled');
+  if (reporting) processLog.log('error reporting enabled');
 
   app.useGlobalPipes(
     new ValidationPipe({

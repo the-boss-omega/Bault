@@ -6,7 +6,7 @@
 
 About 1 minute. It builds on T16.1 and T16.4.
 
-These two files start the app. `index.html` sets `lang="en"` and no `dir`, so the page is English and left to right from the first paint, and nothing changes that later. It links `favicon-32.png` and `apple-touch-icon.png`, the B that the rail shows, from the repo-root `assets` folder, which Vite serves as its public folder. `main.tsx` removes the retired `bault.railPinned` and `bault.locale` keys. `adoptPayPalReturn` turns PayPal's return to `/?paypal=...&payment=...` into the cash-in tab's hash address before the app renders, because the app is a hash router. It then nests `StrictMode`, `ThemeProvider`, `I18nProvider`, `ErrorBoundary` and `App`, outermost first. The error boundary sits inside the providers, so a crash screen still shows in the viewer's theme.
+These two files start the app. `index.html` sets `lang="en"` and no `dir`, so the page is English and left to right from the first paint, and nothing changes that later. It links `favicon-32.png` and `apple-touch-icon.png`, the B that the rail shows, from the repo-root `assets` folder, which Vite serves as its public folder. `main.tsx` removes the retired `bault.railPinned` and `bault.locale` keys. `adoptPayPalReturn` turns PayPal's return to `/?paypal=...&payment=...` into the cash-in tab's hash address before the app renders, because the app is a hash router. `startErrorReporting` from `shared/errorReporting.ts` starts Sentry when the build had `VITE_SENTRY_DSN`. It then nests `StrictMode`, `AppErrorBoundary`, `ThemeProvider`, `I18nProvider` and `App`, outermost first. The boundary sits outside the providers, so an error a provider throws is caught too, and the page keeps its theme because `index.html` and the theme script set `data-theme` on the `html` element before the app runs.
 
 #### `apps/web/vite.config.ts`, `apps/web/proxy-target.ts`
 
@@ -82,7 +82,15 @@ These are the design-system parts that every screen is built from. The `gold` va
 
 About 1 minute. It builds on T16.1 and T16.2.
 
-These files draw the frame around every page. `PageHeader` holds the title and the breadcrumb. Beside them sit `AccountPill`, which shows `@username` or the suspended state, `ThemeToggle`, `NotificationBell` and `UserMenu`. The rail expands while hovered or focused and is never pinned. `navRailReducer` is its pure state machine, so `tests/web/nav-rail.test.ts` needs no DOM. `ErrorBoundary` catches a render crash and offers Try again and Reload the page, in English only.
+These files draw the frame around every page. `PageHeader` holds the title and the breadcrumb. Beside them sit `AccountPill`, which shows `@username` or the suspended state, `ThemeToggle`, `NotificationBell` and `UserMenu`. The rail expands while hovered or focused and is never pinned. `navRailReducer` is its pure state machine, so `tests/web/nav-rail.test.ts` needs no DOM. `ErrorBoundary` catches a render crash and offers Try again and Reload the page, in English only. `main.tsx` no longer mounts it, since `AppErrorBoundary` took its place at the root, but it is still there for a screen that wants its own fallback, and `tests/ux/screen-guards.test.tsx` still covers its buttons.
+
+#### `apps/web/src/shared/errorReporting.ts`, `apps/web/src/shared/ui/AppErrorBoundary.tsx`
+
+About 1 minute. It builds on T7.10 and T16.1.
+
+These files report the browser's errors. `startErrorReporting` does nothing and loads nothing without `VITE_SENTRY_DSN`. With it, it imports `@sentry/browser`, which the build puts in a chunk of its own that no other page fetches, and starts it with `sendDefaultPii: false`, no tracing, the `VITE_RELEASE` tag as the release, the build mode as the environment and a `process: web` tag. The breadcrumbs keep clicks, requests and navigation but not the console. `scrubBrowserEvent` is the `beforeSend` and follows `scrubErrorEvent`: it drops the user, the request's cookies, body and query string and the credential headers, and cuts the query from every URL, the one inside the hash route included, so a reset or verification token and a search term never leave. `scrubBreadcrumb` drops console breadcrumbs and request bodies and cuts the query from a breadcrumb's `url`, `from` and `to`. Sentry's own global handlers report uncaught errors and unhandled rejections, and `reportError` sends what a boundary caught, with the component stack.
+
+`AppErrorBoundary` wraps the whole app. On a render crash it shows one sentence, "Something went wrong on our side. Reload the page; if it keeps happening, tell support.", never the error's message, and passes the error to `reportError`, or to the `report` prop that `tests/ux/app-error-boundary.test.tsx` gives it. `tests/web/error-reporting.test.ts` checks that nothing loads without a DSN, the options it starts with and what the scrubber keeps.
 
 #### `apps/web/src/shared/money.ts`
 
