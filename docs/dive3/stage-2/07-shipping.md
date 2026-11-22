@@ -16,7 +16,7 @@ These two files define the shipment tables. In `shipmentStatus`, a new shipment 
 
 About 2 minutes. It builds on T13.1 and T13.8.
 
-This file lists the carrier services and the rules that refuse a parcel. `CARRIER_SERVICES` lists seven services with their limits, most with an `easypost` mapping. ePacket and ePost have none, so EasyPost never offers them. `checkService` returns every `ServiceProblem` at once, each with a `rule` and usually a formatted `limit`. The web app translates each rule's sentence, except for `dimensions`, and keeps the `limit` figure.
+This file lists the carrier services and the rules that refuse a parcel. `CARRIER_SERVICES` lists seven services with their limits, each with an `easypost` mapping, and `tests/contract/easypost-catalogue.test.ts` fails if one is added without it. The keys `epacket` and `epost` are kept for stored shipments and prices, but they are sold as USPS First-Class International, EasyPost's `FirstClassPackageInternationalService`, and USPS Priority Mail International, `PriorityMailInternational`, and the sandbox adapter quotes them under the same names. That pairing is a default the owner can change. `checkService` returns every `ServiceProblem` at once, each with a `rule` and usually a formatted `limit`. The web app translates each rule's sentence, except for `dimensions`, and keeps the `limit` figure.
 
 `rateFor` matches a rate by the exact carrier and service name, as the sandbox adapter returns it, or else by the `easypost` codes in order. It never matches by resemblance. `findService` and `carrierService` are lookups, and `destinationOf` prefers the frozen `destinationDetail`. `DIRECT_OVERNIGHT_KEY` and `DIRECT_OVERNIGHT_FACILITY` define the flat $100 overnight service from `DE`.
 
