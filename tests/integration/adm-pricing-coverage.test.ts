@@ -46,6 +46,8 @@ describe('E6 pricing coverage', () => {
       'storage_oversized',
       'grading_fee:psa_value',
       'consignment_fee:card_show',
+      'consignment_fee:alt',
+      'consignment_fee:fanatics_collect',
       'service_fee:video_review',
       'service_fee:condition_inspection',
       'service_fee:deslab',

@@ -13,9 +13,9 @@ interface GroupMember {
   shipmentCode: string | null;
   username: string | null;
   itemCount: number;
-  weightGrams: number;
+  weightGrams?: number;
   isPayer: boolean;
-  insuredValueMinor: number;
+  insuredValueMinor?: number;
   status: string;
 }
 
@@ -308,9 +308,9 @@ export function SharedParcelsTab({
                             <span className="group-member-meta" dir="ltr">
                               {mine ? (
                                 <>
-                                  {m.shipmentCode} · {t('grp.memberItems', { count: m.itemCount })} ·{' '}
-                                  {formatWeight(m.weightGrams)}
-                                  {m.insuredValueMinor > 0 ? ` · ${formatUsd(m.insuredValueMinor)}` : ''}
+                                  {m.shipmentCode} · {t('grp.memberItems', { count: m.itemCount })}
+                                  {m.weightGrams !== undefined ? ` · ${formatWeight(m.weightGrams)}` : ''}
+                                  {m.insuredValueMinor ? ` · ${formatUsd(m.insuredValueMinor)}` : ''}
                                 </>
                               ) : (
                                 t('grp.memberItems', { count: m.itemCount })

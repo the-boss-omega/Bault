@@ -356,7 +356,6 @@ describe('the words the product uses', () => {
       'wallet.request.funding.card',
       'itemClass.trading_card',
       'itemClass.oversized_card',
-      'consign.channel.card_show',
       'landing.price.intake',
     ]);
 

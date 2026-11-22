@@ -115,8 +115,11 @@ export interface PayPalConfig {
   clientSecret: string;
   environment: 'sandbox' | 'live';
   webhookId: string;
+  payoutNote?: string;
   fetchImpl?: typeof fetch;
 }
+
+export const DEFAULT_PAYOUT_NOTE = 'Your Card Embassy cash-out';
 
 const PAYPAL_BASE = {
   sandbox: 'https://api-m.sandbox.paypal.com',
@@ -518,7 +521,7 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
         body: JSON.stringify({
           sender_batch_header: {
             sender_batch_id: req.idempotencyKey,
-            email_subject: 'Your Card Embassy cash-out',
+            email_subject: this.config.payoutNote?.trim() || DEFAULT_PAYOUT_NOTE,
             email_message: 'The store credit you asked us to send back.',
           },
           items: [

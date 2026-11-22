@@ -131,8 +131,8 @@ const SANDBOX_SERVICES: readonly SandboxService[] = [
   { carrier: 'USPS', serviceLevel: 'Priority Mail', international: false, baseMinor: 980, perKgMinor: 690, estimatedDays: 2, signatureMinor: 340, increment: 'pound' },
   { carrier: 'FedEx', serviceLevel: '2Day', international: false, baseMinor: 1_850, perKgMinor: 890, estimatedDays: 2, signatureMinor: 590, increment: 'pound' },
   { carrier: 'FedEx', serviceLevel: 'Direct Overnight', international: false, baseMinor: 0, perKgMinor: 0, estimatedDays: 1, flatMinor: 10_000, signatureMinor: 0, increment: 'continuous' },
-  { carrier: 'ePacket', serviceLevel: 'International', international: true, baseMinor: 1_150, perKgMinor: 1_400, estimatedDays: 16, increment: 'ounce' },
-  { carrier: 'ePost', serviceLevel: 'International', international: true, baseMinor: 1_950, perKgMinor: 2_100, estimatedDays: 11, signatureMinor: 620, increment: 'pound' },
+  { carrier: 'USPS', serviceLevel: 'First-Class International', international: true, baseMinor: 1_150, perKgMinor: 1_400, estimatedDays: 16, increment: 'ounce' },
+  { carrier: 'USPS', serviceLevel: 'Priority Mail International', international: true, baseMinor: 1_950, perKgMinor: 2_100, estimatedDays: 11, signatureMinor: 620, increment: 'pound' },
   { carrier: 'FedEx', serviceLevel: 'International Priority', international: true, baseMinor: 4_200, perKgMinor: 3_400, estimatedDays: 3, signatureMinor: 590, increment: 'pound' },
 ];
 

@@ -12,6 +12,8 @@ set -euo pipefail
 # restarts of one service, and after MAX_RESTARTS in WINDOW it stops and says a
 # person is needed, so a broken release cannot restart in a loop. It does
 # nothing while deploy.sh holds the deploy lock, and logs only what it does.
+# It also reports, once, the BACKUP-FAILED marker infra/ops/backup.sh leaves in
+# BACKUP_DIR when a dump fails, and, once, that a later dump cleared it.
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LOCK="${BAULT_DEPLOY_LOCK:-$ROOT/.deploy.lock}"
@@ -21,6 +23,7 @@ GRACE="${BAULT_WATCHDOG_GRACE:-600}"
 COOLDOWN="${BAULT_WATCHDOG_COOLDOWN:-900}"
 MAX_RESTARTS="${BAULT_WATCHDOG_MAX_RESTARTS:-3}"
 WINDOW="${BAULT_WATCHDOG_WINDOW:-21600}"
+BACKUP_ENV="${BAULT_BACKUP_ENV:-/etc/bault/backup.env}"
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
@@ -92,4 +95,22 @@ if [ -n "$api" ] && [ -n "$worker" ] && [ "$(age_of "$worker")" -ge "$GRACE" ] \
    && [ "$(api_status "$api" /api/v1/readyz)" = 200 ] \
    && [ "$(api_status "$api" /api/v1/readyz/worker)" = 503 ]; then
   restart worker "$worker" "no outbox dispatch for five minutes"
+fi
+
+backup_dir="${BACKUP_DIR:-}"
+if [ -z "$backup_dir" ] && [ -r "$BACKUP_ENV" ]; then
+  backup_dir="$(awk 'index($0, "BACKUP_DIR=") == 1 { v = substr($0, 12) } END { print v }' "$BACKUP_ENV")"
+  backup_dir="${backup_dir%\'}"; backup_dir="${backup_dir#\'}"
+  backup_dir="${backup_dir%\"}"; backup_dir="${backup_dir#\"}"
+fi
+marker="${backup_dir:-/var/backups/bault}/BACKUP-FAILED"
+seen="$STATE_DIR/backup-failed"
+if [ -r "$marker" ]; then
+  if [ ! -e "$seen" ] || ! cmp -s "$marker" "$seen"; then
+    log "backup: the nightly backup FAILED: $(head -n 1 "$marker")"
+    cp "$marker" "$seen"
+  fi
+elif [ -e "$seen" ]; then
+  log "backup: a backup has succeeded since the failure; $marker is gone"
+  rm -f "$seen"
 fi
