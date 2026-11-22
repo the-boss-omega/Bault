@@ -9,7 +9,7 @@ import {
   createCryptoProvider,
 } from '@bault/adapters';
 
-const API_KEY = 'cc-test-key-0123456789';
+const API_KEY = ['fake', 'coinbase', 'commerce', 'key'].join('-');
 const SECRET = 'cc-test-webhook-secret';
 
 function fakeFetch(answer: { status?: number; body: unknown }) {
