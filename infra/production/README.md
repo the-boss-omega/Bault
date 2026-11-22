@@ -277,6 +277,17 @@ Still by hand, because nothing outside the server can drive them:
 With it, the journeys take about 30 minutes, not 2 hours, and the provider
 checks about 2 hours, not 4.
 
+The `chk…` collectors stay behind. `pnpm users:remove-test --production-i-know`
+lists them, and with `--apply` as well it asks you to type `delete` and then
+handles each account in its own transaction. An account with nothing kept is
+deleted, together with its sessions, tokens, two-factor rows, notifications,
+notification settings, idempotency keys and support tickets that hold no
+message. An account that money, custody, an audit record or any other kept row
+still names is set to `closed`, as the admin console would, and printed as
+"closed, not deleted, because of <table>". The staging check moves money, so
+expect its buyer and seller to be closed rather than deleted. Without `--apply`
+it prints the same decisions and changes nothing.
+
 ## 9. Checks before launch (on staging)
 
 From your own machine:
