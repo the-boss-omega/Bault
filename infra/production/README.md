@@ -75,7 +75,12 @@ Fill in every value. In `production.env` at least: `BAULT_DOMAIN`,
 `compose.yml`, `172.30.89.0/24`), PayPal, `PAYOUT_MODE`, EasyPost, SMTP,
 `STORAGE_*`, `SENTRY_DSN`, and `MFA_ENCRYPTION_KEY` (`openssl rand -base64 32`;
 keep a copy — losing it locks every enrolled authenticator out). Never
-`ALLOW_DESTRUCTIVE_SEED`.
+`ALLOW_DESTRUCTIVE_SEED`. `PAYPAL_PAYOUT_NOTE` is the subject of the email
+PayPal sends with each cash-out (empty means `Your Card Embassy cash-out`), and
+`SUPPORT_EMAIL`, `SUPPORT_PHONE`, `SUPPORT_HOURS` and `SUPPORT_TEAM` are the
+contact page's details, each shown as not published when empty. There is no
+session secret: sessions are random tokens looked up by hash, and an old
+`SESSION_COOKIE_SECRET` or `EMAIL_API_KEY` line is ignored.
 
 Check the owner's connection from the host before going further:
 
@@ -176,6 +181,17 @@ restore drill is `infra/ops/RESTORE.md`. The same crontab runs
 `infra/ops/watchdog.sh` every two minutes, which restarts a container that
 hangs (compose restarts only one that exits), and logs what it does to
 `/var/log/bault/watchdog.log`.
+
+Before installing the crontab, replace `MAILTO=CHANGE_ME@your-ops-address`
+in it with an address this host can actually deliver to (a mail relay such as
+`msmtp-mta` must be set up, since the server sends no mail of its own), or
+with `MAILTO=""` if nobody will read cron mail. A failed dump leaves
+`BACKUP-FAILED` in `BACKUP_DIR` (`/var/backups/bault`) with the time and the
+exit status, the watchdog writes it once to `watchdog.log` as
+`backup: the nightly backup FAILED: …`, and the next good dump removes it, so
+`ls /var/backups/bault/BACKUP-FAILED` is the quick check. The commented
+dead-man's-switch line in the crontab is what reaches a person when the host
+cannot send mail.
 
 ## 7. Prices (the first deploy, and whenever a price changes)
 

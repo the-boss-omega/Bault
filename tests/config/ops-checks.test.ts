@@ -10,6 +10,13 @@ import {
   unexpectedPorts,
 } from '../../scripts/ops/security-check.mjs';
 import { chooser, MIX, percentile, summarize, verdict } from '../../scripts/ops/load-test.mjs';
+import {
+  PROTECTED,
+  parseArgs,
+  refusal,
+  report,
+  testAccountKind,
+} from '../../scripts/remove-test-users.mjs';
 
 const ROOT = join(__dirname, '..', '..');
 
@@ -114,5 +121,77 @@ describe('scripts/ops/load-test.mjs', () => {
     const names = new Set(Array.from({ length: 100 }, (_, i) => some(i / 100).name));
     expect(names).toContain('listing detail');
     expect(names).toContain('vault items');
+  });
+});
+
+describe('scripts/remove-test-users.mjs', () => {
+  const created_at = new Date('2026-11-01T10:00:00Z');
+  const row = (email: string, username: string, activity: string[] = []) => ({
+    id: email,
+    email,
+    username,
+    status: 'active',
+    created_at,
+    activity,
+  });
+  const ROWS = [
+    row('t1700000000000@bault.dev', 'legacy1'),
+    row('ops+chk-run1-seller@example.org', 'chkm3x9a1b2cseller'),
+    row('ops+chk-run1-buyer@example.org', 'chkm3x9a1b2cbuyer', ['ledger_record']),
+    row('chk@example.org', 'chkmimic'),
+    row('collector@example.org', 'chkcollector'),
+    ...[...PROTECTED].map((email) => row(email, 'staff')),
+  ];
+  const candidates = (production: boolean) =>
+    ROWS.flatMap((r) => {
+      const kind = testAccountKind(r, { includeStagingChecks: production });
+      return kind ? [{ ...r, kind }] : [];
+    });
+
+  it('refuses production unless told with the flag', () => {
+    expect(refusal({ NODE_ENV: 'production' }, parseArgs(['--apply']))).toMatch(/--production-i-know/);
+    expect(refusal({ NODE_ENV: 'production' }, parseArgs(['--production-i-know']))).toBeNull();
+    expect(refusal({ NODE_ENV: 'development' }, parseArgs([]))).toBeNull();
+    const r = spawnSync(process.execPath, [join(ROOT, 'scripts', 'remove-test-users.mjs'), '--apply'], {
+      env: { PATH: process.env.PATH ?? '', NODE_ENV: 'production', DATABASE_URL: 'postgres://nobody@127.0.0.1:1/none' },
+      encoding: 'utf8',
+    });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/Refusing to run: NODE_ENV=production/);
+  });
+
+  it('lists only the legacy fixtures without the flag', () => {
+    const { lines } = report({ total: ROWS.length, candidates: candidates(false), args: parseArgs([]) });
+    expect(lines.join('\n')).toBe(
+      [
+        `Accounts in table:            ${ROWS.length}`,
+        'Matching a test pattern:      1',
+        'Safe to remove (own nothing): 1',
+        '  - t1700000000000@bault.dev  (legacy fixture, username=legacy1, status=active, created=2026-11-01T10:00:00.000Z)',
+        '',
+        'Dry run. Nothing was deleted. Re-run with --apply to remove the accounts listed above.',
+      ].join('\n'),
+    );
+  });
+
+  it("adds the staging check's accounts under the flag, skips any with activity, and never a protected one", () => {
+    const args = parseArgs(['--production-i-know']);
+    const { lines, removable } = report({ total: ROWS.length, candidates: candidates(true), args });
+    expect(lines.join('\n')).toBe(
+      [
+        `Accounts in table:            ${ROWS.length}`,
+        'Matching a test pattern:      3',
+        'Safe to remove (own nothing): 2',
+        '  - t1700000000000@bault.dev  (legacy fixture, username=legacy1, status=active, created=2026-11-01T10:00:00.000Z)',
+        '  - ops+chk-run1-seller@example.org  (staging check, username=chkm3x9a1b2cseller, status=active, created=2026-11-01T10:00:00.000Z)',
+        '  ! SKIPPED ops+chk-run1-buyer@example.org — has activity in: ledger_record',
+        '',
+        'Dry run. Nothing was deleted. Re-run with --production-i-know --apply to remove the accounts listed above.',
+      ].join('\n'),
+    );
+    expect(removable.map((c) => c.email)).toEqual(['t1700000000000@bault.dev', 'ops+chk-run1-seller@example.org']);
+    for (const email of PROTECTED) {
+      expect(testAccountKind({ email, username: 'chkstaff' }, { includeStagingChecks: true })).toBeNull();
+    }
   });
 });

@@ -57,8 +57,15 @@ describe('environment schema', () => {
     expect(env).not.toHaveProperty('DATABASE_STATEMENT_TIMEOUT_MS');
   });
 
-  it('no longer requires the unused session secret', async () => {
-    expect((await load(DEV)).SESSION_COOKIE_SECRET).toBe('');
+  it('ignores the retired session secret and email API key', async () => {
+    const env = await load({ ...PROD, SESSION_COOKIE_SECRET: 'an-old-secret-value', EMAIL_API_KEY: 'old' });
+    expect(env).not.toHaveProperty('SESSION_COOKIE_SECRET');
+    expect(env).not.toHaveProperty('EMAIL_API_KEY');
+  });
+
+  it('defaults the payout note to the text PayPal has always sent', async () => {
+    expect((await load(DEV)).PAYPAL_PAYOUT_NOTE).toBe('Your Card Embassy cash-out');
+    expect((await load({ ...DEV, PAYPAL_PAYOUT_NOTE: 'Store credit' })).PAYPAL_PAYOUT_NOTE).toBe('Store credit');
   });
 
   it('refuses the loopback proxy setting in production', async () => {

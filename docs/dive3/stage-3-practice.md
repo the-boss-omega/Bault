@@ -339,7 +339,7 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **Renewal with no tier price** only warns (`renewMemberships`); the pricing coverage check reports `ready: false` while a tier is unpriced, and nothing ends a rule once loaded.
 - **Bin counts** include cards that left the building (`StowService.listWithCounts`).
 - **Confirming a correct flagged name** is impossible on the profile page; nothing depends on the flag (`nameDirty` in `ProfilePage.tsx`).
-- **`scripts/remove-test-users.mjs`** checks six tables (`ACTIVITY`); it is a development tool and refuses production.
+- **`scripts/remove-test-users.mjs`** checks six tables (`ACTIVITY`); it refuses production unless given `--production-i-know`, which also lists the staging check's `chk` accounts and asks for `delete` typed back before it removes anything.
 - **Code uniqueness:** no unique index on `service_request.code`, `shipment.code`, `transaction.code` or `dispute.code`, no caller of `prefixedId` retries, and `'WR'` is not in `ID_PREFIX`; a collision is very unlikely and no lookup uses these codes (`shared/ids.ts`).
 - **Clean-up jobs:** expired `verification_token`, `mfa_challenge` and `idempotency_key` rows (`expiresAt` is never read, so a key replays for ever), and uploads never attached (`media_upload`).
 - **One upload on several records:** `MediaService.assertAttachable` (`med/media.service.ts`) does not record attachment, and the photography and video completions never call it; staff-only paths.
@@ -363,7 +363,7 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **Parcel retention:** nothing disposes of old unclaimed parcels (`ParcelService.listRetentionDue` has no caller).
 - **Local set-up:** `.env.example` does not boot as copied (`PAYMENT_PROVIDER=paypal` with no credentials, `AUTH_RATE_LIMIT_PER_MINUTE=10`), and `pnpm dev` does not start the worker (`scripts/dev.mjs`).
 - **CI gaps:** `scripts/design-lint.mjs` runs nowhere (it reports clean), and CI never builds the web or worker images.
-- **Unused settings:** `SESSION_COOKIE_SECRET`, `EMAIL_API_KEY`, `PAYPAL_PAYOUT_NOTE` (`packages/config/src/env.ts`).
+- **Unused settings:** done; `SESSION_COOKIE_SECRET` and `EMAIL_API_KEY` are gone from `packages/config/src/env.ts` and the examples, and `PAYPAL_PAYOUT_NOTE` is now the payout's email subject (`tests/contract/adapter-selection.test.ts`, `tests/config/env.test.ts`).
 - **`tests/README.md`** lists four of the ten suites.
 - **Shipment composed in two calls:** `ShipmentComposer`'s `book` creates the shipment, then selects a rate or opens or joins a shared parcel; a failed second call leaves a `requested` shipment holding the cards, which the composer reports as unfinished.
 - **Intake batch** has no idempotency key; only the button's `busy` state stops a second submit (`POST /intake/items/batch`, `IntakeBench.tsx`).
