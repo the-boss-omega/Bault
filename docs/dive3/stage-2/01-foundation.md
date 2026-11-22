@@ -110,7 +110,7 @@ These files store item photographs. `StorageAdapter` has `putObject` and `getSig
 
 About 1 minute. It builds on T7.10 and T17.5.
 
-This file strips secrets from the error reports sent to Sentry. `scrubErrorEvent` is the Sentry `beforeSend` of the API and the worker. It drops cookies and the `CREDENTIAL_HEADERS`. On the `SECRET_BODY_ROUTES`, `/auth` and `/me/password`, it also drops the body and the query string. It redacts the parameter values that Drizzle puts in a failed query's message. Every other route's body still reaches Sentry on a 5xx, so a failed shipment creation sends the customer's address.
+This file strips secrets from the error reports sent to Sentry. `scrubErrorEvent` is the Sentry `beforeSend` of the API and the worker. It drops cookies, the `CREDENTIAL_HEADERS`, the query string from the URL, and every value in the body. On the `SECRET_BODY_ROUTES`, `/auth` and `/me/password`, nothing of the body or the query is left. On every other route the report keeps the body's field names as sorted paths, such as `destinationAddress.city` or `parcels[].weightGrams`, read from an object or from a JSON or form-encoded text body, and the names of the query parameters. It redacts the parameter values that Drizzle puts in a failed query's message, and it cuts the provider's reply from an `EasyPost 422 on /shipments: …` or a `PayPal … failed (422): …` message, which can quote what was sent.
 
 #### `packages/contracts/src/index.ts`
 
