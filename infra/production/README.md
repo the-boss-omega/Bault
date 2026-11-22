@@ -78,7 +78,15 @@ keep a copy — losing it locks every enrolled authenticator out). Never
 `ALLOW_DESTRUCTIVE_SEED`. `PAYPAL_PAYOUT_NOTE` is the subject of the email
 PayPal sends with each cash-out (empty means `Your Card Embassy cash-out`), and
 `SUPPORT_EMAIL`, `SUPPORT_PHONE`, `SUPPORT_HOURS` and `SUPPORT_TEAM` are the
-contact page's details, each shown as not published when empty. There is no
+contact page's details, each shown as not published when empty. Crypto
+cash-in stays off with `CRYPTO_CHECKOUT_ENABLED=false` and
+`CRYPTO_PROVIDER=sandbox`, which production accepts because the sandbox is
+never built there. To turn it on, set `CRYPTO_PROVIDER=coinbase_commerce`,
+`COINBASE_COMMERCE_API_KEY`, `COINBASE_COMMERCE_WEBHOOK_SECRET` and
+`CRYPTO_CHECKOUT_ENABLED=true`, and subscribe a Coinbase Commerce webhook for
+`https://<domain>/api/v1/webhooks/crypto` to `charge:confirmed`,
+`charge:failed`, `charge:delayed` and `charge:pending` (on Compute Engine,
+`infra/gcp/configure.sh --change crypto` asks for all of it). There is no
 session secret: sessions are random tokens looked up by hash, and an old
 `SESSION_COOKIE_SECRET` or `EMAIL_API_KEY` line is ignored.
 
