@@ -29,7 +29,6 @@ jobs:
     env:
       DATABASE_URL: postgres://bault:bault@localhost:5432/bault
       DIRECT_DATABASE_URL: postgres://bault:bault@localhost:5432/bault
-      SESSION_COOKIE_SECRET: ci-test-secret-value-1234567890
       PAYMENT_PROVIDER: sandbox
       NODE_ENV: test
       STORAGE_PROVIDER: s3
