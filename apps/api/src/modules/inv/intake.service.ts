@@ -14,6 +14,7 @@ import { MediaService } from '../med/media.service';
 import { userAccount } from '../acc/acc.schema';
 import { normalizeUsername } from '../../shared/names';
 import { makeItemBarcode, makeItemSerial, makeLotSerial } from './labels';
+import { requestOcr } from './ocr.service';
 import { isKnownItemClass, itemClass, qualifiesAsLot } from './item-classes';
 
 export interface IntakeItemInput {
@@ -262,6 +263,7 @@ export class IntakeService {
           objectKey,
         })),
       );
+      await requestOcr(this.outbox, tx, { kind: 'item', id: createdItem.id }, photoKeys[0]);
     }
 
     await this.outbox.emit(tx, {

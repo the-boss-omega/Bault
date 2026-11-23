@@ -14,6 +14,7 @@ import { item } from '../cst/cst.schema';
 import { facility } from './facility.schema';
 import { renderLabelsPdf } from './labels';
 import { parcel, parcelEvent, parcelPhoto } from './parcel.schema';
+import { requestOcr } from './ocr.service';
 
 export type ParcelStatus =
   | 'expected'
@@ -390,6 +391,7 @@ export class ParcelService {
     await tx.insert(parcelPhoto).values(
       clean.map((objectKey) => ({ parcelId, kind, objectKey, uploadedBy })),
     );
+    if (kind === 'arrival') await requestOcr(this.outbox, tx, { kind: 'parcel', id: parcelId }, clean[0]);
   }
 
   async photos(parcelId: string) {

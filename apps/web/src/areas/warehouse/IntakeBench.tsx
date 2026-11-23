@@ -11,6 +11,7 @@ import { Button, Field, IconButton, ScanField } from '../../shared/ui/primitives
 import { IconBox, IconClose, IconPlus } from '../../shared/ui/icons';
 import { code as bdiCode, quiet, stamped } from './Benches';
 import { LabelSheet } from './LabelSheet';
+import { OcrReview } from './OcrReview';
 
 export interface StowSuggestion {
   id: string;
@@ -85,6 +86,7 @@ export function IntakeBench({
   const [busy, setBusy] = useState(false);
   const [closing, setClosing] = useState(false);
   const [outcome, setOutcome] = useState<BenchOutcome | null>(null);
+  const [toRead, setToRead] = useState<string[]>([]);
 
   const loadParcels = useCallback(async () => {
     try {
@@ -201,6 +203,7 @@ export function IntakeBench({
       setLabels(
         created.map((made, index) => ({ ...made, description: filled[index]?.description })),
       );
+      setToRead(created.filter((_, index) => (filled[index]?.photos.length ?? 0) > 0).map((made) => made.id));
       onLog(t('intake.bulkDone', { count: created.length }));
       setOutcome({
         tone: 'success',
@@ -609,6 +612,9 @@ export function IntakeBench({
           </ul>
         </div>
       )}
+      {toRead.map((itemId) => (
+        <OcrReview key={itemId} subject="item" id={itemId} />
+      ))}
     </div>
   );
 }

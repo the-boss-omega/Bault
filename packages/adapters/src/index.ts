@@ -7,3 +7,4 @@ export * from './s3';
 export * from './select';
 export * from './error-report';
 export * from './crypto';
+export * from './ocr';

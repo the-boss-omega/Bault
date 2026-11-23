@@ -62,6 +62,9 @@ const CONSTRAINED: ReadonlyArray<readonly [table: string, column: string, refere
   ['parcel_event', 'facility_id', 'facility'],
   ['parcel_photo', 'parcel_id', 'parcel'],
   ['parcel_photo', 'uploaded_by', 'user_account'],
+  ['ocr_suggestion', 'parcel_id', 'parcel'],
+  ['ocr_suggestion', 'item_id', 'item'],
+  ['ocr_suggestion', 'consumed_by', 'user_account'],
   ['arrival_disposal', 'owner_id', 'user_account'],
   ['arrival_disposal', 'actor_id', 'user_account'],
 

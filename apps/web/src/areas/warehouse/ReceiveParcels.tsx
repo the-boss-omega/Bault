@@ -9,8 +9,10 @@ import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput
 import { Button, Field, Panel, ScanField } from '../../shared/ui/primitives';
 import { IconPlus } from '../../shared/ui/icons';
 import { code as bdiCode, quiet, stamped } from './Benches';
+import { OcrReview } from './OcrReview';
 
 interface ReceivedParcel {
+  id: string;
   code: string;
   status: string;
 }
@@ -37,6 +39,7 @@ export function ReceiveParcels({
   const [photos, setPhotos] = useState<PhotoRef[]>([]);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<BenchOutcome | null>(null);
+  const [toRead, setToRead] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -92,6 +95,7 @@ export function ReceiveParcels({
       }, t('parcelQueue.received'));
       if (result.rows) {
         const [made] = result.rows;
+        setToRead(made && photos.length > 0 ? made.id : null);
         setOutcome({
           tone: 'success',
           label: t('bench.received'),
@@ -227,6 +231,7 @@ export function ReceiveParcels({
           </Button>
         </div>
       </div>
+      {toRead && <OcrReview key={toRead} subject="parcel" id={toRead} />}
     </Panel>
   );
 }
