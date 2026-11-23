@@ -259,24 +259,6 @@
       "description": "Collect your cards in person at a show Card Embassy is attending"
     },
     {
-      "actionType": "membership:bronze",
-      "fixed": "$39.00",
-      "billingTrigger": "monthly",
-      "description": "Bronze membership — storage for 60 items, 4 intakes a month"
-    },
-    {
-      "actionType": "membership:silver",
-      "fixed": "$199.00",
-      "billingTrigger": "monthly",
-      "description": "Silver membership — storage for 200 items, 10 intakes a month"
-    },
-    {
-      "actionType": "membership:gold",
-      "fixed": "$699.00",
-      "billingTrigger": "monthly",
-      "description": "Gold membership — storage for 750 items, 25 intakes a month"
-    },
-    {
       "actionType": "parcel_processing",
       "fixed": "$2.00",
       "billingTrigger": "per_event",

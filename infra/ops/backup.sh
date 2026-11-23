@@ -228,7 +228,8 @@ cmd_verify() {
            count(*)
       FROM unnest(ARRAY['ledger_record', 'custody_event', 'audit_record', 'bin_transfer',
                         'wallet_request_event', 'arrival_disposal', 'parcel_event',
-                        'support_message', 'escrow_event', 'login_attempt']) AS t(name)
+                        'support_message', 'escrow_event', 'login_attempt',
+                        'usage_tier_change']) AS t(name)
      WHERE NOT EXISTS (SELECT 1 FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
                         WHERE c.relname = t.name AND tg.tgname = 'trg_append_only_' || t.name)
     UNION ALL

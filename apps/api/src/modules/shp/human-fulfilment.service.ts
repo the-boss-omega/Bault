@@ -353,7 +353,8 @@ export class HumanFulfilmentService {
 
       await this.ledger.lockWallet(userId, tx as Database);
       const waiver = await this.memberships.waive(tx as Database, userId, 'show_pickup', show.feeMinor);
-      const feeMinor = show.feeMinor - waiver.waivedMinor;
+      const quote = await this.pricing.quoteFor(userId, show.feeMinor - waiver.waivedMinor, tx as Database);
+      const feeMinor = quote.chargedMinor;
       const balance = await this.ledger.balanceOf(userId, tx as Database);
       if (balance.amount < feeMinor) {
         throw new AppError(ErrorCode.CONFLICT, `Short by ${usdAmount(feeMinor - balance.amount)}.`, 409);
@@ -386,7 +387,7 @@ export class HumanFulfilmentService {
           .values({
             userId,
             actionType: 'shipping',
-            pricingRuleSnapshot: { showPickup: true, eventId: show.id, showName: show.name },
+            pricingRuleSnapshot: { showPickup: true, eventId: show.id, showName: show.name, ...quote },
             amount: feeMinor,
             currency: DEFAULT_CURRENCY,
             paymentMeans: 'wallet',

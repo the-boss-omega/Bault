@@ -233,9 +233,9 @@ jobs:
             SELECT count(*) FROM pg_operator
              WHERE oprname IN ('=', '<>')
                AND (oprleft, oprright) IN (('uuid'::regtype, 'text'::regtype), ('text'::regtype, 'uuid'::regtype));")"
-          echo "guard triggers: ${triggers} (expected 11), uuid/text operators: ${operators} (expected 4)"
+          echo "guard triggers: ${triggers} (expected 12), uuid/text operators: ${operators} (expected 4)"
           psql "$DIRECT_DATABASE_URL" -c "SELECT tgrelid::regclass AS table, tgname FROM pg_trigger WHERE NOT tgisinternal ORDER BY 1, 2;"
-          [ "$triggers" = "11" ] && [ "$operators" = "4" ]
+          [ "$triggers" = "12" ] && [ "$operators" = "4" ]
 
       - name: The migration wrote one platform custodian, and a second run adds none
         run: |

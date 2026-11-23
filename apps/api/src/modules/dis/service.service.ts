@@ -8,7 +8,7 @@ import { BILLING_PORT, type BillingPort, type ChargeOutcome } from '../../shared
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { WalletService } from '../pay/wallet.service';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
-import { ledgerRecord } from '../pay/pay.schema';
+import { charge, ledgerRecord } from '../pay/pay.schema';
 import { MembershipService } from '../mem/membership.service';
 import { serviceRequest } from './dis.schema';
 import { userAccount } from '../acc/acc.schema';
@@ -267,6 +267,10 @@ export class ServiceRequestService {
         },
         tx,
       );
+      await tx
+        .update(charge)
+        .set({ status: 'refunded', updatedAt: new Date() })
+        .where(and(eq(charge.id, billed.chargeId), eq(charge.status, 'settled')));
       refundedMinor = billed.amountMinor;
     } else if (billed?.kind === 'covered') {
       await this.memberships.restoreCounted(tx, billed.periodId, billed.allowance);

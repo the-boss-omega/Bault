@@ -14,6 +14,7 @@ import { userAccount } from '../acc/acc.schema';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { MediaService } from '../med/media.service';
+import { PricingService } from '../prc/pricing.service';
 import { isKnownItemClass, itemClass } from '../inv/item-classes';
 import { makeItemBarcode, makeItemSerial } from '../inv/labels';
 import { transaction } from './mkt.schema';
@@ -50,6 +51,7 @@ export class HouseStoreService {
     private readonly outbox: OutboxService,
     private readonly idempotency: IdempotencyService,
     private readonly media: MediaService,
+    private readonly pricing: PricingService,
   ) {}
 
   listForSale() {
@@ -154,7 +156,8 @@ export class HouseStoreService {
         throw new AppError(ErrorCode.SELF_DEALING_FORBIDDEN, 'The store cannot buy from itself', 403);
       }
 
-      const price = product.askingPrice;
+      const quote = await this.pricing.quoteFor(buyerId, product.askingPrice, tx as Database);
+      const price = quote.chargedMinor;
       const currency = product.currency;
       const balance = await this.ledger.balanceOf(buyerId, tx);
       if (balance.amount < price) {
@@ -188,7 +191,8 @@ export class HouseStoreService {
             source: 'house_store',
             houseListingId: product.id,
             houseListingCode: product.code,
-            askingPrice: price,
+            askingPrice: product.askingPrice,
+            ...quote,
           },
           currency,
         })

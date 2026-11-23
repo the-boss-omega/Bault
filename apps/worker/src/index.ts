@@ -13,7 +13,7 @@ import { refreshTracking } from './jobs/tracking-refresh';
 import { dispatchOutbox } from './jobs/outbox-dispatch';
 import { runStorageFees } from './jobs/storage-fee';
 import { expireUnpaidShipments } from './jobs/shipment-expiry';
-import { renewMemberships } from './jobs/membership-renewal';
+import { recomputeUsageTiers } from './jobs/usage-tier-recompute';
 import { purgeExpiredSessions } from './jobs/session-cleanup';
 import { readRequestedPhotos, tesseractOptions } from './jobs/ocr-read';
 
@@ -84,13 +84,13 @@ async function main(): Promise<void> {
 
   const schedule: { name: string; cron: string; run: () => Promise<void> }[] = [
     { name: JobName.OUTBOX_DISPATCH, cron: '*/1 * * * *', run: () => dispatchOutbox(pool) },
+    { name: JobName.USAGE_TIER_RECOMPUTE, cron: '30 1 * * *', run: () => recomputeUsageTiers(pool) },
     { name: JobName.STORAGE_FEE_RUN, cron: '0 2 * * *', run: () => runStorageFees(pool) },
     { name: JobName.INTEREST_ACCRUAL, cron: '0 3 * * *', run: () => accrueInterest(pool) },
     { name: JobName.WALLET_SUSPENSION, cron: '15 3 * * *', run: () => sweepWalletSuspensions(pool) },
     { name: JobName.LEDGER_INVARIANT_CHECK, cron: '0 * * * *', run: () => checkLedgerInvariants(pool) },
     { name: JobName.TRACKING_REFRESH, cron: '*/30 * * * *', run: () => refreshTracking(pool) },
     { name: JobName.SHIPMENT_EXPIRY, cron: '20 * * * *', run: () => expireUnpaidShipments(pool) },
-    { name: JobName.MEMBERSHIP_RENEWAL, cron: '40 * * * *', run: () => renewMemberships(pool) },
     { name: JobName.SESSION_CLEANUP, cron: '30 4 * * *', run: () => purgeExpiredSessions(pool) },
     ...(ocr ? [{ name: JobName.OCR_READ, cron: '*/1 * * * *', run: () => readPhotos().then(() => undefined) }] : []),
   ];

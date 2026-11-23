@@ -331,8 +331,8 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **Empty `SMTP_REQUIRE_TLS=`** reads as `false` in development (`booleanFromEnv`, `packages/config/src/env.ts`).
 - **Three missing notices:** an operator's re-rate charge or refund (`ShipmentService.reRate`), offers closed by a sale or take-down (`closeOpenOffers`, `mkt/open-offers.ts`), and a gift waiting for its recipient (`TradeService.confirmTransfer`); each needs a new event in `not/event-types.ts`, the worker's `notification-events.ts` and `notification-message.ts`, and `apps/web/src/shared/notifications.ts` with its label in the `en` catalogue.
 - **E-mail on delivery and exception:** `shipment_delivered` and `shipment_exception` e-mail by default, which follows the catalogue's own rule, and each collector can switch it off (`NOTIFICATION_EVENT_TYPES`).
-- **Vault forecast after a cycle ends:** wrong for up to an hour, until the hourly renewal runs (`VaultService.coveredByMembership`).
-- **Renewal with no tier price** only warns (`renewMemberships`); the pricing coverage check reports `ready: false` while a tier is unpriced, and nothing ends a rule once loaded.
+- **Vault forecast after a cycle ends:** done; memberships became usage tiers (FF37) and nothing renews a period, so when an honoured period ends the vault and the sweep both bill the card (`VaultService.coveredByMembership`, `tests/worker/storage-fee.test.ts`).
+- **Renewal with no tier price:** done; the renewal job is gone and migration `0046` ended the `membership:` rules, so the coverage check no longer asks for them (`tests/integration/adm-pricing-coverage.test.ts`).
 - **Bin counts** include cards that left the building (`StowService.listWithCounts`).
 - **Confirming a correct flagged name** is impossible on the profile page; nothing depends on the flag (`nameDirty` in `ProfilePage.tsx`).
 - **`scripts/remove-test-users.mjs`** checks every foreign key to `user_account` and the six `ACTIVITY` tables, deletes an account only with its tokens, sessions, two-factor rows, notifications and empty own tickets, and closes one that anything else names; it refuses production unless given `--production-i-know`, which also lists the staging check's `chk` accounts and asks for `delete` typed back before it changes anything.
@@ -354,7 +354,7 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **Dead shipping code:** `CustomsService.required` and `outstanding` have no route, and nothing writes the statuses `picking` and `packed`.
 - **Hand-over scans** compare raw item ids, and the SPA has no hand-over screen (`HumanFulfilmentService.handOver`).
 - **Shelf Yield:** an administrator's bin change writes no `bin_transfer` (`AdmService.updateItem`), and `ShelfYieldService` passes every shelved item to `inArray`, which meets Postgres's 65,535-parameter limit as stock grows.
-- **Upgrade credit and allowances:** the credit ignores allowances already used, and the new cycle starts fresh; the exposure is one cycle's allowances per upgrade (`prorationCreditMinor` in `MembershipService.subscribe`).
+- **Upgrade credit and allowances:** done; nothing can be bought or upgraded any more, a tier comes from the last 90 days of use, and a paid period only keeps the allowances it had until `honoured_until` (`tests3/integration/mem-usage-tiers.test.ts`, `tests/worker/usage-tier-recompute.test.ts`).
 - **Parcel retention:** nothing disposes of old unclaimed parcels (`ParcelService.listRetentionDue` has no caller).
 - **Local set-up:** `.env.example` does not boot as copied (`PAYMENT_PROVIDER=paypal` with no credentials, `AUTH_RATE_LIMIT_PER_MINUTE=10`), and `pnpm dev` does not start the worker (`scripts/dev.mjs`).
 - **CI gaps:** `scripts/design-lint.mjs` runs nowhere (it reports clean), and CI never builds the web or worker images.

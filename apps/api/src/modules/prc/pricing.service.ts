@@ -4,6 +4,8 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { applyBasisPoints, money, type Money } from '../../shared/money';
+import { userAccount } from '../acc/acc.schema';
+import { discountedMinor, tierRule, type TierKey } from '../mem/tiers';
 import { pricingRule } from './prc.schema';
 import { billableActions } from './billable-actions';
 
@@ -22,6 +24,19 @@ export interface CreateRuleInput {
 export interface PriceResult {
   amount: Money;
   snapshot: Record<string, unknown>;
+}
+
+export interface TierQuote {
+  tier: TierKey;
+  discountBps: number;
+  listMinor: number;
+  chargedMinor: number;
+}
+
+export interface PriceOptions {
+  itemClass?: string;
+  base?: Money;
+  userId?: string;
 }
 
 @Injectable()
@@ -75,11 +90,26 @@ export class PricingService {
     return rows[0] ?? null;
   }
 
-  async tryPrice(
-    actionType: string,
-    opts: { itemClass?: string; base?: Money } = {},
-    tx?: Database,
-  ): Promise<PriceResult | null> {
+  async tierOf(userId: string, tx?: Database): Promise<TierKey> {
+    const exec = tx ?? this.db;
+    const [row] = await exec
+      .select({ tier: userAccount.usageTier })
+      .from(userAccount)
+      .where(eq(userAccount.id, userId))
+      .limit(1);
+    return tierRule(row?.tier).key;
+  }
+
+  async quoteFor(userId: string, listMinor: number, tx?: Database): Promise<TierQuote> {
+    return PricingService.atTier(await this.tierOf(userId, tx), listMinor);
+  }
+
+  static atTier(tier: TierKey, listMinor: number): TierQuote {
+    const discountBps = tierRule(tier).discountBps;
+    return { tier, discountBps, listMinor, chargedMinor: discountedMinor(listMinor, discountBps) };
+  }
+
+  async tryPrice(actionType: string, opts: PriceOptions = {}, tx?: Database): Promise<PriceResult | null> {
     const rule = await this.ruleInForce(actionType, opts.itemClass, tx);
     if (!rule) return null;
 
@@ -93,25 +123,25 @@ export class PricingService {
       });
     }
 
+    const snapshot: Record<string, unknown> = {
+      ruleId: rule.id,
+      actionType: rule.actionType,
+      itemClass: rule.itemClass,
+      model: rule.model,
+      value: rule.value,
+      currency: rule.currency,
+      effectiveFrom: rule.effectiveFrom,
+    };
+    if (!opts.userId) return { amount, snapshot };
+
+    const quote = await this.quoteFor(opts.userId, amount.amount, tx);
     return {
-      amount,
-      snapshot: {
-        ruleId: rule.id,
-        actionType: rule.actionType,
-        itemClass: rule.itemClass,
-        model: rule.model,
-        value: rule.value,
-        currency: rule.currency,
-        effectiveFrom: rule.effectiveFrom,
-      },
+      amount: money(quote.chargedMinor, amount.currency),
+      snapshot: { ...snapshot, ...quote },
     };
   }
 
-  async price(
-    actionType: string,
-    opts: { itemClass?: string; base?: Money } = {},
-    tx?: Database,
-  ): Promise<PriceResult> {
+  async price(actionType: string, opts: PriceOptions = {}, tx?: Database): Promise<PriceResult> {
     const result = await this.tryPrice(actionType, opts, tx);
     if (!result) throw AppError.validation(`No pricing rule for action "${actionType}"`);
     return result;

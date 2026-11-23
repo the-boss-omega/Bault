@@ -34,7 +34,6 @@ const { ProfilePage } = await import('../../apps/web/src/areas/customer/profile/
 const { api } = await import('../../apps/web/src/shared/api');
 const { billableActions, coverage } =
   await import('../../apps/api/src/modules/prc/billable-actions');
-const { MEMBERSHIP_TIERS } = await import('../../apps/api/src/modules/mem/tiers');
 const { revealField } = await import('../../apps/web/src/shared/ui/revealField');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
@@ -737,14 +736,7 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
             ? RULES
             : path === '/admin/pricing/coverage'
               ? JSON.parse(JSON.stringify(coverage(billableActions(), [])))
-              : path === '/membership/tiers'
-                ? {
-                    tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
-                    uncovered: [],
-                    cycleDays: 30,
-                    currency: 'USD',
-                  }
-                : [],
+              : [],
         )) as never);
       render(
         <I18nProvider>
@@ -1137,12 +1129,6 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
     // What the two management forms are given to show: the price list's actions, and a transaction to open a dispute on.
     const PRICING = {
       '/admin/pricing/coverage': JSON.parse(JSON.stringify(coverage(billableActions(), []))),
-      '/membership/tiers': {
-        tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
-        uncovered: [],
-        cycleDays: 30,
-        currency: 'USD',
-      },
     };
     const DISPUTES = {
       '/admin/transactions': [

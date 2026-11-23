@@ -81,6 +81,7 @@ function service(adapter: ShippingAdapter): ShipmentService {
   const pricing = {
     price: async () => ({ amount: { amount: 300, currency: 'USD' } }),
     tryPrice: async () => null,
+    tierOf: async () => 'bronze',
   };
   return new ShipmentService(
     db as never,
@@ -97,9 +98,16 @@ function service(adapter: ShippingAdapter): ShipmentService {
 const priceServices = (s: ShipmentService, profile: ParcelProfile, customs?: CustomsLine[]) =>
   (
     s as unknown as {
-      priceServices(p: ParcelProfile, addOns: string[], rush: boolean, cover: null, c?: CustomsLine[]): Promise<QuotedRate[]>;
+      priceServices(
+        userId: string,
+        p: ParcelProfile,
+        addOns: string[],
+        rush: boolean,
+        cover: null,
+        c?: CustomsLine[],
+      ): Promise<QuotedRate[]>;
     }
-  ).priceServices(profile, [], false, null, customs);
+  ).priceServices('collector', profile, [], false, null, customs);
 
 const profile = (destination: ParcelProfile['destination'], extra: Partial<ParcelProfile> = {}): ParcelProfile => ({
   destination,

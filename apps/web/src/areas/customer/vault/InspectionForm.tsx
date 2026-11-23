@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
 import { areaLabel } from '../../../shared/grading';
@@ -14,7 +14,7 @@ export function InspectionForm({
 }: {
   item: { id: string };
   /** What the inspection costs, as it is written (the price list's), when there is a price. */
-  fee?: string | null;
+  fee?: ReactNode;
   onCancel: () => void;
   onDone: (message: string) => void;
   onError: (m: string) => void;
