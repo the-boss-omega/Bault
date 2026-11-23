@@ -51,6 +51,12 @@ export class CstController {
   }
 
   @Roles('warehouse_operator', 'admin')
+  @Get('to-shelve')
+  toShelve() {
+    return this.stow.listToShelve();
+  }
+
+  @Roles('warehouse_operator', 'admin')
   @Post('items/:itemId/hold')
   async placeHold(@Param('itemId') itemId: string, @CurrentUser() user: AuthUser) {
     const target = await this.stow.resolveItem(itemId);

@@ -399,3 +399,88 @@ describe('when there is nowhere to put it', () => {
     expect(within(bench).queryByRole('button', { name: /create a shelf here/i })).toBeNull();
   });
 });
+
+describe('a shelf can be decided later', () => {
+  it('offers "Decide the shelf later" with its reasons and books in without a shelf', async () => {
+    const user = userEvent.setup();
+    renderConsole();
+    const bench = await waitFor(() => panel(/receive bench/i));
+
+    const mode = within(bench).getByRole('combobox', { name: /where it goes/i });
+    expect(within(mode).getByRole('option', { name: 'Decide the shelf later' })).toBeInTheDocument();
+    await user.selectOptions(mode, 'later');
+
+    const reason = within(bench).getByRole('combobox', { name: /why later/i });
+    const reasons = within(reason)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    expect(reasons).toEqual(['Shelf full', 'Oversized, needs a place', 'Waiting for grading', 'Other']);
+
+    await user.selectOptions(reason, 'other');
+    const submit = within(bench).getByRole('button', { name: /^intake$/i });
+    await user.type(within(bench).getByLabelText(/owner username/i), 'red');
+    await user.type(within(bench).getAllByLabelText(/description/i)[0]!, 'Rayquaza ex 97/97');
+    expect(submit).toBeDisabled();
+    await user.type(within(bench).getByLabelText(/say why/i), 'Needs a toploader');
+
+    post.mockResolvedValue([{ id: 'i1', barcode: 'SN-LATER-0001' }]);
+    await user.click(submit);
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const [path, body] = post.mock.calls[0]!;
+    expect(path).toBe('/intake/items/batch');
+    expect((body as { units: Record<string, unknown>[] }).units[0]).toMatchObject({
+      placement: 'later',
+      placementReason: 'Needs a toploader',
+      autoStow: false,
+      binId: undefined,
+    });
+  });
+});
+
+describe('the To shelve panel', () => {
+  const WAITING = {
+    itemId: 'it-1',
+    serialNumber: 'SN-WAIT-0001',
+    barcode: 'SN-WAIT-0001',
+    description: 'Rayquaza ex 97/97',
+    typeClass: 'trading_card',
+    oversized: false,
+    lifecycleState: 'stored',
+    parcelCode: 'PKG-AAAA1111',
+    ownerUsername: 'red',
+    reason: 'Shelf full',
+    placementUndecidedAt: '2026-09-01T10:00:00.000Z',
+    waitingSeconds: 3 * 3600,
+  };
+
+  it('lists what waits for a shelf and stows it through the relocate bench', async () => {
+    const user = userEvent.setup();
+    let waiting = [WAITING];
+    get.mockImplementation((path: string) =>
+      path === '/custody/to-shelve' ? Promise.resolve(waiting) : apiFor()(path),
+    );
+    post.mockImplementation(() => {
+      waiting = [];
+      return Promise.resolve({ status: 'relocated' });
+    });
+
+    renderConsole('#/warehouse/inventory');
+    const shelve = await waitFor(() => panel(/^to shelve$/i));
+    const row = (await within(shelve).findByText('SN-WAIT-0001')).closest('tr')!;
+    expect(within(row).getByText('PKG-AAAA1111')).toBeInTheDocument();
+    expect(within(row).getByText('@red')).toBeInTheDocument();
+    expect(within(row).getByText('Shelf full')).toBeInTheDocument();
+    expect(within(row).getByText('3 h')).toBeInTheDocument();
+
+    await user.click(within(row).getByRole('button', { name: /stow sn-wait-0001/i }));
+    expect(within(shelve).getByLabelText(/scan item/i)).toHaveValue('SN-WAIT-0001');
+    await user.type(within(shelve).getByLabelText(/scan shelf/i), 'BIN-QJLTDJH4');
+    await user.click(within(shelve).getByRole('button', { name: /relocate/i }));
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/custody/items/SN-WAIT-0001/relocate', { binId: 'BIN-QJLTDJH4' }),
+    );
+    await within(shelve).findByText(/everything booked in is on a shelf/i);
+  });
+});
