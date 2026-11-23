@@ -13,7 +13,7 @@ import {
   type QuotedRate,
   type ServiceCatalogue,
 } from '../../../shared/carriers';
-import { Button, ButtonLink, Field, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, ButtonLink, ErrorState, Field, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { TierPrice } from '../../../shared/ui/TierPrice';
 import { IconAlert, IconChevronRight, IconPlus, IconShipping, IconUsers } from '../../../shared/ui/icons';
@@ -124,6 +124,19 @@ function ComposerRound({
   const [newAddressError, setNewAddressError] = useState<string | null>(null);
   const [savingAddress, setSavingAddress] = useState(false);
 
+  const stepHeading = useRef<HTMLHeadingElement>(null);
+  const firstStep = useRef(true);
+  useEffect(() => {
+    if (firstStep.current) {
+      firstStep.current = false;
+      return;
+    }
+    const heading = stepHeading.current;
+    if (!heading) return;
+    heading.focus({ preventScroll: true });
+    heading.closest('.composer')?.scrollIntoView?.({ block: 'start' });
+  }, [step]);
+
   const preselect = route.params.items;
   const consumed = useRef(false);
   useEffect(() => {
@@ -133,6 +146,7 @@ function ComposerRound({
     setParams({ items: null });
   }, [preselect, setParams]);
 
+  const [loadRound, setLoadRound] = useState(0);
   useEffect(() => {
     void (async () => {
       try {
@@ -142,14 +156,17 @@ function ComposerRound({
         ]);
         setCatalogue(cat);
         setAddresses(list);
+        setLoadError(null);
         const preferred = list.find((a) => a.isDefault) ?? list[0];
-        if (preferred) setAddressId(preferred.id);
-        else setNewAddress({ ...EMPTY_ADDRESS });
+        if (preferred) setAddressId((cur) => cur || preferred.id);
+        else setNewAddress((cur) => cur ?? { ...EMPTY_ADDRESS });
       } catch (e) {
         setLoadError((e as Error).message);
-        setAddresses([]);
       }
     })();
+  }, [loadRound]);
+
+  useEffect(() => {
     void api
       .get<{ amount: number }>('/finance/wallet')
       .then((wallet) => setBalanceMinor(typeof wallet?.amount === 'number' ? wallet.amount : null))
@@ -458,7 +475,7 @@ function ComposerRound({
       <section className="panel composer-step" aria-labelledby={`composer-step-${step}`}>
         <header className="panel-head">
           <div>
-            <h2 className="panel-title" id={`composer-step-${step}`}>
+            <h2 className="panel-title" id={`composer-step-${step}`} tabIndex={-1} ref={stepHeading}>
               {t('ship.stepTitle', { n: stepIndex + 1, name: t(STEP_LABEL[step]) })}
             </h2>
             <p className="panel-subtitle">{t(`ship.stepSubtitle.${step}` as MessageKey)}</p>
@@ -472,9 +489,15 @@ function ComposerRound({
 
         <div className="panel-body">
           {loadError && (
-            <p className="field-error" role="alert">
-              <bdi dir="auto">{loadError}</bdi>
-            </p>
+            <ErrorState
+              title={t('ship.loadFailed')}
+              message={loadError}
+              onRetry={() => {
+                setLoadError(null);
+                setLoadRound((n) => n + 1);
+              }}
+              retryLabel={t('ui.retry')}
+            />
           )}
 
           {step === 'cards' && (
@@ -490,7 +513,7 @@ function ComposerRound({
           {step === 'where' && (
             <div className="stack">
               {addresses === null ? (
-                <p className="hint">{t('grp.loading')}</p>
+                !loadError && <p className="hint">{t('grp.loading')}</p>
               ) : (
                 addresses.length > 0 && (
                   <fieldset className="address-choices">
@@ -1108,7 +1131,7 @@ function Confirmation({
   let tone: 'success' | 'warning' | 'error' = 'success';
   if (done.kind === 'booked') {
     title = t('ship.done.booked', { code: done.code });
-    text = `${serviceLabel(t, done.rate)} · ${transitLabel(t, done.rate.transitDaysMin, done.rate.transitDaysMax)}`;
+    text = `${serviceLabel(t, done.rate)} · ${transitLabel(t, done.rate.transitDaysMin, done.rate.transitDaysMax)}. ${t('ship.done.bookedNext')}`;
     amount = formatUsd(done.costMinor);
   } else if (done.kind === 'held') {
     title = t('ship.done.held', { code: done.code });

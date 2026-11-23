@@ -700,7 +700,6 @@ describe('cancelling a shipment says what it will cost', () => {
         t={(k: string) => k}
         onClose={() => {}}
         onChanged={() => {}}
-        onError={() => {}}
         onStatus={() => {}}
       />,
     );
@@ -735,7 +734,6 @@ describe('a collector’s own hand delivery', () => {
         t={(k: string) => k}
         onClose={() => {}}
         onChanged={() => {}}
-        onError={() => {}}
         onStatus={() => {}}
       />,
     );
