@@ -85,7 +85,8 @@ export function LabelSheet({
         </ul>
       )}
 
-      <div className="stack stack--tight">
+      <details className="stack stack--tight">
+        <summary className="field-label">{t('warehouse.labels.printerHelp')}</summary>
         <h4 className="field-label">{t('labels.sheet.settings')}</h4>
         <ol className="label-sheet-steps hint">
           <li>{t('labels.sheet.step.size')}</li>
@@ -104,7 +105,7 @@ export function LabelSheet({
           <dt>{t('labels.sheet.printer.browser')}</dt>
           <dd>{t('labels.sheet.printer.browserHow')}</dd>
         </dl>
-      </div>
+      </details>
     </section>
   );
 }

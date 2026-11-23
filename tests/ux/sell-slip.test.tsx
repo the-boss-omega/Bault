@@ -46,7 +46,8 @@ describe('selling an item, written on a slip while it is priced', () => {
     sell();
     const user = userEvent.setup();
     const slip = screen.getByRole('region', { name: 'Asking price' });
-    expect(slip.querySelector('.drawer-tag-amount')).toHaveTextContent('$500.00');
+    // No price is made up: the slip has a dash until one is typed.
+    expect(slip.querySelector('.drawer-tag-amount')).toHaveTextContent('—');
     expect(within(slip).getByText('Serial').nextElementSibling).toHaveTextContent('SN-CL10-0005');
     // The card's name, not the whole catalogue line.
     expect(within(slip).getByText('Item').nextElementSibling).toHaveTextContent('2011 Pokémon Call of Legends — Rayquaza #SL10/95');

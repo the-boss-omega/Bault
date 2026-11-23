@@ -7,7 +7,7 @@ import type { ParcelQueueRow } from '../../shared/parcels';
 import { Barcode } from '../../shared/Barcode';
 import { Docket, type BenchOutcome } from '../../shared/ui/Docket';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
-import { Button, Field, IconButton, ScanField } from '../../shared/ui/primitives';
+import { Button, ErrorState, Field, IconButton, ScanField, SuccessNote } from '../../shared/ui/primitives';
 import { IconBox, IconClose, IconPlus } from '../../shared/ui/icons';
 import { code as bdiCode, quiet, stamped } from './Benches';
 import { LabelSheet } from './LabelSheet';
@@ -85,6 +85,10 @@ export function IntakeBench({
   const [emptyReason, setEmptyReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [closedNote, setClosedNote] = useState<string | null>(null);
+  const [parcelsError, setParcelsError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<BenchOutcome | null>(null);
   const [toRead, setToRead] = useState<string[]>([]);
 
@@ -92,7 +96,10 @@ export function IntakeBench({
     try {
       const queue = await api.get<ParcelQueueRow[]>('/parcels');
       setOpenParcels(queue.filter((p) => p.status === 'opened' && p.ownerUsername));
-    } catch {}
+      setParcelsError(null);
+    } catch (e) {
+      setParcelsError((e as Error).message);
+    }
   }, []);
 
   useEffect(() => {
@@ -172,6 +179,13 @@ export function IntakeBench({
     (u) => u.description.trim() || u.serialNumber.trim() || u.photos.length > 0,
   );
   const ready = ownerOk && stowReady && filled.length > 0 && !busy;
+  const missing = [
+    ...(!ownerOk ? [t('warehouse.intake.missingOwner')] : []),
+    ...(filled.length === 0 ? [t('warehouse.intake.missingUnit')] : []),
+    ...(!stowReady
+      ? [t(stowMode === 'later' ? 'warehouse.intake.missingReason' : 'warehouse.intake.missingShelf')]
+      : []),
+  ];
 
   const patch = (key: string, next: Partial<UnitDraft>) =>
     setUnits((prev) => prev.map((u) => (u.key === key ? { ...u, ...next } : u)));
@@ -229,11 +243,14 @@ export function IntakeBench({
   async function closeParcel() {
     if (!parcel) return;
     setClosing(true);
+    setCloseError(null);
     try {
       await api.post(`/parcels/${parcel.id}/process`, {
         emptyReason: emptyReason.trim() || undefined,
       });
       onLog(t('warehouse.intake.parcelClosed', { code: parcel.code }));
+      setClosedNote(t('warehouse.intake.parcelClosedNext', { code: parcel.code }));
+      setConfirmClose(false);
       setParcelId('');
       setEmptyReason('');
       onParcelClosed();
@@ -241,6 +258,7 @@ export function IntakeBench({
       await onDone();
     } catch (e) {
       onLog(t('warehouse.log.intakeError', { message: (e as Error).message }));
+      setCloseError((e as Error).message);
     } finally {
       setClosing(false);
     }
@@ -268,11 +286,27 @@ export function IntakeBench({
 
   return (
     <div className="stack stack--tight">
+      {parcelsError && (
+        <ErrorState
+          title={t('warehouse.intake.parcelsFailed')}
+          message={parcelsError}
+          onRetry={() => void loadParcels()}
+          retryLabel={t('ui.retry')}
+        />
+      )}
+      {closedNote && !parcel && <SuccessNote>{closedNote}</SuccessNote>}
       <div className="request-form request-form--bench">
         <div className="stack stack--tight request-form-fields">
           <div className="form-grid">
             <Field label={t('warehouse.intake.parcel')} hint={t('warehouse.intake.parcelHint')}>
-              <select value={parcelId} onChange={(e) => setParcelId(e.target.value)}>
+              <select
+                value={parcelId}
+                onChange={(e) => {
+                  setParcelId(e.target.value);
+                  setConfirmClose(false);
+                  setCloseError(null);
+                }}
+              >
                 <option value="">{t('warehouse.intake.noParcel')}</option>
                 {openParcels.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -556,6 +590,9 @@ export function IntakeBench({
               ? t('warehouse.intake.submitMany', { count: filled.length })
               : t('warehouse.intake.submit')}
           </Button>
+          {!ready && !busy && missing.length > 0 && (
+            <span className="field-hint">{t('warehouse.missing', { list: missing.join('; ') })}</span>
+          )}
         </div>
       </div>
 
@@ -572,17 +609,36 @@ export function IntakeBench({
               <input value={emptyReason} onChange={(e) => setEmptyReason(e.target.value)} />
             </Field>
           )}
-          <div className="row">
-            <span className="spacer" />
-            <Button
-              variant="secondary"
-              icon={<IconBox />}
-              disabled={closing || (parcel.itemCount === 0 && emptyReason.trim() === '')}
-              onClick={() => void closeParcel()}
-            >
-              {t('warehouse.intake.closeParcel')}
-            </Button>
-          </div>
+          {closeError && <ErrorState message={closeError} />}
+          {confirmClose ? (
+            <div className="row" role="group" aria-label={t('warehouse.intake.closeParcel')}>
+              <span className="field-hint">
+                {t('warehouse.intake.closeConfirm', { code: parcel.code, count: parcel.itemCount })}
+              </span>
+              <span className="spacer" />
+              <Button variant="primary" icon={<IconBox />} loading={closing} onClick={() => void closeParcel()}>
+                {t('warehouse.intake.closeYes')}
+              </Button>
+              <Button variant="ghost" disabled={closing} onClick={() => setConfirmClose(false)}>
+                {t('warehouse.intake.closeKeep')}
+              </Button>
+            </div>
+          ) : (
+            <div className="row">
+              <span className="spacer" />
+              <Button
+                variant="secondary"
+                icon={<IconBox />}
+                disabled={closing || (parcel.itemCount === 0 && emptyReason.trim() === '')}
+                onClick={() => {
+                  setClosedNote(null);
+                  setConfirmClose(true);
+                }}
+              >
+                {t('warehouse.intake.closeParcel')}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

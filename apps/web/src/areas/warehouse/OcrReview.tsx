@@ -58,6 +58,7 @@ export function OcrReview({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [round, setRound] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -104,7 +105,7 @@ export function OcrReview({
       live = false;
       if (timer) clearTimeout(timer);
     };
-  }, [subject, id, pollMs, waitMs]);
+  }, [subject, id, pollMs, waitMs, round]);
 
   if (phase === 'off' || phase === 'dismissed') return null;
 
@@ -116,6 +117,16 @@ export function OcrReview({
         <p className="hint" role="status">
           {title}: {line}
         </p>
+        {phase === 'nothing' && (
+          <div className="row">
+            <Button size="sm" variant="secondary" onClick={() => setRound((n) => n + 1)}>
+              {t('warehouse.ocr.readAgain')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setPhase('dismissed')}>
+              {t('ocr.skip')}
+            </Button>
+          </div>
+        )}
       </section>
     );
   }

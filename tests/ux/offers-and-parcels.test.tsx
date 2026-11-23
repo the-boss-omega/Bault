@@ -255,9 +255,18 @@ describe('the trades, one slip each', () => {
     await act(async () => {
       within(swap!).getByRole('button', { name: 'Approve' }).click();
     });
+    expect(post).not.toHaveBeenCalled();
+    const confirm = await screen.findByRole('dialog', { name: 'Approve this swap' });
+    await act(async () => {
+      within(confirm).getByRole('button', { name: 'Approve' }).click();
+    });
 
     await waitFor(() => expect(post).toHaveBeenCalledWith('/marketplace/swaps/s-in/approve'));
-    await waitFor(() => expect(onChanged).toHaveBeenCalledWith('Approved'));
+    await waitFor(() =>
+      expect(onChanged).toHaveBeenCalledWith(
+        'Approved. If the other side has approved too, the items have changed owners; otherwise it waits on them.',
+      ),
+    );
   });
 
   it('says so when there are none', async () => {
@@ -339,7 +348,7 @@ describe('the listings, one slip each', () => {
 
     const [slip] = await listingSlips();
     await user.click(within(slip!).getByRole('button', { name: 'Reprice' }));
-    const input = within(slip!).getByRole('textbox', { name: 'Price' });
+    const input = within(slip!).getByRole('textbox', { name: 'New asking price' });
     expect(input).toHaveValue('3200.00');
 
     await user.clear(input);

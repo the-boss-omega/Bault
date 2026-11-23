@@ -55,6 +55,15 @@ describe('MKT offers', () => {
   const statusOf = async (c: Awaited<ReturnType<typeof signIn>>, offerId: string) =>
     ((await c.get('/marketplace/offers/mine')).body as { id: string; status: string }[]).find((o) => o.id === offerId)?.status;
 
+  it('names the seller on an offer the buyer made, and the buyer on one the seller received', async () => {
+    const { seller, bidder, offerId } = await listedWithOffer('Offers name both sides');
+    type Row = { id: string; direction: string; buyerUsername: string | null; sellerUsername: string | null };
+    const made = ((await bidder.get('/marketplace/offers/mine')).body as Row[]).find((o) => o.id === offerId);
+    expect(made).toMatchObject({ direction: 'outgoing', sellerUsername: 'red', buyerUsername: 'golden' });
+    const received = ((await seller.get('/marketplace/offers/mine')).body as Row[]).find((o) => o.id === offerId);
+    expect(received).toMatchObject({ direction: 'incoming', sellerUsername: 'red', buyerUsername: 'golden' });
+  });
+
   it('closes the other open offers when the listing is bought outright', async () => {
     const { seller, bidder, listingId, offerId } = await listedWithOffer('Offers closed by a purchase');
     const buyer = await signIn(SEED.collector3);

@@ -266,6 +266,7 @@ describe('packing a shipment', () => {
     await load(user);
 
     await user.type(await screen.findByLabelText('Notes'), 'Rigid mailer.');
+    await user.type(screen.getByLabelText('Package weight (grams)'), '120');
     const complete = screen.getByRole('button', { name: 'Complete' });
     expect(complete).toBeDisabled();
 
@@ -300,6 +301,7 @@ describe('packing a shipment', () => {
     });
     await load(user);
     await user.type(await screen.findByLabelText('Notes'), 'Overnight envelope.');
+    await user.type(screen.getByLabelText('Package weight (grams)'), '120');
     const complete = screen.getByRole('button', { name: 'Complete' });
 
     await scan(user, /scan the parcel/i, 'PKG-SOMEONE-ELSE');
@@ -344,6 +346,9 @@ describe('the service queue', () => {
     );
     const button = await screen.findByRole('button', { name: /cancel and refund/i });
     await userEvent.click(button);
+    expect(post).not.toHaveBeenCalledWith('/services/requests/sr-1/deny');
+    expect(screen.getByText(/give the customer back what they paid/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, cancel and refund' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/services/requests/sr-1/deny'));
   });
 });

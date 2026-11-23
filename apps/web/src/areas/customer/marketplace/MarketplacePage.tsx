@@ -1,19 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useVaultItems } from '../../../shared/useVaultItems';
 import { ITEM_CLASSES, itemClassLabel, itemName } from '../../../shared/itemClasses';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
 import { Amount, ItemPick, Serial } from '../../../shared/ui/Serial';
-import { dollarsToCents, formatUsd } from '../../../shared/money';
+import { dollarsToCents, formatUsd, isolate } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { useNavigation, useRoute } from '../../../shared/routing';
+import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
   ContextTabs,
   EmptyState,
   ErrorState,
   Field,
+  MoneyField,
   Panel,
   SkeletonBlock,
   StatusBadge,
@@ -27,6 +28,7 @@ import { ProposeTradePanel } from './ProposeTradePanel';
 import { StorefrontPanel } from './StorefrontPanel';
 import { ListingDealFlow, SellerLink, type ListingDeal } from './ListingDeal';
 import { loadProfile } from '../../../shared/session';
+import { LIST_TOOLS_FROM } from './ListTools';
 
 interface Listing {
   id: string;
@@ -49,6 +51,7 @@ export function MarketplacePage() {
   const { goTab, setParams } = useNavigation(route);
 
   const [listings, setListings] = useState<Listing[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const q = route.params.q ?? '';
@@ -65,7 +68,8 @@ export function MarketplacePage() {
     setParams({ q: null, type: null, condition: null, min: null, max: null, sort: null });
   }
   const [deal, setDeal] = useState<ListingDeal | null>(null);
-  const { items, reload: reloadItems } = useVaultItems(true);
+  const keepStatus = useRef(false);
+  const { items, loaded: itemsLoaded, reload: reloadItems } = useVaultItems(true);
   const [myUsername, setMyUsername] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -78,16 +82,30 @@ export function MarketplacePage() {
     ? (route.tab as MarketTab)
     : 'browse';
 
+  const shownTab = useRef(tab);
+  useEffect(() => {
+    if (shownTab.current === tab) return;
+    shownTab.current = tab;
+    setError(null);
+    if (!keepStatus.current) setStatus(null);
+    keepStatus.current = false;
+  }, [tab]);
+
+  const minCents = dollarsToCents(minPrice);
+  const maxCents = dollarsToCents(maxPrice);
+  const minBad = minPrice.trim() !== '' && minCents === null;
+  const maxBad = maxPrice.trim() !== '' && maxCents === null;
+  const rangeBad = minCents !== null && maxCents !== null && minCents > maxCents;
+
   const query = useMemo(() => {
     const params = new URLSearchParams();
     if (q.trim()) params.set('q', q.trim());
     if (type) params.set('type', type);
     if (condition.trim()) params.set('condition', condition.trim());
-    const cents = (value: string) => dollarsToCents(value);
-    const min = cents(minPrice);
-    const max = cents(maxPrice);
+    const min = dollarsToCents(minPrice);
+    const max = dollarsToCents(maxPrice);
     if (min !== null) params.set('minPrice', String(min));
-    if (max !== null) params.set('maxPrice', String(max));
+    if (max !== null && (min === null || max >= min)) params.set('maxPrice', String(max));
     if (sort !== 'newest') params.set('sort', sort);
     return params.toString();
   }, [q, type, condition, minPrice, maxPrice, sort]);
@@ -95,9 +113,9 @@ export function MarketplacePage() {
   const loadListings = useCallback(async (search: string) => {
     try {
       setListings(await api.get<Listing[]>(`/marketplace/listings?${search}`));
-      setError(null);
+      setLoadError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setLoadError((e as Error).message);
       setListings([]);
     }
   }, []);
@@ -162,8 +180,13 @@ export function MarketplacePage() {
                 />
               </Field>
 
-              <Field label={t('market.filter.minPrice')} className="field--compact">
+              <Field
+                label={t('market.filter.minPrice')}
+                className="field--compact"
+                error={minBad ? t('market.filter.priceBad') : undefined}
+              >
                 <input
+                  aria-invalid={minBad || undefined}
                   inputMode="decimal"
                   value={minPrice}
                   onChange={(e) => setParams({ min: e.target.value })}
@@ -172,8 +195,15 @@ export function MarketplacePage() {
                 />
               </Field>
 
-              <Field label={t('market.filter.maxPrice')} className="field--compact">
+              <Field
+                label={t('market.filter.maxPrice')}
+                className="field--compact"
+                error={
+                  maxBad ? t('market.filter.priceBad') : rangeBad ? t('market.filter.rangeBad') : undefined
+                }
+              >
                 <input
+                  aria-invalid={maxBad || rangeBad || undefined}
                   inputMode="decimal"
                   value={maxPrice}
                   onChange={(e) => setParams({ max: e.target.value })}
@@ -202,7 +232,7 @@ export function MarketplacePage() {
               <span className="spacer" />
 
               {listings !== null && (
-                <span className="vault-count">
+                <span className="vault-count" role="status">
                   {listings.length === 1
                     ? t('market.listingsCountOne')
                     : t('market.listingsCount', { count: listings.length })}
@@ -210,7 +240,17 @@ export function MarketplacePage() {
               )}
             </div>
 
-            {listings === null ? (
+            {loadError ? (
+              <ErrorState
+                title={t('market.loadFailed')}
+                message={loadError}
+                onRetry={() => {
+                  setListings(null);
+                  void loadListings(query);
+                }}
+                retryLabel={t('ui.retry')}
+              />
+            ) : listings === null ? (
               <ul className="card-grid">
                 {Array.from({ length: 6 }, (_, i) => (
                   <li key={i}>
@@ -227,7 +267,11 @@ export function MarketplacePage() {
                     <Button size="sm" onClick={clearFilters}>
                       {t('market.filter.clear')}
                     </Button>
-                  ) : undefined
+                  ) : (
+                    <Button size="sm" variant="primary" onClick={() => goTab('sell')}>
+                      {t('market.empty.sellOne')}
+                    </Button>
+                  )
                 }
               />
             ) : (
@@ -265,14 +309,25 @@ export function MarketplacePage() {
                       <span className="card-sub">{itemClassLabel(t, listing.typeClass)}</span>
                     </div>
 
-                    <div className="actions">
-                      <Button variant="primary" size="sm" onClick={() => setDeal({ kind: 'buy', listing })}>
-                        {t('market.buy')}
-                      </Button>
-                      <Button variant="secondary" size="sm" onClick={() => setDeal({ kind: 'offer', listing })}>
-                        {t('market.makeOffer')}
-                      </Button>
-                    </div>
+                    {myUsername !== undefined && listing.sellerUsername === myUsername ? (
+                      <div className="actions">
+                        <StatusBadge tone="gold" plain>
+                          {t('market.yours')}
+                        </StatusBadge>
+                        <Button variant="secondary" size="sm" onClick={() => goTab('listings')}>
+                          {t('market.manage')}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="actions">
+                        <Button variant="primary" size="sm" onClick={() => setDeal({ kind: 'buy', listing })}>
+                          {t('market.buy')}
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => setDeal({ kind: 'offer', listing })}>
+                          {t('market.makeOffer')}
+                        </Button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -284,22 +339,25 @@ export function MarketplacePage() {
       {tab === 'sell' && (
         <TabPanel tab="sell">
           <SellPanel
+            key={route.params.item ?? route.params.serial ?? ''}
             items={items}
             t={t}
-            onListed={async () => {
-              setStatus(t('market.status.listed'));
-              await loadListings(q);
+            loaded={itemsLoaded}
+            initialItem={route.params.item ?? route.params.serial}
+            onListed={async (message) => {
+              setStatus(message);
+              keepStatus.current = true;
+              await loadListings(query);
               await reloadItems();
-              goTab('browse');
+              goTab('listings');
             }}
-            onError={setError}
           />
         </TabPanel>
       )}
 
       {tab === 'listings' && (
         <TabPanel tab="listings">
-          <MyListingsPanel onChanged={async (m) => setStatus(m)} onError={setError} />
+          <MyListingsPanel onChanged={async (m) => setStatus(m)} />
         </TabPanel>
       )}
 
@@ -308,10 +366,9 @@ export function MarketplacePage() {
           <OffersPanel
             onChanged={async (m) => {
               setStatus(m);
-              await loadListings(q);
+              await loadListings(query);
               await reloadItems();
             }}
-            onError={setError}
           />
         </TabPanel>
       )}
@@ -323,14 +380,12 @@ export function MarketplacePage() {
             initialUsername={route.params.with}
             initialSerial={route.params.serial}
             onProposed={async (m) => setStatus(m)}
-            onError={setError}
           />
           <SwapsPanel
             onChanged={async (m) => {
               setStatus(m);
               await reloadItems();
             }}
-            onError={setError}
           />
         </TabPanel>
       )}
@@ -362,50 +417,111 @@ function SellerLine({ t, username }: { t: TranslateFn; username: string }) {
 export function SellPanel({
   items,
   t,
+  loaded = true,
+  initialItem,
   onListed,
-  onError,
 }: {
   items: readonly { id: string; serialNumber?: string; typeClass: string; description: string }[];
   t: TranslateFn;
-  onListed: () => Promise<void>;
-  onError: (message: string) => void;
+  loaded?: boolean;
+  initialItem?: string;
+  onListed: (message: string) => Promise<void>;
+  onError?: (message: string) => void;
 }) {
   const [itemId, setItemId] = useState('');
-  const [price, setPrice] = useState('500.00');
+  const [price, setPrice] = useState('');
+  const [touched, setTouched] = useState(false);
+  const [find, setFind] = useState('');
   const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!itemId && items[0]) setItemId(items[0].id);
-  }, [items, itemId]);
+    if (itemId && items.some((item) => item.id === itemId)) return;
+    const wanted = initialItem
+      ? items.find((item) => item.id === initialItem || item.serialNumber === initialItem)
+      : undefined;
+    const first = wanted ?? items[0];
+    if (first) setItemId(first.id);
+  }, [items, itemId, initialItem]);
+
+  const asked = initialItem && loaded && !items.some((item) => item.id === initialItem || item.serialNumber === initialItem);
 
   const cents = dollarsToCents(price);
+  const priceError = touched && price.trim() !== '' && cents === null ? t('market.sell.priceBad') : undefined;
 
   async function sell() {
+    setTouched(true);
     if (!itemId || cents === null) return;
     setBusy(true);
+    setFailure(null);
     try {
       await api.post('/marketplace/listings', { itemId, askingPrice: cents });
-      await onListed();
+      const listed = items.find((item) => item.id === itemId);
+      await onListed(
+        t('market.status.listedItem', {
+          item: isolate(listed ? itemName(t, listed).split(' · ')[0]! : ''),
+          amount: formatUsd(cents),
+        }),
+      );
     } catch (e) {
-      onError((e as Error).message);
+      setFailure((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   const chosen = items.find((item) => item.id === itemId);
+  const needle = find.trim().toLowerCase();
+  const pickable = needle
+    ? items.filter(
+        (item) =>
+          item.id === itemId ||
+          `${item.serialNumber ?? ''} ${itemName(t, item)}`.toLowerCase().includes(needle),
+      )
+    : items;
 
   return (
     <Panel title={t('market.sellLegend')} subtitle={t('market.sell.subtitle')}>
-      {items.length === 0 ? (
-        <EmptyState title={t('services.noItems')} text={t('market.sell.noItemsText')} icon={<IconTag />} />
+      {!loaded ? (
+        <SkeletonBlock className="skel-metric" />
+      ) : items.length === 0 ? (
+        <EmptyState
+          title={t('services.noItems')}
+          text={t('market.sell.noItemsText')}
+          icon={<IconTag />}
+          action={
+            <Button size="sm" variant="secondary" onClick={() => navigate({ section: 'vault', tab: null })}>
+              {t('market.sell.toVault')}
+            </Button>
+          }
+        />
       ) : (
-        <div className="request-form">
+        <form
+          className="request-form"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void sell();
+          }}
+        >
           <div className="stack stack--tight request-form-fields">
+            {asked && <SuccessNote tone="warning">{t('market.sell.notSellable')}</SuccessNote>}
+            {items.length > LIST_TOOLS_FROM && (
+              <div className="search">
+                <IconSearch />
+                <input
+                  type="search"
+                  placeholder={t('market.sell.find')}
+                  aria-label={t('market.sell.find')}
+                  value={find}
+                  onChange={(e) => setFind(e.target.value)}
+                />
+              </div>
+            )}
             <fieldset className="field field--cards">
               <legend className="field-label">{t('market.sell.itemLabel')}</legend>
               <ul className="check-list">
-                {items.map((item) => (
+                {pickable.map((item) => (
                   <li key={item.id}>
                     <label className="check">
                       <input
@@ -422,28 +538,18 @@ export function SellPanel({
               </ul>
             </fieldset>
 
-            <div className="field">
-              <label className="field-label" htmlFor="ask-price">
-                {t('market.sell.priceLabel')}
-              </label>
-              <div className="money-input">
-                <span aria-hidden="true">$</span>
-                <input
-                  id="ask-price"
-                  inputMode="decimal"
-                  dir="ltr"
-                  value={price}
-                  aria-describedby="ask-hint"
-                  onChange={(e) => setPrice(e.target.value)}
-                />
-              </div>
-              <p className="field-hint" id="ask-hint">
-                {cents === null ? t('market.sell.priceHint') : t('market.sell.willList', { amount: formatUsd(cents) })}
-              </p>
-            </div>
+            <MoneyField
+              id="ask-price"
+              label={t('market.sell.priceLabel')}
+              value={price}
+              placeholder="0.00"
+              onChange={setPrice}
+              onBlur={() => setTouched(true)}
+              error={priceError}
+              hint={cents === null ? t('market.sell.priceHint') : t('market.sell.willList', { amount: formatUsd(cents) })}
+            />
           </div>
 
-          {/* The listing as it will stand in the marketplace: the card in its case, the price asked, what it is. */}
           <aside className="request-slip">
             <DrawerTag
               kicker={t('market.sell.priceLabel')}
@@ -459,7 +565,6 @@ export function SellPanel({
                       ...(chosen.serialNumber
                         ? [{ label: t('vault.serial'), value: <Serial value={chosen.serialNumber} /> }]
                         : []),
-                      // The card's name, not the whole catalogue line (the set, the artist and the collation follow it).
                       { label: t('market.mine.col.item'), value: <span className="ltr-run">{itemName(t, chosen).split(' · ')[0]}</span> },
                     ]
                   : []
@@ -469,16 +574,13 @@ export function SellPanel({
           </aside>
 
           <div className="stack stack--tight request-form-actions">
-            <Button
-              variant="primary"
-              block
-              disabled={busy || !itemId || cents === null}
-              onClick={sell}
-            >
+            {failure && <ErrorState message={failure} />}
+            <Button type="submit" variant="primary" block disabled={busy || !itemId || cents === null}>
               {t('market.listForSale')}
             </Button>
+            <p className="field-hint">{t('market.sell.next')}</p>
           </div>
-        </div>
+        </form>
       )}
     </Panel>
   );

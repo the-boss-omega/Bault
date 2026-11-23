@@ -215,6 +215,25 @@ describe('the facilities, a roll', () => {
     expect(within(or).queryByText('Address not set')).toBeNull();
   });
 
+  it('puts a missing real address above the roll, names the buildings, and opens the first to be set', async () => {
+    const user = userEvent.setup();
+    await roll();
+    const note = screen.getByRole('note');
+    expect(note).toHaveTextContent('No real address yet: Bault New Jersey, Bault Delaware.');
+    const [nj, , or] = rows() as [HTMLElement, HTMLElement, HTMLElement];
+    expect(within(nj).getByText('No street address yet')).toBeInTheDocument();
+    expect(within(or).queryByText('No street address yet')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Set the address of Bault New Jersey' }));
+    expect(window.location.hash).toBe('#/admin/facilities?facility=f-nj');
+  });
+
+  it('says nothing above the roll once every address is real', async () => {
+    current = current.map((f) => ({ ...f, placeholder: false, line1: '1 Real Street' }));
+    await roll();
+    expect(screen.queryByRole('note')).toBeNull();
+    expect(screen.queryByText('No street address yet')).toBeNull();
+  });
+
   it('keeps no field in its lines: a facility is changed in its drawer', async () => {
     await roll();
     expect(document.querySelectorAll('.data-table input, .data-table select')).toHaveLength(0);

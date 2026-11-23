@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -110,6 +111,7 @@ export class MarketReadService {
   }
 
   async myOffers(userId: string) {
+    const sellerAccount = alias(userAccount, 'seller_account');
     const rows = await this.db
       .select({
         id: offer.id,
@@ -129,11 +131,13 @@ export class MarketReadService {
         typeClass: item.typeClass,
         description: item.description,
         buyerUsername: userAccount.username,
+        sellerUsername: sellerAccount.username,
       })
       .from(offer)
       .innerJoin(listing, eq(listing.id, offer.listingId))
       .innerJoin(item, sql`${item.id}::text = ${listing.itemId}`)
       .leftJoin(userAccount, eq(userAccount.id, offer.buyerId))
+      .leftJoin(sellerAccount, eq(sellerAccount.id, listing.sellerId))
       .where(or(eq(offer.buyerId, userId), eq(listing.sellerId, userId)))
       .orderBy(desc(offer.createdAt));
 
