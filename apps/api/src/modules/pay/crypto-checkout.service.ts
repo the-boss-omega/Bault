@@ -346,7 +346,7 @@ export class CryptoCheckoutService {
       const eventId = row.webhookEventId ?? context.webhookEventId;
       const write = async (set: Partial<typeof externalPayment.$inferInsert>) => {
         const [updated] = await tx.update(externalPayment).set({ ...set, updatedAt: now }).where(eq(externalPayment.id, row.id)).returning();
-        if (!updated) throw AppError.validation('Failed to record the payment');
+        if (!updated) throw new Error('Failed to record the payment');
         return updated;
       };
 
@@ -411,7 +411,7 @@ export class CryptoCheckoutService {
           referenceId: row.id,
         })
         .returning({ id: ledgerRecord.id });
-      if (!credit) throw AppError.validation('Failed to credit the wallet');
+      if (!credit) throw new Error('Failed to credit the wallet');
 
       const updated = await write({ status: 'succeeded', webhookEventId: eventId });
       await this.outbox.emit(tx, {

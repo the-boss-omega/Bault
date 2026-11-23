@@ -30,12 +30,10 @@ import { externalPayment, ledgerRecord } from './pay.schema';
 import { fundingRoute } from './money-terms';
 import { WALLET_REQUEST_LIMITS } from './wallet-request.rules';
 
-/** Every cash-in by PayPal checkout has a `provider_ref` that starts with this. */
 export const PAYPAL_CHECKOUT_REF_PREFIX = 'paypal_checkout:';
 
 export const CHECKOUT_PROVIDER_TIMEOUT_MS = 20_000;
 
-/** The instant routes PayPal checkout takes, and the page PayPal opens on for each. */
 export const CHECKOUT_LANDING: Readonly<Record<string, 'card' | 'paypal'>> = {
   card: 'card',
   paypal_gs: 'paypal',
@@ -43,31 +41,21 @@ export const CHECKOUT_LANDING: Readonly<Record<string, 'card' | 'paypal'>> = {
 
 type CheckoutSwitch = Pick<Env, 'PAYPAL_CHECKOUT_ENABLED' | 'PAYMENT_PROVIDER'>;
 
-/** Whether the cash-in screen offers card and PayPal through PayPal checkout. The live site waits for the switch. */
 export function paypalCheckoutOffered(env: CheckoutSwitch): boolean {
   return env.PAYPAL_CHECKOUT_ENABLED;
 }
 
-/**
- * Whether the checkout endpoints take a payment. With the switch off they take one only from the sandbox
- * provider, which moves no money and which production refuses at boot, so the flow can be tested.
- */
 export function paypalCheckoutAccepted(env: CheckoutSwitch): boolean {
   return env.PAYPAL_CHECKOUT_ENABLED || env.PAYMENT_PROVIDER === 'sandbox';
 }
 
-/** Sent as PayPal-Request-Id: one order per payment row, and one capture, however often either is asked for. */
 export const checkoutOrderRequestId = (paymentId: string) => `cash-in-order:${paymentId}`;
 export const checkoutCaptureRequestId = (paymentId: string) => `cash-in-capture:${paymentId}`;
 
-/** PayPal refuses a capture with these while the payer has not approved: nothing is lost by waiting. */
 const NOT_APPROVED_YET = new Set(['ORDER_NOT_APPROVED', 'PAYER_ACTION_REQUIRED']);
-/** PayPal is still completing an earlier capture of the order: the outcome is not known yet. */
 const STILL_CAPTURING = new Set(['ORDER_COMPLETION_IN_PROGRESS']);
 
-/** The wallet was credited for the payment (and, for `reversed`, debited again). */
 const CREDITED = new Set(['succeeded', 'reversed']);
-/** A payment Bault decided never to credit: PayPal settled another amount, or took the money back first. */
 const NEVER_CREDITED = 'refused';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -92,16 +80,6 @@ export interface CheckoutCaptured {
   message: string;
 }
 
-/**
- * Cash-in by PayPal checkout (Orders v2). The server opens an order for the amount the collector chose,
- * the collector approves it on PayPal's page, by a PayPal account or a debit or credit card, and the
- * server captures it. The wallet is credited when PayPal confirms the capture, from the capture's answer
- * or from the PAYMENT.CAPTURE.COMPLETED webhook, whichever comes first, once.
- *
- * Every confirmation goes through `settle`, under the payment row's lock and then the wallet's, and the
- * credit is written only on the move to `succeeded`. `ledger_record_one_credit_per_payment` refuses a
- * second credit even if the code were wrong. No provider call runs inside a transaction.
- */
 @Injectable()
 export class PayPalCheckoutService {
   private readonly logger = new Logger(PayPalCheckoutService.name);
@@ -223,7 +201,6 @@ export class PayPalCheckoutService {
     return { paymentId: row.id, orderId: order.orderId, approveUrl: order.approveUrl, status: 'pending', amountMinor: row.amount, replayed };
   }
 
-  /** The collector is back from PayPal's page: capture what they approved, and say what became of it. */
   async capture(userId: string, paymentId: string): Promise<CheckoutCaptured> {
     const row = await this.ownCheckout(userId, paymentId);
     const replayed = row.status !== 'pending';
@@ -231,7 +208,6 @@ export class PayPalCheckoutService {
     return this.answer(settled, replayed);
   }
 
-  /** The collector left PayPal's page without paying. A capture PayPal completes after this is still credited. */
   async cancel(userId: string, paymentId: string): Promise<{ paymentId: string; status: string }> {
     const row = await this.ownCheckout(userId, paymentId);
     const [cancelled] = await this.db
@@ -248,8 +224,7 @@ export class PayPalCheckoutService {
     return { paymentId: row.id, status: current?.status ?? row.status };
   }
 
-  /** A verified PayPal webhook about a checkout order or its capture. */
-  async applyEvent(event: WebhookEvent): Promise<'applied' | 'unmatched' | 'ignored'> {
+  async applyEvent(event: WebhookEvent): Promise<'applied' | 'unmatched' | 'ignored' | 'duplicate'> {
     const read = checkoutCaptureFromEvent(event);
     if (!read) return 'ignored';
 
@@ -268,17 +243,12 @@ export class PayPalCheckoutService {
     const { capture } = read;
     const row = await this.findCheckout(capture);
     if (!row) return 'unmatched';
-    if (capture.status === 'reversed' && CREDITED.has(row.status)) return this.takenBackAfterCredit(row, event);
+    if (capture.status === 'reversed' && row.status === 'reversed') return 'duplicate';
+    if (capture.status === 'reversed' && row.status === 'succeeded') return this.takenBackAfterCredit(row, event);
     await this.settle(row.id, capture, { source: 'webhook', webhookEventId: capture.status === 'pending' ? null : event.id });
     return 'applied';
   }
 
-  /**
-   * PayPal took back a capture Bault had already credited: a refund from the PayPal account, or a
-   * reversal after a dispute. It is not recorded automatically yet. An administrator records it with
-   * POST /finance/chargebacks/:paymentId, which debits the credit once and marks the payment reversed;
-   * applying it from this event is the place to do it.
-   */
   private takenBackAfterCredit(row: PaymentRow, event: WebhookEvent): 'ignored' {
     const message =
       `PayPal reports ${event.type} (${event.id}) for cash-in ${row.id}, which was credited ${formatMinor(row.amount)}. ` +
@@ -331,7 +301,6 @@ export class PayPalCheckoutService {
     return rows[0] ?? null;
   }
 
-  /** Capture a pending checkout outside any transaction, then record the answer. */
   private async captureRow(row: PaymentRow, source: Source, webhookEventId: string | null): Promise<PaymentRow> {
     if (row.status !== 'pending') return row;
     if (!row.externalRef) {
@@ -357,7 +326,6 @@ export class PayPalCheckoutService {
         );
       }
       if (e instanceof PaymentProviderError && e.refused && !(issue && STILL_CAPTURING.has(issue))) {
-        // PayPal refused to capture, so it took nothing.
         capture = {
           orderId: row.externalRef,
           status: 'failed',
@@ -382,12 +350,6 @@ export class PayPalCheckoutService {
     return this.settle(row.id, capture, { source, webhookEventId });
   }
 
-  /**
-   * Record what PayPal says became of a payment's capture. Locks the payment row, then the wallet. A
-   * completed capture of exactly the amount ordered credits it, unless it was credited already or Bault
-   * refused it. A completed capture for a payment marked `failed` or `cancelled` is still credited:
-   * PayPal holds the money, so the collector is owed it.
-   */
   private async settle(paymentId: string, capture: CheckoutCaptureReport, context: { source: Source; webhookEventId: string | null }): Promise<PaymentRow> {
     return this.db.transaction(async (tx) => {
       const [row] = await tx.select().from(externalPayment).where(eq(externalPayment.id, paymentId)).for('update').limit(1);
@@ -410,7 +372,7 @@ export class PayPalCheckoutService {
       const captureRef = capture.captureId ?? row.captureRef;
       const write = async (set: Partial<typeof externalPayment.$inferInsert>) => {
         const [updated] = await tx.update(externalPayment).set({ ...set, updatedAt: now }).where(eq(externalPayment.id, row.id)).returning();
-        if (!updated) throw AppError.validation('Failed to record the payment');
+        if (!updated) throw new Error('Failed to record the payment');
         return updated;
       };
 
@@ -418,8 +380,6 @@ export class PayPalCheckoutService {
         capture.status === 'succeeded' && capture.feeMinor !== null && capture.feeCurrency === row.currency ? capture.feeMinor : null;
 
       if (CREDITED.has(row.status) || row.status === NEVER_CREDITED) {
-        // Settled already. Keep the first webhook that confirmed it, so its redelivery is seen as one, and
-        // take PayPal's fee from a later report when the first one left it out.
         const fee = row.status === 'succeeded' && row.providerFeeMinor === null ? reportedFee : null;
         if (eventId === row.webhookEventId && fee === null) return row;
         return write({ webhookEventId: eventId, ...(fee !== null ? { providerFeeMinor: fee } : {}) });
@@ -487,7 +447,7 @@ export class PayPalCheckoutService {
           referenceId: row.id,
         })
         .returning({ id: ledgerRecord.id });
-      if (!credit) throw AppError.validation('Failed to credit the wallet');
+      if (!credit) throw new Error('Failed to credit the wallet');
 
       const feeMinor = reportedFee;
       if (capture.feeMinor !== null && feeMinor === null) {
@@ -564,7 +524,6 @@ export class PayPalCheckoutService {
   }
 }
 
-/** Whether a webhook is about a checkout order or its capture, rather than a payout. */
 export function isCheckoutEvent(type: string): boolean {
   const t = (type ?? '').toUpperCase();
   return t === CHECKOUT_ORDER_APPROVED || t in CHECKOUT_CAPTURE_EVENTS;

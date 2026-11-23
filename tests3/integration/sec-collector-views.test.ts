@@ -280,6 +280,28 @@ describe('A4 wallet requests as a collector reads them', () => {
   });
 });
 
+describe('A4b cash-ins by provider as a collector reads them', () => {
+  it('names the route in words and carries no provider references, user id or webhook ids', async () => {
+    const golden = await signIn(SEED.collector2);
+    const idempotencyKey = `views-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    expect((await golden.post('/finance/checkout', { amountMinor: 1_000, route: 'card', idempotencyKey })).status).toBe(201);
+    const paypal = await golden.post('/finance/checkout/paypal', { amountMinor: 1_100, route: 'paypal_gs', idempotencyKey });
+    expect(paypal.status).toBe(201);
+
+    const res = await golden.get('/finance/payments');
+    expect(res.status).toBe(200);
+    const rows = res.body as Record<string, unknown>[];
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expectWithout(res.body, ['userId', 'provider', 'providerRef', 'externalRef', 'captureRef', 'webhookEventId', 'providerFeeMinor', 'purpose', 'updatedAt']);
+    for (const row of rows) expect(Object.keys(row).sort()).toEqual(['amount', 'createdAt', 'currency', 'id', 'route', 'status']);
+    const routes = rows.map((r) => r.route);
+    expect(routes).toContain('Card');
+    expect(routes).toContain('PayPal');
+    const other = (await (await signIn(SEED.collector)).get('/finance/payments')).body as { id: string }[];
+    expect(other.some((r) => r.id === paypal.body.paymentId)).toBe(false);
+  });
+});
+
 describe('A5 the notification feed a collector reads', () => {
   it('shows only in-app rows, with the message, codes and amounts and no ids or delivery internals', async () => {
     const red = await signIn(SEED.collector);
