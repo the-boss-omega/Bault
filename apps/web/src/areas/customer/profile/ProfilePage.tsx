@@ -21,6 +21,7 @@ import {
   StatusBadge,
   SuccessNote,
   TabPanel,
+  SkeletonBlock,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
@@ -67,7 +68,7 @@ export function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [addresses, setAddresses] = useState<Address[] | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Address | null>(null);
@@ -246,9 +247,11 @@ export function ProfilePage() {
           <Panel
             title={t('profile.addresses.heading')}
             subtitle={t('profile.addresses.subtitle')}
-            flush={addresses.length === 0}
+            flush={!addresses || addresses.length === 0}
           >
-            {addresses.length === 0 ? (
+            {addresses === null ? (
+              error ? null : <SkeletonBlock />
+            ) : addresses.length === 0 ? (
               <EmptyState
                 title={t('profile.addresses.empty')}
                 text={t('profile.addresses.emptyText')}
@@ -496,6 +499,7 @@ function AddressCard({
           <Button
             size="sm"
             variant="secondary"
+            aria-label={t('profile.address.editNamed', { label: address.label })}
             onClick={() => {
               setDraft(address);
               setEditing(true);
@@ -503,7 +507,12 @@ function AddressCard({
           >
             {t('profile.address.edit')}
           </Button>
-          <Button size="sm" variant="danger" onClick={onDelete}>
+          <Button
+            size="sm"
+            variant="danger"
+            aria-label={t('profile.address.deleteNamed', { label: address.label })}
+            onClick={onDelete}
+          >
             {t('profile.addresses.delete')}
           </Button>
         </div>

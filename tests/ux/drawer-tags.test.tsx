@@ -128,7 +128,7 @@ describe('a drawer opens on the sum it is about', () => {
     const trail = within(dialog).getByRole('heading', { name: 'What happened' }).nextElementSibling as HTMLElement;
     const entries = within(trail).getAllByRole('listitem');
     expect(entries.map((e) => e.querySelector('.register-kind')!.textContent)).toEqual([
-      'It is with us and waiting to be looked at.',
+      'Card Embassy has it and will inspect it next.',
       'Funds held',
       'Terms agreed',
       'Proposed',
@@ -167,14 +167,14 @@ describe('what a deal’s history says', () => {
         <Labels types={['inspected']} matches="yes" />
       </I18nProvider>,
     );
-    expect(container.textContent).toBe('We looked at it and it matches the description.');
+    expect(container.textContent).toBe('Card Embassy inspected it, and it matches the description.');
 
     rerender(
       <I18nProvider>
         <Labels types={['inspected']} matches="no" />
       </I18nProvider>,
     );
-    expect(container.textContent).toBe('We looked at it and it does NOT match the description.');
+    expect(container.textContent).toBe('Card Embassy inspected it, and it does not match the description.');
 
     rerender(
       <I18nProvider>

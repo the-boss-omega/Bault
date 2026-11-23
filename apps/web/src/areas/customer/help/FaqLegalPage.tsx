@@ -40,7 +40,7 @@ const AVAILABILITY_NOTE: Record<FaqAvailability, MessageKey> = {
   unavailable: 'faq.note.unavailableTitle',
 };
 
-const TABS = ['ask', 'guides', 'faq', 'policy', 'prices', 'shows', 'contact', 'legal'] as const;
+const TABS = ['faq', 'guides', 'policy', 'prices', 'shows', 'contact', 'legal', 'ask'] as const;
 type HelpTab = (typeof TABS)[number];
 
 export function FaqLegalPage() {
@@ -50,7 +50,7 @@ export function FaqLegalPage() {
 
   const tab: HelpTab = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as HelpTab)
-    : 'ask';
+    : 'faq';
 
   const tabs = TABS.map((key) => ({ key, label: t(`faq.tab.${key}` as MessageKey) }));
 

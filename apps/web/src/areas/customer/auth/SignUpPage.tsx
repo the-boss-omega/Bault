@@ -27,6 +27,7 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [attempted, setAttempted] = useState(false);
   const t = useT();
 
   const normalizedUsername = normalizeUsername(username);
@@ -35,15 +36,29 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const lastOk = isValidNamePart(normalizeNamePart(lastName));
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const passwordOk = password.length >= PASSWORD_MIN;
-  const usernameError = username.length > 0 && !usernameOk;
-  const firstNameError = firstName.length > 0 && !firstOk;
-  const lastNameError = lastName.length > 0 && !lastOk;
-  const emailError = email.length > 0 && !emailOk;
-  const passwordError = password.length > 0 && !passwordOk;
+  const usernameError = (attempted || username.length > 0) && !usernameOk;
+  const firstNameError = (attempted || firstName.length > 0) && !firstOk;
+  const lastNameError = (attempted || lastName.length > 0) && !lastOk;
+  const emailError = (attempted || email.length > 0) && !emailOk;
+  const passwordError = (attempted || password.length > 0) && !passwordOk;
+  const consentError = attempted && !accepted;
 
   async function register(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!emailOk || !usernameOk || !firstOk || !lastOk || !passwordOk || !accepted) {
+      setAttempted(true);
+      const first = [
+        ['signup-email', emailOk],
+        ['signup-username', usernameOk],
+        ['signup-first', firstOk],
+        ['signup-last', lastOk],
+        ['signup-password', passwordOk],
+        ['signup-consent', accepted],
+      ].find(([, ok]) => !ok);
+      if (first) document.getElementById(first[0] as string)?.focus();
+      return;
+    }
     setBusy(true);
     try {
       const created = await api.post<{ username: string; firstName: string; lastName: string }>(
@@ -106,6 +121,7 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
       kicker={t('auth.kicker.signUp')}
       title={t('auth.signUpTitle')}
       onSubmit={register}
+      noValidate
       stub={
         <p className="auth-switch">
           {t('auth.haveAccount')}{' '}
@@ -200,11 +216,13 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
       <div className="consent">
         <label className="check">
           <input
+            id="signup-consent"
             type="checkbox"
             checked={accepted}
             onChange={(e) => setAccepted(e.target.checked)}
             required
-            aria-describedby="signup-consent-hint"
+            aria-invalid={consentError}
+            aria-describedby={consentError ? 'signup-consent-error' : 'signup-consent-hint'}
           />
           <span>{t('auth.consentLabel', { version: TERMS_VERSION })}</span>
         </label>
@@ -219,6 +237,11 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
             {showTerms ? t('auth.consentHide') : t('auth.consentRead')}
           </Button>
         </p>
+        {consentError && (
+          <span className="field-error" id="signup-consent-error" role="alert">
+            {t('auth.consentRequired')}
+          </span>
+        )}
         {showTerms && <TermsReader id="signup-terms" />}
       </div>
 
@@ -229,7 +252,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
         type="submit"
         block
         loading={busy}
-        disabled={!usernameOk || !firstOk || !lastOk || !passwordOk || !emailOk || !accepted}
       >
         {t('auth.signUp')}
       </Button>

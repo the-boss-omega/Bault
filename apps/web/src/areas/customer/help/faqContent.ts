@@ -370,9 +370,9 @@ const ENTRIES: Draft[] = [
     category: 'services',
     availability: 'adapted',
     baultNote:
-      'Choose a tier and state what the item is worth. Items go to the grader in batches; while away the item shows as "At the grader" and cannot be sold, swapped or shipped.',
+      'Choose a grading service and state what the item is worth. Items go to the grader in batches; while away the item shows as "At the grader" and cannot be sold, swapped or shipped.',
     blocks: [
-      p('A tier is a turnaround and a ceiling on declared value. The value you state decides which tiers you can use, and the top tier is refused for an item below its threshold. Each tier’s price is on [[Prices|#/faq/prices]].'),
+      p('Each grading service is a turnaround and a ceiling on declared value, and is not the same thing as your account’s Bronze, Silver or Gold tier. The value you state decides which services you can use, and the fastest one is refused for an item below its threshold. Each service’s price is on [[Prices|#/faq/prices]], at the price for your tier.'),
       p('When the grade comes back it is written onto the item with its certificate number, and the item goes back on the shelf.'),
     ],
   },
