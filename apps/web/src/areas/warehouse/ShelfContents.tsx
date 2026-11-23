@@ -7,6 +7,7 @@ import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { EmptyState, ErrorState, SkeletonTable, StatusBadge } from '../../shared/ui/primitives';
 import { Code } from '../../shared/ui/Serial';
 import { IconBox } from '../../shared/ui/icons';
+import { LabelSheet } from './LabelSheet';
 import type { ShelfBin } from './ShelfMap';
 
 interface ShelfItem {
@@ -123,6 +124,16 @@ export function ShelfContents({ bin, onClose }: { bin: ShelfBin; onClose: () => 
           </ul>
         )}
       </section>
+
+      {shelf && shelf.items.length > 0 && (
+        <LabelSheet
+          showCodes={false}
+          targets={{
+            kind: 'items',
+            items: shelf.items.map((item) => ({ id: item.id, code: item.barcode })),
+          }}
+        />
+      )}
     </DetailDrawer>
   );
 }

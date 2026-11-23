@@ -329,7 +329,7 @@ describe('photographs', () => {
 });
 
 describe('the labels an intake produces', () => {
-  it('shows a label per unit, with one control that prints the whole run', async () => {
+  it('shows a label per unit, with one control that opens the whole run as one label PDF', async () => {
     const user = userEvent.setup();
     renderConsole();
 
@@ -347,15 +347,19 @@ describe('the labels an intake produces', () => {
     await user.click(within(bench).getByRole('button', { name: /book in 2 units/i }));
 
     await waitFor(() => expect(screen.getByText(/labels for what you just booked in/i)).toBeInTheDocument());
-    expect(within(bench).getAllByRole('button', { name: /print the barcode/i })).toHaveLength(2);
+    expect(within(bench).getAllByRole('img', { name: /^barcode SN-/i })).toHaveLength(2);
 
-    expect(within(bench).getByRole('button', { name: /print all 2 labels/i })).toBeInTheDocument();
+    expect(within(bench).getAllByRole('link', { name: /open the label pdf \(2\)/i })).toHaveLength(1);
+    expect(within(bench).getByRole('link', { name: /open the label pdf/i })).toHaveAttribute(
+      'href',
+      '/api/v1/custody/labels.pdf?ids=i1,i2#zoom=100',
+    );
   });
 
   it('offers nothing to print before anything has been booked in', async () => {
     renderConsole();
     const bench = await waitFor(() => panel(/receive bench/i));
-    expect(within(bench).queryByRole('button', { name: /print all/i })).toBeNull();
+    expect(within(bench).queryByRole('link', { name: /open the label pdf/i })).toBeNull();
     expect(screen.queryByText(/labels for what you just booked in/i)).toBeNull();
   });
 });

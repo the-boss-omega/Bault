@@ -4,12 +4,13 @@ import { useI18n } from '../../shared/i18n';
 import { ITEM_CLASSES, itemClassOption } from '../../shared/itemClasses';
 import { isValidUsername, normalizeUsername } from '../../shared/names';
 import type { ParcelQueueRow } from '../../shared/parcels';
-import { BarcodeLabel, BarcodePrintAllButton } from '../../shared/Barcode';
+import { Barcode } from '../../shared/Barcode';
 import { Docket, type BenchOutcome } from '../../shared/ui/Docket';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
 import { Button, Field, IconButton, ScanField } from '../../shared/ui/primitives';
 import { IconBox, IconClose, IconPlus } from '../../shared/ui/icons';
 import { code as bdiCode, quiet, stamped } from './Benches';
+import { LabelSheet } from './LabelSheet';
 
 export interface StowSuggestion {
   id: string;
@@ -286,6 +287,9 @@ export function IntakeBench({
                 hint={t('warehouse.intake.stowScanHint')}
                 value={scanBin}
                 onChange={setScanBin}
+                onScan={() => {
+                  if (ready) void submit();
+                }}
                 placeholder="BIN-XXXXXXXX"
               />
             )}
@@ -380,17 +384,19 @@ export function IntakeBench({
                     />
                   </Field>
 
-                  <Field
+                  <ScanField
+                    id={`intake-serial-${unit.key}`}
                     label={t('warehouse.intake.serialNumber')}
                     hint={t('warehouse.intake.serialNumberHint')}
-                  >
-                    <input
-                      value={unit.serialNumber}
-                      onChange={(e) => patch(unit.key, { serialNumber: e.target.value })}
-                      placeholder={t('warehouse.intake.serialNumberPlaceholder')}
-                      dir="ltr"
-                    />
-                  </Field>
+                    value={unit.serialNumber}
+                    onChange={(value) => patch(unit.key, { serialNumber: value })}
+                    onScan={() => {
+                      const next = units[index + 1];
+                      if (next) document.getElementById(`intake-serial-${next.key}`)?.focus();
+                      else if (ready) void submit();
+                    }}
+                    placeholder={t('warehouse.intake.serialNumberPlaceholder')}
+                  />
                 </div>
 
                 {lotAllowed && (
@@ -523,19 +529,18 @@ export function IntakeBench({
               </h3>
               <p className="hint">{t('warehouse.intake.labelsHint')}</p>
             </div>
-            <span className="spacer" />
-            <BarcodePrintAllButton
-              labels={labels.map((l) => ({
-                value: l.barcode,
-                caption: l.description || l.barcode,
-              }))}
-            />
           </div>
+
+          <LabelSheet
+            showCodes={false}
+            targets={{ kind: 'items', items: labels.map((l) => ({ id: l.id, code: l.barcode })) }}
+          />
 
           <ul className="card-grid">
             {labels.map((l) => (
               <li key={l.id} className="card">
-                <BarcodeLabel value={l.barcode} caption={l.description || l.barcode} />
+                <Barcode value={l.barcode} />
+                {l.description && <span className="hint" dir="auto">{l.description}</span>}
               </li>
             ))}
           </ul>
