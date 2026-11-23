@@ -36,7 +36,8 @@
     "test:contract": "vitest run --project contract",
     "test:core": "vitest run --no-file-parallelism --project core",
     "test:core-contract": "vitest run --project core-contract",
-    "test:ux": "vitest run --project ux"
+    "test:ux": "vitest run --project ux",
+    "test:journeys": "vitest run --no-file-parallelism --project journeys"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -45,6 +46,7 @@
     "@testing-library/user-event": "^14.6.6",
     "@types/node": "^22.10.2",
     "eslint": "^9.17.0",
+    "fast-check": "4.10.2",
     "jsdom": "^30.0.1",
     "playwright-core": "1.63.0",
     "prettier": "^3.4.2",
