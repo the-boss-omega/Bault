@@ -29,7 +29,14 @@ export function TierPage() {
 
   if (loading) return <SkeletonBlock />;
   if (error || !standing) {
-    return <ErrorState message={error ?? ''} onRetry={() => void load()} retryLabel={t('ui.retry')} />;
+    return (
+      <ErrorState
+        title={t('tier.loadFailed')}
+        message={error ?? t('tier.loadFailedText')}
+        onRetry={() => void load()}
+        retryLabel={t('ui.retry')}
+      />
+    );
   }
 
   const days = standing.window.days;
@@ -121,6 +128,11 @@ export function TierPage() {
             </tbody>
           </table>
         </div>
+        <p className="field-hint stack-top">
+          <a href="#/faq/prices">{t('tier.links.prices')}</a>
+          {' · '}
+          <a href="#/faq/faq?q=tiers">{t('tier.links.faq')}</a>
+        </p>
       </Panel>
 
       {standing.honoured && <Honoured honoured={standing.honoured} />}

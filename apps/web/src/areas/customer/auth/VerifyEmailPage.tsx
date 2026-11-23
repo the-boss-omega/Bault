@@ -55,7 +55,7 @@ export function VerifyEmailPage({ token }: { token: string | null }) {
   }, [token]);
 
   function goToSignIn() {
-    navigate({ section: '' }, { replace: true });
+    navigate({ section: 'signin' }, { replace: true });
   }
 
   if (state.status === 'working') {

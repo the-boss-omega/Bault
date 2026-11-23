@@ -29,6 +29,14 @@ export class AppErrorBoundary extends Component<Props, State> {
     return (
       <div className="error-boundary" role="alert">
         <p>{APP_FAILURE_SENTENCE}</p>
+        <p className="error-boundary-actions">
+          <button type="button" className="btn btn--primary" onClick={() => window.location.reload()}>
+            Reload the page
+          </button>{' '}
+          <a href="#/support/new" onClick={() => window.setTimeout(() => window.location.reload(), 0)}>
+            Tell support
+          </a>
+        </p>
       </div>
     );
   }
