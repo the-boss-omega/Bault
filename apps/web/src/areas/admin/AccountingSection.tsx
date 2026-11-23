@@ -1,9 +1,22 @@
 import { useState } from 'react';
 import { api } from '../../shared/api';
 import { formatDateTime, formatUsd } from '../../shared/money';
-import { useI18n, type MessageKey } from '../../shared/i18n';
-import { Button, ButtonLink, EmptyState, Panel, StatusBadge } from '../../shared/ui/primitives';
-import { IconAlert, IconCheckCircle, IconChart, IconDownload, IconReceipt } from '../../shared/ui/icons';
+import { hasMessage, useI18n, type MessageKey, type TranslateFn } from '../../shared/i18n';
+import {
+  Button,
+  ButtonLink,
+  EmptyState,
+  ErrorState,
+  Panel,
+  StatusBadge,
+} from '../../shared/ui/primitives';
+import {
+  IconAlert,
+  IconCheckCircle,
+  IconChart,
+  IconDownload,
+  IconReceipt,
+} from '../../shared/ui/icons';
 
 export interface AccountingSummary {
   month: string;
@@ -49,7 +62,14 @@ export interface Reconciliation {
     recordedMinor: number | null;
     at: string;
   }[];
-  pending: { paymentId: string; purpose: string; username: string | null; amount: number; at: string; detail: string }[];
+  pending: {
+    paymentId: string;
+    purpose: string;
+    username: string | null;
+    amount: number;
+    at: string;
+    detail: string;
+  }[];
   manualCashIns: { count: number; totalMinor: number };
 }
 
@@ -65,27 +85,69 @@ const REVENUE_LABEL: Record<string, MessageKey> = {
   interest: 'admin.accounting.revenue.interest',
 };
 
-const pad = (n: number) => String(n).padStart(2, '0');
-const isoDay = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+const MAX_EXPORT_DAYS = 366;
+const DAY_MS = 86_400_000;
 
-export function AccountingSection({ onError }: { onError: (m: string) => void }) {
+export function exportRangeProblem(
+  from: string,
+  to: string,
+): 'missing' | 'backwards' | 'tooLong' | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return 'missing';
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+  if (Number.isNaN(start) || Number.isNaN(end)) return 'missing';
+  if (end < start) return 'backwards';
+  if (Math.round((end - start) / DAY_MS) + 1 > MAX_EXPORT_DAYS) return 'tooLong';
+  return null;
+}
+
+const RANGE_PROBLEM: Record<'missing' | 'backwards' | 'tooLong', MessageKey> = {
+  missing: 'admin.accounting.ledger.rangeMissing',
+  backwards: 'admin.accounting.ledger.rangeBackwards',
+  tooLong: 'admin.accounting.ledger.rangeTooLong',
+};
+
+const ledgerTypeLabel = (t: TranslateFn, type: string) => {
+  const key = `wallet.type.${type}`;
+  return hasMessage(key) ? t(key) : null;
+};
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const isoDay = (d: Date) =>
+  `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+
+export function AccountingSection(_props: { onError?: (m: string) => void }) {
   const { t, locale } = useI18n();
   const today = new Date();
-  const [from, setFrom] = useState(isoDay(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1))));
+  const [from, setFrom] = useState(
+    isoDay(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1))),
+  );
   const [to, setTo] = useState(isoDay(today));
   const [month, setMonth] = useState(isoDay(today).slice(0, 7));
   const [summary, setSummary] = useState<AccountingSummary | null>(null);
   const [recon, setRecon] = useState<Reconciliation | null>(null);
   const [busy, setBusy] = useState<'summary' | 'recon' | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [reconError, setReconError] = useState<string | null>(null);
 
+  const rangeProblem = exportRangeProblem(from, to);
   const exportHref = `/api/v1/admin/accounting/ledger.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
 
   async function loadSummary() {
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      setSummaryError(t('admin.accounting.summary.monthMissing'));
+      return;
+    }
     setBusy('summary');
+    setSummaryError(null);
     try {
-      setSummary(await api.get<AccountingSummary>(`/admin/accounting/summary?month=${encodeURIComponent(month)}`));
+      setSummary(
+        await api.get<AccountingSummary>(
+          `/admin/accounting/summary?month=${encodeURIComponent(month)}`,
+        ),
+      );
     } catch (e) {
-      onError((e as Error).message);
+      setSummaryError((e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -93,10 +155,11 @@ export function AccountingSection({ onError }: { onError: (m: string) => void })
 
   async function loadRecon() {
     setBusy('recon');
+    setReconError(null);
     try {
       setRecon(await api.get<Reconciliation>('/admin/accounting/reconciliation'));
     } catch (e) {
-      onError((e as Error).message);
+      setReconError((e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -106,26 +169,56 @@ export function AccountingSection({ onError }: { onError: (m: string) => void })
     <>
       <p className="hint">{t('admin.accounting.intro')}</p>
 
-      <Panel title={t('admin.accounting.ledger.title')} subtitle={t('admin.accounting.ledger.subtitle')}>
+      <Panel
+        title={t('admin.accounting.ledger.title')}
+        subtitle={t('admin.accounting.ledger.subtitle')}
+      >
         <div className="row accounting-controls">
           <label className="field">
             <span className="field-label">{t('admin.accounting.ledger.from')}</span>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} dir="ltr" />
+            <input
+              type="date"
+              value={from}
+              max={to || undefined}
+              aria-invalid={rangeProblem !== null}
+              aria-describedby={rangeProblem ? 'ledger-range-error' : undefined}
+              onChange={(e) => setFrom(e.target.value)}
+              dir="ltr"
+            />
           </label>
           <label className="field">
             <span className="field-label">{t('admin.accounting.ledger.to')}</span>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} dir="ltr" />
+            <input
+              type="date"
+              value={to}
+              min={from || undefined}
+              aria-invalid={rangeProblem !== null}
+              aria-describedby={rangeProblem ? 'ledger-range-error' : undefined}
+              onChange={(e) => setTo(e.target.value)}
+              dir="ltr"
+            />
           </label>
-          <ButtonLink
-            variant="primary"
-            size="sm"
-            icon={<IconDownload />}
-            href={exportHref}
-            download
-          >
-            {t('admin.accounting.ledger.download')}
-          </ButtonLink>
+          {rangeProblem ? (
+            <Button variant="primary" size="sm" icon={<IconDownload />} disabled>
+              {t('admin.accounting.ledger.download')}
+            </Button>
+          ) : (
+            <ButtonLink
+              variant="primary"
+              size="sm"
+              icon={<IconDownload />}
+              href={exportHref}
+              download
+            >
+              {t('admin.accounting.ledger.download')}
+            </ButtonLink>
+          )}
         </div>
+        {rangeProblem && (
+          <p className="field-error" id="ledger-range-error" role="alert">
+            {t(RANGE_PROBLEM[rangeProblem])}
+          </p>
+        )}
       </Panel>
 
       <Panel
@@ -155,7 +248,13 @@ export function AccountingSection({ onError }: { onError: (m: string) => void })
           </div>
         }
       >
-        {summary === null ? (
+        {summaryError ? (
+          <ErrorState
+            message={summaryError}
+            onRetry={() => void loadSummary()}
+            retryLabel={t('ui.retry')}
+          />
+        ) : summary === null ? (
           <EmptyState title={t('admin.accounting.summary.empty')} icon={<IconChart />} />
         ) : (
           <SummaryView summary={summary} locale={locale} />
@@ -178,7 +277,15 @@ export function AccountingSection({ onError }: { onError: (m: string) => void })
         }
         flush
       >
-        {recon === null ? (
+        {reconError ? (
+          <div className="panel-body">
+            <ErrorState
+              message={reconError}
+              onRetry={() => void loadRecon()}
+              retryLabel={t('ui.retry')}
+            />
+          </div>
+        ) : recon === null ? (
           <EmptyState title={t('admin.accounting.recon.empty')} icon={<IconReceipt />} />
         ) : (
           <ReconciliationView recon={recon} locale={locale} />
@@ -293,9 +400,20 @@ function SummaryView({ summary, locale }: { summary: AccountingSummary; locale: 
             {summary.byType.map((row) => (
               <tr key={`${row.type}:${row.direction}`}>
                 <td>
-                  <code dir="ltr">{row.type}</code>
+                  {ledgerTypeLabel(t, row.type) ?? <code dir="ltr">{row.type}</code>}
+                  {ledgerTypeLabel(t, row.type) && (
+                    <span className="dt-sub">
+                      <code dir="ltr">{row.type}</code>
+                    </span>
+                  )}
                 </td>
-                <td>{row.direction}</td>
+                <td>
+                  {row.direction === 'credit'
+                    ? t('admin.accounting.direction.credit')
+                    : row.direction === 'debit'
+                      ? t('admin.accounting.direction.debit')
+                      : row.direction}
+                </td>
                 <td className="td-end num">{row.count}</td>
                 <td className="td-end num">{formatUsd(row.totalMinor)}</td>
               </tr>
@@ -377,10 +495,12 @@ function ReconciliationView({ recon, locale }: { recon: Reconciliation; locale: 
           <ul>
             {recon.pending.map((p) => (
               <li key={p.paymentId}>
-                <span className="ltr-run">{p.username ?? '—'}</span> · {formatUsd(p.amount)} ·{' '}
-                <span dir="ltr">
-                  {p.detail}
-                </span>
+                <span className="amount" dir="ltr">
+                  {formatUsd(p.amount)}
+                </span>{' '}
+                · <span className="ltr-run">{p.username ?? '—'}</span> ·{' '}
+                <span className="date">{formatDateTime(p.at, locale)}</span> ·{' '}
+                <span dir="ltr">{p.detail}</span>
               </li>
             ))}
           </ul>

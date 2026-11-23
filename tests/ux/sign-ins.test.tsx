@@ -28,8 +28,8 @@ describe('the sign-in log', () => {
     get.mockResolvedValue(LOG);
     render(<I18nProvider><SignInsSection onError={() => {}} /></I18nProvider>);
 
-    expect(await screen.findAllByText('Wrong details')).toHaveLength(2);
-    expect(screen.getByText('Signed in')).toBeInTheDocument();
+    expect(await screen.findAllByText('Wrong details', { ignore: 'option' })).toHaveLength(2);
+    expect(screen.getByText('Signed in', { ignore: 'option' })).toBeInTheDocument();
     expect(screen.getByText('203.0.113.7')).toBeInTheDocument();
     expect(screen.getByText('Chrome · Windows')).toBeInTheDocument();
     expect(screen.getByText('curl/8.10.1')).toBeInTheDocument();

@@ -4,6 +4,7 @@ import { formatDate, formatUsd } from '../../shared/money';
 import { useI18n } from '../../shared/i18n';
 import { EmptyState, Panel, SkeletonTable } from '../../shared/ui/primitives';
 import { IconReceipt } from '../../shared/ui/icons';
+import { LoadFailure } from './RollTools';
 
 interface FeeRun {
   id: string;
@@ -14,18 +15,19 @@ interface FeeRun {
   currency: string;
 }
 
-export function StorageFeesSection({ onError }: { onError: (m: string) => void }) {
+export function StorageFeesSection(_props: { onError?: (m: string) => void }) {
   const { t, locale } = useI18n();
   const [runs, setRuns] = useState<FeeRun[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       setRuns(await api.get<FeeRun[]>('/admin/storage-fee-runs'));
     } catch (e) {
-      onError((e as Error).message);
-      setRuns([]);
+      setLoadError((e as Error).message);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -36,10 +38,16 @@ export function StorageFeesSection({ onError }: { onError: (m: string) => void }
       <p className="infobox">{t('admin.storage.autoNotice')}</p>
 
       <Panel title={t('admin.storage.previousRuns', { count: runs?.length ?? 0 })}>
-        {runs === null ? (
+        {loadError ? (
+          <LoadFailure message={loadError} onRetry={() => void load()} />
+        ) : runs === null ? (
           <SkeletonTable rows={3} columns={4} />
         ) : runs.length === 0 ? (
-          <EmptyState title={t('admin.storage.empty')} icon={<IconReceipt />} />
+          <EmptyState
+            title={t('admin.storage.empty')}
+            text={t('admin.storage.emptyText')}
+            icon={<IconReceipt />}
+          />
         ) : (
           <FeeStatement runs={runs} locale={locale} />
         )}

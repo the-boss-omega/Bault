@@ -18,6 +18,7 @@ import {
   SuccessNote,
 } from '../../shared/ui/primitives';
 import { IconLocation, IconPlus } from '../../shared/ui/icons';
+import { LoadFailure } from './RollTools';
 import { Code } from '../../shared/ui/Serial';
 import {
   CODE_PATTERN,
@@ -45,7 +46,7 @@ const ROLE_LABEL: Record<AdminFacility['role'], MessageKey> = {
  */
 export function FacilitiesSection({
   onMsg,
-  onError,
+  onError: _onError,
 }: {
   onMsg: (m: string) => void;
   onError: (m: string) => void;
@@ -54,15 +55,16 @@ export function FacilitiesSection({
   const route = useRoute();
   const { openRecord, closeRecord } = useNavigation(route);
   const [rows, setRows] = useState<AdminFacility[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       setRows(await api.get<AdminFacility[]>('/admin/facilities'));
     } catch (e) {
-      onError((e as Error).message);
-      setRows([]);
+      setLoadError((e as Error).message);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -90,7 +92,9 @@ export function FacilitiesSection({
         }
         flush
       >
-        {rows === null ? (
+        {loadError ? (
+          <LoadFailure message={loadError} onRetry={() => void load()} />
+        ) : rows === null ? (
           <SkeletonTable rows={3} columns={3} />
         ) : rows.length === 0 ? (
           <EmptyState

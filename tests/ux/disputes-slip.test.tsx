@@ -124,7 +124,7 @@ describe('a dispute, written on a slip as it is opened', () => {
 
     expect(slip().querySelector('.drawer-tag-title')).toHaveTextContent('c5013f0a');
     expect(slip().querySelector('.drawer-tag-amount')).toHaveTextContent('$260.00');
-    expect(within(slip()).getByText('Type').nextElementSibling).toHaveTextContent('sale');
+    expect(within(slip()).getByText('Type').nextElementSibling).toHaveTextContent('Sale');
     expect(slip().querySelector('.ticket-note p')).toHaveTextContent('Not as described');
     expect(screen.getByRole('button', { name: 'Open dispute' })).toBeEnabled();
   });
@@ -195,7 +195,7 @@ describe('the disputes, a case file each', () => {
     expect(within(newest).getByText('Transaction').nextElementSibling).toHaveTextContent(
       'c5013f0a',
     );
-    expect(within(newest).getByText('Type').nextElementSibling).toHaveTextContent('sale');
+    expect(within(newest).getByText('Type').nextElementSibling).toHaveTextContent('Sale');
     expect(within(newest).getByText('Price').nextElementSibling).toHaveTextContent('$260.00');
     expect(newest.querySelector('blockquote')).toHaveTextContent('Buyer reports a nicked corner.');
     // A transaction that is not in the list is only named; nothing is made up about it.

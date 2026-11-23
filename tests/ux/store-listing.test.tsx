@@ -347,7 +347,7 @@ describe('the products in the store, a tag each', () => {
       stock: 6,
       expectedStock: 4,
     });
-    await waitFor(() => expect(onMsg).toHaveBeenCalledWith('Saved.'));
+    await waitFor(() => expect(onMsg).toHaveBeenCalledWith('Stock of HSE-72WWGK10 set to 6.'));
   });
 
   it('save with Enter as well, and not what is the same or is not a number of copies', async () => {
@@ -381,7 +381,11 @@ describe('the products in the store, a tag each', () => {
       }),
     );
     expect(patch).toHaveBeenCalledWith('/marketplace/house/listings/p1', { status: 'removed' });
-    await waitFor(() => expect(onMsg).toHaveBeenCalledWith('Saved.'));
+    await waitFor(() =>
+      expect(onMsg).toHaveBeenCalledWith(
+        'Took HSE-72WWGK10 off sale. Buyers no longer see it; restore it to sell it again.',
+      ),
+    );
     await user.click(
       within(tagOf(/Deoxys/).parentElement!).getByRole('button', { name: 'Put back on sale' }),
     );
