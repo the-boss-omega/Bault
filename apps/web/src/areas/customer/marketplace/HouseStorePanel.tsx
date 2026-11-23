@@ -4,7 +4,9 @@ import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { itemClassLabel } from '../../../shared/itemClasses';
 import { formatUsd, isolate } from '../../../shared/money';
 import { useI18n } from '../../../shared/i18n';
-import { Amount, Serial } from '../../../shared/ui/Serial';
+import { Serial } from '../../../shared/ui/Serial';
+import { TierPrice } from '../../../shared/ui/TierPrice';
+import { discountedMinor, useViewerTier } from '../../../shared/tiers';
 import { Button, EmptyState, Panel, SkeletonBlock } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
 import { IconTag } from '../../../shared/ui/icons';
@@ -35,6 +37,7 @@ export function HouseStorePanel({
   onError: (message: string | null) => void;
 }) {
   const { t } = useI18n();
+  const viewer = useViewerTier();
   const [products, setProducts] = useState<HouseProduct[] | null>(null);
   const [buying, setBuying] = useState<{ product: HouseProduct; key: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -98,7 +101,7 @@ export function HouseStorePanel({
 
               <div className="card-id">
                 <p className="price">
-                  <Amount>{formatUsd(p.askingPrice)}</Amount>
+                  <TierPrice listMinor={p.askingPrice} />
                 </p>
                 <h3 className="card-title">
                   <Serial value={p.code} />
@@ -138,7 +141,7 @@ export function HouseStorePanel({
               <p>
                 {t('market.buy.confirmBody', {
                   item: isolate(buying.product.description),
-                  amount: formatUsd(buying.product.askingPrice),
+                  amount: formatUsd(discountedMinor(buying.product.askingPrice, viewer.discountBps)),
                 })}
               </p>
               <p className="field-hint">{t('house.confirmNote')}</p>

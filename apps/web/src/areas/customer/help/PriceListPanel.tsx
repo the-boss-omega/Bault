@@ -3,7 +3,7 @@ import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { formatUsd } from '../../../shared/money';
 import { itemClassLabel } from '../../../shared/itemClasses';
-import { Amount } from '../../../shared/ui/Serial';
+import { TierPrice } from '../../../shared/ui/TierPrice';
 import { EmptyState, ErrorState, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconReceipt } from '../../../shared/ui/icons';
 
@@ -16,6 +16,7 @@ interface PriceEntry {
   currency: string;
   billingTrigger: string;
   parameters: Record<string, unknown> | null;
+  tierDiscounted?: boolean;
 }
 
 interface PriceList {
@@ -38,11 +39,7 @@ export function PriceListPanel() {
     })();
   }, []);
 
-  function priceOf(entry: PriceEntry): string {
-    return entry.model === 'percentage'
-      ? `${(entry.value / 100).toFixed(2)}%`
-      : formatUsd(entry.value);
-  }
+  const asPercent = (bps: number) => `${(bps / 100).toFixed(2)}%`;
 
   return (
     <>
@@ -79,7 +76,11 @@ export function PriceListPanel() {
                             )}
                           </td>
                           <td>
-                            <Amount>{priceOf(e)}</Amount>
+                            <TierPrice
+                              listMinor={e.value}
+                              chargedMinor={e.tierDiscounted === false ? e.value : undefined}
+                              format={e.model === 'percentage' ? asPercent : formatUsd}
+                            />
                           </td>
                           <td>
                             <StatusBadge tone="neutral" plain>

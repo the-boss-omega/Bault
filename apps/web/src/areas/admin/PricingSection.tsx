@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../shared/api';
 import { dollarsToCents, formatDate, formatUsd } from '../../shared/money';
 import { useI18n, type MessageKey } from '../../shared/i18n';
-import type { MembershipTier, TierCatalogue } from '../../shared/membership';
 import { Button, EmptyState, Panel, SkeletonTable } from '../../shared/ui/primitives';
 import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { Code } from '../../shared/ui/Serial';
@@ -43,16 +42,6 @@ const MODEL_LABEL: Record<string, MessageKey> = {
   percentage: 'admin.pricing.model.percentage',
 };
 
-function tierRuleParameters(tier: MembershipTier) {
-  return {
-    storedItems: tier.storedItems,
-    insuredShipments: tier.insuredShipments,
-    insuredValueCapMinor: tier.insuredValueCapMinor,
-    postageCreditMinor: tier.postageCreditMinor,
-    commissionWaivedOnMinor: tier.commissionWaivedOnMinor,
-  };
-}
-
 function percentToBasisPoints(input: string): number | null {
   const cleaned = input.trim().replace(/[%\s]/g, '');
   if (cleaned === '' || !/^\d*\.?\d{0,2}$/.test(cleaned)) return null;
@@ -76,7 +65,6 @@ export function PricingSection({
   const { t, locale } = useI18n();
   const [rules, setRules] = useState<PricingRule[] | null>(null);
   const [coverage, setCoverage] = useState<PricingCoverage | null>(null);
-  const [tiers, setTiers] = useState<MembershipTier[] | null>(null);
   const [actionType, setActionType] = useState('intake');
   const [itemClass, setItemClass] = useState('');
   const [description, setDescription] = useState('');
@@ -98,18 +86,10 @@ export function PricingSection({
     void load();
   }, [load]);
 
-  useEffect(() => {
-    api
-      .get<TierCatalogue>('/membership/tiers')
-      .then((c) => setTiers(c.tiers))
-      .catch((e: Error) => onError(e.message));
-  }, [onError]);
-
   const value = model === 'fixed' ? dollarsToCents(amount) : percentToBasisPoints(amount);
   const catalogue = coverage?.actions ?? [];
   const selected = catalogue.find((a) => a.actionType === actionType) ?? null;
-  const tier = tiers?.find((x) => x.feeActionType === actionType) ?? null;
-  const ready = selected !== null && tiers !== null;
+  const ready = selected !== null;
 
   async function create() {
     if (value === null || !ready) return;
@@ -121,7 +101,6 @@ export function PricingSection({
         model,
         value,
         billingTrigger,
-        ...(tier ? { parameters: tierRuleParameters(tier) } : {}),
       });
       onMsg(t('admin.pricing.created'));
       setAmount('');
@@ -249,11 +228,6 @@ export function PricingSection({
             </div>
 
             <p className="field-hint">{t('admin.pricing.billingHint')}</p>
-            {tier && (
-              <p className="field-hint">
-                {t('admin.pricing.tierHint', { count: tier.storedItems })}
-              </p>
-            )}
             {selected?.resolution === 'code_constant' && (
               <p className="field-hint">{t('admin.pricing.publishedHint')}</p>
             )}

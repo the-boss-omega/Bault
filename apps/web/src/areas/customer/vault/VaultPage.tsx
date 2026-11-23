@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
-import { SERVICE_FEE_ACTION, priceLabel, useServicePrices } from '../../../shared/servicePrices';
+import { SERVICE_FEE_ACTION, priceLabel, useServicePrices, type PriceEntry } from '../../../shared/servicePrices';
+import { EntryPrice } from '../../../shared/ui/TierPrice';
+import { useViewerTier } from '../../../shared/tiers';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
@@ -750,6 +752,8 @@ function ItemDrawer({
   const [media, setMedia] = useState<ItemMedia[] | null>(null);
   const [openRequests, setOpenRequests] = useState<OpenServiceRequest[]>([]);
   const prices = useServicePrices();
+  const viewer = useViewerTier();
+  const feeOf = (entry: PriceEntry | undefined) => (entry && priceLabel(entry) ? <EntryPrice entry={entry} /> : null);
   const [confirming, setConfirming] = useState<CardAction | null>(null);
   const [formOpen, setFormOpen] = useState<FormKind | null>(null);
   // The row a form was opened from: the form takes the menu's place, and when it is closed the keyboard goes back to that row.
@@ -951,7 +955,7 @@ function ItemDrawer({
             <h3 className="drawer-heading">{t('vault.actions.title')}</h3>
             <ul className="service-menu">
               {actions.map((action) => {
-                const price = priceLabel(prices.get(SERVICE_FEE_ACTION[action.key] ?? ''));
+                const price = feeOf(prices.get(SERVICE_FEE_ACTION[action.key] ?? ''));
                 const pending = action.serviceType
                   ? openRequests.find((r) => r.type === action.serviceType)
                   : undefined;
@@ -983,7 +987,7 @@ function ItemDrawer({
                           {t(action.label)}
                         </span>
                         <span className="btn-row-end">
-                          {price && !pending && <span dir="ltr">{price}</span>}
+                          {price && !pending && price}
                           {action.form && !pending && <IconChevronRight />}
                         </span>
                       </span>
@@ -1008,7 +1012,7 @@ function ItemDrawer({
         {formOpen === 'consignment' && (
           <ConsignmentForm
             item={item}
-            fee={priceLabel(prices.get(SERVICE_FEE_ACTION.consignment ?? ''))}
+            fee={feeOf(prices.get(SERVICE_FEE_ACTION.consignment ?? ''))}
             onCancel={() => setFormOpen(null)}
             onDone={(message) => {
               setFormOpen(null);
@@ -1048,7 +1052,7 @@ function ItemDrawer({
         {formOpen === 'inspection' && (
           <InspectionForm
             item={item}
-            fee={priceLabel(prices.get(SERVICE_FEE_ACTION.inspection ?? ''))}
+            fee={feeOf(prices.get(SERVICE_FEE_ACTION.inspection ?? ''))}
             onCancel={() => setFormOpen(null)}
             onDone={(message) => {
               setFormOpen(null);
@@ -1099,7 +1103,7 @@ function ItemDrawer({
                 })}
               </p>
               {(() => {
-                const fee = priceLabel(prices.get(SERVICE_FEE_ACTION[confirming.key] ?? ''));
+                const fee = priceLabel(prices.get(SERVICE_FEE_ACTION[confirming.key] ?? ''), viewer.discountBps);
                 return fee ? <p className="hint">{t('services.confirmFee', { amount: fee })}</p> : null;
               })()}
             </>

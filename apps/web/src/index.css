@@ -2988,6 +2988,27 @@ input[type='search'] {
   color: var(--brass);
 }
 
+.tier-price {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--sp-2);
+}
+
+.tier-price-label {
+  font-size: 0.75em;
+  color: var(--brass);
+}
+
+.tier-price-list {
+  font-size: 0.8em;
+  color: var(--muted-foreground);
+}
+
+.tier-table th[scope='row'] .pill {
+  margin-inline-start: var(--sp-2);
+}
+
 .mem-uncovered li {
   padding-inline-start: var(--sp-4);
   border-inline-start: 2px solid var(--line-strong);

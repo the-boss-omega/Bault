@@ -15,6 +15,7 @@ import {
 } from '../../../shared/carriers';
 import { Button, ButtonLink, Field, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
+import { TierPrice } from '../../../shared/ui/TierPrice';
 import { IconAlert, IconChevronRight, IconPlus, IconShipping, IconUsers } from '../../../shared/ui/icons';
 import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import { countryName, lacksRegion, useShippingCountries } from '../../../shared/countries';
@@ -404,7 +405,7 @@ function ComposerRound({
 
   if (done) return <Confirmation done={done} t={t} paymentWindowDays={catalogue?.paymentWindowDays ?? 7} onAgain={onAgain} />;
 
-  const amount = !shared.on && chosen ? formatUsd(chosen.totalMinor) : '—';
+  const amount = !shared.on && chosen ? <RatePrice rate={chosen} /> : '—';
   const destinationText = address ? (
     <bdi dir="auto">
       {address.city}, {countryName(address.country, countries)}
@@ -1012,14 +1013,14 @@ function ServiceChoice({
                   {r.membershipCover && (r.coveredMinor ?? 0) > 0 && (
                     <span className="hint mem-covered">
                       {t('ship.coveredBy', {
-                        tier: t(`membership.tier.${r.membershipCover.tier}` as MessageKey),
+                        tier: t(`tier.name.${r.membershipCover.tier}` as MessageKey),
                         amount: formatUsd(r.coveredMinor ?? 0),
                       })}
                     </span>
                   )}
                 </span>
-                <span className="service-option-price" dir="ltr">
-                  {formatUsd(r.totalMinor)}
+                <span className="service-option-price">
+                  <RatePrice rate={r} />
                 </span>
               </label>
             </li>
@@ -1033,8 +1034,8 @@ function ServiceChoice({
             {refused.map((r) => (
               <li key={r.serviceKey} className="service-refused">
                 <span className="service-option-name">{serviceLabel(t, r)}</span>
-                <span className="service-option-price hint" dir="ltr">
-                  {formatUsd(r.totalMinor)}
+                <span className="service-option-price hint">
+                  <RatePrice rate={r} />
                 </span>
                 <span className="service-refused-reason hint">
                   {r.problems.map((p) => ruleLabel(t, p)).join(' · ')}
@@ -1163,4 +1164,14 @@ function Confirmation({
 
 function refusedForRegion(error: unknown): boolean {
   return error instanceof ApiError && error.code === 'address_region_required';
+}
+
+function RatePrice({ rate }: { rate: QuotedRate }) {
+  return (
+    <TierPrice
+      listMinor={rate.listTotalMinor ?? rate.totalMinor}
+      chargedMinor={rate.totalMinor}
+      tier={rate.tier ?? 'bronze'}
+    />
+  );
 }

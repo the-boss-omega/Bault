@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { billableActions, coverage } from '../../apps/api/src/modules/prc/billable-actions';
-import { MEMBERSHIP_TIERS } from '../../apps/api/src/modules/mem/tiers';
 
 const get = vi.fn();
 const post = vi.fn();
@@ -25,12 +24,6 @@ const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 const UNPRICED = JSON.parse(JSON.stringify(coverage(billableActions(), []))) as ReturnType<
   typeof coverage
 >;
-const TIERS = {
-  tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
-  uncovered: [],
-  cycleDays: 30,
-  currency: 'USD',
-};
 
 const rule = (
   id: string,
@@ -72,7 +65,6 @@ function api(rules: unknown[] = RULES) {
   get.mockImplementation(async (path: string) => {
     if (path === '/pricing/rules') return rules;
     if (path === '/admin/pricing/coverage') return UNPRICED;
-    if (path === '/membership/tiers') return TIERS;
     return [];
   });
 }
