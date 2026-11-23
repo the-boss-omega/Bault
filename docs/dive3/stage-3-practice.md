@@ -361,7 +361,7 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **Unused settings:** done; `SESSION_COOKIE_SECRET` and `EMAIL_API_KEY` are gone from `packages/config/src/env.ts` and the examples, and `PAYPAL_PAYOUT_NOTE` is now the payout's email subject (`tests/contract/adapter-selection.test.ts`, `tests/config/env.test.ts`).
 - **`tests/README.md`** lists four of the ten suites.
 - **Shipment composed in two calls:** `ShipmentComposer`'s `book` creates the shipment, then selects a rate or opens or joins a shared parcel; a failed second call leaves a `requested` shipment holding the cards, which the composer reports as unfinished.
-- **Intake batch** has no idempotency key; only the button's `busy` state stops a second submit (`POST /intake/items/batch`, `IntakeBench.tsx`).
+- **Intake batch:** done; both intake POSTs replay through `IdempotencyService`, with the `Idempotency-Key` header or else a key derived from the operator, the parcel and the units, so a resend from one parcel bills once; the bench sends no header yet (`tests/integration/inv-intake.test.ts`, 'an intake sent twice').
 - **Unused hook:** `usePrefersReducedMotion` (`apps/web/src/shared/hooks.ts`).
 - **A spent confirmation:** `ConfirmationService.consume` commits before the caller's work, so a failed action spends the token.
 - **Password change and the lockout:** a wrong current password in `PasswordService.change` is not written to `login_attempt`.

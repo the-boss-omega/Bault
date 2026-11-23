@@ -1,10 +1,12 @@
+import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
 import { BILLING_PORT, type BillingPort } from '../../shared/billing/billing.port';
+import { IdempotencyService } from '../../shared/idempotency/idempotency.service';
 import { CustodyService } from '../cst/custody.service';
 import { StowService } from '../cst/stow.service';
 import { bin, item, itemImage } from '../cst/cst.schema';
@@ -46,6 +48,7 @@ export class IntakeService {
     private readonly outbox: OutboxService,
     @Inject(BILLING_PORT) private readonly billing: BillingPort,
     private readonly media: MediaService,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
   private async resolveOwner(input: Pick<IntakeItemInput, 'ownerUsername' | 'ownerIntakeId'>): Promise<string> {
@@ -85,6 +88,7 @@ export class IntakeService {
       if (!target.active) {
         throw AppError.validation(`Bin ${target.barcode} is out of service — stow this somewhere else`);
       }
+      assertFitsShelf(target, oversized);
       if (parcelFacilityId) {
         const [row] = await this.db
           .select({ facilityId: bin.facilityId })
@@ -110,8 +114,8 @@ export class IntakeService {
     throw AppError.validation('A bin is required for every item — scan a shelf, ask for one, or decide the shelf later');
   }
 
-  private async assertParcelOpenFor(parcelId: string, ownerId: string) {
-    const [row] = await this.db
+  private async assertParcelOpenFor(db: Database, parcelId: string, ownerId: string) {
+    const [row] = await db
       .select({
         id: parcel.id,
         ownerId: parcel.ownerId,
@@ -120,6 +124,7 @@ export class IntakeService {
       })
       .from(parcel)
       .where(eq(parcel.id, parcelId))
+      .for('share')
       .limit(1);
     if (!row) throw AppError.validation(`Parcel ${parcelId} does not exist`);
     if (row.ownerId !== ownerId) {
@@ -131,32 +136,54 @@ export class IntakeService {
     return row;
   }
 
-  async intakeUnits(actorId: string, units: readonly IntakeItemInput[]) {
-    for (const [index, unit] of units.entries()) {
-      try {
-        await this.assertReceivable(actorId, unit);
-      } catch (e) {
-        const reason = e instanceof Error ? e.message : 'could not be booked in';
-        throw AppError.validation(`Unit ${index + 1} of ${units.length}: ${reason}`);
-      }
-    }
+  async intakeOne(actorId: string, input: IntakeItemInput, key?: string) {
+    return this.replayable(actorId, 'POST /intake/items', key, [input], (tx) => this.intakeItem(actorId, input, tx));
+  }
 
-    return this.custody.run(async (tx) => {
+  async intakeUnits(actorId: string, units: readonly IntakeItemInput[], key?: string) {
+    return this.replayable(actorId, 'POST /intake/items/batch', key, units, async (tx) => {
+      for (const [index, unit] of units.entries()) {
+        try {
+          await this.assertReceivable(tx, actorId, unit);
+        } catch (e) {
+          throw unitRefusal(e, index, units.length);
+        }
+      }
       const created: unknown[] = [];
       for (const [index, unit] of units.entries()) {
         try {
           const one = await this.intakeItem(actorId, unit, tx);
           created.push(...(Array.isArray(one) ? one : [one]));
         } catch (e) {
-          const reason = e instanceof Error ? e.message : 'could not be booked in';
-          throw AppError.validation(`Unit ${index + 1} of ${units.length}: ${reason}`);
+          throw unitRefusal(e, index, units.length);
         }
       }
       return created;
     });
   }
 
-  private async assertReceivable(actorId: string, input: IntakeItemInput): Promise<void> {
+  private replayable(
+    actorId: string,
+    endpoint: string,
+    key: string | undefined,
+    units: readonly IntakeItemInput[],
+    work: (tx: Database) => Promise<unknown>,
+  ) {
+    const idempotencyKey = key?.trim() || derivedIntakeKey(actorId, units);
+    return this.custody.run(async (tx) => {
+      if (idempotencyKey) {
+        const { replay } = await this.idempotency.claim(tx, idempotencyKey, endpoint, actorId);
+        if (replay) return replay.body;
+      }
+      const result = await work(tx);
+      if (idempotencyKey) {
+        await this.idempotency.complete(tx, idempotencyKey, endpoint, 201, JSON.parse(JSON.stringify(result)));
+      }
+      return result;
+    });
+  }
+
+  private async assertReceivable(db: Database, actorId: string, input: IntakeItemInput): Promise<void> {
     if (!isKnownItemClass(input.typeClass)) {
       throw AppError.validation(`Unknown item class "${input.typeClass}"`);
     }
@@ -166,11 +193,12 @@ export class IntakeService {
     }
     placementLater(input);
     const ownerId = await this.resolveOwner(input);
-    if (input.parcelId) await this.assertParcelOpenFor(input.parcelId, ownerId);
-    await this.media.assertAttachable(this.db, cleanKeys(input.photoKeys), { purpose: 'item_intake', actorId });
+    if (input.parcelId) await this.assertParcelOpenFor(db, input.parcelId, ownerId);
+    await this.media.assertAttachable(db, cleanKeys(input.photoKeys), { purpose: 'item_intake', actorId });
   }
 
-  async intakeItem(actorId: string, input: IntakeItemInput, tx?: Database) {
+  async intakeItem(actorId: string, input: IntakeItemInput, tx?: Database): Promise<unknown> {
+    if (!tx) return this.custody.run((t) => this.intakeItem(actorId, input, t));
     if (!isKnownItemClass(input.typeClass)) {
       throw AppError.validation(`Unknown item class "${input.typeClass}"`);
     }
@@ -180,7 +208,7 @@ export class IntakeService {
     const ownerId = await this.resolveOwner(input);
 
     const sourceParcel = input.parcelId
-      ? await this.assertParcelOpenFor(input.parcelId, ownerId)
+      ? await this.assertParcelOpenFor(tx, input.parcelId, ownerId)
       : null;
 
     const binId = await this.resolveStowBin(input, cls.oversized, sourceParcel?.facilityId ?? null);
@@ -194,6 +222,11 @@ export class IntakeService {
         throw AppError.validation(`${cls.label} cannot be received as a lot`);
       }
       if (!qualifiesAsLot(cls, lotSize)) {
+        if (input.quantity !== undefined && input.quantity !== 1) {
+          throw AppError.validation(
+            `A lot of ${cls.label.toLowerCase()}s needs at least ${cls.lotMinSize}; book these as single cards, one row per card`,
+          );
+        }
         lot = false;
         quantity = lotSize;
       }
@@ -208,16 +241,35 @@ export class IntakeService {
       quantity: quantity === 1 ? input.quantity : quantity,
     };
 
-    const writeAll = async (t: Database) => {
-      await this.media.assertAttachable(t, cleanKeys(input.photoKeys), { purpose: 'item_intake', actorId });
-      const created = [];
-      for (let i = 0; i < quantity; i += 1) {
-        created.push(await this.createOne(t, actorId, ownerId, effective, cls.oversized));
-      }
-      return created;
-    };
-    const created = tx ? await writeAll(tx) : await this.custody.run(writeAll);
+    await this.media.assertAttachable(tx, cleanKeys(input.photoKeys), { purpose: 'item_intake', actorId });
+    const created = [];
+    for (let i = 0; i < quantity; i += 1) {
+      created.push(await this.createOne(tx, actorId, ownerId, effective, cls.oversized));
+    }
     return quantity === 1 ? created[0] : created;
+  }
+
+  private async assertCodesFree(
+    tx: Database,
+    serialNumber: string,
+    barcode: string,
+    typed: { serial: boolean; barcode: boolean },
+  ) {
+    if (!typed.serial && !typed.barcode) return;
+    const codes = [...new Set([serialNumber.toUpperCase(), barcode.toUpperCase()])];
+    const list = sql.join(codes.map((c) => sql`${c}`), sql`, `);
+    const [taken] = await tx
+      .select({ serialNumber: item.serialNumber, barcode: item.barcode })
+      .from(item)
+      .where(or(sql`upper(${item.serialNumber}) in (${list})`, sql`upper(${item.barcode}) in (${list})`))
+      .limit(1);
+    if (!taken) return;
+    const clashes = (code: string) =>
+      [taken.serialNumber.toUpperCase(), taken.barcode.toUpperCase()].includes(code.toUpperCase());
+    const message = typed.serial && clashes(serialNumber)
+      ? `Serial ${serialNumber} is already on another item`
+      : `Barcode ${barcode} is already on another item`;
+    throw new AppError(ErrorCode.CONFLICT, message, 409);
   }
 
   private async createOne(tx: Database, actorId: string, ownerId: string, input: IntakeItemInput, oversized = false) {
@@ -228,6 +280,10 @@ export class IntakeService {
     const barcode = input.barcode && input.quantity === undefined
       ? input.barcode
       : makeItemBarcode(serialNumber);
+    await this.assertCodesFree(tx, serialNumber, barcode, {
+      serial: serialNumber === input.serialNumber,
+      barcode: barcode === input.barcode,
+    });
 
     const createdItem = await this.custody.createWithIntake(tx, {
       ownerId,
@@ -329,6 +385,7 @@ export class IntakeService {
         oversized: lot.oversized,
         isLot: false,
         lotSize: 1,
+        receivedAt: lot.receivedAt ?? undefined,
         actorId,
       });
       await this.billing.charge(tx, {
@@ -336,6 +393,12 @@ export class IntakeService {
         actionType: 'intake',
         itemId: child.id,
         itemClass: lot.typeClass,
+      });
+      await this.outbox.emit(tx, {
+        aggregateType: 'item',
+        aggregateId: child.id,
+        eventType: 'item_received',
+        payload: { itemId: child.id, ownerId: lot.ownerId, barcode: child.barcode },
       });
       produced.push(child);
     }
@@ -360,6 +423,29 @@ function placementLater(input: IntakeItemInput): string | undefined {
     throw AppError.validation(`Keep the reason under ${PLACEMENT_REASON_MAX} characters`);
   }
   return reason;
+}
+
+export function assertFitsShelf(target: { barcode: string; oversized: boolean }, oversized: boolean) {
+  if (oversized && !target.oversized) {
+    throw AppError.validation(`Bin ${target.barcode} is standard shelving; this needs an oversized bin`);
+  }
+}
+
+function unitRefusal(e: unknown, index: number, count: number): unknown {
+  if (!(e instanceof AppError)) return e;
+  const message = `Unit ${index + 1} of ${count}: ${e.message}`;
+  return e.getStatus() === 409 ? new AppError(e.code, message, 409, e.details) : AppError.validation(message, e.details);
+}
+
+function derivedIntakeKey(actorId: string, units: readonly IntakeItemInput[]): string | null {
+  const parcels = [...new Set(units.map((u) => u.parcelId?.trim() ?? '').filter(Boolean))].sort();
+  const serials = units.map((u) => u.serialNumber?.trim() ?? '').filter(Boolean);
+  const everyUnitTyped = units.length > 0 && serials.length === units.length;
+  if (parcels.length === 0 && !everyUnitTyped) return null;
+  const content = createHash('sha256')
+    .update(JSON.stringify(units.map((u) => JSON.stringify(u, Object.keys(u).sort()))))
+    .digest('hex');
+  return `intake:${actorId}:${parcels.join(',') || '-'}:${content}`;
 }
 
 function cleanKeys(keys: readonly string[] | undefined): string[] {
