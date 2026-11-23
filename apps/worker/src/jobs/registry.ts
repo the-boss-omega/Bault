@@ -9,6 +9,7 @@ export const JobName = {
   SHIPMENT_EXPIRY: 'shipment.expiry-sweep',
   MEMBERSHIP_RENEWAL: 'membership.renewal',
   SESSION_CLEANUP: 'session.cleanup',
+  OCR_READ: 'ocr.read',
 } as const;
 
 export type JobName = (typeof JobName)[keyof typeof JobName];

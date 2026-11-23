@@ -86,7 +86,13 @@ never built there. To turn it on, set `CRYPTO_PROVIDER=coinbase_commerce`,
 `CRYPTO_CHECKOUT_ENABLED=true`, and subscribe a Coinbase Commerce webhook for
 `https://<domain>/api/v1/webhooks/crypto` to `charge:confirmed`,
 `charge:failed`, `charge:delayed` and `charge:pending` (on Compute Engine,
-`infra/gcp/configure.sh --change crypto` asks for all of it). There is no
+`infra/gcp/configure.sh --change crypto` asks for all of it). Reading parcel
+labels and items at intake stays off with `OCR_ENABLED=false`, and
+`OCR_PROVIDER=sandbox` is accepted while it is off. To turn it on, set
+`OCR_PROVIDER=tesseract` and `OCR_ENABLED=true` for both the API and the
+worker and restart them: Tesseract runs inside the worker with its English data
+shipped in the image, so it needs no account, no key and no outbound network,
+and production refuses `OCR_ENABLED=true` with any other provider. There is no
 session secret: sessions are random tokens looked up by hash, and an old
 `SESSION_COOKIE_SECRET` or `EMAIL_API_KEY` line is ignored.
 
