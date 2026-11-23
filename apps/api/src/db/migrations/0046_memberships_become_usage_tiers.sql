@@ -81,15 +81,15 @@ RETURNS TABLE ("actions" integer, "spent_minor" bigint) AS $$
     SELECT l."amount"
       FROM "ledger_record" l, since
      WHERE l."user_id" = p_user
-       AND l."type" = 'fee'
-       AND l."direction" = 'debit'
+       AND l."type"::text = 'fee'
+       AND l."direction"::text = 'debit'
        AND l."reference_type" IN ('listing', 'service_request')
        AND l."occurred_at" >= since.t
        AND NOT EXISTS (
          SELECT 1 FROM "ledger_record" r
           WHERE r."user_id" = l."user_id"
-            AND r."type" = 'service_refund'
-            AND r."direction" = 'credit'
+            AND r."type"::text = 'service_refund'
+            AND r."direction"::text = 'credit'
             AND r."reference_type" = l."reference_type"
             AND r."reference_id" = l."reference_id")
     UNION ALL
@@ -171,7 +171,7 @@ DROP TRIGGER IF EXISTS "ledger_record_usage_tier" ON "ledger_record";
 CREATE TRIGGER "ledger_record_usage_tier"
   AFTER INSERT ON "ledger_record"
   FOR EACH ROW
-  WHEN (NEW."type" IN ('fee', 'service_refund') AND NEW."reference_type" IN ('listing', 'service_request'))
+  WHEN (NEW."type"::text IN ('fee', 'service_refund') AND NEW."reference_type" IN ('listing', 'service_request'))
   EXECUTE FUNCTION "usage_tier_after_fee"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "usage_tier_after_house_order"() RETURNS trigger AS $$
