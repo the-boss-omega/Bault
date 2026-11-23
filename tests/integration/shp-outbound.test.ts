@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
+import { honouredMembership } from './helpers/db';
 
 describe('SHP outbound shipping', () => {
   async function itemFor(cls = 'trading_card', weightGrams?: number) {
@@ -405,8 +406,7 @@ describe('SHP outbound shipping', () => {
   it('gives back the membership cover a cancelled parcel had spent', async () => {
     const operator = await signIn(SEED.operator);
     await fundWallet(SEED.operator, 20_000);
-    const joined = await operator.post('/membership/subscribe', { tier: 'bronze' });
-    expect([200, 201]).toContain(joined.status);
+    await honouredMembership({ email: SEED.operator }, 'bronze');
 
     const item = await intakeFor(operator, SEED.operator);
     const us = await addressFor(operator, { ...US, recipient: 'Hermon Vale' });
@@ -420,20 +420,20 @@ describe('SHP outbound shipping', () => {
     const covered = rates.find((r) => r.eligible && (r.membershipCover?.postageMinor ?? 0) > 0)!;
     expect(covered).toBeTruthy();
 
-    const usedBefore = (await operator.get('/membership/me')).body.membership.postage.usedMinor as number;
+    const usedBefore = (await operator.get('/tiers/me')).body.honoured.postage.usedMinor as number;
     const balanceBefore = (await operator.get('/finance/wallet')).body.amount as number;
     const selected = await operator.post(`/shipping/shipments/${s.id}/select-rate`, {
       carrier: covered.carrier,
       serviceLevel: covered.serviceLevel,
     });
     expect(selected.body.status).toBe('rates_selected');
-    const spent = (await operator.get('/membership/me')).body.membership.postage.usedMinor as number;
+    const spent = (await operator.get('/tiers/me')).body.honoured.postage.usedMinor as number;
     expect(spent).toBe(usedBefore + covered.membershipCover!.postageMinor);
 
     const cancelled = await operator.post(`/shipping/shipments/${s.id}/cancel`, { reason: 'Not needed after all.' });
     expect(cancelled.status).toBe(201);
 
-    expect((await operator.get('/membership/me')).body.membership.postage.usedMinor).toBe(usedBefore);
+    expect((await operator.get('/tiers/me')).body.honoured.postage.usedMinor).toBe(usedBefore);
     expect((await operator.get('/finance/wallet')).body.amount).toBe(
       balanceBefore - (cancelled.body.restockingFeeMinor as number),
     );

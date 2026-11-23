@@ -2,7 +2,16 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Pool } from 'pg';
 import { runStorageFees } from '../../apps/worker/src/jobs/storage-fee';
 import { SEED, SEED_PASSWORD, signIn, type Client } from '../integration/helpers/http';
-import { count, createItem, createMembership, createUser, storageCharges, testPool, warm } from './helpers/db';
+import {
+  HONOURED_STORED_ITEMS,
+  count,
+  createItem,
+  createMembership,
+  createUser,
+  storageCharges,
+  testPool,
+  warm,
+} from './helpers/db';
 
 let pool: Pool;
 beforeAll(() => {
@@ -30,19 +39,33 @@ describe('a membership that stops covering an item', () => {
     expect(await storageCharges(pool, card)).toBe(1);
   });
 
-  it('does not bill a member whose cycle ran out minutes before the sweep and is about to renew (F021)', async () => {
+  it('keeps a paid membership’s storage cover until honoured_until, and not after', async () => {
     const member = await createUser(pool);
-    await createMembership(pool, member, { endsInMinutes: -5 });
+    const m = await createMembership(pool, member, { endsInMinutes: 60 });
+    const card = await createItem(pool, member, 400);
+
+    await runStorageFees(pool);
+    expect(await storageCharges(pool, card)).toBe(0);
+
+    await pool.query(`UPDATE membership SET honoured_until = now() - interval '1 minute' WHERE id = $1`, [m]);
+    await runStorageFees(pool);
+    expect(await storageCharges(pool, card)).toBe(1);
+  });
+
+  it('never renews a paid membership whose period has run out', async () => {
+    const member = await createUser(pool);
+    const m = await createMembership(pool, member, { endsInMinutes: -5 });
     const card = await createItem(pool, member, 400);
 
     await runStorageFees(pool);
 
-    expect(await storageCharges(pool, card)).toBe(0);
+    expect(await storageCharges(pool, card)).toBe(1);
     const { rows } = await pool.query<{ live: boolean }>(
-      `SELECT current_period_end > now() AS live FROM membership WHERE user_id = $1`,
-      [member],
+      `SELECT current_period_end > now() AS live FROM membership WHERE id = $1`,
+      [m],
     );
-    expect(rows[0]!.live).toBe(true);
+    expect(rows[0]!.live).toBe(false);
+    expect(await count(pool, `SELECT 1 FROM charge WHERE action_type LIKE 'membership:%' AND user_id = $1`, [member])).toBe(0);
   });
 });
 
@@ -112,14 +135,7 @@ describe('a lot that has been split into its cards (F006)', () => {
   it('does not let the split lot take one of a member’s covered slots', async () => {
     const member = await createUser(pool);
     await createMembership(pool, member, { endsInMinutes: 60 * 24 * 10 });
-    const { rows } = await pool.query<{ slots: number }>(
-      `SELECT (parameters ->> 'storedItems')::int AS slots
-         FROM pricing_rule
-        WHERE action_type = 'membership:bronze' AND effective_from <= now()
-          AND (effective_to IS NULL OR effective_to > now())
-        ORDER BY effective_from DESC LIMIT 1`,
-    );
-    const slots = rows[0]!.slots;
+    const slots = HONOURED_STORED_ITEMS;
     const { lot, cards } = await splitLot(pool, member, { lotReceivedDaysAgo: 400, splitDaysAgo: 250, cards: slots });
 
     await runStorageFees(pool);

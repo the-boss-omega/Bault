@@ -35,6 +35,7 @@ const CONSTRAINED: ReadonlyArray<readonly [table: string, column: string, refere
   ['membership', 'user_id', 'user_account'],
   ['membership_period', 'membership_id', 'membership'],
   ['membership_period', 'user_id', 'user_account'],
+  ['usage_tier_change', 'user_id', 'user_account'],
 
   ['batch', 'owner_id', 'user_account'],
   ['item', 'owner_id', 'user_account'],
