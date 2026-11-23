@@ -1,9 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { asc, eq, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { facility } from '../inv/facility.schema';
+import { parcel } from '../inv/parcel.schema';
+import { userAccount } from '../acc/acc.schema';
 import { bin, item } from './cst.schema';
 
 export interface StowTarget {
@@ -17,6 +19,23 @@ export interface StowTarget {
   facilityId: string | null;
   facilityCode: string | null;
 }
+
+export interface ToShelveRow {
+  itemId: string;
+  serialNumber: string;
+  barcode: string;
+  description: string;
+  typeClass: string;
+  oversized: boolean;
+  lifecycleState: string;
+  parcelCode: string | null;
+  ownerUsername: string | null;
+  reason: string | null;
+  placementUndecidedAt: Date;
+  waitingSeconds: number;
+}
+
+const IN_THE_BUILDING = ['received', 'stored', 'listed', 'on-hold', 'sold'] as const;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -84,6 +103,37 @@ export class StowService {
       .leftJoin(counts, sql`${bin.id}::text = ${counts.binId}`)
       .leftJoin(facility, eq(facility.id, bin.facilityId))
       .orderBy(asc(bin.zone), asc(bin.barcode));
+  }
+
+  async listToShelve(): Promise<ToShelveRow[]> {
+    const rows = await this.db
+      .select({
+        itemId: item.id,
+        serialNumber: item.serialNumber,
+        barcode: item.barcode,
+        description: item.description,
+        typeClass: item.typeClass,
+        oversized: item.oversized,
+        lifecycleState: item.lifecycleState,
+        parcelCode: parcel.code,
+        ownerUsername: userAccount.username,
+        reason: item.placementUndecidedReason,
+        placementUndecidedAt: item.placementUndecidedAt,
+        waitingSeconds: sql<number>`floor(extract(epoch from (now() - ${item.placementUndecidedAt})))::int`,
+      })
+      .from(item)
+      .leftJoin(parcel, eq(parcel.id, item.sourceParcelId))
+      .leftJoin(userAccount, eq(userAccount.id, item.ownerId))
+      .where(
+        and(
+          isNull(item.binId),
+          isNotNull(item.placementUndecidedAt),
+          eq(item.lotBroken, false),
+          inArray(item.lifecycleState, [...IN_THE_BUILDING]),
+        ),
+      )
+      .orderBy(asc(item.placementUndecidedAt), asc(item.serialNumber));
+    return rows.map((r) => ({ ...r, placementUndecidedAt: r.placementUndecidedAt as Date }));
   }
 
   async listStowable(input: { facilityId?: string | null; oversized?: boolean } = {}): Promise<StowTarget[]> {

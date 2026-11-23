@@ -55,13 +55,15 @@ export function RelocateBench({
   shelves,
   onLog,
   onDone,
+  initialItem = '',
 }: {
   shelves: readonly BenchShelf[];
   onLog: (line: string) => void;
   onDone: () => Promise<void>;
+  initialItem?: string;
 }) {
   const { t, locale } = useI18n();
-  const [item, setItem] = useState('');
+  const [item, setItem] = useState(initialItem);
   const [shelfCode, setShelfCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<BenchOutcome | null>(null);
@@ -70,6 +72,10 @@ export function RelocateBench({
 
   const shelf = useMemo(() => shelfFor(shelves, shelfCode), [shelves, shelfCode]);
   const ready = item.trim() !== '' && shelfCode.trim() !== '';
+
+  useEffect(() => {
+    if (initialItem) shelfRef.current?.focus();
+  }, [initialItem]);
 
   async function relocate() {
     if (!ready || busy) return;

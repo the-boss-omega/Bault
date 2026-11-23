@@ -24,6 +24,8 @@ export interface IntakeItemInput {
   conditionGrade?: string;
   binId?: string;
   autoStow?: boolean;
+  placement?: 'shelf' | 'later';
+  placementReason?: string;
   weightGrams?: number;
   serialNumber?: string;
   barcode?: string;
@@ -75,7 +77,7 @@ export class IntakeService {
     input: IntakeItemInput,
     oversized: boolean,
     parcelFacilityId: string | null,
-  ): Promise<string> {
+  ): Promise<string | null> {
     const named = input.binId?.trim();
     if (named) {
       const target = await this.stow.resolveBin(named);
@@ -102,7 +104,9 @@ export class IntakeService {
       return chosen.id;
     }
 
-    throw AppError.validation('A bin is required for every item — scan a shelf, or ask for one');
+    if (input.placement === 'later') return null;
+
+    throw AppError.validation('A bin is required for every item — scan a shelf, ask for one, or decide the shelf later');
   }
 
   private async assertParcelOpenFor(parcelId: string, ownerId: string) {
@@ -159,6 +163,7 @@ export class IntakeService {
     if (input.isLot === true && !cls.lotEligible) {
       throw AppError.validation(`${cls.label} cannot be received as a lot`);
     }
+    placementLater(input);
     const ownerId = await this.resolveOwner(input);
     if (input.parcelId) await this.assertParcelOpenFor(input.parcelId, ownerId);
     await this.media.assertAttachable(this.db, cleanKeys(input.photoKeys), { purpose: 'item_intake', actorId });
@@ -169,6 +174,7 @@ export class IntakeService {
       throw AppError.validation(`Unknown item class "${input.typeClass}"`);
     }
     const cls = itemClass(input.typeClass)!;
+    const laterReason = placementLater(input);
 
     const ownerId = await this.resolveOwner(input);
 
@@ -194,7 +200,8 @@ export class IntakeService {
 
     const effective: IntakeItemInput = {
       ...input,
-      binId,
+      binId: binId ?? undefined,
+      placementReason: binId ? undefined : laterReason,
       isLot: lot,
       lotSize: lot ? lotSize : undefined,
       quantity: quantity === 1 ? input.quantity : quantity,
@@ -229,6 +236,7 @@ export class IntakeService {
       description: input.description,
       conditionGrade: input.conditionGrade,
       binId: input.binId,
+      placementUndecidedReason: input.binId ? undefined : input.placementReason,
       sourceParcelId: input.parcelId,
       oversized,
       weightGrams: input.weightGrams,
@@ -332,6 +340,24 @@ export class IntakeService {
     await tx.update(item).set({ lotBroken: true, updatedAt: new Date() }).where(eq(item.id, lotItemId));
     return { lotItemId, producedCount: produced.length, items: produced };
   }
+}
+
+const PLACEMENT_REASON_MAX = 200;
+
+function placementLater(input: IntakeItemInput): string | undefined {
+  if (input.placement === undefined || input.placement === 'shelf') return undefined;
+  if (input.placement !== 'later') {
+    throw AppError.validation('Placement is either a shelf now or decided later');
+  }
+  if (input.binId?.trim() || input.autoStow) {
+    throw AppError.validation('Name a shelf or decide the shelf later, not both');
+  }
+  const reason = input.placementReason?.trim() ?? '';
+  if (!reason) throw AppError.validation('Say why the shelf is being decided later');
+  if (reason.length > PLACEMENT_REASON_MAX) {
+    throw AppError.validation(`Keep the reason under ${PLACEMENT_REASON_MAX} characters`);
+  }
+  return reason;
 }
 
 function cleanKeys(keys: readonly string[] | undefined): string[] {
