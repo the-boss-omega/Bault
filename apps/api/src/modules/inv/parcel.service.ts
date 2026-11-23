@@ -12,7 +12,9 @@ import { MediaService } from '../med/media.service';
 import { userAccount } from '../acc/acc.schema';
 import { item } from '../cst/cst.schema';
 import { facility } from './facility.schema';
+import { renderLabelsPdf } from './labels';
 import { parcel, parcelEvent, parcelPhoto } from './parcel.schema';
+import { requestOcr } from './ocr.service';
 
 export type ParcelStatus =
   | 'expected'
@@ -97,6 +99,18 @@ export class ParcelService {
       notes: input.notes ?? null,
       metadata: input.metadata ?? null,
     });
+  }
+
+  async labelPdf(idOrCode: string): Promise<Buffer> {
+    const needle = idOrCode.trim();
+    const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(needle);
+    const [row] = await this.db
+      .select({ code: parcel.code })
+      .from(parcel)
+      .where(byId ? eq(parcel.id, needle) : sql`upper(${parcel.code}) = upper(${needle})`)
+      .limit(1);
+    if (!row) throw AppError.notFound('Parcel not found');
+    return renderLabelsPdf([{ code: row.code, caption: row.code }]);
   }
 
   private async load(parcelId: string) {
@@ -377,6 +391,7 @@ export class ParcelService {
     await tx.insert(parcelPhoto).values(
       clean.map((objectKey) => ({ parcelId, kind, objectKey, uploadedBy })),
     );
+    if (kind === 'arrival') await requestOcr(this.outbox, tx, { kind: 'parcel', id: parcelId }, clean[0]);
   }
 
   async photos(parcelId: string) {

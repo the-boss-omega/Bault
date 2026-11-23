@@ -10,6 +10,7 @@ export interface S3Config {
 }
 
 const SERVICE = 's3';
+const MAX_READ_BYTES = 20 * 1024 * 1024;
 const ALGORITHM = 'AWS4-HMAC-SHA256';
 
 const sha256Hex = (data: string | Buffer): string =>
@@ -118,6 +119,18 @@ export class S3StorageAdapter implements StorageAdapter {
     }
 
     return { key: req.key };
+  }
+
+  async getObject(key: string): Promise<Buffer> {
+    const response = await fetch(await this.getSignedUrl(key, 60));
+    if (!response.ok) {
+      throw new Error(`Storage read failed (${response.status} ${response.statusText}) for key "${key}"`);
+    }
+    const declared = Number(response.headers.get('content-length') ?? '0');
+    if (declared > MAX_READ_BYTES) throw new Error(`Object "${key}" is larger than ${MAX_READ_BYTES} bytes`);
+    const body = Buffer.from(await response.arrayBuffer());
+    if (body.length > MAX_READ_BYTES) throw new Error(`Object "${key}" is larger than ${MAX_READ_BYTES} bytes`);
+    return body;
   }
 
   async getSignedUrl(key: string, expiresInSeconds = 300): Promise<string> {

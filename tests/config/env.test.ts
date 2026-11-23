@@ -244,3 +244,29 @@ describe('cash-in by crypto', () => {
     expect((await load({ ...DEV, CRYPTO_CHECKOUT_ENABLED: 'true' })).CRYPTO_CHECKOUT_ENABLED).toBe(true);
   });
 });
+
+describe('reading photographs at intake', () => {
+  it('leaves OCR off and on the sandbox reader until it is configured', async () => {
+    const dev = await load(DEV);
+    expect(dev.OCR_ENABLED).toBe(false);
+    expect(dev.OCR_PROVIDER).toBe('sandbox');
+    const prod = await load(PROD);
+    expect(prod.OCR_ENABLED).toBe(false);
+    expect(prod.OCR_PROVIDER).toBe('sandbox');
+  });
+
+  it('accepts the sandbox reader switched on outside production', async () => {
+    const env = await load({ ...DEV, OCR_ENABLED: 'true' });
+    expect(env.OCR_ENABLED).toBe(true);
+    expect(env.OCR_PROVIDER).toBe('sandbox');
+    await expect(load({ ...DEV, OCR_PROVIDER: 'textract' })).rejects.toThrow(/OCR_PROVIDER/);
+  });
+
+  it('refuses OCR switched on in production without Tesseract', async () => {
+    await expect(load({ ...PROD, OCR_ENABLED: 'true' })).rejects.toThrow(/OCR_PROVIDER/);
+    await expect(load({ ...PROD, OCR_ENABLED: 'true', OCR_PROVIDER: 'sandbox' })).rejects.toThrow(/OCR_PROVIDER/);
+    const on = await load({ ...PROD, OCR_ENABLED: 'true', OCR_PROVIDER: 'tesseract' });
+    expect(on.OCR_ENABLED).toBe(true);
+    expect(on.OCR_PROVIDER).toBe('tesseract');
+  });
+});

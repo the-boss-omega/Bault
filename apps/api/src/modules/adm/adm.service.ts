@@ -176,6 +176,10 @@ export class AdmService {
 
       if (patch.binId !== undefined && (patch.binId || null) !== cur.binId) {
         set.binId = patch.binId || null;
+        if (set.binId) {
+          set.placementUndecidedReason = null;
+          set.placementUndecidedAt = null;
+        }
         await tx.insert(custodyEvent).values({ itemId: id, eventType: 'relocate', prevBinId: cur.binId, newBinId: patch.binId || null, actorId, reason: 'admin edit' });
       }
 
