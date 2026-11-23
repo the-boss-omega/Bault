@@ -13,13 +13,13 @@ describe('message catalogues', () => {
   });
 
   it('substitutes placeholders', () => {
-    const rendered = t('wallet.request.submitted', 'en', { code: 'WR-TEST0001' });
+    const rendered = t('wallet.request.submittedNext', 'en', { code: 'WR-TEST0001', amount: '$1.00' });
     expect(rendered).toContain('WR-TEST0001');
     expect(rendered).not.toContain('{code}');
   });
 
   it('leaves an unmatched placeholder verbatim rather than printing "undefined"', () => {
-    expect(t('wallet.request.submitted', 'en', {})).toContain('{code}');
+    expect(t('wallet.request.submittedNext', 'en', {})).toContain('{code}');
   });
 
   it('reports unknown keys as absent, so callers can omit rather than print them', () => {

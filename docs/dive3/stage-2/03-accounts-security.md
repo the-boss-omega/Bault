@@ -132,7 +132,7 @@ About 2 minutes. It builds on T15.1, T14.3 and T5.6.
 
 About 1 minute. It builds on T7.10, T9.1 and T9.2.
 
-These files take photo uploads and record each stored image. `POST /media/uploads` is staff only, so collectors cannot upload. `UploadDto` takes `contentType`, `dataBase64` and a `purpose` of `item_intake` or `parcel`. `MedModule` is global, so the inbound module `inv` and the marketplace module `mkt` inject `MediaService` freely. `mediaUpload` keeps one `media_upload` row per stored image, with key, purpose, uploader, sniffed type and size. The wallet request's `documentKey` is free text the requester types in. Its shape is checked, but nothing uploads it, looks it up or signs it.
+These files take photo uploads and record each stored image. `POST /media/uploads` is staff only, so collectors cannot upload. `UploadDto` takes `contentType`, `dataBase64` and a `purpose` of `item_intake` or `parcel`. `MedModule` is global, so the inbound module `inv` and the marketplace module `mkt` inject `MediaService` freely. `mediaUpload` keeps one `media_upload` row per stored image, with key, purpose, uploader, sniffed type and size. The wallet request's `documentKey` is free text a caller of the API may send; the collector's form no longer asks for it. Its shape is checked, but nothing uploads it, looks it up or signs it.
 
 #### `apps/api/src/modules/med/media.service.ts`
 

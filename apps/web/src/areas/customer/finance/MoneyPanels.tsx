@@ -2,10 +2,22 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
-import { Button, EmptyState, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  MoneyField,
+  Panel,
+  SkeletonTable,
+  StatusBadge,
+} from '../../../shared/ui/primitives';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { IconAlert, IconWallet } from '../../../shared/ui/icons';
-import { isPayPalApproveUrl, leaveForPayPal, type PayPalReturn } from '../../../shared/paypalCheckout';
+import {
+  isPayPalApproveUrl,
+  leaveForPayPal,
+  type PayPalReturn,
+} from '../../../shared/paypalCheckout';
 
 interface BankInstructions {
   accountName: string | null;
@@ -63,7 +75,8 @@ export interface CryptoReturn {
 const CRYPTO_PAYMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function cryptoReturnFrom(outcome: string, paymentId: string): CryptoReturn | null {
-  if ((outcome !== 'returned' && outcome !== 'cancelled') || !CRYPTO_PAYMENT_ID.test(paymentId)) return null;
+  if ((outcome !== 'returned' && outcome !== 'cancelled') || !CRYPTO_PAYMENT_ID.test(paymentId))
+    return null;
   return { outcome, paymentId };
 }
 
@@ -74,7 +87,8 @@ export function isCryptoHostedUrl(href: string, appOrigin: string): boolean {
   } catch {
     return false;
   }
-  if (url.protocol === 'https:' && url.hostname === 'commerce.coinbase.com' && url.port === '') return true;
+  if (url.protocol === 'https:' && url.hostname === 'commerce.coinbase.com' && url.port === '')
+    return true;
   return url.origin === appOrigin;
 }
 
@@ -112,21 +126,24 @@ export function TopUpPanel({
   const [busy, setBusy] = useState(false);
   const attempt = useRef<{ key: string; route: string; cents: number } | null>(null);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadRound, setLoadRound] = useState(0);
   useEffect(() => {
     void (async () => {
       try {
         const loaded = await api.get<RouteCatalogue>('/finance/funding-routes');
         setCatalogue(loaded);
+        setLoadError(null);
         setRoute((current) =>
           loaded.routes.some((r) => r.key === current && r.available)
             ? current
             : (loaded.routes.find((r) => r.available)?.key ?? current),
         );
       } catch (e) {
-        onError((e as Error).message);
+        setLoadError((e as Error).message);
       }
     })();
-  }, [onError]);
+  }, [loadRound]);
 
   const finished = useRef<string | null>(null);
   useEffect(() => {
@@ -148,7 +165,9 @@ export function TopUpPanel({
         const result = await api.post<PayPalCheckoutCaptured>(`${base}/capture`, {});
         onError(null);
         onStatus(
-          result.status === 'succeeded' ? t('money.paid', { amount: formatUsd(result.amountMinor) }) : t('money.paypalPending'),
+          result.status === 'succeeded'
+            ? t('money.paid', { amount: formatUsd(result.amountMinor) })
+            : t('money.paypalPending'),
         );
         onChanged();
       } catch (e) {
@@ -171,7 +190,10 @@ export function TopUpPanel({
     void (async () => {
       try {
         if (cryptoReturn.outcome === 'cancelled') {
-          await api.post(`/finance/checkout/crypto/${encodeURIComponent(cryptoReturn.paymentId)}/cancel`, {});
+          await api.post(
+            `/finance/checkout/crypto/${encodeURIComponent(cryptoReturn.paymentId)}/cancel`,
+            {},
+          );
           onError(null);
           onStatus(t('money.cryptoCancelled'));
           return;
@@ -192,7 +214,9 @@ export function TopUpPanel({
     let timer: ReturnType<typeof setTimeout> | undefined;
     const look = async (round: number) => {
       try {
-        const seen = await api.get<CryptoCheckoutState>(`/finance/checkout/crypto/${encodeURIComponent(watching)}`);
+        const seen = await api.get<CryptoCheckoutState>(
+          `/finance/checkout/crypto/${encodeURIComponent(watching)}`,
+        );
         if (stopped) return;
         if (seen.status === 'succeeded') {
           onError(null);
@@ -362,16 +386,31 @@ export function TopUpPanel({
   const instructionLines =
     chosen?.available && chosen.instructions
       ? 'handle' in chosen.instructions
-        ? [{ label: t('money.paypalHandle'), value: <bdi dir="ltr">{chosen.instructions.handle}</bdi> }]
+        ? [
+            {
+              label: t('money.paypalHandle'),
+              value: <bdi dir="ltr">{chosen.instructions.handle}</bdi>,
+            },
+          ]
         : Object.entries(chosen.instructions)
             .filter(([, v]) => v !== null)
-            .map(([k, v]) => ({ label: t(`money.bank.${k}` as MessageKey), value: <bdi dir="ltr">{v}</bdi> }))
+            .map(([k, v]) => ({
+              label: t(`money.bank.${k}` as MessageKey),
+              value: <bdi dir="ltr">{v}</bdi>,
+            }))
       : [];
 
   return (
     <Panel title={t('money.topUp')} subtitle={t('money.topUpSubtitle')}>
-      {catalogue === null ? (
-        <p className="hint">{t('grp.loading')}</p>
+      {catalogue === null && loadError ? (
+        <ErrorState
+          title={t('money.loadFailed')}
+          message={loadError}
+          onRetry={() => setLoadRound((n) => n + 1)}
+          retryLabel={t('ui.retry')}
+        />
+      ) : catalogue === null ? (
+        <SkeletonTable rows={3} columns={2} />
       ) : (
         <div className="request-form">
           <div className="stack stack--tight request-form-fields">
@@ -390,9 +429,15 @@ export function TopUpPanel({
             {chosen && (
               <p className="field-hint">
                 <StatusBadge tone={chosen.instant || viaCrypto ? 'success' : 'warning'} plain>
-                  {chosen.instant ? t('money.instant') : viaCrypto ? t('money.automatic') : t('money.reviewed')}
+                  {chosen.instant
+                    ? t('money.instant')
+                    : viaCrypto
+                      ? t('money.automatic')
+                      : t('money.reviewed')}
                 </StatusBadge>{' '}
-                {t(`${viaPayPal ? 'money.routeDescPaypal' : 'money.routeDesc'}.${chosen.key}` as MessageKey)}
+                {t(
+                  `${viaPayPal ? 'money.routeDescPaypal' : 'money.routeDesc'}.${chosen.key}` as MessageKey,
+                )}
               </p>
             )}
 
@@ -405,6 +450,14 @@ export function TopUpPanel({
                   min: formatUsd(catalogue.limits.minMinor),
                   max: formatUsd(catalogue.limits.maxMinor),
                 })}
+                error={
+                  amount.trim() !== '' && !withinLimits
+                    ? t('money.outOfLimits', {
+                        min: formatUsd(catalogue.limits.minMinor),
+                        max: formatUsd(catalogue.limits.maxMinor),
+                      })
+                    : undefined
+                }
               />
             ) : chosen?.available && chosen.instructions ? (
               <>
@@ -415,7 +468,11 @@ export function TopUpPanel({
                 <p className="field-hint">{t('money.thenRaise')}</p>
               </>
             ) : (
-              <EmptyState title={t('money.routeUnavailable')} text={t('money.routeUnavailableText')} icon={<IconAlert />} />
+              <EmptyState
+                title={t('money.routeUnavailable')}
+                text={t('money.routeUnavailableText')}
+                icon={<IconAlert />}
+              />
             )}
           </div>
 
@@ -425,7 +482,9 @@ export function TopUpPanel({
                 <DrawerTag
                   kicker={t('money.topUp')}
                   amount={cents !== null && cents > 0 ? formatUsd(cents) : '—'}
-                  lines={[{ label: t('money.how'), value: t(`money.route.${chosen.key}` as MessageKey) }]}
+                  lines={[
+                    { label: t('money.how'), value: t(`money.route.${chosen.key}` as MessageKey) },
+                  ]}
                   status={
                     <StatusBadge tone="success" plain>
                       {viaCrypto ? t('money.automatic') : t('money.instant')}
@@ -439,12 +498,22 @@ export function TopUpPanel({
                     variant="primary"
                     icon={<IconWallet />}
                     disabled={busy || !withinLimits || (viaCrypto && watching !== null)}
-                    onClick={() => void (viaCrypto ? payWithCrypto() : viaPayPal ? payWithPayPal() : pay())}
+                    onClick={() =>
+                      void (viaCrypto ? payWithCrypto() : viaPayPal ? payWithPayPal() : pay())
+                    }
                   >
-                    {viaCrypto ? t('money.continueToCrypto') : viaPayPal ? t('money.continueToPaypal') : t('money.payNow')}
+                    {viaCrypto
+                      ? t('money.continueToCrypto')
+                      : viaPayPal
+                        ? t('money.continueToPaypal')
+                        : t('money.payNow')}
                   </Button>
                   <span className="field-hint">
-                    {viaCrypto ? t('money.cryptoHint') : viaPayPal ? t('money.paypalHint') : t('money.instantHint')}
+                    {viaCrypto
+                      ? t('money.cryptoHint')
+                      : viaPayPal
+                        ? t('money.paypalHint')
+                        : t('money.instantHint')}
                   </span>
                 </div>
               </div>
@@ -476,31 +545,59 @@ interface CashOutQuote {
   };
 }
 
+export interface CashOutQuoteState {
+  quote: CashOutQuote | null;
+  failed: boolean;
+  retry: () => void;
+}
+
 /** What the server says would land for the amount typed so far, asked for once the typing has paused. */
-export function useCashOutQuote(amount: string): CashOutQuote | null {
+export function useCashOutQuote(amount: string): CashOutQuoteState {
   const [quote, setQuote] = useState<CashOutQuote | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [round, setRound] = useState(0);
   const cents = dollarsToCents(amount);
 
   useEffect(() => {
     if (cents === null || cents <= 0) {
       setQuote(null);
+      setFailed(false);
       return;
     }
     const handle = setTimeout(() => {
       void api
         .get<CashOutQuote>(`/finance/cash-out-quote?amountMinor=${cents}`)
-        .then(setQuote)
-        .catch(() => setQuote(null));
+        .then((next) => {
+          setQuote(next);
+          setFailed(false);
+        })
+        .catch(() => {
+          setQuote(null);
+          setFailed(true);
+        });
     }, 250);
     return () => clearTimeout(handle);
-  }, [cents]);
+  }, [cents, round]);
 
-  return quote;
+  return { quote, failed, retry: () => setRound((n) => n + 1) };
 }
 
 /** The fee schedule, in a sentence. What the amount typed comes to is on the slip beside the form. */
-export function CashOutQuotePanel({ quote }: { quote: CashOutQuote | null }) {
+export function CashOutQuotePanel({
+  quote,
+  failed = false,
+  onRetry,
+}: {
+  quote: CashOutQuote | null;
+  failed?: boolean;
+  onRetry?: () => void;
+}) {
   const { t } = useI18n();
+  if (failed) {
+    return (
+      <ErrorState message={t('money.quoteFailed')} onRetry={onRetry} retryLabel={t('ui.retry')} />
+    );
+  }
   return (
     <div className="stack stack--tight">
       <p className="field-hint">
