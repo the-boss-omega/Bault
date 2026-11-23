@@ -6,11 +6,13 @@ import { isValidUsername, normalizeUsername } from '../../shared/names';
 import type { InboundAddress } from '../../shared/parcels';
 import { Docket, type BenchOutcome } from '../../shared/ui/Docket';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
-import { Button, Field, Panel } from '../../shared/ui/primitives';
+import { Button, Field, Panel, ScanField } from '../../shared/ui/primitives';
 import { IconPlus } from '../../shared/ui/icons';
 import { code as bdiCode, quiet, stamped } from './Benches';
+import { OcrReview } from './OcrReview';
 
 interface ReceivedParcel {
+  id: string;
   code: string;
   status: string;
 }
@@ -37,6 +39,7 @@ export function ReceiveParcels({
   const [photos, setPhotos] = useState<PhotoRef[]>([]);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<BenchOutcome | null>(null);
+  const [toRead, setToRead] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -92,6 +95,7 @@ export function ReceiveParcels({
       }, t('parcelQueue.received'));
       if (result.rows) {
         const [made] = result.rows;
+        setToRead(made && photos.length > 0 ? made.id : null);
         setOutcome({
           tone: 'success',
           label: t('bench.received'),
@@ -150,13 +154,14 @@ export function ReceiveParcels({
               />
             </Field>
 
-            <Field label={t('inbound.register.tracking')}>
-              <input
-                value={trackingNumber}
-                onChange={(e) => edit(setTrackingNumber)(e.target.value)}
-                dir="ltr"
-              />
-            </Field>
+            <ScanField
+              label={t('inbound.register.tracking')}
+              value={trackingNumber}
+              onChange={edit(setTrackingNumber)}
+              onScan={() => {
+                if (ready && !busy) void receive();
+              }}
+            />
 
             <Field label={t('warehouse.notes')}>
               <input value={notes} onChange={(e) => edit(setNotes)(e.target.value)} dir="auto" />
@@ -226,6 +231,7 @@ export function ReceiveParcels({
           </Button>
         </div>
       </div>
+      {toRead && <OcrReview key={toRead} subject="parcel" id={toRead} />}
     </Panel>
   );
 }

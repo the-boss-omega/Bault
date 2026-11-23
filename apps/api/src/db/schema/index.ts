@@ -17,6 +17,7 @@ export * from '../../modules/esc/escrow.schema';
 export * from '../../modules/inv/disposal.schema';
 export * from '../../modules/inv/facility.schema';
 export * from '../../modules/inv/parcel.schema';
+export * from '../../modules/inv/ocr.schema';
 export * from '../../modules/sup/sup.schema';
 export * from '../../modules/med/med.schema';
 export * from '../../modules/mem/mem.schema';

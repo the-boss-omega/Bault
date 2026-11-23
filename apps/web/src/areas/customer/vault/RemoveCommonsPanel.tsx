@@ -48,7 +48,7 @@ export function RemoveCommonsPanel({
               ? t('cull.blocked.window', { days: windowDays })
               : null;
         return { it, reason };
-      }),
+      }).sort((a, b) => Number(Boolean(a.reason)) - Number(Boolean(b.reason))),
     [items, cutoff, windowDays, t],
   );
 
@@ -61,6 +61,12 @@ export function RemoveCommonsPanel({
       return it ? [it] : [];
     });
   }, [chosen, eligible]);
+
+  const allChosen = eligible.length > 0 && eligible.every((r) => chosen.includes(r.it.id));
+
+  function toggleAll() {
+    setChosen(allChosen ? [] : eligible.map((r) => r.it.id));
+  }
 
   function toggle(id: string) {
     setChosen((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -92,7 +98,14 @@ export function RemoveCommonsPanel({
         <EmptyState title={t('cull.empty')} text={t('cull.emptyText')} icon={<IconArchive />} />
       ) : (
         <>
-          <ul className="check-list">
+          {eligible.length > 1 && (
+            <div className="row">
+              <Button size="sm" variant="ghost" pressed={allChosen} onClick={toggleAll}>
+                {allChosen ? t('vault.cull.clear') : t('vault.cull.all', { count: eligible.length })}
+              </Button>
+            </div>
+          )}
+          <ul className="check-list" aria-label={t('cull.title')}>
             {rows.map(({ it, reason }) => (
               <li key={it.id} className="check-row">
                 <label className={`check${reason ? ' is-disabled' : ''}`}>
@@ -158,7 +171,11 @@ export function RemoveCommonsPanel({
             >
               {t('cull.submit', { count: selected.length })}
             </Button>
-            {eligible.length === 0 && <span className="field-hint">{t('cull.noneEligible')}</span>}
+            {eligible.length === 0 ? (
+              <span className="field-hint">{t('cull.noneEligible')}</span>
+            ) : (
+              selected.length === 0 && <span className="field-hint">{t('vault.cull.pickHint')}</span>
+            )}
           </div>
         </>
       )}

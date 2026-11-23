@@ -66,6 +66,8 @@ export const item = pgTable(
     conditionGrade: text('condition_grade'),
     lifecycleState: itemLifecycle('lifecycle_state').notNull().default('received'),
     binId: text('bin_id'),
+    placementUndecidedReason: text('placement_undecided_reason'),
+    placementUndecidedAt: timestamp('placement_undecided_at', { withTimezone: true }),
     sourceBatchId: uuid('source_batch_id').references(() => batch.id, { onDelete: 'restrict' }),
     sourceParcelId: uuid('source_parcel_id').references(() => parcel.id, { onDelete: 'restrict' }),
     holdFlag: boolean('hold_flag').notNull().default(false),

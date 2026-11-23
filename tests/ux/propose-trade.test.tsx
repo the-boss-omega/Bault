@@ -47,8 +47,8 @@ async function renderPanel() {
       <ProposeTradePanel onProposed={onProposed} onError={() => {}} />
     </I18nProvider>,
   );
-  // The picker is the only group called "They get": the slip beside it shows what is chosen and is not a group of its own.
-  const offered = await screen.findByRole('group', { name: 'They get' });
+  // The picker is the group called "What you offer": the slip beside it shows what is chosen and is not a group of its own.
+  const offered = await screen.findByRole('group', { name: 'What you offer' });
   await waitFor(() => expect(offered.querySelector('input')).not.toBeNull());
   return { onProposed, offered };
 }
@@ -101,6 +101,9 @@ describe('proposing a trade', () => {
     await user.click(screen.getByRole('checkbox', { name: /Send as a gift/ }));
     await user.click(within(offered).getByRole('radio', { name: /SN-DR97-0001/ }));
     await user.click(screen.getByRole('button', { name: 'Send gift' }));
+    expect(post).not.toHaveBeenCalled();
+    const confirm = await screen.findByRole('dialog', { name: 'Send this gift' });
+    await user.click(within(confirm).getByRole('button', { name: 'Send gift' }));
 
     await waitFor(() =>
       expect(post).toHaveBeenCalledWith('/marketplace/transfers', { itemId: 'i2', toUsername: 'blue' }),

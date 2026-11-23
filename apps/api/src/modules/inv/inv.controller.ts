@@ -5,10 +5,12 @@ import {
   ArrayNotEmpty,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -29,6 +31,8 @@ class IntakeItemDto {
   @IsOptional() @IsString() conditionGrade?: string;
   @IsOptional() @IsString() binId?: string;
   @IsOptional() @IsBoolean() autoStow?: boolean;
+  @IsOptional() @IsIn(['shelf', 'later']) placement?: 'shelf' | 'later';
+  @IsOptional() @IsString() @MaxLength(200) placementReason?: string;
   @IsOptional() @IsInt() @Min(1) @Max(100000) weightGrams?: number;
   @IsOptional() @IsString() serialNumber?: string;
   @IsOptional() @IsString() barcode?: string;

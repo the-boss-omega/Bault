@@ -91,18 +91,19 @@ describe('a storefront seen by a visitor', () => {
     get.mockClear();
     await user.click(within(dialog).getByRole('button', { name: 'Buy' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/marketplace/listings/l1/purchase'));
-    expect(await screen.findByText('Purchase completed')).toBeInTheDocument();
+    expect(await screen.findByText(/^Bought .*Gold Star Rayquaza.* for \$123\.00\. It is in your vault now\.$/)).toBeInTheDocument();
     await waitFor(() => expect(get).toHaveBeenCalledWith('/marketplace/sellers/golden'));
   });
 
-  it('shows a refused purchase as the page error', async () => {
+  it('shows a refused purchase in the confirmation, which stays open to try again or cancel', async () => {
     const user = userEvent.setup();
     post.mockRejectedValue(new Error('Insufficient funds'));
     await openStore('red');
     await user.click(await within(card('Gold Star Rayquaza')).findByRole('button', { name: 'Buy' }));
     const dialog = await screen.findByRole('dialog', { name: 'Confirm purchase' });
     await user.click(within(dialog).getByRole('button', { name: 'Buy' }));
-    expect(await screen.findByText('Insufficient funds')).toBeInTheDocument();
+    expect(await within(dialog).findByText('Insufficient funds')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Confirm purchase' })).toBeInTheDocument();
   });
 
   it('opens the same offer drawer Browse opens, with the asking price and the seller', async () => {
