@@ -3562,6 +3562,32 @@ input[type='search'] {
   border-block-start: 1px solid var(--border);
 }
 
+.label-sheet-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.label-sheet-steps {
+  padding-inline-start: var(--sp-6);
+  margin: 0;
+}
+
+.label-sheet-printers {
+  margin: 0;
+}
+
+.label-sheet-printers dt {
+  font-weight: 600;
+}
+
+.label-sheet-printers dd {
+  margin: 0 0 var(--sp-2);
+}
+
 .visually-hidden {
   position: absolute;
   inline-size: 1px;

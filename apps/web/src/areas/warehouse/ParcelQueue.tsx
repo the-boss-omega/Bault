@@ -22,6 +22,7 @@ import {
 } from '../../shared/ui/primitives';
 import { IconBox, IconInbox, IconShipping } from '../../shared/ui/icons';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
+import { LabelSheetButton } from './LabelSheet';
 
 export function ParcelQueue({
   onChanged,
@@ -102,6 +103,9 @@ export function ParcelQueue({
                           <Code value={row.trackingNumber} />
                         </span>
                       )}
+                      <span className="dt-sub">
+                        <LabelSheetButton targets={{ kind: 'parcel', id: row.id, code: row.code }} />
+                      </span>
                     </td>
                     <td>
                       {row.ownerUsername ? (

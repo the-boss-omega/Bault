@@ -6,7 +6,7 @@ import { isValidUsername, normalizeUsername } from '../../shared/names';
 import type { InboundAddress } from '../../shared/parcels';
 import { Docket, type BenchOutcome } from '../../shared/ui/Docket';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
-import { Button, Field, Panel } from '../../shared/ui/primitives';
+import { Button, Field, Panel, ScanField } from '../../shared/ui/primitives';
 import { IconPlus } from '../../shared/ui/icons';
 import { code as bdiCode, quiet, stamped } from './Benches';
 
@@ -150,13 +150,14 @@ export function ReceiveParcels({
               />
             </Field>
 
-            <Field label={t('inbound.register.tracking')}>
-              <input
-                value={trackingNumber}
-                onChange={(e) => edit(setTrackingNumber)(e.target.value)}
-                dir="ltr"
-              />
-            </Field>
+            <ScanField
+              label={t('inbound.register.tracking')}
+              value={trackingNumber}
+              onChange={edit(setTrackingNumber)}
+              onScan={() => {
+                if (ready && !busy) void receive();
+              }}
+            />
 
             <Field label={t('warehouse.notes')}>
               <input value={notes} onChange={(e) => edit(setNotes)(e.target.value)} dir="auto" />

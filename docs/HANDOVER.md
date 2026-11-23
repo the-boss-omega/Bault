@@ -59,6 +59,8 @@ In front of them, on the same server, Caddy terminates TLS, obtains the certific
 | GitHub | The repository, CI, and the image registry (GHCR) | `.github/workflows` |
 | A domain registrar and Cloudflare | The public name, DNS, and an optional proxy in front of the server | `infra/production/README.md`, "Behind Cloudflare" |
 
+**Warehouse labels.** Items and parcels carry one label: Code 128 on a 50 by 25 mm direct-thermal label, printed at 203 dpi. The barcode sits in a 40 mm field, 10 mm tall, with at least 3 mm of blank on each side, and under it the code and then the item's serial number or the parcel code. The API serves the labels as PDFs sized exactly to one label a page, and the warehouse console opens them from the intake bench, a shelf and the parcel queue. Buy 50 x 25 mm rolls with gaps for whichever printer you choose (a Zebra ZD220 or ZD421, a Rollo or Munbyn, or a Brother TD-4 series all work), add a 50 x 25 mm paper size in its driver, and print at 100 percent scale (Actual size) with no fit to page and no margins. A label shrunk to fit a different paper size may not scan. The scanners are ordinary USB keyboard-wedge scanners set to send Enter after each code, which is how the console's scan fields expect them.
+
 **What talks to what:**
 
 - A visitor's browser talks only to Caddy on the server, over HTTPS on port 443.
