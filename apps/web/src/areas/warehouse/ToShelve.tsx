@@ -5,6 +5,7 @@ import { itemName } from '../../shared/itemClasses';
 import { Button, EmptyState, ErrorState, Panel, SkeletonTable } from '../../shared/ui/primitives';
 import { IconBox } from '../../shared/ui/icons';
 import { RelocateBench, type BenchShelf } from './Benches';
+import { ListSearch, NoMatch, matchesQuery } from './ListTools';
 
 export interface ToShelveRow {
   itemId: string;
@@ -42,6 +43,10 @@ export function ToShelvePanel({
   const [rows, setRows] = useState<ToShelveRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<ToShelveRow | null>(null);
+  const [q, setQ] = useState('');
+  const shown = (rows ?? []).filter((r) =>
+    matchesQuery(q, r.serialNumber, r.barcode, r.description, r.parcelCode, r.ownerUsername, r.reason),
+  );
 
   const load = useCallback(async () => {
     try {
@@ -65,15 +70,29 @@ export function ToShelvePanel({
   }, [load, onDone]);
 
   return (
-    <Panel title={t('warehouse.toShelve.title')} subtitle={t('warehouse.toShelve.subtitle')} flush>
+    <Panel id="to-shelve" title={t('warehouse.toShelve.title')} subtitle={t('warehouse.toShelve.subtitle')} flush>
       {error ? (
-        <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />
+        <ErrorState
+          title={t('warehouse.toShelve.loadFailed')}
+          message={error}
+          onRetry={() => void load()}
+          retryLabel={t('ui.retry')}
+        />
       ) : rows === null ? (
         <SkeletonTable rows={3} columns={5} />
       ) : rows.length === 0 ? (
-        <EmptyState title={t('warehouse.toShelve.empty')} icon={<IconBox />} />
+        <EmptyState title={t('warehouse.toShelve.empty')} text={t('warehouse.toShelve.emptyText')} icon={<IconBox />} />
       ) : (
         <div className="stack stack--tight">
+          <ListSearch
+            value={q}
+            onChange={setQ}
+            label={t('warehouse.toShelve.search')}
+            placeholder={t('warehouse.toShelve.searchPlaceholder')}
+            shown={shown.length}
+            total={rows.length}
+          />
+          {shown.length === 0 && <NoMatch onClear={() => setQ('')} />}
           <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
@@ -89,7 +108,7 @@ export function ToShelvePanel({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {shown.map((row) => (
                   <tr key={row.itemId}>
                     <td data-label={t('warehouse.toShelve.col.item')}>
                       <span className="dt-primary">

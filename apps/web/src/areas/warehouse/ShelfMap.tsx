@@ -30,11 +30,13 @@ export function ShelfMap({
   bins,
   counts,
   onOpen,
+  onOpenTray,
   t,
 }: {
   bins: readonly ShelfBin[];
   counts: readonly ShelfCount[];
   onOpen?: (bin: ShelfBin) => void;
+  onOpenTray?: () => void;
   t: TranslateFn;
 }) {
   const { zones, unshelved } = useMemo(() => {
@@ -127,9 +129,22 @@ export function ShelfMap({
           </header>
           <ul className="shelf-rack">
             <li className="shelf-cell">
-              <div className="shelf-slot" data-state="tray">
-                <Pips count={unshelved} />
-              </div>
+              {onOpenTray ? (
+                <button
+                  type="button"
+                  className="shelf-slot"
+                  data-state="tray"
+                  title={t('warehouse.shelf.openTray')}
+                  aria-label={t('warehouse.shelf.openTrayCount', { count: unshelved })}
+                  onClick={onOpenTray}
+                >
+                  <Pips count={unshelved} />
+                </button>
+              ) : (
+                <div className="shelf-slot" data-state="tray">
+                  <Pips count={unshelved} />
+                </div>
+              )}
             </li>
           </ul>
         </section>

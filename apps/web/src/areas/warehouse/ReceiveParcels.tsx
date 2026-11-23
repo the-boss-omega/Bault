@@ -1,15 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../shared/api';
 import { useI18n } from '../../shared/i18n';
 import { useMediaQuery } from '../../shared/hooks';
 import { isValidUsername, normalizeUsername } from '../../shared/names';
-import type { InboundAddress } from '../../shared/parcels';
+import { parcelStatusLabel, type InboundAddress } from '../../shared/parcels';
 import { Docket, type BenchOutcome } from '../../shared/ui/Docket';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
-import { Button, Field, Panel, ScanField } from '../../shared/ui/primitives';
+import { Button, ErrorState, Field, Panel, ScanField, StatusBadge } from '../../shared/ui/primitives';
 import { IconPlus } from '../../shared/ui/icons';
 import { code as bdiCode, quiet, stamped } from './Benches';
 import { OcrReview } from './OcrReview';
+
+export type BenchFacility = InboundAddress & { placeholder?: boolean };
+
+export function facilityAddress(f: BenchFacility): string {
+  return [...(f.lines ?? []), [f.city, f.region, f.postalCode].filter(Boolean).join(' '), f.country]
+    .filter((part) => part && part.trim())
+    .join(', ');
+}
 
 interface ReceivedParcel {
   id: string;
@@ -29,7 +37,8 @@ export function ReceiveParcels({
 }) {
   const { t, locale } = useI18n();
   const precisePointer = useMediaQuery('(pointer: fine)');
-  const [facilities, setFacilities] = useState<InboundAddress[]>([]);
+  const [facilities, setFacilities] = useState<BenchFacility[]>([]);
+  const [facilitiesError, setFacilitiesError] = useState<string | null>(null);
   const [facilityCode, setFacilityCode] = useState('');
   const [carrier, setCarrier] = useState('');
   const [addressedTo, setAddressedTo] = useState('');
@@ -40,19 +49,23 @@ export function ReceiveParcels({
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<BenchOutcome | null>(null);
   const [toRead, setToRead] = useState<string | null>(null);
+  const [next, setNext] = useState<string | null>(null);
+
+  const loadFacilities = useCallback(async () => {
+    try {
+      const list = await api.get<BenchFacility[]>('/me/inbound-addresses');
+      setFacilities(list);
+      setFacilitiesError(null);
+      const preferred = list.find((f) => f.role === 'primary') ?? list[0];
+      if (preferred) setFacilityCode((current) => current || preferred.code);
+    } catch (e) {
+      setFacilitiesError((e as Error).message);
+    }
+  }, []);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const list = await api.get<InboundAddress[]>('/me/inbound-addresses');
-        setFacilities(list);
-        const preferred = list.find((f) => f.role === 'primary') ?? list[0];
-        if (preferred) setFacilityCode(preferred.code);
-      } catch {
-        // No list of buildings: the bench cannot say where it was received, and does not receive.
-      }
-    })();
-  }, []);
+    void loadFacilities();
+  }, [loadFacilities]);
 
   const labelOk = addressedTo.trim() === '' || isValidUsername(normalizeUsername(addressedTo));
   const said = Boolean(
@@ -60,12 +73,18 @@ export function ReceiveParcels({
   );
   const ready = facilityCode !== '' && said && labelOk;
   const facility = facilities.find((f) => f.code === facilityCode);
+  const missing = [
+    ...(facilityCode === '' ? [t('warehouse.receive.missingFacility')] : []),
+    ...(!said ? [t('warehouse.receive.missingClue')] : []),
+    ...(!labelOk ? [t('warehouse.receive.missingLabel')] : []),
+  ];
 
   const edit =
     <T,>(set: (value: T) => void) =>
     (value: T) => {
       set(value);
       setOutcome(null);
+      setNext(null);
     };
 
   async function receive() {
@@ -99,8 +118,12 @@ export function ReceiveParcels({
         setOutcome({
           tone: 'success',
           label: t('bench.received'),
-          detail: stamped(made ? `${made.code} · ${made.status}` : '', locale),
+          detail: stamped(
+            made ? [made.code, made.status ? parcelStatusLabel(t, made.status) : ''].filter(Boolean).join(' · ') : '',
+            locale,
+          ),
         });
+        setNext(made ? t(made.status === 'unclaimed' ? 'warehouse.receive.nextUnclaimed' : 'warehouse.receive.next', { code: made.code }) : null);
         setAddressedTo('');
         setTrackingNumber('');
         setNotes('');
@@ -113,18 +136,37 @@ export function ReceiveParcels({
   }
 
   return (
-    <Panel title={t('parcelQueue.receive.title')} subtitle={t('parcelQueue.receive.subtitle')}>
+    <Panel id="receive-arrival" title={t('parcelQueue.receive.title')} subtitle={t('parcelQueue.receive.subtitle')}>
+      {facilitiesError && (
+        <ErrorState
+          title={t('warehouse.receive.facilitiesFailed')}
+          message={facilitiesError}
+          onRetry={() => void loadFacilities()}
+          retryLabel={t('ui.retry')}
+        />
+      )}
+      {!facilitiesError && facility?.placeholder && (
+        <div className="drawer-note drawer-note--hold">
+          <span>{t('warehouse.receive.noAddressNote', { name: facility.name })}</span>
+        </div>
+      )}
       <div className="request-form request-form--bench">
         <div className="stack stack--tight request-form-fields">
           <div className="form-grid">
             <Field
               label={t('parcelQueue.receive.facility')}
-              hint={t('parcelQueue.receive.facilityHint')}
+              hint={
+                facility?.placeholder
+                  ? t('warehouse.receive.noAddress')
+                  : facility && facilityAddress(facility)
+                    ? t('warehouse.receive.address', { address: facilityAddress(facility) })
+                    : t('parcelQueue.receive.facilityHint')
+              }
             >
               <select value={facilityCode} onChange={(e) => edit(setFacilityCode)(e.target.value)}>
                 {facilities.map((f) => (
                   <option key={f.code} value={f.code}>
-                    {f.name}
+                    {f.placeholder ? t('warehouse.receive.optionNoAddress', { name: f.name }) : f.name}
                   </option>
                 ))}
               </select>
@@ -196,7 +238,23 @@ export function ReceiveParcels({
             )
           }
           lines={[
-            { label: t('parcelQueue.receive.facility'), value: facility ? facility.name : quiet },
+            {
+              label: t('parcelQueue.receive.facility'),
+              value: facility ? (
+                facility.placeholder ? (
+                  <>
+                    {facility.name}{' '}
+                    <StatusBadge tone="warning" plain>
+                      {t('warehouse.receive.noAddressBadge')}
+                    </StatusBadge>
+                  </>
+                ) : (
+                  facility.name
+                )
+              ) : (
+                quiet
+              ),
+            },
             {
               label: t('inbound.register.carrier'),
               value: carrier.trim() ? <bdi dir="auto">{carrier.trim()}</bdi> : quiet,
@@ -229,6 +287,10 @@ export function ReceiveParcels({
           >
             {t('parcelQueue.receive.submit')}
           </Button>
+          {!ready && !busy && missing.length > 0 && (
+            <span className="field-hint">{t('warehouse.missing', { list: missing.join('; ') })}</span>
+          )}
+          {next && <span className="field-hint" role="status">{next}</span>}
         </div>
       </div>
       {toRead && <OcrReview key={toRead} subject="parcel" id={toRead} />}

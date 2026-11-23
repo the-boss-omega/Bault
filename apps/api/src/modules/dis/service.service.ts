@@ -221,6 +221,7 @@ export class ServiceRequestService {
         typeFields: serviceRequest.typeFields,
         createdAt: serviceRequest.createdAt,
         requesterEmail: userAccount.email,
+        requesterUsername: userAccount.username,
         itemDescription: item.description,
       })
       .from(serviceRequest)
