@@ -6,8 +6,12 @@ import { Code, ItemPick } from '../../../shared/ui/Serial';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { SwapGlyph, TradeSide } from './TradeSides';
 import { useVaultItems } from '../../../shared/useVaultItems';
-import { isValidUsername, normalizeUsername } from '../../../shared/names';
-import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { isValidUsername } from '../../../shared/names';
+import { typedUsername } from '../../../shared/market';
+import { Button, EmptyState, ErrorState, Field, Panel, SkeletonBlock, StatusBadge } from '../../../shared/ui/primitives';
+import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
+import { isolate } from '../../../shared/money';
+import { LIST_TOOLS_FROM } from './ListTools';
 import { IconBox, IconSearch } from '../../../shared/ui/icons';
 
 interface Collector {
@@ -26,15 +30,14 @@ export function ProposeTradePanel({
   initialUsername,
   initialSerial,
   onProposed,
-  onError,
 }: {
   initialUsername?: string;
   initialSerial?: string;
   onProposed: (message: string) => Promise<void> | void;
-  onError: (m: string) => void;
+  onError?: (m: string) => void;
 }) {
   const { t } = useI18n();
-  const { items } = useVaultItems(true);
+  const { items, loaded } = useVaultItems(true);
 
   const [username, setUsername] = useState(initialUsername ?? '');
   const [counterparty, setCounterparty] = useState<Collector | null>(null);
@@ -44,8 +47,13 @@ export function ProposeTradePanel({
   const [serial, setSerial] = useState(initialSerial ?? '');
   const [gift, setGift] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [wantError, setWantError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [confirmGift, setConfirmGift] = useState(false);
+  const [find, setFind] = useState('');
 
-  const normalized = normalizeUsername(username);
+  const normalized = typedUsername(username);
   const usernameOk = isValidUsername(normalized);
   const offeredIds = Object.entries(offered)
     .filter(([, v]) => v)
@@ -54,22 +62,28 @@ export function ProposeTradePanel({
   useEffect(() => {
     setCounterparty(null);
     setWanted([]);
+    setLookupError(null);
   }, [username]);
 
   async function lookup() {
+    if (!usernameOk) {
+      setLookupError(t('market.propose.usernameBad'));
+      return;
+    }
     setLookingUp(true);
+    setLookupError(null);
     try {
       setCounterparty(await api.get<Collector>(`/marketplace/collectors/${normalized}`));
     } catch (e) {
       setCounterparty(null);
-      onError((e as Error).message);
+      setLookupError((e as Error).message);
     } finally {
       setLookingUp(false);
     }
   }
 
   useEffect(() => {
-    const who = normalizeUsername(initialUsername ?? '');
+    const who = typedUsername(initialUsername ?? '');
     if (!isValidUsername(who)) return;
     let live = true;
     setLookingUp(true);
@@ -79,7 +93,7 @@ export function ProposeTradePanel({
         if (live) setCounterparty(found);
       })
       .catch((e: unknown) => {
-        if (live) onError((e as Error).message);
+        if (live) setLookupError((e as Error).message);
       })
       .finally(() => {
         if (live) setLookingUp(false);
@@ -87,7 +101,7 @@ export function ProposeTradePanel({
     return () => {
       live = false;
     };
-  }, [initialUsername, onError]);
+  }, [initialUsername]);
 
   /** A gift moves one item, so what was ticked for a swap is cut to the first of it. */
   function chooseGift(on: boolean) {
@@ -101,7 +115,8 @@ export function ProposeTradePanel({
   }
 
   async function addWanted() {
-    if (!counterparty) return;
+    if (!counterparty || !serial.trim()) return;
+    setWantError(null);
     try {
       const found = await api.get<TradableItem>(
         `/marketplace/collectors/${counterparty.username}/items/${encodeURIComponent(serial.trim())}`,
@@ -109,13 +124,22 @@ export function ProposeTradePanel({
       setWanted((prev) => (prev.some((w) => w.id === found.id) ? prev : [...prev, found]));
       setSerial('');
     } catch (e) {
-      onError((e as Error).message);
+      setWantError((e as Error).message);
     }
   }
+
+  const missing = !counterparty
+    ? t('market.propose.needCollector')
+    : offeredIds.length === 0
+      ? t(gift ? 'market.propose.needGiftItem' : 'market.propose.needOffered')
+      : !gift && wanted.length === 0
+        ? t('market.propose.needWanted')
+        : null;
 
   async function propose() {
     if (!counterparty || offeredIds.length === 0) return;
     setBusy(true);
+    setSendError(null);
     try {
       if (gift) {
         const challenge = await api.post<{ confirmationToken: string }>('/marketplace/transfers', {
@@ -136,40 +160,62 @@ export function ProposeTradePanel({
       }
       setOffered({});
       setWanted([]);
+      setConfirmGift(false);
     } catch (e) {
-      onError((e as Error).message);
+      setSendError((e as Error).message);
+      setConfirmGift(false);
     } finally {
       setBusy(false);
     }
   }
 
+  const giftItem = gift ? items.find((item) => offered[item.id]) : undefined;
+  const needle = find.trim().toLowerCase();
+  const pickable = needle
+    ? items.filter(
+        (item) => offered[item.id] || `${item.serialNumber ?? ''} ${itemName(t, item)}`.toLowerCase().includes(needle),
+      )
+    : items;
+
   return (
+    <>
     <Panel title={t('market.propose.title')} subtitle={t('market.propose.subtitle')}>
       <div className="request-form">
         <div className="stack stack--tight request-form-fields">
-          <div className="row" style={{ alignItems: 'start' }}>
+          <form
+            className="row"
+            style={{ alignItems: 'start' }}
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              void lookup();
+            }}
+          >
             <Field
               label={t('market.propose.username')}
               hint={t('market.propose.usernameHint')}
+              error={lookupError ?? undefined}
               className="field--grow"
             >
               <input
                 value={username}
+                autoComplete="off"
+                spellCheck={false}
                 onChange={(e) => setUsername(e.target.value)}
-                aria-invalid={username.length > 0 && !usernameOk}
+                aria-invalid={Boolean(lookupError) || (username.length > 0 && !usernameOk) || undefined}
                 dir="ltr"
               />
             </Field>
             <Button
+              type="submit"
               variant="secondary"
               className="btn--field-aligned"
               icon={<IconSearch />}
-              disabled={!usernameOk || lookingUp}
-              onClick={() => void lookup()}
+              disabled={lookingUp}
             >
               {t('market.propose.find')}
             </Button>
-          </div>
+          </form>
 
           {counterparty && (
             <p className="field-hint">
@@ -184,14 +230,30 @@ export function ProposeTradePanel({
           </label>
           <p className="field-hint">{t(gift ? 'market.propose.giftHint' : 'market.propose.swapHint')}</p>
 
-          {items.length === 0 ? (
+          {!loaded ? (
+            <SkeletonBlock className="skel-metric" />
+          ) : items.length === 0 ? (
             <EmptyState title={t('services.noItems')} text={t('market.sell.noItemsText')} icon={<IconBox />} />
           ) : (
             <fieldset className="field field--cards">
-              <legend className="sr-only">{t('market.swaps.col.theyGet')}</legend>
+              <legend className="field-label">
+                {t(gift ? 'market.propose.giftLegend' : 'market.propose.offerLegend')}
+              </legend>
+              {items.length > LIST_TOOLS_FROM && (
+                <div className="search">
+                  <IconSearch />
+                  <input
+                    type="search"
+                    placeholder={t('market.sell.find')}
+                    aria-label={t('market.sell.find')}
+                    value={find}
+                    onChange={(e) => setFind(e.target.value)}
+                  />
+                </div>
+              )}
               {/* A swap can be of several cards; a gift is of one, so it is a radio and says "1 of n". */}
               <ul className="check-list" key={gift ? 'one' : 'several'}>
-                {items.map((item) => (
+                {pickable.map((item) => (
                   <li key={item.id}>
                     <label className="check">
                       <input
@@ -212,23 +274,37 @@ export function ProposeTradePanel({
 
           {!gift && counterparty && (
             <>
-              <div className="row" style={{ alignItems: 'start' }}>
+              <form
+                className="row"
+                style={{ alignItems: 'start' }}
+                noValidate
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void addWanted();
+                }}
+              >
                 <Field
                   label={t('market.propose.wantSerial')}
                   hint={t('market.propose.wantHint')}
+                  error={wantError ?? undefined}
                   className="field--grow"
                 >
-                  <input value={serial} onChange={(e) => setSerial(e.target.value)} dir="ltr" />
+                  <input
+                    value={serial}
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-invalid={wantError ? true : undefined}
+                    onChange={(e) => {
+                      setSerial(e.target.value);
+                      setWantError(null);
+                    }}
+                    dir="ltr"
+                  />
                 </Field>
-                <Button
-                  variant="secondary"
-                  className="btn--field-aligned"
-                  disabled={!serial.trim()}
-                  onClick={() => void addWanted()}
-                >
+                <Button type="submit" variant="secondary" className="btn--field-aligned" disabled={!serial.trim()}>
                   {t('market.propose.addWanted')}
                 </Button>
-              </div>
+              </form>
               {wanted.length > 0 && (
                 <ul className="check-list list-unbounded" aria-label={t('market.swaps.col.youGet')}>
                   {wanted.map((w) => (
@@ -237,9 +313,10 @@ export function ProposeTradePanel({
                       <Button
                         size="sm"
                         variant="ghost"
+                        aria-label={t('market.propose.removeWanted', { serial: w.serialNumber })}
                         onClick={() => setWanted((prev) => prev.filter((x) => x.id !== w.id))}
                       >
-                        {t('ui.cancel')}
+                        {t('market.propose.remove')}
                       </Button>
                     </li>
                   ))}
@@ -275,16 +352,45 @@ export function ProposeTradePanel({
           </DrawerTag>
         </aside>
 
-        <div className="row request-form-actions">
-          <Button
-            variant="primary"
-            disabled={busy || !counterparty || offeredIds.length === 0 || (!gift && wanted.length === 0)}
-            onClick={() => void propose()}
-          >
-            {t(gift ? 'market.propose.sendGift' : 'market.propose.send')}
-          </Button>
+        <div className="stack stack--tight request-form-actions">
+          {sendError && <ErrorState message={sendError} />}
+          <div className="row">
+            <Button
+              variant="primary"
+              disabled={busy || missing !== null}
+              aria-describedby={missing ? 'propose-missing' : undefined}
+              onClick={() => (gift ? setConfirmGift(true) : void propose())}
+            >
+              {t(gift ? 'market.propose.sendGift' : 'market.propose.send')}
+            </Button>
+          </div>
+          {missing && (
+            <p className="field-hint" id="propose-missing">
+              {missing}
+            </p>
+          )}
         </div>
       </div>
     </Panel>
+
+    {confirmGift && counterparty && giftItem && (
+      <ConfirmationModal
+        title={t('market.propose.giftConfirmTitle')}
+        body={
+          <p>
+            {t('market.propose.giftConfirmBody', {
+              item: isolate(itemName(t, giftItem).split(' · ')[0]!),
+              username: counterparty.username,
+            })}
+          </p>
+        }
+        confirmLabel={t('market.propose.sendGift')}
+        cancelLabel={t('ui.cancel')}
+        busy={busy}
+        onConfirm={() => void propose()}
+        onCancel={() => setConfirmGift(false)}
+      />
+    )}
+    </>
   );
 }
