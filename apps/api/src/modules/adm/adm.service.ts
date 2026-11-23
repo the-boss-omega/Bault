@@ -257,8 +257,7 @@ export class AdmService {
     }
 
     return this.db.transaction(async (tx) => {
-      const { amount, snapshot } = await this.pricing.price('storage', {}, tx);
-
+      const listed = await this.pricing.price('storage', {}, tx);
       const items = await tx
         .select({ id: item.id, ownerId: item.ownerId })
         .from(item)
@@ -274,6 +273,7 @@ export class AdmService {
       const chargedAccountIds = new Set<string>();
 
       for (const it of items) {
+        const { amount, snapshot } = await this.pricing.price('storage', { userId: it.ownerId }, tx);
         const [ch] = await tx
           .insert(charge)
           .values({
@@ -315,7 +315,7 @@ export class AdmService {
           chargedItemIds,
           chargedAccountIds: [...chargedAccountIds],
           totalAmount,
-          currency: amount.currency,
+          currency: listed.amount.currency,
         })
         .returning({ id: storageFeeRun.id });
       if (!run) throw AppError.validation('Failed to record storage-fee run');

@@ -49,7 +49,7 @@ import {
   signatureForced,
   usdAmount,
 } from './shipping-options';
-import { UNLIMITED } from '../mem/tiers';
+import { UNLIMITED, isTierKey, type TierKey } from '../mem/tiers';
 import {
   MembershipService,
   type AppliedShippingCover,
@@ -96,6 +96,9 @@ export interface QuotedRate extends Rate {
   membershipCover: AppliedShippingCover | null;
   coveredMinor: number;
   totalMinor: number;
+  tier: TierKey;
+  discountBps: number;
+  listTotalMinor: number;
   recommended: boolean;
 }
 
@@ -120,6 +123,30 @@ const LABEL_REFUSAL_SENTENCES: readonly [RegExp, string][] = [
   [/customs/i, 'The carrier needs fuller customs details before it can print a label.'],
   [/no overnight service|offers no/i, 'The carrier offers no service of this kind for this parcel.'],
 ];
+
+interface TierSnapshot {
+  tier: TierKey;
+  discountBps: number;
+  listMinor: number;
+  chargedMinor: number;
+}
+
+function tierSnapshot(rate: Pick<QuotedRate, 'tier' | 'discountBps' | 'listTotalMinor' | 'totalMinor'>): TierSnapshot {
+  return { tier: rate.tier, discountBps: rate.discountBps, listMinor: rate.listTotalMinor, chargedMinor: rate.totalMinor };
+}
+
+function agreedTier(fulfillment: unknown, costMinor: number): TierSnapshot {
+  const stored = (fulfillment as { tierQuote?: Partial<TierSnapshot> } | null)?.tierQuote;
+  if (stored && isTierKey(stored.tier) && stored.chargedMinor === costMinor) {
+    return {
+      tier: stored.tier,
+      discountBps: Number(stored.discountBps ?? 0),
+      listMinor: Number(stored.listMinor ?? costMinor),
+      chargedMinor: costMinor,
+    };
+  }
+  return { tier: 'bronze', discountBps: 0, listMinor: costMinor, chargedMinor: costMinor };
+}
 
 export function labelRefusalSentence(raw: string | null): string {
   const match = LABEL_REFUSAL_SENTENCES.find(([pattern]) => pattern.test(raw ?? ''));
@@ -271,6 +298,7 @@ export class ShipmentService {
       : null;
 
     const rates = await this.priceServices(
+      userId,
       profile,
       addOns,
       input.rush ?? false,
@@ -295,17 +323,22 @@ export class ShipmentService {
   }
 
   private async priceServices(
+    userId: string,
     profile: ParcelProfile,
     addOnKeys: string[],
     rush: boolean,
     cover: ShippingCover | null = null,
     customsLines: readonly CustomsLine[] | null = null,
   ): Promise<QuotedRate[]> {
+    const tier = await this.pricing.tierOf(userId);
+    const atTier = (listMinor: number) => PricingService.atTier(tier, listMinor).chargedMinor;
     const { amount: baseHandling } = await this.pricing.price('shipping');
-    const rushMinor = rush ? ((await this.pricing.tryPrice('shipping_rush'))?.amount.amount ?? 0) : 0;
-    const handling = { amount: baseHandling.amount + rushMinor };
+    const rushListMinor = rush ? ((await this.pricing.tryPrice('shipping_rush'))?.amount.amount ?? 0) : 0;
+    const rushMinor = atTier(rushListMinor);
+    const handling = { amount: atTier(baseHandling.amount) + rushMinor };
     const premium = insurancePremiumMinor(profile.insuredValueMinor);
-    const addOnPrices = await this.priceAddOns(addOnKeys);
+    const addOnListPrices = await this.priceAddOns(addOnKeys);
+    const addOnPrices = Object.fromEntries(Object.entries(addOnListPrices).map(([k, v]) => [k, atTier(v)]));
     const addOnsMinor = Object.values(addOnPrices).reduce((a, b) => a + b, 0);
 
     const rushCovered = cover?.rushIncluded ? rushMinor : 0;
@@ -344,6 +377,14 @@ export class ShipmentService {
       const postageCovered = cover ? Math.min(cover.postageCreditLeftMinor, carrierCost) : 0;
       const addOnsCoveredMinor = Object.values(addOnsCovered).reduce((a, b) => a + b, 0);
       const coveredMinor = postageCovered + insuranceCovered + rushCovered + addOnsCoveredMinor;
+      const discountMinor =
+        baseHandling.amount -
+        atTier(baseHandling.amount) +
+        (rushCovered > 0 ? 0 : rushListMinor - rushMinor) +
+        Object.keys(addOnPrices)
+          .filter((action) => addOnsCovered[action] === undefined)
+          .reduce((sum, action) => sum + addOnListPrices[action]! - addOnPrices[action]!, 0);
+      const totalMinor = carrierCost + handling.amount + premium + addOnsMinor - coveredMinor;
       const membershipCover: AppliedShippingCover | null =
         cover && coveredMinor > 0
           ? {
@@ -372,7 +413,10 @@ export class ShipmentService {
         addOnsMinor,
         membershipCover,
         coveredMinor,
-        totalMinor: carrierCost + handling.amount + premium + addOnsMinor - coveredMinor,
+        totalMinor,
+        tier,
+        discountBps: PricingService.atTier(tier, 0).discountBps,
+        listTotalMinor: totalMinor + discountMinor,
         recommended: false,
       });
     }
@@ -698,6 +742,7 @@ export class ShipmentService {
     const { profile } = await this.profileOf(s);
     const addOnKeys = ((s.addOns as { key: string }[]) ?? []).map((a) => a.key);
     return this.priceServices(
+      s.userId,
       profile,
       addOnKeys,
       s.rushFlag,
@@ -820,7 +865,12 @@ export class ShipmentService {
         const paymentDueAt = cur.paymentDueAt ?? new Date(now.getTime() + PAYMENT_WINDOW_DAYS * 86_400_000);
         await tx
           .update(shipment)
-          .set({ ...common, status: 'awaiting_payment', paymentDueAt })
+          .set({
+            ...common,
+            status: 'awaiting_payment',
+            paymentDueAt,
+            fulfillment: { ...((cur.fulfillment as Record<string, unknown> | null) ?? {}), tierQuote: tierSnapshot(rate) },
+          })
           .where(eq(shipment.id, s.id));
         return {
           status: 'awaiting_payment' as const,
@@ -897,6 +947,7 @@ export class ShipmentService {
             insurancePremium: rate.insurancePremiumMinor,
             addOns: rate.addOnsMinor,
             membershipCover: rate.membershipCover ?? null,
+            ...tierSnapshot(rate),
           },
           amount: differenceMinor,
           currency,
@@ -949,6 +1000,7 @@ export class ShipmentService {
           service: rate.serviceKey,
           insuredValueMinor: s.insuredValueMinor,
           membershipCover: rate.membershipCover ?? null,
+          ...tierSnapshot(rate),
         },
         amount: rate.totalMinor,
         currency: rate.currency,
@@ -998,6 +1050,7 @@ export class ShipmentService {
       const service = findService(s.carrier, s.serviceLevel);
       const storedCover = (s.membershipCover as AppliedShippingCover | null) ?? null;
       const spentCover = storedCover ? await this.memberships.spendShippingCover(tx, s.userId, storedCover) : null;
+      const agreed = agreedTier(s.fulfillment, s.cost);
       await this.chargeFor(tx, s, {
         carrier: s.carrier!,
         serviceLevel: s.serviceLevel!,
@@ -1016,6 +1069,9 @@ export class ShipmentService {
         membershipCover: storedCover,
         coveredMinor: 0,
         totalMinor: s.cost!,
+        tier: agreed.tier,
+        discountBps: agreed.discountBps,
+        listTotalMinor: agreed.listMinor,
         recommended: false,
       });
       await tx

@@ -161,11 +161,11 @@ describe('the tier an account has from its last 90 days of use', () => {
     expect(await tierOf(aged.who.id)).toBe('bronze');
     expect(await tierOf(kept.who.id)).toBe('silver');
     const [change] = await sql<Record<string, unknown>>(
-      `SELECT from_tier, to_tier, actions, spent_minor::int AS spent_minor, trigger FROM usage_tier_change
+      `SELECT from_tier, to_tier, actions, spent_minor::int AS spent_minor, reason FROM usage_tier_change
         WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1`,
       [aged.who.id],
     );
-    expect(change).toEqual({ from_tier: 'silver', to_tier: 'bronze', actions: 9, spent_minor: 900, trigger: 'nightly' });
+    expect(change).toEqual({ from_tier: 'silver', to_tier: 'bronze', actions: 9, spent_minor: 900, reason: 'nightly' });
   });
 });
 

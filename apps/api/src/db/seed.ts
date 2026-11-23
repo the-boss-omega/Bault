@@ -14,7 +14,6 @@ import {
   walletRequestEvent,
 } from '../modules/pay/pay.schema';
 import { pricingRule } from '../modules/prc/prc.schema';
-import { MEMBERSHIP_TIERS } from '../modules/mem/tiers';
 import { serviceRequest } from '../modules/dis/dis.schema';
 import { shipment } from '../modules/shp/shp.schema';
 import { dispute } from '../modules/adm/adm.schema';
@@ -78,7 +77,7 @@ async function main(): Promise<void> {
     support_ticket, support_message, media_upload,
     consignment_event, grading_submission, shipment_group,
     escrow_deal, escrow_event,
-    membership, membership_period,
+    membership, membership_period, usage_tier_change,
     storage_cover, worker_heartbeat
     RESTART IDENTITY`);
 
@@ -376,20 +375,6 @@ async function main(): Promise<void> {
       description: 'Collect your cards in person at a show Card Embassy is attending',
       billingTrigger: 'per_event' as const,
     },
-    ...MEMBERSHIP_TIERS.map((t) => ({
-      actionType: t.feeActionType,
-      model: 'fixed' as const,
-      value: t.listPriceMinor,
-      description: `${t.key[0]!.toUpperCase()}${t.key.slice(1)} membership — storage for ${t.storedItems} items, ${t.perCycle.intake} intakes a month`,
-      billingTrigger: 'monthly' as const,
-      parameters: {
-        storedItems: t.storedItems,
-        insuredShipments: t.insuredShipments,
-        insuredValueCapMinor: t.insuredValueCapMinor,
-        postageCreditMinor: t.postageCreditMinor,
-        commissionWaivedOnMinor: t.commissionWaivedOnMinor,
-      },
-    })),
     {
       actionType: 'parcel_processing',
       model: 'fixed' as const,

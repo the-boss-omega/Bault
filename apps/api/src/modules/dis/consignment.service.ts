@@ -163,8 +163,8 @@ export class ConsignmentService {
       const channelKey = String((req.typeFields as Record<string, unknown>)?.channel ?? '');
       const base = money(saleAmountMinor, currency);
       const priced =
-        (channelKey ? await this.pricing.tryPrice(channelFeeAction(channelKey), { base }, tx) : null) ??
-        (await this.pricing.price('marketplace_fee', { base }, tx));
+        (channelKey ? await this.pricing.tryPrice(channelFeeAction(channelKey), { base, userId: ownerId }, tx) : null) ??
+        (await this.pricing.price('marketplace_fee', { base, userId: ownerId }, tx));
       const { amount: fee, snapshot } = priced;
 
       await this.ledger.record(

@@ -383,12 +383,13 @@ export class VaultService {
       : periodsBilled;
 
     const [intake] = await this.db
-      .select({ amount: charge.amount })
+      .select({ amount: charge.amount, snapshot: charge.pricingRuleSnapshot })
       .from(charge)
       .where(and(eq(charge.actionType, 'intake'), eq(charge.referenceId, itemId)))
       .orderBy(sql`${charge.createdAt} desc`)
       .limit(1);
-    const intakeMinor = intake?.amount ?? rule?.value ?? 0;
+    const listed = Number((intake?.snapshot as { listMinor?: unknown } | null)?.listMinor);
+    const intakeMinor = Number.isFinite(listed) && listed > 0 ? listed : (intake?.amount ?? rule?.value ?? 0);
 
     const received = it.receivedAt;
     const accruing = Boolean(received) && it.lifecycleState === 'stored' && !it.lotBroken && Boolean(standard);
@@ -415,21 +416,13 @@ export class VaultService {
   private async coveredByMembership(userId: string, itemId: string): Promise<boolean> {
     const result = await this.db.execute<{ covered: boolean }>(sql`
       WITH cap AS (
-        SELECT COALESCE((pr.parameters ->> 'storedItems')::int, 0) AS stored_items
+        SELECT m.honoured_stored_items AS stored_items
           FROM membership m
-          JOIN LATERAL (
-            SELECT parameters
-              FROM pricing_rule
-             WHERE action_type = 'membership:' || m.tier
-               AND effective_from <= now()
-               AND (effective_to IS NULL OR effective_to > now())
-             ORDER BY effective_from DESC
-             LIMIT 1
-          ) pr ON TRUE
          WHERE m.user_id = ${userId}::uuid
            AND m.status IN ('active', 'cancelling')
            AND now() >= m.current_period_start
            AND now() <  m.current_period_end
+           AND now() <  m.honoured_until
       ),
       ranked AS (
         SELECT i.id, row_number() OVER (ORDER BY i.received_at ASC, i.id ASC) AS rn

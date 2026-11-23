@@ -227,7 +227,7 @@ It signs in as an administrator, asking for the password and the code from
 your authenticator app (or reading `BAULT_ADMIN_IDENTIFIER`,
 `BAULT_ADMIN_PASSWORD` and `BAULT_ADMIN_TOTP`), and stores neither. Each price
 becomes a rule through the admin API, with the storage terms the console's form
-cannot send and each membership's allowances from the tier catalogue. A run
+cannot send. A run
 loads only what is missing; `--update` also replaces rules that differ from the
 file. A changed price is a new rule, so charges already made keep theirs.
 
