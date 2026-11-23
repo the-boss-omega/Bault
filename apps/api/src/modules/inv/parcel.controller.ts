@@ -80,7 +80,9 @@ export class ParcelController {
 
   @Get('me/inbound-addresses')
   inboundAddresses(@CurrentUser() user: AuthUser) {
-    return this.facilities.inboundAddressesFor(user.id);
+    return this.facilities.inboundAddressesFor(user.id, {
+      staff: user.role === 'warehouse_operator' || user.role === 'admin',
+    });
   }
 
   @Get('me/parcels')

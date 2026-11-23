@@ -100,6 +100,19 @@ describe('the facilities as the administrator reads them', () => {
     });
     expect(de!.forwardsToFacilityId).toBe(nj!.id);
   });
+
+  it('tells the receiving bench which buildings still have no real address, and which do', async () => {
+    const operator = await signIn(SEED.operator);
+    const created = await admin.post('/admin/facilities', primary('ZT9'));
+    expect(created.status).toBe(201);
+    const addresses = (await operator.get('/me/inbound-addresses')).body as {
+      code: string;
+      placeholder: boolean;
+    }[];
+    expect(addresses.find((a) => a.code === 'NJ')).toMatchObject({ placeholder: true });
+    expect(addresses.find((a) => a.code === 'ZT9')).toMatchObject({ placeholder: false });
+    await restore();
+  });
 });
 
 describe('adding a facility', () => {

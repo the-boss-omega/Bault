@@ -71,6 +71,7 @@ export function FacilitiesSection({
   const openId = route.params.facility ?? null;
   const adding = openId === 'new';
   const open = rows?.find((f) => f.id === openId) ?? null;
+  const unset = (rows ?? []).filter((f) => f.placeholder);
 
   return (
     <>
@@ -98,6 +99,23 @@ export function FacilitiesSection({
             icon={<IconLocation />}
           />
         ) : (
+          <>
+          {unset.length > 0 && (
+            <div className="stack stack--tight" style={{ padding: 'var(--sp-4) var(--sp-6) 0' }}>
+              <div className="drawer-note drawer-note--hold" role="note">
+                <span>
+                  {t('warehouse.facility.unsetBanner', {
+                    names: unset.map((f) => f.name).join(', '),
+                  })}
+                </span>
+              </div>
+              <div className="row">
+                <Button size="sm" variant="secondary" onClick={() => openRecord('facility', unset[0]!.id)}>
+                  {t('warehouse.facility.unsetFix', { name: unset[0]!.name })}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
@@ -128,6 +146,9 @@ export function FacilitiesSection({
                       <span className="dt-sub">
                         <Code value={f.code} /> · <bdi dir="auto">{placeOf(f)}</bdi>
                       </span>
+                      {f.placeholder && (
+                        <span className="dt-sub field-error">{t('warehouse.facility.noStreet')}</span>
+                      )}
                     </td>
                     <td data-label={t('facility.col.role')}>
                       {t(ROLE_LABEL[f.role])}
@@ -157,6 +178,7 @@ export function FacilitiesSection({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Panel>
 

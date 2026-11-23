@@ -194,10 +194,11 @@ describe('A3 service requests as a collector reads them', () => {
     }
 
     const queue = await operator.get('/services/queue');
-    const staffRow = (queue.body as { id: string; typeFields: Record<string, unknown> }[]).find(
-      (r) => r.id === asked.body.id,
-    )!;
+    const staffRow = (
+      queue.body as { id: string; typeFields: Record<string, unknown>; requesterUsername: string | null }[]
+    ).find((r) => r.id === asked.body.id)!;
     expect(staffRow.typeFields.quotedBy).toBeTruthy();
+    expect(staffRow.requesterUsername).toBe('red');
   });
 });
 
