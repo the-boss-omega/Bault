@@ -7,6 +7,7 @@ import { notificationMessage } from './notification-message';
 import { defaultEmailEnabled, eventSubject } from './notification-events';
 import { PASSWORD_RESET_REQUESTED, sendPasswordReset } from './password-reset-mail';
 import { MFA_EMAIL_CODE_REQUESTED, sendMfaEmailCode } from './mfa-email-code-mail';
+import { OCR_REQUESTED } from './ocr-read';
 
 const SINGLE_RECIPIENT_KEYS = ['ownerId', 'userId', 'sellerId', 'buyerId', 'responderId', 'donorId'];
 
@@ -133,10 +134,11 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
           WHERE dispatched_at IS NULL
             AND attempts < $1
             AND NOT (id = ANY($2::uuid[]))
+            AND event_type <> $3
           ORDER BY created_at
           LIMIT 1
           FOR UPDATE SKIP LOCKED`,
-        [MAX_ATTEMPTS, tried],
+        [MAX_ATTEMPTS, tried, OCR_REQUESTED],
       );
       claimed = rows[0];
       if (!claimed) {

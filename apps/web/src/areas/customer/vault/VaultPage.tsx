@@ -96,6 +96,23 @@ interface VaultCounts {
 }
 
 const SCOPES = ['active', 'hold', 'history'] as const;
+
+const SORTS = ['newest', 'oldest', 'name', 'serial'] as const;
+type Sort = (typeof SORTS)[number];
+
+function whenOf(item: VaultItem): number {
+  const at = item.historical ? item.departedAt : item.receivedAt;
+  return at ? new Date(at).getTime() : 0;
+}
+
+export function sortVaultItems<T extends VaultItem>(items: readonly T[], sort: Sort, nameOf: (item: T) => string): T[] {
+  const out = [...items];
+  if (sort === 'newest') out.sort((a, b) => whenOf(b) - whenOf(a));
+  else if (sort === 'oldest') out.sort((a, b) => whenOf(a) - whenOf(b));
+  else if (sort === 'name') out.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  else out.sort((a, b) => a.serialNumber.localeCompare(b.serialNumber));
+  return out;
+}
 type Scope = (typeof SCOPES)[number];
 
 const SCOPE_ICON: Record<Scope, ReactNode> = {
@@ -261,7 +278,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
 export function VaultPage() {
   const { t, locale } = useI18n();
   const route = useRoute();
-  const { openRecord, closeRecord, goTab } = useNavigation(route);
+  const { openRecord, closeRecord, setParams } = useNavigation(route);
 
   const scope: Scope = (SCOPES as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as Scope)
@@ -269,9 +286,14 @@ export function VaultPage() {
 
   const [items, setItems] = useState<VaultItem[] | null>(null);
   const [counts, setCounts] = useState<VaultCounts | null>(null);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(() => route.params.q ?? '');
+  const [sort, setSort] = useState<Sort>(() =>
+    (SORTS as readonly string[]).includes(route.params.sort ?? '') ? (route.params.sort as Sort) : 'newest',
+  );
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [statusFollow, setStatusFollow] = useState(false);
   const [culling, setCulling] = useState(false);
   const [cullWindowDays, setCullWindowDays] = useState<number | null>(null);
   const [selecting, setSelecting] = useState(false);
@@ -287,10 +309,12 @@ export function VaultPage() {
       ]);
       setItems(list);
       setCounts(totals);
+      setLoadFailed(false);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
-      setItems([]);
+      setLoadFailed(true);
+      setItems((prev) => prev ?? []);
     }
   }, [q, scope]);
 
@@ -314,6 +338,20 @@ export function VaultPage() {
     [items, route.params.item],
   );
 
+  const shown = useMemo(
+    () => (items === null ? null : sortVaultItems(items, sort, (item) => itemName(t, item))),
+    [items, sort, t],
+  );
+
+  const goScope = (next: Scope) => {
+    setStatus(null);
+    navigate({ section: route.section, tab: next, params: sort === 'newest' ? {} : { sort } });
+  };
+  const chooseSort = (next: Sort) => {
+    setSort(next);
+    setParams({ sort: next === 'newest' ? null : next });
+  };
+
   const countFor = (s: Scope) => (counts ? counts[s] : undefined);
 
   const canShip = (item: VaultItem) => item.lifecycleState === 'stored' && !item.historical && !item.holdFlag;
@@ -328,6 +366,10 @@ export function VaultPage() {
     setSelecting(false);
     setShipPicks(new Set());
   };
+  const shippable = (items ?? []).filter(canShip);
+  const allPicked = shippable.length > 0 && shippable.every((item) => shipPicks.has(item.id));
+  const pickAll = () =>
+    setShipPicks(allPicked ? new Set() : new Set(shippable.map((item) => item.id)));
   const shipThese = () =>
     navigate({ section: 'shipping-services', tab: 'shipping', params: { items: Array.from(shipPicks).join(',') } });
 
@@ -359,7 +401,7 @@ export function VaultPage() {
                 aria-label={
                   count === undefined ? label : t('vault.scopeWithCount', { label, count })
                 }
-                onClick={() => goTab(s)}
+                onClick={() => goScope(s)}
               >
                 <span className="state-icon" aria-hidden="true">
                   {SCOPE_ICON[s]}
@@ -375,10 +417,25 @@ export function VaultPage() {
           })}
         </div>
 
+        <select
+          className="vault-sort"
+          value={sort}
+          aria-label={t('vault.sort.label')}
+          onChange={(e) => chooseSort(e.target.value as Sort)}
+        >
+          {SORTS.map((key) => (
+            <option key={key} value={key}>
+              {t(`vault.sort.${key}` as MessageKey)}
+            </option>
+          ))}
+        </select>
+
         <span className="spacer" />
 
         {items !== null && (
-          <span className="vault-count">{t('vault.assetsCount', { count: items.length })}</span>
+          <span className="vault-count" role="status">
+            {t('vault.assetsCount', { count: items.length })}
+          </span>
         )}
         {scope === 'active' && (
           <Button size="sm" pressed={selecting} onClick={() => (selecting ? stopSelecting() : setSelecting(true))}>
@@ -392,8 +449,27 @@ export function VaultPage() {
         )}
       </div>
 
-      {status && <SuccessNote>{status}</SuccessNote>}
-      {error && <ErrorState message={error} />}
+      {status && (
+        <div className="row">
+          <SuccessNote>{status}</SuccessNote>
+          {statusFollow && (
+            <Button size="sm" variant="ghost" onClick={() => navigate({ section: 'shipping-services', tab: 'requests' })}>
+              {t('vault.acted.follow')}
+            </Button>
+          )}
+        </div>
+      )}
+      {error && (
+        <ErrorState
+          title={loadFailed ? t('vault.loadFailed') : undefined}
+          message={error}
+          onRetry={() => {
+            setError(null);
+            void load();
+          }}
+          retryLabel={t('ui.retry')}
+        />
+      )}
 
       {culling && cullWindowDays !== null && (
         <RemoveCommonsPanel
@@ -401,6 +477,7 @@ export function VaultPage() {
           windowDays={cullWindowDays}
           onDone={(message) => {
             setStatus(message);
+            setStatusFollow(false);
             setCulling(false);
             void load();
           }}
@@ -412,8 +489,11 @@ export function VaultPage() {
         {scope === 'history' && (
           <p className="hint vault-history-note">{t('vault.history.note')}</p>
         )}
+        {selecting && scope === 'active' && (
+          <p className="hint vault-history-note">{t('vault.select.hint')}</p>
+        )}
 
-        {items === null ? (
+        {shown === null ? (
           <ul className="card-grid">
             {Array.from({ length: 6 }, (_, i) => (
               <li key={i}>
@@ -421,7 +501,7 @@ export function VaultPage() {
               </li>
             ))}
           </ul>
-        ) : items.length === 0 ? (
+        ) : shown.length === 0 && loadFailed ? null : shown.length === 0 ? (
           <EmptyState
             title={t(`vault.empty.${scope}` as MessageKey)}
             text={q ? t('vault.empty.searchText') : t(`vault.empty.${scope}Text` as MessageKey)}
@@ -444,7 +524,7 @@ export function VaultPage() {
           />
         ) : (
           <ul className="card-grid card-grid--register">
-            {items.map((item) => (
+            {shown.map((item) => (
               <CardTile
                 key={item.id}
                 item={item}
@@ -464,8 +544,13 @@ export function VaultPage() {
 
       {selecting && scope === 'active' && (
         <div className="vault-select-bar" role="region" aria-label={t('vault.select.bar')}>
-          <span className="vault-select-count">{t('vault.select.count', { count: shipPicks.size })}</span>
+          <span className="vault-select-count" role="status">
+            {t('vault.select.count', { count: shipPicks.size })}
+          </span>
           <span className="spacer" />
+          <Button variant="ghost" size="sm" pressed={allPicked} disabled={shippable.length === 0} onClick={pickAll}>
+            {t('vault.select.all', { count: shippable.length })}
+          </Button>
           <Button variant="ghost" size="sm" onClick={stopSelecting}>
             {t('vault.select.stop')}
           </Button>
@@ -483,8 +568,14 @@ export function VaultPage() {
           onClose={() => closeRecord('item')}
           onActed={(message) => {
             setStatus(message);
+            setStatusFollow(true);
             void load();
           }}
+          onShip={
+            canShip(selected)
+              ? () => navigate({ section: 'shipping-services', tab: 'shipping', params: { items: selected.id } })
+              : undefined
+          }
         />
       )}
     </>
@@ -584,15 +675,17 @@ function CardTile({
         {historical ? (
           <>
             {item.departedAt && (
-              <span className="date">
-                {t('vault.historical.on', { date: formatDate(item.departedAt, locale) })}
+              <span>
+                {t('vault.historical.onLabel')} <span className="date">{formatDate(item.departedAt, locale)}</span>
               </span>
             )}
             {item.departure && <span className="card-sub">{departureLabel(t, item.departure)}</span>}
           </>
         ) : (
           item.receivedAt && (
-            <span className="date">{t('vault.since', { date: formatDate(item.receivedAt, locale) })}</span>
+            <span>
+              {t('vault.sinceLabel')} <span className="date">{formatDate(item.receivedAt, locale)}</span>
+            </span>
           )
         )}
       </div>
@@ -739,15 +832,21 @@ function ItemDrawer({
   t,
   onClose,
   onActed,
+  onShip,
 }: {
   item: VaultItem;
   locale: string;
   t: TranslateFn;
   onClose: () => void;
   onActed: (message: string) => void;
+  onShip?: () => void;
 }) {
   const [events, setEvents] = useState<TimelineEvent[] | null>(null);
+  const [timelineFailed, setTimelineFailed] = useState(false);
+  const [timelineTry, setTimelineTry] = useState(0);
   const [storage, setStorage] = useState<StorageStatus | null>(null);
+  const [storageFailed, setStorageFailed] = useState(false);
+  const [storageTry, setStorageTry] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [media, setMedia] = useState<ItemMedia[] | null>(null);
   const [openRequests, setOpenRequests] = useState<OpenServiceRequest[]>([]);
@@ -756,28 +855,25 @@ function ItemDrawer({
   const feeOf = (entry: PriceEntry | undefined) => (entry && priceLabel(entry) ? <EntryPrice entry={entry} /> : null);
   const [confirming, setConfirming] = useState<CardAction | null>(null);
   const [formOpen, setFormOpen] = useState<FormKind | null>(null);
-  // The row a form was opened from: the form takes the menu's place, and when it is closed the keyboard goes back to that row.
   const returnTo = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const meta = STATE_META[item.lifecycleState];
   const historical = Boolean(item.historical);
 
   useEffect(() => {
+    setEvents(null);
+    setTimelineFailed(false);
     void (async () => {
       try {
         setEvents(collectorTimeline(await api.get<TimelineEvent[]>(`/vault/items/${item.id}/timeline`)));
-        setError(null);
-      } catch (e) {
-        setError((e as Error).message);
-        setEvents([]);
+      } catch {
+        setTimelineFailed(true);
       }
     })();
-  }, [item.id]);
+  }, [item.id, timelineTry]);
 
   useEffect(() => {
     setMedia(null);
-    // A card that has left the vault has no card page to ask for (the server answers 404): there are no
-    // photographs of it to load and nothing open on it.
     if (historical) {
       setMedia([]);
       setOpenRequests([]);
@@ -799,14 +895,16 @@ function ItemDrawer({
 
   useEffect(() => {
     setStorage(null);
+    setStorageFailed(false);
     if (historical) return;
     void (async () => {
       try {
         setStorage(await api.get<StorageStatus>(`/vault/items/${item.id}/storage`));
       } catch {
+        setStorageFailed(true);
       }
     })();
-  }, [item.id, historical]);
+  }, [item.id, historical, storageTry]);
 
   useEffect(() => {
     if (formOpen !== null || returnTo.current === null) return;
@@ -889,6 +987,11 @@ function ItemDrawer({
                 </span>
               </p>
             )}
+            {frozen && (
+              <Button size="sm" variant="ghost" onClick={() => navigate({ section: 'support', tab: 'new' })}>
+                {t('vault.frozen.ask')}
+              </Button>
+            )}
 
             {historical && (
               <p className="departed-note">
@@ -946,14 +1049,46 @@ function ItemDrawer({
         {error && <ErrorState message={error} />}
 
         {storage && <StoragePanel storage={storage} locale={locale} t={t} />}
+        {storageFailed && (
+          <ErrorState
+            title={t('vault.storage.title')}
+            message={t('vault.storage.failed')}
+            onRetry={() => setStorageTry((n) => n + 1)}
+            retryLabel={t('ui.retry')}
+          />
+        )}
 
         {media !== null && media.length > 0 && <ItemMediaGallery media={media} title={name} t={t} />}
 
-        {/* What can be asked for: a menu of rows, not a wall of buttons. A form takes the menu's place. */}
         {actions.length > 0 && formOpen === null && (
           <>
             <h3 className="drawer-heading">{t('vault.actions.title')}</h3>
             <ul className="service-menu">
+              {onShip && (
+                <li>
+                  <Button
+                    className="btn--row"
+                    variant="secondary"
+                    icon={<IconBox />}
+                    data-action="ship"
+                    aria-labelledby="svc-ship-name"
+                    aria-describedby="svc-ship-desc"
+                    onClick={onShip}
+                  >
+                    <span className="btn-row-line">
+                      <span className="btn-row-name" id="svc-ship-name">
+                        {t('vault.drawer.ship')}
+                      </span>
+                      <span className="btn-row-end">
+                        <IconChevronRight />
+                      </span>
+                    </span>
+                    <span className="btn-row-desc" id="svc-ship-desc">
+                      {t('vault.drawer.shipDesc')}
+                    </span>
+                  </Button>
+                </li>
+              )}
               {actions.map((action) => {
                 const price = feeOf(prices.get(SERVICE_FEE_ACTION[action.key] ?? ''));
                 const pending = action.serviceType
@@ -1068,8 +1203,16 @@ function ItemDrawer({
           <div className="sheet-col sheet-col--register">
             <h3 className="drawer-heading">{t('vault.historyTitle')}</h3>
 
-            {events === null ? (
-              <p className="hint">{t('vault.historyLoading')}</p>
+            {timelineFailed ? (
+              <ErrorState
+                message={t('vault.historyFailed')}
+                onRetry={() => setTimelineTry((n) => n + 1)}
+                retryLabel={t('ui.retry')}
+              />
+            ) : events === null ? (
+              <p className="hint" role="status">
+                {t('vault.historyLoading')}
+              </p>
             ) : events.length === 0 ? (
               <EmptyState title={t('vault.historyEmpty')} />
             ) : (

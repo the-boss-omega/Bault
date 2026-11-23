@@ -10,9 +10,11 @@ import { InvController } from './inv.controller';
 import { DisposalController } from './disposal.controller';
 import { ParcelController } from './parcel.controller';
 import { FacilityAdminController } from './facility-admin.controller';
+import { OcrController } from './ocr.controller';
+import { OcrService } from './ocr.service';
 
 @Module({
-  controllers: [InvController, DisposalController, ParcelController, FacilityAdminController],
+  controllers: [InvController, DisposalController, ParcelController, FacilityAdminController, OcrController],
   providers: [
     IntakeService,
     CorrectionService,
@@ -21,6 +23,7 @@ import { FacilityAdminController } from './facility-admin.controller';
     FacilityService,
     FacilityAdminService,
     ParcelService,
+    OcrService,
   ],
 })
 export class InvModule {}

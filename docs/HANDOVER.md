@@ -59,6 +59,8 @@ In front of them, on the same server, Caddy terminates TLS, obtains the certific
 | GitHub | The repository, CI, and the image registry (GHCR) | `.github/workflows` |
 | A domain registrar and Cloudflare | The public name, DNS, and an optional proxy in front of the server | `infra/production/README.md`, "Behind Cloudflare" |
 
+**Warehouse labels.** Items and parcels carry one label: Code 128 on a 50 by 25 mm direct-thermal label, printed at 203 dpi. The barcode sits in a 40 mm field, 10 mm tall, with at least 3 mm of blank on each side, and under it the code and then the item's serial number or the parcel code. The API serves the labels as PDFs sized exactly to one label a page, and the warehouse console opens them from the intake bench, a shelf and the parcel queue. Buy 50 x 25 mm rolls with gaps for whichever printer you choose (a Zebra ZD220 or ZD421, a Rollo or Munbyn, or a Brother TD-4 series all work), add a 50 x 25 mm paper size in its driver, and print at 100 percent scale (Actual size) with no fit to page and no margins. A label shrunk to fit a different paper size may not scan. The scanners are ordinary USB keyboard-wedge scanners set to send Enter after each code, which is how the console's scan fields expect them.
+
 **What talks to what:**
 
 - A visitor's browser talks only to Caddy on the server, over HTTPS on port 443.
@@ -158,6 +160,13 @@ Section 7 explains whether to take over the owner's projects or to provision fre
 3. Where it goes: on the server, `configure.sh --change crypto` asks whether to turn crypto cash-in on, then for the key and the secret as hidden input, and writes `CRYPTO_PROVIDER`, `CRYPTO_CHECKOUT_ENABLED` and the two secrets into `/etc/bault/production.env`. Answering no later turns the switch off while keeping the provider, so a charge already open is still credited when it confirms.
 4. Nothing is pasted into chat, tickets or the repository. Until the account exists, leave crypto off; the wallet screen then shows no crypto option.
 
+### 2.10 Reading photos at intake (no account needed)
+
+1. What to create: nothing. The default reader, Tesseract.js, runs inside the worker with its English language data shipped in the worker image (`tesseract.js` and `@tesseract.js-data/eng`, both pinned exactly in `apps/worker/package.json`), so it needs no account, no key, no bill and no outbound network. Photos never leave the server.
+2. Settings that matter: `OCR_PROVIDER=tesseract` and `OCR_ENABLED=true`, in `/etc/bault/production.env` so the API and the worker both read them, then restart both. The worker reads each photo within a few seconds; the bench waits 20 seconds for a reading and otherwise lets the operator type the details in. Nothing read is ever saved until the operator has ticked or corrected every field, and no collector screen shows what was read.
+3. A cloud provider instead (for example Google Cloud Vision, AWS Textract or Azure AI Vision) would need its own account in the business's name, a billing account, a service credential or API key kept like the other secrets in section 3, an outbound host allowed from the worker, a data-processing agreement because the photos of labels carry names and addresses, and a new `OcrProvider` in `packages/adapters/src/ocr.ts` with its own `OCR_PROVIDER` value. None of that exists today.
+4. Until the decision is made, leave `OCR_ENABLED=false`; the benches then look exactly as before.
+
 ## 3. Every setting
 
 `packages/config/src/env.ts` is the single source of truth: the API, the worker and the migrate container all validate their environment against it at start-up. With `NODE_ENV=production` it refuses to boot on a sandbox payment, storage, shipping or email provider, on `TRUST_PROXY=loopback` or `true`, on an `APP_BASE_URL` that is not `https://`, on an open API explorer without a password, on a missing or development `MFA_ENCRYPTION_KEY`, and on `MFA_REQUIRED_ROLES` without both staff roles. It names every problem at once, and `docker compose logs api` shows them.
@@ -251,6 +260,8 @@ On the server the files live in `/etc/bault` (directory mode 700, files mode 600
 | `CRYPTO_CHECKOUT_ENABLED` | Offers "Pay with crypto" on the wallet screen. Off means the routes answer 404. | Optional | Decision | `false` |
 | `COINBASE_COMMERCE_API_KEY` | The merchant API key. Required when the provider is `coinbase_commerce`. | With the provider | Coinbase Commerce (2.9) | empty |
 | `COINBASE_COMMERCE_WEBHOOK_SECRET` | The shared secret that signs webhook deliveries. Required when the provider is `coinbase_commerce`. | With the provider | Coinbase Commerce (2.9) | empty |
+| `OCR_ENABLED` | Reads the photo of a parcel label or an item at intake in the worker and prefills the bench, which the operator confirms field by field. Off means nothing is queued and the reading routes answer 404. Set it the same for the API and the worker. | Optional, default `false` | Decision (2.10) | `false` |
+| `OCR_PROVIDER` | Who reads the photo: `tesseract` (Tesseract.js inside the worker) or `sandbox` (canned text, refused in production when `OCR_ENABLED=true`). | Default `sandbox`; `tesseract` when OCR is on | Keep `tesseract` (2.10) | `sandbox` |
 | `LOG_LEVEL` | `debug`, `info`, `warn` or `error` | Default `info` | Keep | `info` |
 | `RATE_LIMIT_PER_MINUTE` | Requests per minute per client address, for the whole API | Default 300 | Keep. Raise it on staging only, for the load test. | `300` |
 | `AUTH_RATE_LIMIT_PER_MINUTE` | The same, for the sign-in, registration and reset routes | Default 30 | Keep | `30` |

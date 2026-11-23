@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
@@ -125,6 +126,16 @@ export class ParcelController {
   @Post('parcels/receive/batch')
   receiveMany(@Body() dto: ReceiveManyDto, @CurrentUser() user: AuthUser) {
     return this.parcels.receiveMany(user.id, dto.parcels);
+  }
+
+  @Roles('warehouse_operator', 'admin')
+  @Get('parcels/:id/label.pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'inline; filename="label.pdf"')
+  async label(@Param('id') id: string, @Res({ passthrough: true }) res: Response) {
+    const pdf = await this.parcels.labelPdf(id);
+    res.setHeader('Content-Length', pdf.length);
+    return res.end(pdf);
   }
 
   @Get('parcels/:id/photos')

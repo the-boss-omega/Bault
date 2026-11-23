@@ -74,7 +74,7 @@ async function main(): Promise<void> {
     outbox_message, audit_record, idempotency_key, confirmation_token,
     notification, notification_preference, dispute,
     storage_fee_run, shipping_address,
-    facility, parcel, parcel_event, parcel_photo, arrival_disposal,
+    facility, parcel, parcel_event, parcel_photo, ocr_suggestion, arrival_disposal,
     support_ticket, support_message, media_upload,
     consignment_event, grading_submission, shipment_group,
     escrow_deal, escrow_event,

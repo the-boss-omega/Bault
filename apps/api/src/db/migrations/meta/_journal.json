@@ -311,6 +311,20 @@
       "breakpoints": true
     },
     {
+      "idx": 44,
+      "version": "7",
+      "when": 1785076000000,
+      "tag": "0044_a_shelf_can_be_decided_later",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1785076100000,
+      "tag": "0045_a_photo_is_read_at_intake",
+      "breakpoints": true
+    },
+    {
       "idx": 46,
       "version": "7",
       "when": 1785076200000,
