@@ -102,8 +102,9 @@ describe('a trade, written on a slip as it is composed', () => {
     // Two cards are chosen, and the slip has no control in it: Tab goes from the fields to the button that sends.
     expect(within(slip).queryAllByRole('button')).toHaveLength(0);
     expect(slip.querySelectorAll('a[href], button, input, select, textarea, [tabindex]')).toHaveLength(0);
-    // The picker is the one group called "They get"; the slip says it in words beside it.
-    expect(screen.getAllByRole('group', { name: 'They get' })).toHaveLength(1);
+    // The picker is the one group called "What you offer"; the slip says "They get" in words beside it, and is no group.
+    expect(screen.getAllByRole('group', { name: 'What you offer' })).toHaveLength(1);
+    expect(screen.queryByRole('group', { name: 'They get' })).not.toBeInTheDocument();
     expect(side(slip, 'give')).toHaveTextContent('They get');
     expect(side(slip, 'give')).toHaveTextContent('SN-CL10-0005');
   });
