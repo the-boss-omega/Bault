@@ -27,7 +27,7 @@ import {
 } from '../../../shared/ui/primitives';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
-import { IconAsk, IconPlus } from '../../../shared/ui/icons';
+import { IconAsk, IconPlus, IconSearch } from '../../../shared/ui/icons';
 
 const TABS = ['tickets', 'new'] as const;
 type SupportTab = (typeof TABS)[number];
@@ -51,7 +51,6 @@ export function SupportPage({ suspended = false }: { suspended?: boolean }) {
       setError(null);
     } catch (e) {
       setError((e as Error).message);
-      setTickets([]);
     }
   }, []);
 
@@ -73,6 +72,7 @@ export function SupportPage({ suspended = false }: { suspended?: boolean }) {
         <TabPanel tab="tickets">
           <TicketList
             tickets={tickets}
+            failed={error !== null}
             openId={route.params.ticket ?? null}
             onOpen={(id) => openRecord('ticket', id)}
             onNew={() => goTab('new')}
@@ -105,18 +105,30 @@ export function SupportPage({ suspended = false }: { suspended?: boolean }) {
   );
 }
 
+const TICKET_FILTERS = ['all', 'awaiting_customer', 'open', 'resolved'] as const;
+
 function TicketList({
   tickets,
+  failed,
   openId,
   onOpen,
   onNew,
 }: {
   tickets: SupportTicket[] | null;
+  failed: boolean;
   openId: string | null;
   onOpen: (id: string) => void;
   onNew: () => void;
 }) {
   const { t, locale } = useI18n();
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState<(typeof TICKET_FILTERS)[number]>('all');
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = (tickets ?? []).filter(
+    (ticket) =>
+      (filter === 'all' || ticket.status === filter) &&
+      words.every((w) => `${ticket.subject} ${ticket.code}`.toLowerCase().includes(w)),
+  );
 
   return (
     <Panel
@@ -130,13 +142,54 @@ function TicketList({
       }
     >
       {tickets === null ? (
-        <SkeletonTable rows={3} columns={4} />
+        failed ? null : <SkeletonTable rows={3} columns={4} />
       ) : tickets.length === 0 ? (
-        <EmptyState title={t('support.empty')} text={t('support.emptyText')} icon={<IconAsk />} />
+        <EmptyState
+          title={t('support.empty')}
+          text={t('support.emptyText')}
+          icon={<IconAsk />}
+          action={
+            <Button size="sm" variant="secondary" onClick={onNew}>
+              {t('support.new')}
+            </Button>
+          }
+        />
       ) : (
         <div className="register-days panel-body">
+          <div className="faq-controls">
+            <div className="search search--wide">
+              <IconSearch />
+              <input
+                type="search"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={t('support.list.searchPlaceholder')}
+                aria-label={t('support.list.searchLabel')}
+              />
+            </div>
+            <div className="chip-row" role="group" aria-label={t('support.list.filterLabel')}>
+              {TICKET_FILTERS.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`chip${filter === key ? ' is-on' : ''}`}
+                  aria-pressed={filter === key}
+                  onClick={() => setFilter(key)}
+                >
+                  {key === 'all' ? t('support.list.filterAll') : ticketStatusLabel(t, key)}
+                </button>
+              ))}
+            </div>
+          </div>
+          {shown.length === 0 && (
+            <EmptyState
+              title={t('support.list.noMatch')}
+              text={t('support.list.noMatchText')}
+              icon={<IconSearch />}
+            />
+          )}
           {inDays(
-            [...tickets].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt)),
+            [...shown].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt)),
             (ticket) => ticket.lastMessageAt,
           ).map(({ key, items, first }) => (
             <div key={key} className="register-day-group">

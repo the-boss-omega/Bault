@@ -156,7 +156,9 @@ describe('the sign-up form explains every field it blocks on', () => {
     await fill(user, { Email: 'nope' });
 
     expect(screen.getByText(/does not look like an email address/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign up' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Sign up' }));
+    expect(post).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByLabelText('Email', { exact: true }));
   });
 
   it('says the password is too short, and how short is too short', async () => {
@@ -165,7 +167,8 @@ describe('the sign-up form explains every field it blocks on', () => {
     await fill(user, { Password: 'abc' });
 
     expect(screen.getByText(/at least 8 characters/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign up' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Sign up' }));
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('cannot be submitted twice by pressing it twice', async () => {
@@ -197,11 +200,12 @@ describe('the sign-up form asks for consent to the terms', () => {
     const submit = screen.getByRole('button', { name: 'Sign up' });
     expect(consentBox()).not.toBeChecked();
     expect(consentBox()).toBeRequired();
-    expect(submit).toBeDisabled();
     expect(screen.getByText(/the version you accept, and when, is recorded/i)).toBeInTheDocument();
+    await user.click(submit);
+    expect(post).not.toHaveBeenCalled();
+    expect(screen.getByText('Tick the box to agree to the terms before you sign up.')).toBeInTheDocument();
 
     await user.click(consentBox());
-    expect(submit).toBeEnabled();
     await user.click(submit);
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));

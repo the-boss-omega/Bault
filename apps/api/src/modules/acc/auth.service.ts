@@ -144,7 +144,9 @@ export class AuthService {
     const verified = await argon2.verify(u?.passwordHash ?? (await this.dummyHash), password);
     if (!u || !verified) {
       await this.attempts.record(normalized, u?.id ?? null, 'bad_credentials', origin);
-      throw AppError.unauthenticated('Invalid credentials');
+      throw AppError.unauthenticated(
+        'That email or username and password do not match. Check both, or reset your password.',
+      );
     }
     if (u.status === 'pending') {
       await this.attempts.record(normalized, u.id, 'unverified', origin);

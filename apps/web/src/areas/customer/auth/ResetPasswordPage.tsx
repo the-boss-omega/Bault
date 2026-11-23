@@ -13,13 +13,18 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [expired, setExpired] = useState(false);
 
   const tooShort = password.length > 0 && password.length < PASSWORD_MIN;
   const mismatch = confirm.length > 0 && confirm !== password;
   const ready = password.length >= 8 && confirm === password;
 
   function goToSignIn() {
-    navigate({ section: '' }, { replace: true });
+    navigate({ section: 'signin' }, { replace: true });
+  }
+
+  function askAgain() {
+    navigate({ section: 'forgot' }, { replace: true });
   }
 
   async function submit(e: FormEvent) {
@@ -31,7 +36,9 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
       await api.post('/auth/password/reset', { token, newPassword: password });
       setDone(true);
     } catch (err) {
-      const key = err instanceof ApiError && err.status === 410 ? 'auth.resetLinkInvalid' : apiErrorKey(err);
+      const gone = err instanceof ApiError && err.status === 410;
+      setExpired(gone);
+      const key = gone ? 'auth.resetLinkInvalid' : apiErrorKey(err);
       setError(key ? t(key) : (err as Error).message);
     } finally {
       setBusy(false);
@@ -42,8 +49,11 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
     return (
       <AuthCard as="section" kicker={t('auth.kicker.reset')} title={t('auth.resetTitle')}>
         <ErrorState message={t('auth.resetNoToken')} />
-        <Button variant="primary" block onClick={goToSignIn}>
-          {t('auth.goToSignIn')}
+        <Button variant="primary" block onClick={askAgain}>
+          {t('auth.resetAskAgain')}
+        </Button>
+        <Button variant="link" onClick={goToSignIn}>
+          {t('auth.backToSignIn')}
         </Button>
       </AuthCard>
     );
@@ -106,6 +116,12 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
       </Field>
 
       {error && <ErrorState message={error} />}
+
+      {expired && (
+        <Button variant="secondary" block onClick={askAgain}>
+          {t('auth.resetAskAgain')}
+        </Button>
+      )}
 
       <Button variant="primary" type="submit" block disabled={busy || !ready}>
         {t('auth.resetSubmit')}
