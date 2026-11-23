@@ -949,6 +949,27 @@ Behind Cloudflare (from `infra/production/README.md`, "Behind Cloudflare"):
 | Every 6 to 12 months, and whenever someone with access leaves | Rotate keys | Section 7, step 12, which lists each secret and how to rotate it |
 | When Cloudflare announces new ranges | Update `BAULT_TRUSTED_PROXIES` and both firewalls | 6.6 |
 
+### 6.8 Load test
+
+These are the figures from `scripts/ops/load-test.mjs`, run with its documented mix (`MIX`: listings 30, listing detail 20, vault 15, wallet 15, price list 10, tiers 5, ledger 5, plus 6 sign-ins a minute) for 3 minutes, against a local stack on 23 November 2026. Treat them as a floor for the code, not a forecast for production. The machine was a shared container: 4 virtual CPUs of an Intel Xeon at 2.1 GHz and 15 GB of memory, with Postgres 16, MinIO, the built API as one Node process, the load generator and other people's test suites all running on it at the same time. There was no TLS, no Caddy, no PgBouncer and no network between the parts, the database held only the seed and what the test suites had added, and `RATE_LIMIT_PER_MINUTE` was raised to 20000 so the limiter would not answer instead of the server.
+
+At 100 requests a second (18,001 requests, the load average rose to 3.6 on 4 CPUs):
+
+| Request | Count | p50 ms | p95 ms | Error rate |
+|---|---|---|---|---|
+| Browse listings | 5,421 | 6 | 13 | 0% |
+| Listing detail | 3,648 | 3 | 8 | 0% |
+| Price list | 1,777 | 3 | 7 | 0% |
+| Usage tiers | 914 | 1 | 4 | 0% |
+| Vault items | 2,695 | 4 | 9 | 0% |
+| Wallet | 2,638 | 3 | 8 | 0% |
+| Ledger | 908 | 5 | 9 | 0% |
+| Sign in | 18 | 193 | 276 | 0% |
+| Sign out | 18 | 8 | 15 | 0% |
+| All | 18,037 | 4 | 10 | 0% |
+
+At 20 requests a second (3,601 requests) every route had the same shape: p95 of 11 ms or less on the reads, 233 ms on a sign-in, the overall p50 6 ms and p95 10 ms, and no errors. A sign-in is slow by design, because the password hash is argon2id. Run the test again on staging, as step 22 of 6.1 says, before launch: the figures that decide the launch are the ones taken through Cloudflare, Caddy and PgBouncer on the production machine size.
+
 ---
 
 ## 7. The transfer itself
