@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, fundWallet, intakeFor, signIn, type Client } from '../integration/helpers/http';
+import { SEED, atTier, fundWallet, intakeFor, signIn, type Client } from '../integration/helpers/http';
 import { sql } from '../integration/helpers/db';
 
 type Res = Awaited<ReturnType<Client['post']>>;
@@ -350,6 +350,7 @@ describe('concurrency: money races', () => {
     expect(copies).toBeGreaterThanOrEqual(2);
 
     const before = await balanceOf(collector);
+    const fee = await atTier(collector, show!.feeMinor);
     const res = await Promise.all(
       Array.from({ length: copies }, () =>
         collector.post('/shipping/pickup', { itemIds: [card.id], eventId: show!.id }),
@@ -360,7 +361,7 @@ describe('concurrency: money races', () => {
 
     expect({ wins: wins(res), charged: before - after, newBookings: bookedAfter - bookedBefore }).toEqual({
       wins: 1,
-      charged: show!.feeMinor,
+      charged: fee,
       newBookings: 1,
     });
     expect(losersAre4xx(res)).toBe(true);

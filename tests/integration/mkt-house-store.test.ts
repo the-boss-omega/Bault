@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, fundWallet, signIn } from './helpers/http';
+import { SEED, atTier, fundWallet, signIn } from './helpers/http';
 
 describe('MKT the Bault store', () => {
   const PRINT =
@@ -25,6 +25,7 @@ describe('MKT the Bault store', () => {
     await fundWallet(SEED.collector, 10_000);
     const collector = await signIn(SEED.collector);
     const before = (await collector.get('/finance/wallet')).body.amount as number;
+    const price = await atTier(collector, 3_500);
 
     const bought = await collector.post(`/marketplace/house/listings/${p.id}/purchase`);
     expect(bought.status).toBe(201);
@@ -33,7 +34,8 @@ describe('MKT the Bault store', () => {
     expect(bought.body.orderCode).toMatch(/^ORD-/);
 
     const after = (await collector.get('/finance/wallet')).body.amount as number;
-    expect(before - after).toBe(3_500);
+    expect(before - after).toBe(price);
+    expect(bought.body.price).toBe(price);
 
     const vault = (await collector.get('/vault/items')).body as Array<Record<string, unknown>>;
     const mine = vault.find((i) => i.id === bought.body.itemId);

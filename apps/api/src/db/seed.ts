@@ -29,6 +29,7 @@ import { supportTicket, supportMessage } from '../modules/sup/sup.schema';
 import { escrowDeal, escrowEvent } from '../modules/esc/escrow.schema';
 import { ID_PREFIX, prefixedId } from '../shared/ids';
 import { makeBinBarcode, makeBinSerial } from '../modules/inv/labels';
+import { TIER_RULES } from '../modules/mem/tiers';
 
 function one<T>(rows: T[]): T {
   const r = rows[0];
@@ -77,7 +78,7 @@ async function main(): Promise<void> {
     support_ticket, support_message, media_upload,
     consignment_event, grading_submission, shipment_group,
     escrow_deal, escrow_event,
-    membership, membership_period, usage_tier_change,
+    membership, membership_period, usage_tier_change, usage_tier_rule,
     storage_cover, worker_heartbeat
     RESTART IDENTITY`);
 
@@ -87,6 +88,13 @@ async function main(): Promise<void> {
         TRUNCATE TABLE pgboss.job, pgboss.archive;
       END IF;
     END $$;`);
+
+  for (const rule of TIER_RULES) {
+    await pool.query(
+      `INSERT INTO usage_tier_rule (tier, min_actions, min_spent_minor, discount_bps) VALUES ($1, $2, $3, $4)`,
+      [rule.key, rule.minActions, rule.minSpentMinor, rule.discountBps],
+    );
+  }
 
   const mkUser = async (
     email: string,

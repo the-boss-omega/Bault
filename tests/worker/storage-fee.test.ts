@@ -59,7 +59,7 @@ describe('a membership that stops covering an item', () => {
 
     await runStorageFees(pool);
 
-    expect(await storageCharges(pool, card)).toBe(1);
+    expect(await storageCharges(pool, card)).toBe(3);
     const { rows } = await pool.query<{ live: boolean }>(
       `SELECT current_period_end > now() AS live FROM membership WHERE id = $1`,
       [m],

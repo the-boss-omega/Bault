@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
+import { SEED, atTier, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
 import { activeAccount, passwordOnly } from './helpers/mfa';
 import { honouredMembership, sql } from './helpers/db';
 
@@ -491,13 +491,14 @@ describe('ESC escrow and human fulfilment', () => {
     const bookedBefore = await bookedAt(show.id);
 
     const before = await balanceOf(collector);
+    const fee = await atTier(collector, show.feeMinor);
     const booked = await collector.post('/shipping/pickup', {
       itemIds: [card.id],
       eventId: show.id,
     });
     expect(booked.status).toBe(201);
     expect(booked.body.fulfilmentMethod).toBe('show_pickup');
-    expect(await balanceOf(collector)).toBe(before - show.feeMinor);
+    expect(await balanceOf(collector)).toBe(before - fee);
 
     expect(await bookedAt(show.id)).toBe(bookedBefore + 1);
 
