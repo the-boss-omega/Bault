@@ -459,7 +459,7 @@ describe('the parcels, one label each', () => {
     renderParcels([PARCEL]);
 
     const label = await firstLabel();
-    await user.click(within(label).getByRole('button', { name: 'Shipment details' }));
+    await user.click(within(label).getByRole('button', { name: 'Parcel details' }));
     await waitFor(() => expect(window.location.hash).toContain('parcel=p1'));
 
     window.location.hash = '#/inbound/parcels';

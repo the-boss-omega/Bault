@@ -20,6 +20,7 @@ import {
 import { scrollBehavior } from '../../shared/ui/motionPreference';
 import { ShelfMap, type ShelfBin } from './ShelfMap';
 import { ShelfContents } from './ShelfContents';
+import { ToShelvePanel } from './ToShelve';
 import {
   IconAlert,
   IconBox,
@@ -291,6 +292,8 @@ export function WarehouseConsole() {
 
       {tab === 'inventory' && (
         <TabPanel tab="inventory">
+          <ToShelvePanel shelves={bins} onLog={append} onDone={loadSummary} />
+
           <Panel title={t('warehouse.relocate.legend')} subtitle={t('warehouse.relocate.subtitle')}>
             <RelocateBench shelves={bins} onLog={append} onDone={loadSummary} />
           </Panel>

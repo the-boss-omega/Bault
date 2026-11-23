@@ -95,6 +95,7 @@ export class CustodyService {
       description?: string;
       conditionGrade?: string;
       binId?: string;
+      placementUndecidedReason?: string;
       sourceBatchId?: string;
       sourceParcelId?: string;
       oversized?: boolean;
@@ -116,6 +117,8 @@ export class CustodyService {
         description: input.description ?? '',
         conditionGrade: input.conditionGrade,
         binId: input.binId,
+        placementUndecidedReason: input.binId ? null : (input.placementUndecidedReason ?? null),
+        placementUndecidedAt: !input.binId && input.placementUndecidedReason ? new Date() : null,
         sourceBatchId: input.sourceBatchId,
         sourceParcelId: input.sourceParcelId,
         oversized: input.oversized ?? false,
@@ -136,6 +139,9 @@ export class CustodyService {
       newState: input.lifecycleState ?? 'stored',
       actorId: input.actorId,
       reason: input.eventType ?? 'intake',
+      ...(!input.binId && input.placementUndecidedReason
+        ? { metadata: { placementUndecidedReason: input.placementUndecidedReason } }
+        : {}),
     });
     if (input.binId) {
       await tx.insert(binTransfer).values({
@@ -153,7 +159,10 @@ export class CustodyService {
     const current = await this.lockItem(tx, itemId);
     if (current.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
 
-    await tx.update(item).set({ binId: newBinId, updatedAt: new Date() }).where(eq(item.id, itemId));
+    await tx
+      .update(item)
+      .set({ binId: newBinId, placementUndecidedReason: null, placementUndecidedAt: null, updatedAt: new Date() })
+      .where(eq(item.id, itemId));
     await tx.insert(custodyEvent).values({
       itemId,
       eventType: 'relocate',
@@ -161,6 +170,9 @@ export class CustodyService {
       newBinId,
       actorId,
       reason: 'scan relocate',
+      ...(current.placementUndecidedReason
+        ? { metadata: { placementUndecidedReason: current.placementUndecidedReason } }
+        : {}),
     });
     await tx.insert(binTransfer).values({
       itemId,

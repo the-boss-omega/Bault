@@ -136,7 +136,8 @@ describe('what is on a shelf', () => {
     expect(tag).toHaveTextContent(/Kind.*Standard/);
     expect(tag).toHaveTextContent(/in stock/i);
 
-    const rows = await within(dialog).findAllByRole('listitem');
+    const contents = within(dialog).getByRole('region', { name: 'On this shelf' });
+    const rows = await within(contents).findAllByRole('listitem');
     expect(rows).toHaveLength(2);
     // A card is its catalogue name up to the first " · "; its number is read left to right whichever way the page reads.
     expect(rows[0]).toHaveTextContent('SN-CL10-0005');

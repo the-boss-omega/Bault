@@ -4,12 +4,14 @@ import { useI18n } from '../../shared/i18n';
 import { ITEM_CLASSES, itemClassOption } from '../../shared/itemClasses';
 import { isValidUsername, normalizeUsername } from '../../shared/names';
 import type { ParcelQueueRow } from '../../shared/parcels';
-import { BarcodeLabel, BarcodePrintAllButton } from '../../shared/Barcode';
+import { Barcode } from '../../shared/Barcode';
 import { Docket, type BenchOutcome } from '../../shared/ui/Docket';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
 import { Button, Field, IconButton, ScanField } from '../../shared/ui/primitives';
 import { IconBox, IconClose, IconPlus } from '../../shared/ui/icons';
 import { code as bdiCode, quiet, stamped } from './Benches';
+import { LabelSheet } from './LabelSheet';
+import { OcrReview } from './OcrReview';
 
 export interface StowSuggestion {
   id: string;
@@ -19,6 +21,17 @@ export interface StowSuggestion {
   itemCount: number;
   facilityCode: string | null;
 }
+
+type StowMode = 'auto' | 'scan' | 'later';
+
+export const LATER_REASONS = [
+  { key: 'shelfFull', labelKey: 'warehouse.intake.laterReason.shelfFull' },
+  { key: 'oversized', labelKey: 'warehouse.intake.laterReason.oversized' },
+  { key: 'grading', labelKey: 'warehouse.intake.laterReason.grading' },
+  { key: 'other', labelKey: 'warehouse.intake.laterReason.other' },
+] as const;
+
+type LaterReason = (typeof LATER_REASONS)[number]['key'];
 
 interface UnitDraft {
   key: string;
@@ -54,8 +67,10 @@ export function IntakeBench({
 
   const [ownerUsername, setOwnerUsername] = useState('');
   const [parcelId, setParcelId] = useState(initialParcelId);
-  const [stowMode, setStowMode] = useState<'auto' | 'scan'>('auto');
+  const [stowMode, setStowMode] = useState<StowMode>('auto');
   const [scanBin, setScanBin] = useState('');
+  const [laterReason, setLaterReason] = useState<LaterReason>('shelfFull');
+  const [laterOther, setLaterOther] = useState('');
 
   const [units, setUnits] = useState<UnitDraft[]>([blankUnit()]);
   const [isLot, setIsLot] = useState(false);
@@ -71,6 +86,7 @@ export function IntakeBench({
   const [busy, setBusy] = useState(false);
   const [closing, setClosing] = useState(false);
   const [outcome, setOutcome] = useState<BenchOutcome | null>(null);
+  const [toRead, setToRead] = useState<string[]>([]);
 
   const loadParcels = useCallback(async () => {
     try {
@@ -142,7 +158,16 @@ export function IntakeBench({
 
   const normalizedOwner = normalizeUsername(ownerUsername);
   const ownerOk = isValidUsername(normalizedOwner);
-  const stowReady = stowMode === 'scan' ? scanBin.trim() !== '' : suggestion !== null;
+  const laterText =
+    laterReason === 'other'
+      ? laterOther.trim()
+      : t(LATER_REASONS.find((r) => r.key === laterReason)!.labelKey);
+  const stowReady =
+    stowMode === 'scan'
+      ? scanBin.trim() !== ''
+      : stowMode === 'later'
+        ? laterText !== ''
+        : suggestion !== null;
   const filled = units.filter(
     (u) => u.description.trim() || u.serialNumber.trim() || u.photos.length > 0,
   );
@@ -158,6 +183,7 @@ export function IntakeBench({
         ownerUsername: normalizedOwner,
         binId: stowMode === 'scan' ? scanBin.trim() : undefined,
         autoStow: stowMode === 'auto',
+        ...(stowMode === 'later' ? { placement: 'later' as const, placementReason: laterText } : {}),
         parcelId: parcelId || undefined,
       };
       const payload = filled.map((u) => ({
@@ -177,12 +203,13 @@ export function IntakeBench({
       setLabels(
         created.map((made, index) => ({ ...made, description: filled[index]?.description })),
       );
+      setToRead(created.filter((_, index) => (filled[index]?.photos.length ?? 0) > 0).map((made) => made.id));
       onLog(t('intake.bulkDone', { count: created.length }));
       setOutcome({
         tone: 'success',
         label: t('bench.bookedIn'),
         detail: stamped(
-          `${created.length.toLocaleString()} → ${stowMode === 'scan' ? scanBin.trim() : (suggestion?.serialNumber ?? '')}`,
+          `${created.length.toLocaleString()} → ${shelfName}`,
           locale,
         ),
       });
@@ -220,7 +247,12 @@ export function IntakeBench({
   }
 
   // The intake as it will be recorded: whose, from which box, onto which shelf, and a line for each unit that has been described.
-  const shelfName = stowMode === 'scan' ? scanBin.trim() : (suggestion?.serialNumber ?? '');
+  const shelfName =
+    stowMode === 'scan'
+      ? scanBin.trim()
+      : stowMode === 'later'
+        ? t('warehouse.intake.shelfLater')
+        : (suggestion?.serialNumber ?? '');
   const unitLines = filled.map((u, index) => {
     const option = itemClassOption(u.typeClass);
     const kind = option ? t(option.labelKey) : u.typeClass;
@@ -273,12 +305,39 @@ export function IntakeBench({
             <Field label={t('warehouse.intake.stowMode')} hint={t('warehouse.intake.stowHint')}>
               <select
                 value={stowMode}
-                onChange={(e) => setStowMode(e.target.value as 'auto' | 'scan')}
+                onChange={(e) => setStowMode(e.target.value as StowMode)}
               >
                 <option value="auto">{t('warehouse.intake.stow.auto')}</option>
                 <option value="scan">{t('warehouse.intake.stow.scan')}</option>
+                <option value="later">{t('warehouse.intake.stow.later')}</option>
               </select>
             </Field>
+
+            {stowMode === 'later' && (
+              <Field label={t('warehouse.intake.laterReason')} hint={t('warehouse.intake.laterHint')}>
+                <select
+                  value={laterReason}
+                  onChange={(e) => setLaterReason(e.target.value as LaterReason)}
+                >
+                  {LATER_REASONS.map((r) => (
+                    <option key={r.key} value={r.key}>
+                      {t(r.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
+            {stowMode === 'later' && laterReason === 'other' && (
+              <Field label={t('warehouse.intake.laterOther')}>
+                <input
+                  value={laterOther}
+                  onChange={(e) => setLaterOther(e.target.value)}
+                  maxLength={200}
+                  dir="auto"
+                />
+              </Field>
+            )}
 
             {stowMode === 'scan' && (
               <ScanField
@@ -286,6 +345,9 @@ export function IntakeBench({
                 hint={t('warehouse.intake.stowScanHint')}
                 value={scanBin}
                 onChange={setScanBin}
+                onScan={() => {
+                  if (ready) void submit();
+                }}
                 placeholder="BIN-XXXXXXXX"
               />
             )}
@@ -380,17 +442,19 @@ export function IntakeBench({
                     />
                   </Field>
 
-                  <Field
+                  <ScanField
+                    id={`intake-serial-${unit.key}`}
                     label={t('warehouse.intake.serialNumber')}
                     hint={t('warehouse.intake.serialNumberHint')}
-                  >
-                    <input
-                      value={unit.serialNumber}
-                      onChange={(e) => patch(unit.key, { serialNumber: e.target.value })}
-                      placeholder={t('warehouse.intake.serialNumberPlaceholder')}
-                      dir="ltr"
-                    />
-                  </Field>
+                    value={unit.serialNumber}
+                    onChange={(value) => patch(unit.key, { serialNumber: value })}
+                    onScan={() => {
+                      const next = units[index + 1];
+                      if (next) document.getElementById(`intake-serial-${next.key}`)?.focus();
+                      else if (ready) void submit();
+                    }}
+                    placeholder={t('warehouse.intake.serialNumberPlaceholder')}
+                  />
                 </div>
 
                 {lotAllowed && (
@@ -455,7 +519,15 @@ export function IntakeBench({
               label: t('warehouse.intake.parcel'),
               value: parcel ? bdiCode(parcel.code) : t('warehouse.intake.noParcel'),
             },
-            { label: t('bench.shelf'), value: shelfName ? bdiCode(shelfName) : quiet },
+            {
+              label: t('bench.shelf'),
+              value:
+                stowMode === 'later'
+                  ? `${shelfName} · ${laterText || '—'}`
+                  : shelfName
+                    ? bdiCode(shelfName)
+                    : quiet,
+            },
             ...(isLot && single && lotAllowed
               ? [{ label: t('bench.lot'), value: lotSize.toLocaleString() }]
               : []),
@@ -523,24 +595,26 @@ export function IntakeBench({
               </h3>
               <p className="hint">{t('warehouse.intake.labelsHint')}</p>
             </div>
-            <span className="spacer" />
-            <BarcodePrintAllButton
-              labels={labels.map((l) => ({
-                value: l.barcode,
-                caption: l.description || l.barcode,
-              }))}
-            />
           </div>
+
+          <LabelSheet
+            showCodes={false}
+            targets={{ kind: 'items', items: labels.map((l) => ({ id: l.id, code: l.barcode })) }}
+          />
 
           <ul className="card-grid">
             {labels.map((l) => (
               <li key={l.id} className="card">
-                <BarcodeLabel value={l.barcode} caption={l.description || l.barcode} />
+                <Barcode value={l.barcode} />
+                {l.description && <span className="hint" dir="auto">{l.description}</span>}
               </li>
             ))}
           </ul>
         </div>
       )}
+      {toRead.map((itemId) => (
+        <OcrReview key={itemId} subject="item" id={itemId} />
+      ))}
     </div>
   );
 }
