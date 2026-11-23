@@ -138,9 +138,6 @@ export async function aShelf(): Promise<string> {
   return row.barcode;
 }
 
-export const dollars = (minor: number) =>
-  `$${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
 const WAIT = { timeout: 15_000, interval: 100 };
 
 export async function shows(locator: Locator): Promise<void> {

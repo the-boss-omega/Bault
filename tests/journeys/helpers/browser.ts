@@ -24,10 +24,3 @@ export async function visitor(browser: Browser, baseUrl: string): Promise<Visito
   const page = await context.newPage();
   return { context, page };
 }
-
-export async function signInAs(page: Page, identifier: string, password: string): Promise<void> {
-  await page.goto('/#/sign-in');
-  await page.getByLabel(/email or username/i).fill(identifier);
-  await page.getByLabel(/^password/i).fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-}
