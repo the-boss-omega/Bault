@@ -317,7 +317,7 @@ const en = {
   'market.propose.giftSent': 'Gift sent to {username} and waiting on them to accept',
 
   'market.store.title': 'Collector storefront',
-  'market.store.subtitle': 'Everything one collector currently has for sale. The page is public.',
+  'market.store.subtitle': 'Everything one collector has for sale right now. Any signed-in member can open a storefront link.',
   'market.store.view': 'View',
   'market.store.of': "{username}'s storefront",
   'market.listing.soldBy': 'Sold by',
