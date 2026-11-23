@@ -25,7 +25,8 @@ import {
 import { ConfirmationModal, DetailDrawer } from '../../shared/ui/DetailDrawer';
 import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { Code } from '../../shared/ui/Serial';
-import { IconArrowDown, IconArrowUp, IconReceipt } from '../../shared/ui/icons';
+import { IconArrowDown, IconArrowUp, IconReceipt, IconSearch } from '../../shared/ui/icons';
+import { LoadFailure, matchesQuery } from './RollTools';
 
 export function reviewerActions(status: string): readonly string[] {
   switch (status) {
@@ -123,10 +124,17 @@ export function WalletRequestsSection({
   const [completing, setCompleting] = useState<WalletRequest | null>(null);
   const [payoutReference, setPayoutReference] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
   const roll = useRef<HTMLDivElement>(null);
   const returnTo = useRef<string | null>(null);
 
-  const filtered = typeFilter !== 'all' || statusFilter !== 'all' || from !== '' || to !== '';
+  const filtered =
+    typeFilter !== 'all' ||
+    statusFilter !== 'all' ||
+    from !== '' ||
+    to !== '' ||
+    query.trim() !== '';
 
   const load = useCallback(async () => {
     const params = new URLSearchParams();
@@ -134,16 +142,16 @@ export function WalletRequestsSection({
     if (statusFilter !== 'all') params.set('status', statusFilter);
     if (from) params.set('from', from);
     if (to) params.set('to', to);
-    const query = params.toString();
+    const search = params.toString();
+    setLoadError(null);
     try {
       setRequests(
-        await api.get<WalletRequest[]>('/admin/wallet-requests' + (query ? '?' + query : '')),
+        await api.get<WalletRequest[]>('/admin/wallet-requests' + (search ? '?' + search : '')),
       );
     } catch (e) {
-      onError((e as Error).message);
-      setRequests([]);
+      setLoadError((e as Error).message);
     }
-  }, [typeFilter, statusFilter, from, to, onError]);
+  }, [typeFilter, statusFilter, from, to]);
 
   useEffect(() => {
     void load();
@@ -240,10 +248,26 @@ export function WalletRequestsSection({
     setStatusFilter('all');
     setFrom('');
     setTo('');
+    setQuery('');
   }
 
-  const rows = requests ?? [];
-  const groups = useMemo(() => groupByNeed(requests ?? []), [requests]);
+  const rows = useMemo(
+    () =>
+      (requests ?? []).filter((r) =>
+        matchesQuery(
+          query,
+          r.code,
+          r.customerName,
+          r.email,
+          r.username,
+          r.username ? `@${r.username}` : null,
+          r.beneficiaryName,
+        ),
+      ),
+    [requests, query],
+  );
+  const groups = useMemo(() => groupByNeed(rows), [rows]);
+  const dateProblem = from !== '' && to !== '' && to < from;
 
   return (
     <>
@@ -257,6 +281,23 @@ export function WalletRequestsSection({
         }
       >
         <div className="filter-bar" role="group" aria-label={t('admin.requests.filters')}>
+          <div className="search">
+            <IconSearch />
+            <input
+              type="search"
+              value={query}
+              placeholder={t('admin.requests.search')}
+              aria-label={t('admin.requests.search')}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && query !== '') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setQuery('');
+                }
+              }}
+            />
+          </div>
           <Field label={t('admin.requests.filterType')} className="field--compact">
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
               <option value="all">{t('admin.requests.filterAll')}</option>
@@ -277,8 +318,18 @@ export function WalletRequestsSection({
           <Field label={t('admin.requests.filterFrom')} className="field--compact">
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
           </Field>
-          <Field label={t('admin.requests.filterTo')} className="field--compact">
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <Field
+            label={t('admin.requests.filterTo')}
+            className="field--compact"
+            error={dateProblem ? t('admin.requests.datesBackwards') : undefined}
+          >
+            <input
+              type="date"
+              value={to}
+              min={from || undefined}
+              aria-invalid={dateProblem || undefined}
+              onChange={(e) => setTo(e.target.value)}
+            />
           </Field>
           {filtered && (
             <Button size="sm" variant="ghost" onClick={clearFilters}>
@@ -287,7 +338,9 @@ export function WalletRequestsSection({
           )}
         </div>
 
-        {requests === null ? (
+        {loadError ? (
+          <LoadFailure message={loadError} onRetry={() => void load()} />
+        ) : requests === null ? (
           <SkeletonTable rows={5} columns={5} />
         ) : rows.length === 0 ? (
           <EmptyState

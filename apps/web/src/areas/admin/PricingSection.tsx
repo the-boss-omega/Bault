@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../shared/api';
 import { dollarsToCents, formatDate, formatUsd } from '../../shared/money';
 import { useI18n, type MessageKey } from '../../shared/i18n';
-import { Button, EmptyState, Panel, SkeletonTable } from '../../shared/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Panel,
+  SkeletonTable,
+  SuccessNote,
+} from '../../shared/ui/primitives';
+import { LoadFailure } from './RollTools';
 import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { Code } from '../../shared/ui/Serial';
 import { IconPlus, IconReceipt } from '../../shared/ui/icons';
@@ -72,15 +80,19 @@ export function PricingSection({
   const [amount, setAmount] = useState('');
   const [billingTrigger, setBillingTrigger] = useState('per_event');
   const [coverageKey, setCoverageKey] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       setRules(await api.get<PricingRule[]>('/pricing/rules'));
     } catch (e) {
-      onError((e as Error).message);
-      setRules([]);
+      setLoadError((e as Error).message);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -91,8 +103,16 @@ export function PricingSection({
   const selected = catalogue.find((a) => a.actionType === actionType) ?? null;
   const ready = selected !== null;
 
+  const amountError =
+    value === null && (amount.trim() !== '' || tried)
+      ? t(model === 'fixed' ? 'admin.pricing.amountInvalid' : 'admin.pricing.percentInvalid')
+      : null;
+
   async function create() {
-    if (value === null || !ready) return;
+    setTried(true);
+    if (value === null || !ready || description.trim() === '' || busy) return;
+    setBusy(true);
+    setNotice(null);
     try {
       await api.post('/pricing/rules', {
         actionType,
@@ -102,7 +122,10 @@ export function PricingSection({
         value,
         billingTrigger,
       });
-      onMsg(t('admin.pricing.created'));
+      const text = t('admin.pricing.created');
+      onMsg(text);
+      setNotice({ ok: true, text });
+      setTried(false);
       setAmount('');
       setItemClass('');
       setDescription('');
@@ -110,7 +133,10 @@ export function PricingSection({
       setCoverageKey((k) => k + 1);
       await load();
     } catch (e) {
+      setNotice({ ok: false, text: (e as Error).message });
       onError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -208,9 +234,16 @@ export function PricingSection({
                     inputMode="decimal"
                     dir="ltr"
                     value={amount}
+                    aria-invalid={amountError !== null}
+                    aria-describedby={amountError ? 'rule-value-error' : undefined}
                     onChange={(e) => setAmount(e.target.value)}
                   />
                 </div>
+                {amountError && (
+                  <span className="field-error" id="rule-value-error" role="alert">
+                    {amountError}
+                  </span>
+                )}
               </div>
               <label className="field">
                 <span className="field-label">{t('admin.pricing.col.billing')}</span>
@@ -268,16 +301,28 @@ export function PricingSection({
               variant="primary"
               icon={<IconPlus />}
               disabled={value === null || description.trim() === '' || !ready}
-              onClick={create}
+              loading={busy}
+              onClick={() => void create()}
             >
               {t('admin.pricing.addRule')}
             </Button>
+            {(value === null || description.trim() === '') && !busy && (
+              <span className="hint">{t('admin.pricing.missing')}</span>
+            )}
           </div>
+          {notice &&
+            (notice.ok ? (
+              <SuccessNote>{notice.text}</SuccessNote>
+            ) : (
+              <ErrorState message={notice.text} />
+            ))}
         </div>
       </Panel>
 
       <Panel title={t('admin.pricing.heading', { count: rules?.length ?? 0 })}>
-        {rules === null ? (
+        {loadError ? (
+          <LoadFailure message={loadError} onRetry={() => void load()} />
+        ) : rules === null ? (
           <SkeletonTable rows={4} columns={6} />
         ) : rules.length === 0 ? (
           <EmptyState title={t('admin.pricing.empty')} icon={<IconReceipt />} />

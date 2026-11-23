@@ -556,7 +556,7 @@ describe('the sign-in log', () => {
       ],
     });
     renderIn(<SignInsSection onError={() => {}} />);
-    expect(await screen.findByText('Wrong code')).toBeInTheDocument();
-    expect(screen.getByText(/password right — code asked for/i)).toBeInTheDocument();
+    expect(await screen.findByText('Wrong code', { ignore: 'option' })).toBeInTheDocument();
+    expect(screen.getByText(/password right — code asked for/i, { ignore: 'option' })).toBeInTheDocument();
   });
 });

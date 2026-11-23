@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../shared/api';
 import { formatDate, formatUsd } from '../../shared/money';
-import { useI18n, type MessageKey } from '../../shared/i18n';
+import { hasMessage, useI18n, type MessageKey, type TranslateFn } from '../../shared/i18n';
 import {
   Button,
   EmptyState,
+  ErrorState,
+  Field,
   Panel,
   SkeletonTable,
   StatusBadge,
+  SuccessNote,
   type StatusTone,
 } from '../../shared/ui/primitives';
+import { LoadFailure, NoMatch, RollTools, matchesQuery } from './RollTools';
 import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { Code } from '../../shared/ui/Serial';
 import { IconGavel } from '../../shared/ui/icons';
@@ -37,6 +41,11 @@ const DISPUTE_TONE: Record<string, StatusTone> = {
   closed: 'neutral',
 };
 
+const txType = (t: TranslateFn, type: string) => {
+  const key = `admin.disputes.txType.${type}`;
+  return hasMessage(key) ? t(key) : type;
+};
+
 interface AdminTransaction {
   id: string;
   type: string;
@@ -58,8 +67,14 @@ export function DisputesSection({
   const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
   const [transactionId, setTransactionId] = useState('');
   const [note, setNote] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const [openNotice, setOpenNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       const [d, tx] = await Promise.all([
         api.get<Dispute[]>('/admin/disputes'),
@@ -68,38 +83,56 @@ export function DisputesSection({
       setDisputes(d);
       setTransactions(tx);
     } catch (e) {
-      onError((e as Error).message);
-      setDisputes([]);
+      setLoadError((e as Error).message);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   async function open() {
+    if (!transactionId || opening) return;
+    setOpening(true);
+    setOpenNotice(null);
     try {
-      await api.post('/admin/disputes', { transactionId, note: note || undefined });
-      onMsg(t('admin.disputes.opened'));
+      await api.post('/admin/disputes', { transactionId, note: note.trim() || undefined });
+      const text = t('admin.disputes.opened');
+      onMsg(text);
+      setOpenNotice({ ok: true, text });
       setTransactionId('');
       setNote('');
       await load();
     } catch (e) {
+      setOpenNotice({ ok: false, text: (e as Error).message });
       onError((e as Error).message);
+    } finally {
+      setOpening(false);
     }
   }
 
   const transaction = transactions.find((tx) => tx.id === transactionId) ?? null;
   const byId = useMemo(() => new Map(transactions.map((tx) => [tx.id, tx])), [transactions]);
   const newestFirst = useMemo(
-    () => [...(disputes ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [disputes],
+    () =>
+      [...(disputes ?? [])]
+        .filter(
+          (d) =>
+            (statusFilter === 'all' || d.status === statusFilter) &&
+            matchesQuery(query, d.id, d.transactionId, d.ruling, d.note),
+        )
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [disputes, query, statusFilter],
   );
 
   return (
     <>
       <Panel title={t('admin.disputes.openLegend')} subtitle={t('admin.disputes.subtitle')}>
-        {transactions.length === 0 ? (
+        {loadError ? (
+          <LoadFailure message={loadError} onRetry={() => void load()} />
+        ) : disputes === null ? (
+          <SkeletonTable rows={2} columns={2} />
+        ) : transactions.length === 0 ? (
           <EmptyState title={t('admin.disputes.noTransactions')} icon={<IconGavel />} />
         ) : (
           <div className="request-form">
@@ -108,17 +141,28 @@ export function DisputesSection({
                 <span className="field-label">{t('admin.disputes.col.transaction')}</span>
                 <select value={transactionId} onChange={(e) => setTransactionId(e.target.value)}>
                   <option value="">{t('admin.disputes.selectTransaction')}</option>
-                  {transactions.map((tx) => (
-                    <option key={tx.id} value={tx.id}>
-                      {tx.id.slice(0, 8)} — {tx.type} — {formatUsd(tx.price)} —{' '}
-                      {tx.createdAt.slice(0, 10)}
-                    </option>
-                  ))}
+                  {[...transactions]
+                    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                    .map((tx) => (
+                      <option key={tx.id} value={tx.id}>
+                        {t('admin.disputes.transactionOption', {
+                          code: tx.id.slice(0, 8),
+                          type: txType(t, tx.type),
+                          amount: formatUsd(tx.price),
+                          date: formatDate(tx.createdAt, locale),
+                        })}
+                      </option>
+                    ))}
                 </select>
               </label>
               <label className="field">
                 <span className="field-label">{t('admin.disputes.notePlaceholder')}</span>
-                <input value={note} onChange={(e) => setNote(e.target.value)} dir="auto" />
+                <textarea
+                  rows={3}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  dir="auto"
+                />
               </label>
             </div>
 
@@ -139,7 +183,7 @@ export function DisputesSection({
                 lines={
                   transaction
                     ? [
-                        { label: t('wallet.col.type'), value: <Code value={transaction.type} /> },
+                        { label: t('wallet.col.type'), value: txType(t, transaction.type) },
                         {
                           label: t('admin.storage.col.date'),
                           value: formatDate(transaction.createdAt, locale),
@@ -167,35 +211,80 @@ export function DisputesSection({
                 variant="primary"
                 icon={<IconGavel />}
                 disabled={!transactionId}
-                onClick={open}
+                loading={opening}
+                onClick={() => void open()}
               >
                 {t('admin.disputes.openButton')}
               </Button>
+              {!transactionId && !openNotice && (
+                <span className="hint">{t('admin.disputes.pickFirst')}</span>
+              )}
             </div>
+            {openNotice &&
+              (openNotice.ok ? (
+                <SuccessNote>{openNotice.text}</SuccessNote>
+              ) : (
+                <ErrorState message={openNotice.text} />
+              ))}
           </div>
         )}
       </Panel>
 
       <Panel title={t('admin.disputes.heading', { count: disputes?.length ?? 0 })}>
-        {disputes === null ? (
+        {loadError ? null : disputes === null ? (
           <SkeletonTable rows={3} columns={5} />
         ) : disputes.length === 0 ? (
-          <EmptyState title={t('admin.disputes.empty')} icon={<IconGavel />} />
+          <EmptyState
+            title={t('admin.disputes.empty')}
+            text={t('admin.disputes.emptyText')}
+            icon={<IconGavel />}
+          />
         ) : (
-          <ul className="tag-grid">
-            {newestFirst.map((d) => (
-              <DisputeCase
-                key={d.id}
-                dispute={d}
-                transaction={byId.get(d.transactionId) ?? null}
-                onSaved={async (m) => {
-                  onMsg(m);
-                  await load();
+          <>
+            <RollTools
+              label={t('admin.disputes.tools')}
+              query={query}
+              onQuery={setQuery}
+              placeholder={t('admin.disputes.search')}
+              shown={newestFirst.length}
+              total={disputes.length}
+            >
+              <Field label={t('admin.disputes.filterStatus')} className="field--compact">
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                  <option value="all">{t('admin.requests.filterAll')}</option>
+                  {DISPUTE_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {t(DISPUTE_LABEL[s]!)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </RollTools>
+            {newestFirst.length === 0 ? (
+              <NoMatch
+                query={query}
+                onClear={() => {
+                  setQuery('');
+                  setStatusFilter('all');
                 }}
-                onError={onError}
               />
-            ))}
-          </ul>
+            ) : (
+              <ul className="tag-grid">
+                {newestFirst.map((d) => (
+                  <DisputeCase
+                    key={d.id}
+                    dispute={d}
+                    transaction={byId.get(d.transactionId) ?? null}
+                    onSaved={async (m) => {
+                      onMsg(m);
+                      await load();
+                    }}
+                    onError={onError}
+                  />
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </Panel>
     </>
@@ -220,13 +309,32 @@ function DisputeCase({
   const { t, locale } = useI18n();
   const [status, setStatus] = useState(dispute.status);
   const [ruling, setRuling] = useState(dispute.ruling ?? '');
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [tried, setTried] = useState(false);
+
+  const changed = status !== dispute.status || ruling.trim() !== (dispute.ruling ?? '').trim();
+  const missingRuling = status === 'ruled' && ruling.trim() === '';
+  const showMissing = tried && missingRuling;
+  const rulingError = `ruling-${dispute.id}-error`;
 
   async function save() {
+    setTried(true);
+    if (!changed || busy || missingRuling) return;
+    setBusy(true);
+    setFailure(null);
     try {
-      await api.patch(`/admin/disputes/${dispute.id}`, { status, ruling: ruling || undefined });
-      await onSaved(t('admin.disputes.updated'));
+      await api.patch(`/admin/disputes/${dispute.id}`, {
+        status,
+        ruling: ruling.trim() || undefined,
+      });
+      const key = DISPUTE_LABEL[status];
+      await onSaved(t('admin.disputes.updated', { status: key ? t(key) : status }));
     } catch (e) {
+      setFailure((e as Error).message);
       onError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -239,7 +347,7 @@ function DisputeCase({
     },
     ...(transaction
       ? [
-          { label: t('wallet.col.type'), value: <Code value={transaction.type} /> },
+          { label: t('wallet.col.type'), value: txType(t, transaction.type) },
           {
             label: t('market.mine.col.price'),
             value: <span dir="ltr">{formatUsd(transaction.price)}</span>,
@@ -267,10 +375,18 @@ function DisputeCase({
       >
         {dispute.note?.trim() && <blockquote className="case-note">{dispute.note}</blockquote>}
       </DrawerTag>
-      <div className="case-controls">
+      <form
+        className="case-controls"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
         <input
           placeholder={t('admin.disputes.col.ruling')}
           aria-label={t('admin.disputes.col.ruling')}
+          aria-invalid={showMissing}
+          aria-describedby={showMissing ? rulingError : undefined}
           value={ruling}
           onChange={(e) => setRuling(e.target.value)}
           dir="auto"
@@ -289,10 +405,16 @@ function DisputeCase({
             );
           })}
         </select>
-        <Button size="sm" variant="secondary" onClick={save}>
+        <Button type="submit" size="sm" variant="secondary" disabled={!changed} loading={busy}>
           {t('admin.disputes.updateButton')}
         </Button>
-      </div>
+      </form>
+      {showMissing && (
+        <p className="field-error" id={rulingError} role="alert">
+          {t('admin.disputes.rulingRequired')}
+        </p>
+      )}
+      {failure && <ErrorState message={failure} />}
     </li>
   );
 }

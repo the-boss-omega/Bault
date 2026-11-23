@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api } from '../../shared/api';
 import { CardPhotoThumb } from '../../shared/CardPhoto';
 import { useDebounced } from '../../shared/hooks';
@@ -10,12 +10,15 @@ import { Serial } from '../../shared/ui/Serial';
 import {
   Button,
   EmptyState,
+  ErrorState,
   Field,
   MoneyField,
   Panel,
   SkeletonTable,
   StatusBadge,
+  SuccessNote,
 } from '../../shared/ui/primitives';
+import { LoadFailure, NoMatch, RollTools, matchesQuery } from './RollTools';
 import { IconPlus, IconTag } from '../../shared/ui/icons';
 
 interface HouseListingRow {
@@ -32,6 +35,14 @@ interface HouseListingRow {
 
 const quiet = <span className="drawer-tag-quiet">—</span>;
 
+type HouseSort = 'newest' | 'name' | 'priceHigh' | 'priceLow' | 'stockLow';
+type HouseFilter = 'all' | 'onSale' | 'soldOut' | 'removed';
+
+const standing = (row: HouseListingRow): Exclude<HouseFilter, 'all'> =>
+  row.status === 'removed' ? 'removed' : row.stock === 0 ? 'soldOut' : 'onSale';
+
+type Notice = { ok: boolean; text: string };
+
 export function HouseStoreSection({
   onMsg,
   onError,
@@ -41,15 +52,20 @@ export function HouseStoreSection({
 }) {
   const { t } = useI18n();
   const [rows, setRows] = useState<HouseListingRow[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [notices, setNotices] = useState<Record<string, Notice>>({});
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<HouseFilter>('all');
+  const [sort, setSort] = useState<HouseSort>('newest');
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       setRows(await api.get<HouseListingRow[]>('/marketplace/house/manage'));
     } catch (e) {
-      onError((e as Error).message);
-      setRows([]);
+      setLoadError((e as Error).message);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -59,31 +75,110 @@ export function HouseStoreSection({
     row: HouseListingRow,
     body: Partial<Pick<HouseListingRow, 'stock' | 'status'>> & { expectedStock?: number },
   ) {
+    let notice: Notice;
     try {
       await api.patch(`/marketplace/house/listings/${row.id}`, body);
-      onMsg(t('house.admin.saved'));
+      const text =
+        body.status === 'removed'
+          ? t('admin.house.removedDone', { code: row.code })
+          : body.status === 'active'
+            ? t('admin.house.restoredDone', { code: row.code })
+            : t('admin.house.stockDone', { code: row.code, count: body.stock ?? row.stock });
+      onMsg(text);
+      notice = { ok: true, text };
     } catch (e) {
+      notice = { ok: false, text: (e as Error).message };
       onError((e as Error).message);
     }
+    setNotices((all) => ({ ...all, [row.id]: notice }));
     await load();
   }
+
+  const shown = useMemo(() => {
+    const list = (rows ?? []).filter(
+      (r) =>
+        (filter === 'all' || standing(r) === filter) &&
+        matchesQuery(query, r.code, r.description, r.conditionGrade, r.photoRef),
+    );
+    if (sort === 'newest') return list;
+    return [...list].sort((a, b) =>
+      sort === 'name'
+        ? a.description.localeCompare(b.description)
+        : sort === 'priceHigh'
+          ? b.askingPrice - a.askingPrice
+          : sort === 'priceLow'
+            ? a.askingPrice - b.askingPrice
+            : a.stock - b.stock,
+    );
+  }, [rows, query, filter, sort]);
 
   return (
     <>
       <NewProduct onMsg={onMsg} onError={onError} onAdded={load} />
 
       <Panel title={t('house.admin.heading', { count: rows?.length ?? 0 })}>
-        {rows === null ? (
+        {loadError ? (
+          <LoadFailure message={loadError} onRetry={() => void load()} />
+        ) : rows === null ? (
           <SkeletonTable rows={3} columns={4} />
         ) : rows.length === 0 ? (
-          <EmptyState title={t('house.admin.empty')} icon={<IconTag />} />
+          <EmptyState
+            title={t('house.admin.empty')}
+            text={t('admin.house.emptyText')}
+            icon={<IconTag />}
+          />
         ) : (
-          <ul className="tag-grid">
-            {rows.map((row) => (
-              // A new stock is a new tag: what the server now says replaces what was being typed.
-              <ProductTag key={`${row.id}:${row.stock}:${row.status}`} row={row} onPatch={patch} />
-            ))}
-          </ul>
+          <>
+            <RollTools
+              label={t('admin.house.tools')}
+              query={query}
+              onQuery={setQuery}
+              placeholder={t('admin.house.search')}
+              shown={shown.length}
+              total={rows.length}
+              sort={{
+                value: sort,
+                onChange: setSort,
+                options: [
+                  { key: 'newest', label: t('admin.house.sort.newest') },
+                  { key: 'name', label: t('admin.house.sort.name') },
+                  { key: 'priceHigh', label: t('admin.house.sort.priceHigh') },
+                  { key: 'priceLow', label: t('admin.house.sort.priceLow') },
+                  { key: 'stockLow', label: t('admin.house.sort.stockLow') },
+                ],
+              }}
+            >
+              <Field label={t('admin.house.filterStatus')} className="field--compact">
+                <select value={filter} onChange={(e) => setFilter(e.target.value as HouseFilter)}>
+                  <option value="all">{t('admin.requests.filterAll')}</option>
+                  <option value="onSale">{t('house.admin.onSale')}</option>
+                  <option value="soldOut">{t('house.admin.soldOut')}</option>
+                  <option value="removed">{t('house.admin.removed')}</option>
+                </select>
+              </Field>
+            </RollTools>
+            {shown.length === 0 ? (
+              <NoMatch
+                query={query}
+                onClear={() => {
+                  setQuery('');
+                  setFilter('all');
+                }}
+              />
+            ) : (
+              <ul className="tag-grid">
+                {shown.map((row) => (
+                  // A new stock is a new tag: what the server now says replaces what was being typed.
+                  <ProductTag
+                    key={`${row.id}:${row.stock}:${row.status}`}
+                    row={row}
+                    notice={notices[row.id] ?? null}
+                    onPatch={patch}
+                  />
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </Panel>
     </>
@@ -111,6 +206,8 @@ function NewProduct({
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('1');
   const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
   // The photograph is looked for by its name once the name has stopped changing, not for each letter of it.
   const photo = useDebounced(photoRef.trim());
 
@@ -119,11 +216,18 @@ function NewProduct({
   const wholeCopies = stock.trim() !== '' && Number.isInteger(copies) && copies >= 1;
   const ready = description.trim() !== '' && cents !== null && cents > 0 && wholeCopies;
 
+  const priceError =
+    (price.trim() !== '' || tried) && (cents === null || cents <= 0)
+      ? t('admin.house.priceInvalid')
+      : undefined;
+
   async function create() {
+    setTried(true);
     if (!ready || busy) return;
     setBusy(true);
+    setNotice(null);
     try {
-      await api.post('/marketplace/house/listings', {
+      const created = await api.post<{ code?: string } | null>('/marketplace/house/listings', {
         typeClass,
         description: description.trim(),
         conditionGrade: condition.trim() || undefined,
@@ -131,7 +235,12 @@ function NewProduct({
         askingPrice: cents,
         stock: copies,
       });
-      onMsg(t('house.admin.created'));
+      const text = created?.code
+        ? t('admin.house.createdAs', { code: created.code })
+        : t('house.admin.created');
+      onMsg(text);
+      setNotice({ ok: true, text });
+      setTried(false);
       setDescription('');
       setCondition('');
       setPhotoRef('');
@@ -139,6 +248,7 @@ function NewProduct({
       setStock('1');
       await onAdded();
     } catch (e) {
+      setNotice({ ok: false, text: (e as Error).message });
       onError((e as Error).message);
     } finally {
       setBusy(false);
@@ -188,7 +298,12 @@ function NewProduct({
                 dir="ltr"
               />
             </Field>
-            <MoneyField label={t('house.admin.price')} value={price} onChange={setPrice} />
+            <MoneyField
+              label={t('house.admin.price')}
+              value={price}
+              onChange={setPrice}
+              error={priceError}
+            />
             <Field
               label={t('house.admin.stock')}
               error={
@@ -255,7 +370,14 @@ function NewProduct({
           >
             {t('house.admin.create')}
           </Button>
+          {!ready && !busy && <span className="hint">{t('admin.house.missing')}</span>}
         </div>
+        {notice &&
+          (notice.ok ? (
+            <SuccessNote>{notice.text}</SuccessNote>
+          ) : (
+            <ErrorState message={notice.text} />
+          ))}
       </div>
     </Panel>
   );
@@ -268,9 +390,11 @@ function NewProduct({
  */
 function ProductTag({
   row,
+  notice,
   onPatch,
 }: {
   row: HouseListingRow;
+  notice: Notice | null;
   onPatch: (
     row: HouseListingRow,
     body: Partial<Pick<HouseListingRow, 'stock' | 'status'>> & { expectedStock?: number },
@@ -350,6 +474,17 @@ function ProductTag({
           {row.status === 'active' ? t('house.admin.remove') : t('house.admin.restore')}
         </Button>
       </form>
+      {stock.trim() !== '' && !valid && (
+        <p className="field-error" role="alert">
+          {t('admin.house.stockInvalid')}
+        </p>
+      )}
+      {notice &&
+        (notice.ok ? (
+          <SuccessNote>{notice.text}</SuccessNote>
+        ) : (
+          <ErrorState message={notice.text} />
+        ))}
     </li>
   );
 }

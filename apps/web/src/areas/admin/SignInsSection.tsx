@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../shared/api';
 import { formatDateTime, formatDayHeading, formatTime } from '../../shared/money';
 import { useI18n, type MessageKey } from '../../shared/i18n';
-import { EmptyState, Panel, SkeletonTable, StatusBadge, type StatusTone } from '../../shared/ui/primitives';
+import {
+  EmptyState,
+  Field,
+  Panel,
+  SkeletonTable,
+  StatusBadge,
+  type StatusTone,
+} from '../../shared/ui/primitives';
+import { LoadFailure, NoMatch, RollTools, matchesQuery } from './RollTools';
 import { IconShield } from '../../shared/ui/icons';
 import {
   attemptsByDay,
@@ -31,22 +39,44 @@ const OUTCOME_LABEL: Record<SignInOutcome, MessageKey> = {
   mfa_failed: 'admin.signIns.outcome.mfa_failed',
 };
 
-export function SignInsSection({ onError }: { onError: (m: string) => void }) {
+export function SignInsSection(_props: { onError?: (m: string) => void }) {
   const { t, locale } = useI18n();
   const [log, setLog] = useState<SignInLog | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [outcome, setOutcome] = useState<'all' | SignInOutcome>('all');
 
   const load = useCallback(async () => {
+    setLoadError(null);
+    setLog(null);
     try {
       setLog(await api.get<SignInLog>('/admin/logins'));
     } catch (e) {
-      onError((e as Error).message);
-      setLog({ since: '', last24h: { successes: 0, failures: 0, failingAddresses: 0 }, suspicious: [], attempts: [] });
+      setLoadError((e as Error).message);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const attempts = useMemo(
+    () =>
+      (log?.attempts ?? []).filter(
+        (a) =>
+          (outcome === 'all' || a.outcome === outcome) &&
+          matchesQuery(
+            query,
+            a.identifier,
+            a.username,
+            a.username ? `@${a.username}` : null,
+            a.ip,
+            displayIp(a.ip),
+            describeDevice(a.userAgent),
+          ),
+      ),
+    [log, query, outcome],
+  );
 
   return (
     <>
@@ -68,7 +98,9 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
                 {log ? log.last24h.failures : '—'}
               </span>
             </dd>
-            <dd className="ledger-note">{t('admin.signIns.metric.addresses', { count: log?.last24h.failingAddresses ?? 0 })}</dd>
+            <dd className="ledger-note">
+              {t('admin.signIns.metric.addresses', { count: log?.last24h.failingAddresses ?? 0 })}
+            </dd>
           </dl>
           <dl className="ledger-col">
             <dt className="ledger-kicker">{t('admin.signIns.metric.suspicious')}</dt>
@@ -83,7 +115,11 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
       </section>
 
       {log && log.suspicious.length > 0 && (
-        <Panel title={t('admin.signIns.suspicious.title')} subtitle={t('admin.signIns.suspicious.subtitle')} flush>
+        <Panel
+          title={t('admin.signIns.suspicious.title')}
+          subtitle={t('admin.signIns.suspicious.subtitle')}
+          flush
+        >
           <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
@@ -122,46 +158,93 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
       )}
 
       <Panel title={t('admin.signIns.title')} subtitle={t('admin.signIns.subtitle')} flush>
-        {log === null ? (
+        {loadError ? (
+          <LoadFailure message={loadError} onRetry={() => void load()} />
+        ) : log === null ? (
           <SkeletonTable rows={5} columns={5} />
         ) : log.attempts.length === 0 ? (
           <EmptyState title={t('admin.signIns.empty')} icon={<IconShield />} />
         ) : (
-          <div className="register-days panel-body">
-            {attemptsByDay(log.attempts).map(({ key, items, first }) => (
-              <div key={key} className="register-day-group">
-                <h3 className="register-day" id={`signins-${key}`}>
-                  <span className="date">{formatDayHeading(first.occurredAt, locale)}</span>
-                </h3>
-                <ul className="timeline timeline--stamped timeline--log" aria-labelledby={`signins-${key}`}>
-                  {items.map((a) => (
-                    <li key={a.id}>
-                      <span className="hint date">{formatTime(a.occurredAt, locale)}</span>
-                      <div className="register-text">
-                        <span className="register-kind">
-                          <StatusBadge tone={OUTCOME_TONE[a.outcome]}>{t(OUTCOME_LABEL[a.outcome])}</StatusBadge>
-                        </span>
-                        <p className="register-entry">
-                          <span className="ltr-run">{a.username ? `@${a.username}` : a.identifier}</span>
-                          {!a.userId && <span className="hint"> · {t('admin.signIns.noAccount')}</span>}
-                        </p>
-                        <p className="register-meta">
-                          <span className="code-inline" dir="ltr">
-                            {displayIp(a.ip)}
-                          </span>
-                          {isLocalAddress(a.ip) && <span> · {t('admin.signIns.local')}</span>}
-                          {' · '}
-                          <span className="ltr-run" title={a.userAgent ?? undefined}>
-                            {describeDevice(a.userAgent)}
-                          </span>
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+          <>
+            <div className="panel-body">
+              <RollTools
+                label={t('admin.signIns.tools')}
+                query={query}
+                onQuery={setQuery}
+                placeholder={t('admin.signIns.search')}
+                shown={attempts.length}
+                total={log.attempts.length}
+              >
+                <Field label={t('admin.signIns.filterOutcome')} className="field--compact">
+                  <select
+                    value={outcome}
+                    onChange={(e) => setOutcome(e.target.value as 'all' | SignInOutcome)}
+                  >
+                    <option value="all">{t('admin.requests.filterAll')}</option>
+                    {(Object.keys(OUTCOME_LABEL) as SignInOutcome[]).map((o) => (
+                      <option key={o} value={o}>
+                        {t(OUTCOME_LABEL[o])}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </RollTools>
+            </div>
+            {attempts.length === 0 ? (
+              <NoMatch
+                query={query}
+                onClear={() => {
+                  setQuery('');
+                  setOutcome('all');
+                }}
+              />
+            ) : (
+              <div className="register-days panel-body">
+                {attemptsByDay(attempts).map(({ key, items, first }) => (
+                  <div key={key} className="register-day-group">
+                    <h3 className="register-day" id={`signins-${key}`}>
+                      <span className="date">{formatDayHeading(first.occurredAt, locale)}</span>
+                    </h3>
+                    <ul
+                      className="timeline timeline--stamped timeline--log"
+                      aria-labelledby={`signins-${key}`}
+                    >
+                      {items.map((a) => (
+                        <li key={a.id}>
+                          <span className="hint date">{formatTime(a.occurredAt, locale)}</span>
+                          <div className="register-text">
+                            <span className="register-kind">
+                              <StatusBadge tone={OUTCOME_TONE[a.outcome]}>
+                                {t(OUTCOME_LABEL[a.outcome])}
+                              </StatusBadge>
+                            </span>
+                            <p className="register-entry">
+                              <span className="ltr-run">
+                                {a.username ? `@${a.username}` : a.identifier}
+                              </span>
+                              {!a.userId && (
+                                <span className="hint"> · {t('admin.signIns.noAccount')}</span>
+                              )}
+                            </p>
+                            <p className="register-meta">
+                              <span className="code-inline" dir="ltr">
+                                {displayIp(a.ip)}
+                              </span>
+                              {isLocalAddress(a.ip) && <span> · {t('admin.signIns.local')}</span>}
+                              {' · '}
+                              <span className="ltr-run" title={a.userAgent ?? undefined}>
+                                {describeDevice(a.userAgent)}
+                              </span>
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </Panel>
     </>

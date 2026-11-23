@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { api } from '../../shared/api';
 import { useI18n } from '../../shared/i18n';
 import type { MessageKey } from '../../shared/i18n';
@@ -14,6 +14,7 @@ import {
   Button,
   EmptyState,
   ErrorState,
+  Field,
   Panel,
   SkeletonTable,
   StatusBadge,
@@ -24,6 +25,7 @@ import { ConfirmationModal, DetailDrawer } from '../../shared/ui/DetailDrawer';
 import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { Code } from '../../shared/ui/Serial';
 import { IconUsers } from '../../shared/ui/icons';
+import { LoadFailure, NoMatch, RollTools, matchesQuery } from './RollTools';
 
 export interface AdminUser {
   id: string;
@@ -51,6 +53,12 @@ const ACCOUNT_STATUS_TONE: Record<string, StatusTone> = {
   closed: 'neutral',
 };
 
+type UserSort = 'email' | 'name' | 'status' | 'role';
+
+const STATUS_RANK: Record<string, number> = { suspended: 0, pending: 1, active: 2, closed: 3 };
+
+const displayName = (u: AdminUser) => fullName(u.firstName, u.lastName) || u.email;
+
 type Changes = Partial<Record<'firstName' | 'lastName' | 'role' | 'status', string>>;
 
 /**
@@ -60,12 +68,16 @@ type Changes = Partial<Record<'firstName' | 'lastName' | 'role' | 'status', stri
  */
 export function UsersSection({
   users,
+  loadError = null,
+  onRetry,
   onChanged,
   onSaved,
   onError,
   currentUserId,
 }: {
   users: AdminUser[] | null;
+  loadError?: string | null;
+  onRetry?: () => void;
   onChanged: (user: AdminUser) => void;
   onSaved: (message: string) => void;
   onError: (message: string) => void;
@@ -76,6 +88,31 @@ export function UsersSection({
   const { openRecord, closeRecord } = useNavigation(route);
   const openId = route.params.user ?? null;
   const open = users?.find((u) => u.id === openId) ?? null;
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sort, setSort] = useState<UserSort>('email');
+
+  const shown = useMemo(() => {
+    const list = (users ?? []).filter(
+      (u) =>
+        (statusFilter === 'all' || u.status === statusFilter) &&
+        matchesQuery(query, displayName(u), u.username, `@${u.username}`, u.email),
+    );
+    if (sort === 'email') return list;
+    const byName = (a: AdminUser, b: AdminUser) => displayName(a).localeCompare(displayName(b));
+    return list.sort((a, b) =>
+      sort === 'status'
+        ? (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9) || byName(a, b)
+        : sort === 'role'
+          ? a.role.localeCompare(b.role) || byName(a, b)
+          : byName(a, b),
+    );
+  }, [users, query, statusFilter, sort]);
+
+  const clear = () => {
+    setQuery('');
+    setStatusFilter('all');
+  };
 
   return (
     <>
@@ -84,72 +121,122 @@ export function UsersSection({
         subtitle={t('admin.users.subtitle')}
         flush
       >
-        {users === null ? (
+        {loadError ? (
+          <LoadFailure message={loadError} onRetry={() => onRetry?.()} />
+        ) : users === null ? (
           <SkeletonTable rows={5} columns={4} />
         ) : users.length === 0 ? (
           <EmptyState title={t('admin.users.empty')} icon={<IconUsers />} />
         ) : (
-          <div className="dt-wrap dt-wrap--stack">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">{t('admin.signIns.col.account')}</th>
-                  <th scope="col">{t('admin.users.col.role')}</th>
-                  <th scope="col">{t('admin.col.status')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr
-                    key={u.id}
-                    className={'is-clickable' + (u.id === openId ? ' is-selected' : '')}
-                    onClick={() => openRecord('user', u.id)}
-                  >
-                    <td data-label={t('admin.signIns.col.account')} className="dt-primary">
-                      <div className="roll-account">
-                        <span className="avatar" aria-hidden="true">
-                          {initialsFrom(u.firstName, u.lastName, u.email)}
-                        </span>
-                        <div className="roll-account-text">
-                          <button
-                            type="button"
-                            className="register-link"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openRecord('user', u.id);
-                            }}
-                          >
-                            {fullName(u.firstName, u.lastName) || u.email}
-                          </button>
-                          <span className="dt-sub">
-                            <Code value={`@${u.username}`} /> · <span dir="ltr">{u.email}</span>
-                          </span>
-                          {u.nameReviewRequired && (
-                            <span className="dt-sub">{t('admin.users.nameReviewRequired')}</span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td data-label={t('admin.users.col.role')}>
-                      {t(`role.${u.role}` as MessageKey)}
-                    </td>
-                    <td data-label={t('admin.col.status')}>
-                      <div className="row roll-status">
-                        <StatusBadge tone={ACCOUNT_STATUS_TONE[u.status] ?? 'neutral'}>
-                          {t(`account.status.${u.status}` as MessageKey)}
-                        </StatusBadge>
-                        {u.mfaEnabled && (
-                          <span title={t(u.mfaMethod === 'email' ? 'admin.users.mfaOnEmailTitle' : 'admin.users.mfaOnTitle')}>
-                            <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="panel-body">
+              <RollTools
+                label={t('admin.users.tools')}
+                query={query}
+                onQuery={setQuery}
+                placeholder={t('admin.users.search')}
+                shown={shown.length}
+                total={users.length}
+                sort={{
+                  value: sort,
+                  onChange: setSort,
+                  options: [
+                    { key: 'email', label: t('admin.users.sort.email') },
+                    { key: 'name', label: t('admin.users.sort.name') },
+                    { key: 'status', label: t('admin.users.sort.status') },
+                    { key: 'role', label: t('admin.users.sort.role') },
+                  ],
+                }}
+              >
+                <Field label={t('admin.users.filterStatus')} className="field--compact">
+                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                    <option value="all">{t('admin.requests.filterAll')}</option>
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {t(`account.status.${s}` as MessageKey)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </RollTools>
+            </div>
+            {shown.length === 0 ? (
+              <NoMatch query={query} onClear={clear} />
+            ) : (
+              <div className="dt-wrap dt-wrap--stack">
+                <table className="data-table">
+                  <caption className="sr-only">
+                    {t('admin.users.heading', { count: shown.length })}
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t('admin.signIns.col.account')}</th>
+                      <th scope="col">{t('admin.users.col.role')}</th>
+                      <th scope="col">{t('admin.col.status')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((u) => (
+                      <tr
+                        key={u.id}
+                        className={'is-clickable' + (u.id === openId ? ' is-selected' : '')}
+                        onClick={() => openRecord('user', u.id)}
+                      >
+                        <td data-label={t('admin.signIns.col.account')} className="dt-primary">
+                          <div className="roll-account">
+                            <span className="avatar" aria-hidden="true">
+                              {initialsFrom(u.firstName, u.lastName, u.email)}
+                            </span>
+                            <div className="roll-account-text">
+                              <button
+                                type="button"
+                                className="register-link"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openRecord('user', u.id);
+                                }}
+                              >
+                                {fullName(u.firstName, u.lastName) || u.email}
+                              </button>
+                              <span className="dt-sub">
+                                <Code value={`@${u.username}`} /> · <span dir="ltr">{u.email}</span>
+                              </span>
+                              {u.nameReviewRequired && (
+                                <span className="dt-sub">
+                                  {t('admin.users.nameReviewRequired')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td data-label={t('admin.users.col.role')}>
+                          {t(`role.${u.role}` as MessageKey)}
+                        </td>
+                        <td data-label={t('admin.col.status')}>
+                          <div className="row roll-status">
+                            <StatusBadge tone={ACCOUNT_STATUS_TONE[u.status] ?? 'neutral'}>
+                              {t(`account.status.${u.status}` as MessageKey)}
+                            </StatusBadge>
+                            {u.mfaEnabled && (
+                              <span
+                                title={t(
+                                  u.mfaMethod === 'email'
+                                    ? 'admin.users.mfaOnEmailTitle'
+                                    : 'admin.users.mfaOnTitle',
+                                )}
+                              >
+                                <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </Panel>
 
@@ -193,9 +280,9 @@ function AccountDrawer({
   const [resetting, setResetting] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
 
-  const namesOk =
-    isValidNamePart(normalizeNamePart(firstName)) &&
-    (lastName.trim() === '' || isValidNamePart(normalizeNamePart(lastName)));
+  const firstOk = isValidNamePart(normalizeNamePart(firstName));
+  const lastOk = lastName.trim() === '' || isValidNamePart(normalizeNamePart(lastName));
+  const namesOk = firstOk && lastOk;
 
   // Only what was changed is sent: a name the account is flagged for is confirmed by sending it as it is.
   const changes: Changes = {};
@@ -339,7 +426,13 @@ function AccountDrawer({
                 {statusLabel(status)}
               </StatusBadge>
               {user.mfaEnabled && (
-                <span title={t(user.mfaMethod === 'email' ? 'admin.users.mfaOnEmailTitle' : 'admin.users.mfaOnTitle')}>
+                <span
+                  title={t(
+                    user.mfaMethod === 'email'
+                      ? 'admin.users.mfaOnEmailTitle'
+                      : 'admin.users.mfaOnTitle',
+                  )}
+                >
                   <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
                 </span>
               )}
@@ -373,9 +466,18 @@ function AccountDrawer({
                 value={firstName}
                 maxLength={NAME_PART_MAX}
                 aria-label={t('auth.firstName')}
+                aria-invalid={!firstOk}
+                aria-describedby={firstOk ? undefined : `first-name-error-${user.id}`}
                 onChange={(e) => setFirstName(e.target.value)}
                 dir="auto"
               />
+              {!firstOk && (
+                <span className="field-error" id={`first-name-error-${user.id}`} role="alert">
+                  {firstName.trim() === ''
+                    ? t('admin.users.firstNameRequired')
+                    : t('auth.nameInvalid')}
+                </span>
+              )}
             </label>
             <label className="field">
               <span className="field-label">{t('auth.lastName')}</span>
@@ -383,9 +485,16 @@ function AccountDrawer({
                 value={lastName}
                 maxLength={NAME_PART_MAX}
                 aria-label={t('auth.lastName')}
+                aria-invalid={!lastOk}
+                aria-describedby={lastOk ? undefined : `last-name-error-${user.id}`}
                 onChange={(e) => setLastName(e.target.value)}
                 dir="auto"
               />
+              {!lastOk && (
+                <span className="field-error" id={`last-name-error-${user.id}`} role="alert">
+                  {t('auth.nameInvalid')}
+                </span>
+              )}
             </label>
             <label className="field">
               <span className="field-label">{t('admin.users.col.role')}</span>
