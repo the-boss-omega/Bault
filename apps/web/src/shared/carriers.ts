@@ -1,3 +1,4 @@
+import type { TierKey } from './tiers';
 import type { MessageKey, TranslateFn } from './i18n';
 
 export interface CarrierServiceInfo {
@@ -71,6 +72,9 @@ export interface QuotedRate {
   } | null;
   coveredMinor?: number;
   totalMinor: number;
+  tier?: TierKey;
+  discountBps?: number;
+  listTotalMinor?: number;
   recommended: boolean;
 }
 

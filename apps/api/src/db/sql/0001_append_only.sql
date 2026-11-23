@@ -39,7 +39,7 @@ DECLARE
   -- it, what the check found. It covers the one window in which somebody else's
   -- property sits in Bault's custody before any item record exists, so it is the
   -- least editable thing in the system, not the most.
-  history_tables text[] := ARRAY['ledger_record', 'custody_event', 'audit_record', 'bin_transfer', 'wallet_request_event', 'arrival_disposal', 'parcel_event', 'support_message', 'escrow_event', 'login_attempt'];
+  history_tables text[] := ARRAY['ledger_record', 'custody_event', 'audit_record', 'bin_transfer', 'wallet_request_event', 'arrival_disposal', 'parcel_event', 'support_message', 'escrow_event', 'login_attempt', 'usage_tier_change'];
 BEGIN
   FOREACH t IN ARRAY history_tables LOOP
     IF EXISTS (SELECT 1 FROM information_schema.tables
@@ -84,7 +84,7 @@ DECLARE
   -- it, what the check found. It covers the one window in which somebody else's
   -- property sits in Bault's custody before any item record exists, so it is the
   -- least editable thing in the system, not the most.
-  history_tables text[] := ARRAY['ledger_record', 'custody_event', 'audit_record', 'bin_transfer', 'wallet_request_event', 'arrival_disposal', 'parcel_event', 'support_message', 'escrow_event', 'login_attempt'];
+  history_tables text[] := ARRAY['ledger_record', 'custody_event', 'audit_record', 'bin_transfer', 'wallet_request_event', 'arrival_disposal', 'parcel_event', 'support_message', 'escrow_event', 'login_attempt', 'usage_tier_change'];
 BEGIN
   FOREACH t IN ARRAY history_tables LOOP
     IF EXISTS (SELECT 1 FROM information_schema.tables

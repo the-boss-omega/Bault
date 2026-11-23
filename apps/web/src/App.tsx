@@ -43,7 +43,7 @@ import { AuthPage, AuthShell, type AuthMode, type SessionUser } from './areas/cu
 import { mustEnrolSecondFactor } from './shared/twoFactor';
 import { ForcedEnrollmentPage } from './areas/customer/auth/ForcedEnrollmentPage';
 import { LandingPage } from './areas/customer/marketing/LandingPage';
-import { MembershipPage } from './areas/customer/membership/MembershipPage';
+import { TierPage } from './areas/customer/tier/TierPage';
 import { VerifyEmailPage } from './areas/customer/auth/VerifyEmailPage';
 import { ResetPasswordPage } from './areas/customer/auth/ResetPasswordPage';
 import { VaultPage } from './areas/customer/vault/VaultPage';
@@ -79,7 +79,7 @@ const SECTIONS: readonly SectionSpec[] = [
   { key: 'vault', labelKey: 'tab.vault', titleKey: 'vault.title', icon: <IconVault /> },
   { key: 'inbound', labelKey: 'tab.inbound', titleKey: 'inbound.title', icon: <IconInbox /> },
   { key: 'wallet', labelKey: 'tab.wallet', titleKey: 'wallet.title', icon: <IconWallet /> },
-  { key: 'membership', labelKey: 'tab.membership', titleKey: 'membership.title', icon: <IconShield /> },
+  { key: 'tier', labelKey: 'tab.tier', titleKey: 'tier.title', icon: <IconShield /> },
   { key: 'marketplace', labelKey: 'tab.marketplace', titleKey: 'market.title', icon: <IconMarketplace /> },
   { key: 'store', labelKey: 'tab.store', titleKey: 'store.title', icon: <IconStore /> },
   { key: 'escrow', labelKey: 'tab.escrow', titleKey: 'escrow.title', icon: <IconEscrow /> },
@@ -435,7 +435,7 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
             {section === 'inbound' && <InboundPage />}
             {section === 'support' && <SupportPage suspended={suspended} />}
             {section === 'wallet' && <WalletPage />}
-            {section === 'membership' && <MembershipPage />}
+            {section === 'tier' && <TierPage />}
             {section === 'marketplace' && <MarketplacePage />}
             {section === 'store' && <StorePage />}
             {section === 'escrow' && <EscrowPage />}

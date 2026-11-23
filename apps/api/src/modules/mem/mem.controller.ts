@@ -1,41 +1,23 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsIn, IsString } from 'class-validator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { Public } from '../acc/public.decorator';
-import { MembershipService } from './membership.service';
-import { TIER_KEYS } from './tiers';
-
-class SubscribeDto {
-  @IsString()
-  @IsIn([...TIER_KEYS])
-  tier!: string;
-}
+import { UsageTierService } from './usage-tier.service';
 
 @ApiTags('MEM')
-@Controller('membership')
+@Controller('tiers')
 export class MemController {
-  constructor(private readonly memberships: MembershipService) {}
+  constructor(private readonly tiers: UsageTierService) {}
 
   @Public()
-  @Get('tiers')
-  tiers() {
-    return this.memberships.catalogue();
+  @Get()
+  rules() {
+    return this.tiers.rules();
   }
 
   @Get('me')
-  async me(@CurrentUser() user: AuthUser) {
-    return { membership: await this.memberships.allowances(user.id) };
-  }
-
-  @Post('subscribe')
-  subscribe(@CurrentUser() user: AuthUser, @Body() dto: SubscribeDto) {
-    return this.memberships.subscribe(user.id, dto.tier);
-  }
-
-  @Post('cancel')
-  cancel(@CurrentUser() user: AuthUser) {
-    return this.memberships.cancel(user.id);
+  me(@CurrentUser() user: AuthUser) {
+    return this.tiers.standing(user.id);
   }
 }

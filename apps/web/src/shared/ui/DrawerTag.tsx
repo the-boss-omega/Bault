@@ -24,7 +24,7 @@ export function DrawerTag({
   /** What the amount is: "Agreed price", "Cash in", "Amount". */
   kicker: string;
   /** The amount as it is written, with its sign when it has one. A tag that is a set of lines (where to send a payment) has none. */
-  amount?: string;
+  amount?: ReactNode;
   /**
    * Words, in the display face, where what the tag is about is a name and not a sum: a person, what is in a
    * parcel. Whatever a person typed is read as the language it is in.

@@ -15,7 +15,7 @@ export function ConsignmentForm({
 }: {
   item: { id: string; conditionGrade: string | null };
   /** What asking for this costs, as it is written (the service fee of the price list), when there is one. */
-  fee?: string | null;
+  fee?: ReactNode;
   onCancel: () => void;
   onDone: (message: string) => void;
   onError: (m: string) => void;

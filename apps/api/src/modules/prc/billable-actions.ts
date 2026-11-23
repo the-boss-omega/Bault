@@ -2,7 +2,6 @@ import { GRADING_TIERS, tierFeeAction } from '../dis/grading-tiers';
 import { CONSIGNMENT_CHANNELS, channelFeeAction } from '../dis/consignment-channels';
 import { SHIPMENT_ADD_ONS, addOnFeeAction } from '../shp/shipping-options';
 import { PICKUP_FEE_ACTION, whiteGloveFeeAction } from '../shp/fulfilment';
-import { MEMBERSHIP_TIERS } from '../mem/tiers';
 import { ESCROW_FEE_ACTION } from '../esc/escrow-terms';
 import { CASHOUT_FEE_ACTION, CHARGEBACK_FEE_ACTION } from '../pay/money-terms';
 
@@ -77,10 +76,6 @@ export function billableActions(): BillableAction[] {
     action('shipping_restocking_fee', 'code_constant', 'shp/shipment-edit.service.ts (RESTOCKING_FEE_MINOR)', 'Cancelling a shipment after its service was paid for.'),
     action('shipping_insurance_premium', 'code_constant', 'shp/shipping-options.ts (INSURANCE_PREMIUM_BPS)', 'Insurance premium on an outbound parcel.'),
     action('direct_ship_flat', 'code_constant', 'shp/carriers.ts (flatCostMinor)', 'Shipping straight from a receiving-only address.'),
-
-    ...MEMBERSHIP_TIERS.map((tier) =>
-      action(tier.feeActionType, 'required', 'mem/membership.service.ts, worker jobs/membership-renewal.ts', `The ${tier.key} membership. Joining falls back to the catalogue price, but renewal refuses without a rule and the member lapses.`),
-    ),
 
     ofAmount(
       action(CASHOUT_FEE_ACTION, 'code_constant', 'pay/wallet-request.service.ts (money-terms.ts)', 'Cash-out fee. Charged from the schedule in money-terms.ts; a rule is only shown on the price list.'),

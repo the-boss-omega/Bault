@@ -24,7 +24,7 @@ export class BillingService implements BillingPort {
       return entitlement.periodId ? { kind: 'covered', periodId: entitlement.periodId, allowance } : { kind: 'free' };
     }
 
-    const opts = { itemClass: action.itemClass };
+    const opts = { itemClass: action.itemClass, userId: action.userId };
     const { amount, snapshot } =
       (action.feeActionType ? await this.pricing.tryPrice(action.feeActionType, opts, tx) : null) ??
       (await this.pricing.price(action.actionType, opts, tx));

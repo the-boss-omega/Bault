@@ -1,7 +1,7 @@
 import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, signIn, type Client } from '../integration/helpers/http';
 import { activeAccount, passwordOnly, type Account } from '../integration/helpers/mfa';
-import { closeDb, openTransaction, sql, waitForLockWaiters } from '../integration/helpers/db';
+import { closeDb, honouredMembership, openTransaction, sql, waitForLockWaiters } from '../integration/helpers/db';
 
 afterAll(closeDb);
 
@@ -20,7 +20,7 @@ async function memberWithListing(label: string, admin: Client, operator: Client)
   expect(cashIn.status).toBe(201);
   expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/approve`, {})).status).toBe(201);
   expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/complete`, {})).status).toBe(201);
-  expect([200, 201]).toContain((await c.post('/membership/subscribe', { tier: 'silver' })).status);
+  await honouredMembership(account, 'silver');
 
   const bins = (await operator.get('/custody/bins')).body as { id: string }[];
   const card = await operator.post('/intake/items', {

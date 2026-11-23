@@ -69,7 +69,7 @@ export class PurchaseService {
 
       const { amount: fee, snapshot } = await this.pricing.price(
         'marketplace_fee',
-        { base: money(price, currency) },
+        { base: money(price, currency), userId: l.sellerId },
         tx,
       );
 

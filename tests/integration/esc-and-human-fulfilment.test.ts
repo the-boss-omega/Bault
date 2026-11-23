@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
+import { SEED, atTier, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
 import { activeAccount, passwordOnly } from './helpers/mfa';
-import { sql } from './helpers/db';
+import { honouredMembership, sql } from './helpers/db';
 
 describe('ESC escrow and human fulfilment', () => {
   const balanceOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
@@ -491,13 +491,14 @@ describe('ESC escrow and human fulfilment', () => {
     const bookedBefore = await bookedAt(show.id);
 
     const before = await balanceOf(collector);
+    const fee = await atTier(collector, show.feeMinor);
     const booked = await collector.post('/shipping/pickup', {
       itemIds: [card.id],
       eventId: show.id,
     });
     expect(booked.status).toBe(201);
     expect(booked.body.fulfilmentMethod).toBe('show_pickup');
-    expect(await balanceOf(collector)).toBe(before - show.feeMinor);
+    expect(await balanceOf(collector)).toBe(before - fee);
 
     expect(await bookedAt(show.id)).toBe(bookedBefore + 1);
 
@@ -525,7 +526,7 @@ describe('ESC escrow and human fulfilment', () => {
     expect(cashIn.status).toBe(201);
     expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/approve`, {})).status).toBe(201);
     expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/complete`, {})).status).toBe(201);
-    expect([200, 201]).toContain((await member.post('/membership/subscribe', { tier: 'gold' })).status);
+    await honouredMembership(account, 'gold');
     const bins = (await operator.get('/custody/bins')).body as { id: string }[];
     const card = (
       await operator.post('/intake/items', {

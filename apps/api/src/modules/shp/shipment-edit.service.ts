@@ -293,6 +293,10 @@ export class ShipmentEditService {
             },
             tx,
           );
+          await tx
+            .update(charge)
+            .set({ status: 'refunded', updatedAt: new Date() })
+            .where(and(eq(charge.referenceId, s.id), eq(charge.actionType, 'shipping'), eq(charge.status, 'settled')));
         }
         const cover = (cur.membershipCover as AppliedShippingCover | null) ?? null;
         if (cover) await this.memberships.returnShippingCover(tx as Database, s.userId, cover);

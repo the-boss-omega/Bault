@@ -55,7 +55,6 @@ describe('E6 pricing coverage', () => {
       'shipping_addon:gps_tracker',
       'show_pickup',
       'white_glove:domestic',
-      'membership:bronze',
       'escrow_fee',
       'cash_out_fee',
       'chargeback_fee',
@@ -63,6 +62,7 @@ describe('E6 pricing coverage', () => {
       expect(types, `${t} is not listed`).toContain(t);
     }
     expect(new Set(types).size).toBe(types.length);
+    expect(types.some((t) => t.startsWith('membership:'))).toBe(false);
 
     expect(body.actions.find((a) => a.actionType === 'grading_fee:psa_value')!.fallsBackTo).toBe('service');
     expect(body.actions.find((a) => a.actionType === 'intake_lot')!.fallsBackTo).toBe('intake');

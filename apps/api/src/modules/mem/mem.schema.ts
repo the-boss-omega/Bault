@@ -1,7 +1,7 @@
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { bigint, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
-import { userAccount } from '../acc/acc.schema';
+import { usageTier, userAccount } from '../acc/acc.schema';
 
 export const membershipStatus = pgEnum('membership_status', [
   'active',
@@ -22,6 +22,8 @@ export const membership = pgTable(
     scheduledTier: text('scheduled_tier'),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     endedAt: timestamp('ended_at', { withTimezone: true }),
+    honouredUntil: timestamp('honoured_until', { withTimezone: true }),
+    honouredStoredItems: integer('honoured_stored_items').notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -56,5 +58,39 @@ export const membershipPeriod = pgTable(
     renewalUnique: uniqueIndex('membership_period_renewal_unique')
       .on(t.membershipId, t.renewsPeriodEnd)
       .where(sql`${t.renewsPeriodEnd} IS NOT NULL`),
+  }),
+);
+
+export const usageTierRule = pgTable(
+  'usage_tier_rule',
+  {
+    tier: usageTier('tier').primaryKey(),
+    minActions: integer('min_actions').notNull(),
+    minSpentMinor: bigint('min_spent_minor', { mode: 'number' }).notNull(),
+    discountBps: integer('discount_bps').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    sane: check(
+      'usage_tier_rule_sane',
+      sql`${t.minActions} >= 0 AND ${t.minSpentMinor} >= 0 AND ${t.discountBps} BETWEEN 0 AND 10000`,
+    ),
+  }),
+);
+
+export const usageTierChange = pgTable(
+  'usage_tier_change',
+  {
+    id: pkId(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
+    fromTier: usageTier('from_tier').notNull(),
+    toTier: usageTier('to_tier').notNull(),
+    actions: integer('actions').notNull(),
+    spentMinor: bigint('spent_minor', { mode: 'number' }).notNull(),
+    reason: text('reason').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    byUser: index('usage_tier_change_user_idx').on(t.userId, t.createdAt),
   }),
 );
