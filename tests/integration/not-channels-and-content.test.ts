@@ -106,6 +106,9 @@ describe('NOT channels and published content', () => {
         enabled: false,
       });
       expect(res.status).toBe(400);
+      expect(res.body.error.message).toBe(
+        'This notice cannot be turned off: we must tell you when something of yours arrives damaged or cannot be accepted.',
+      );
     }
   });
 

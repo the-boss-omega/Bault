@@ -160,6 +160,16 @@ export async function gone(locator: Locator): Promise<void> {
   await expect.poll(() => locator.count(), WAIT).toBe(0);
 }
 
+export async function pressAndSettle(page: Page, button: Locator, path: string): Promise<void> {
+  const answered = page.waitForResponse(
+    (r) => new URL(r.url()).pathname.endsWith(path) && r.request().method() === 'GET',
+    { timeout: WAIT.timeout },
+  );
+  await button.click();
+  await answered;
+  await expect.poll(() => button.getAttribute('aria-busy'), WAIT).toBeNull();
+}
+
 export function panel(page: Page, title: string): Locator {
   return page.locator('section').filter({ has: page.getByRole('heading', { name: title, exact: true, level: 2 }) });
 }

@@ -49,6 +49,54 @@ describe('ACC saved shipping addresses', () => {
   });
 });
 
+describe('ACC an address has to be one a carrier can read', () => {
+  const GOOD = {
+    label: 'Home',
+    recipient: 'Red',
+    line1: '500 Howard St',
+    city: 'San Francisco',
+    region: 'CA',
+    country: 'US',
+    postalCode: '94105',
+  };
+
+  it('refuses empty, overlong and marked-up fields, naming the field in words', async () => {
+    const c = await signIn(SEED.collector);
+    const cases: [Record<string, unknown>, string][] = [
+      [{ label: '   ' }, 'The label is required.'],
+      [{ recipient: '' }, 'The recipient is required.'],
+      [{ line1: '' }, 'The street address is required.'],
+      [{ city: '' }, 'The city is required.'],
+      [{ postalCode: '' }, 'The postal code is required.'],
+      [{ recipient: 'x'.repeat(121) }, 'The recipient can be at most 120 characters.'],
+      [{ line1: '<script>alert(1)</script>' }, 'The street address cannot contain < or > or control characters.'],
+      [{ city: 'San\u0007Francisco' }, 'The city cannot contain < or > or control characters.'],
+      [{ line2: '<b>' }, 'The apartment, suite or unit line cannot contain < or > or control characters.'],
+    ];
+    for (const [change, message] of cases) {
+      const res = await c.post('/me/addresses', { ...GOOD, ...change });
+      expect(res.status, JSON.stringify(change)).toBe(400);
+      expect(res.body.error.message, JSON.stringify(change)).toBe(message);
+    }
+  });
+
+  it('saves the fields trimmed, and refuses an edit that empties one', async () => {
+    const c = await signIn(SEED.collector);
+    const created = await c.post('/me/addresses', { ...GOOD, label: '  Studio  ', city: ' San Francisco ' });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    expect(created.body).toMatchObject({ label: 'Studio', city: 'San Francisco' });
+    const id = created.body.id as string;
+    try {
+      const emptied = await c.patch(`/me/addresses/${id}`, { recipient: ' ' });
+      expect(emptied.status).toBe(400);
+      expect(emptied.body.error.message).toBe('The recipient is required.');
+      expect((await c.patch(`/me/addresses/${id.toUpperCase()}`, { label: 'Loft' })).body.label).toBe('Loft');
+    } finally {
+      await c.del(`/me/addresses/${id}`);
+    }
+  });
+});
+
 describe('ACC an address names its state or province where carriers need one', () => {
   const OFFICE = {
     label: 'Office',
