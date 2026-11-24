@@ -554,7 +554,7 @@ describe('a request, opened', () => {
     expect(note).toHaveTextContent(LONG_NOTE);
     // A line the request did not have is not there as a dash.
     expect(within(tag).queryByText('Reference', { selector: 'dt' })).toBeNull();
-    expect(within(tag).queryByText('Supporting document', { selector: 'dt' })).toBeNull();
+    expect(within(tag).queryByText('Receipt', { selector: 'dt' })).toBeNull();
     expect(within(drawer).getByText('Created as Submitted')).toBeInTheDocument();
   });
 

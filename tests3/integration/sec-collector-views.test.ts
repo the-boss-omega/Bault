@@ -281,6 +281,48 @@ describe('A4 wallet requests as a collector reads them', () => {
   });
 });
 
+describe('A4c a cash-in receipt as a collector reads it', () => {
+  it('says a receipt is attached without the storage key, and gives the key and a signed link to staff alone', async () => {
+    const golden = await signIn(SEED.collector2);
+    const red = await signIn(SEED.collector);
+    const admin = await signIn(SEED.admin);
+    const pdf = Buffer.from('%PDF-1.4\n%%EOF\n').toString('base64');
+    const uploaded = await golden.post('/media/uploads', { purpose: 'cash_in_receipt', contentType: 'application/pdf', dataBase64: pdf });
+    expect(uploaded.status).toBe(201);
+    const key = uploaded.body.objectKey as string;
+    expectWithout(uploaded.body, ['uploadedBy', 'purpose', 'userId']);
+
+    const created = await golden.post('/finance/wallet-requests', {
+      type: 'cash_in',
+      amountMinor: 27_00,
+      currency: 'USD',
+      fundingSource: 'bank_transfer',
+      reference: `views-receipt-${Date.now()}`,
+      documentKey: key,
+    });
+    expect(created.status).toBe(201);
+    const id = created.body.id as string;
+
+    for (const body of [created.body, (await golden.get('/finance/wallet-requests')).body, (await golden.get(`/finance/wallet-requests/${id}`)).body]) {
+      expectWithout(body, [...WALLET_REQUEST_DROPPED, 'receipt']);
+      expectWith(body, ['receiptAttached']);
+      expect(JSON.stringify(body)).not.toContain(key);
+    }
+    const own = await golden.get(`/finance/wallet-requests/${id}/receipt`);
+    expect(own.status).toBe(200);
+    expect(Object.keys(own.body).sort()).toEqual(['contentType', 'expiresInSeconds', 'url']);
+
+    const other = await red.get(`/finance/wallet-requests/${id}/receipt`);
+    expect(other.status).toBe(404);
+    expect(JSON.stringify(other.body)).not.toContain(key);
+    expect(JSON.stringify((await red.get('/finance/wallet-requests')).body)).not.toContain(key);
+
+    const staff = await admin.get(`/admin/wallet-requests/${id}`);
+    expect(staff.body.documentKey).toBe(key);
+    expectWith(staff.body, ['receipt', 'url']);
+  });
+});
+
 describe('A4b cash-ins by provider as a collector reads them', () => {
   it('names the route in words and carries no provider references, user id or webhook ids', async () => {
     const golden = await signIn(SEED.collector2);

@@ -15,6 +15,7 @@ import {
   typeLabel as requestTypeLabel,
   type WalletRequest,
   type WalletRequestDetail,
+  type WalletRequestReceipt,
 } from '../../../shared/walletRequests';
 import { WalletRequestForm, type SubmittedRequest } from './WalletRequestForms';
 import { TopUpPanel, cryptoReturnFrom } from './MoneyPanels';
@@ -36,6 +37,7 @@ import {
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
+import { PhotoInput, RECEIPT_TYPES, type PhotoRef } from '../../../shared/ui/PhotoInput';
 import {
   IconCalendar,
   IconChart,
@@ -1088,15 +1090,45 @@ function RequestDrawer({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState(false);
   const [cancelled, setCancelled] = useState(false);
+  const [receipt, setReceipt] = useState<WalletRequestReceipt | null>(null);
+  const [receiptSaved, setReceiptSaved] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      setDetail(await api.get<WalletRequestDetail>('/finance/wallet-requests/' + requestId));
+      const next = await api.get<WalletRequestDetail>('/finance/wallet-requests/' + requestId);
+      setDetail(next);
       setError(null);
+      setReceipt(
+        next.type === 'cash_in' && next.receiptAttached
+          ? await api
+              .get<WalletRequestReceipt>('/finance/wallet-requests/' + requestId + '/receipt')
+              .catch(() => null)
+          : null,
+      );
     } catch (e) {
       setError((e as Error).message);
     }
   }, [requestId]);
+
+  async function attachReceipt(files: PhotoRef[]) {
+    const chosen = files[0];
+    if (!chosen) return;
+    URL.revokeObjectURL(chosen.previewUrl);
+    setBusy(true);
+    setReceiptSaved(false);
+    try {
+      await api.put('/finance/wallet-requests/' + requestId + '/receipt', {
+        documentKey: chosen.objectKey,
+      });
+      setReceiptSaved(true);
+      await load();
+      await onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -1142,6 +1174,7 @@ function RequestDrawer({
           <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />
         )}
         {cancelled && <SuccessNote>{t('wallet.requests.cancelled')}</SuccessNote>}
+        {receiptSaved && <SuccessNote>{t('wallet.requests.receiptSaved')}</SuccessNote>}
 
         {!detail && !error && <SkeletonTable rows={5} columns={2} />}
 
@@ -1159,9 +1192,49 @@ function RequestDrawer({
             />
             <dl className="detail-list">
               {detail.type === 'cash_in' ? (
-                <DetailRow label={t('wallet.request.fundingSource')}>
-                  {fundingSourceLabel(t, detail.fundingSource)}
-                </DetailRow>
+                <>
+                  <DetailRow label={t('wallet.request.fundingSource')}>
+                    {fundingSourceLabel(t, detail.fundingSource)}
+                  </DetailRow>
+                  <DetailRow label={t('wallet.requests.receipt')}>
+                    <div className="stack stack--tight">
+                      <span>
+                        {detail.receiptAttached
+                          ? t('wallet.requests.receiptAttached')
+                          : t('wallet.requests.receiptNone')}
+                      </span>
+                      {receipt?.url && (
+                        <span>
+                          <a href={receipt.url} target="_blank" rel="noopener noreferrer">
+                            {t('wallet.requests.receiptOpen')}
+                          </a>{' '}
+                          <span className="field-hint">
+                            {t('wallet.requests.receiptLinkNote', {
+                              minutes: Math.round(receipt.expiresInSeconds / 60),
+                            })}
+                          </span>
+                        </span>
+                      )}
+                      {canCancelRequest(detail.status) && (
+                        <PhotoInput
+                          purpose="cash_in_receipt"
+                          value={[]}
+                          onChange={(files) => void attachReceipt(files)}
+                          hint={t('wallet.request.receiptHint')}
+                          addLabel={
+                            detail.receiptAttached
+                              ? t('wallet.requests.receiptReplace')
+                              : t('wallet.request.receiptAdd')
+                          }
+                          accept={RECEIPT_TYPES}
+                          camera={false}
+                          max={1}
+                          disabled={busy}
+                        />
+                      )}
+                    </div>
+                  </DetailRow>
+                </>
               ) : (
                 <>
                   <DetailRow label={t('wallet.request.destination')}>

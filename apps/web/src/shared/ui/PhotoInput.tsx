@@ -8,7 +8,14 @@ export interface PhotoRef {
   objectKey: string;
   previewUrl: string;
   name: string;
+  isImage?: boolean;
 }
+
+export type UploadPurpose = 'item_intake' | 'parcel' | 'cash_in_receipt';
+
+const IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/heic,image/heif';
+
+export const RECEIPT_TYPES = `application/pdf,${IMAGE_TYPES}`;
 
 export function PhotoInput({
   purpose,
@@ -18,14 +25,20 @@ export function PhotoInput({
   hint,
   max = 6,
   disabled,
+  accept = IMAGE_TYPES,
+  camera = true,
+  addLabel,
 }: {
-  purpose: 'item_intake' | 'parcel';
+  purpose: UploadPurpose;
   value: readonly PhotoRef[];
   onChange: (next: PhotoRef[]) => void;
-  label: string;
+  label?: string;
   hint?: string;
   max?: number;
   disabled?: boolean;
+  accept?: string;
+  camera?: boolean;
+  addLabel?: string;
 }) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +76,7 @@ export function PhotoInput({
             objectKey: res.objectKey,
             previewUrl: URL.createObjectURL(file),
             name: file.name,
+            isImage: file.type.startsWith('image/'),
           });
         } catch (e) {
           setError((e as Error).message);
@@ -83,14 +97,25 @@ export function PhotoInput({
 
   return (
     <div className="field photo-field">
-      <span className="field-label" id={`${id}-label`}>
-        {label}
-      </span>
+      {label && (
+        <span className="field-label" id={`${id}-label`}>
+          {label}
+        </span>
+      )}
 
-      <ul className="photo-strip" aria-labelledby={`${id}-label`}>
+      <ul
+        className="photo-strip"
+        {...(label ? { 'aria-labelledby': `${id}-label` } : { 'aria-label': addLabel ?? t('photos.add') })}
+      >
         {value.map((photo) => (
           <li key={photo.objectKey} className="upload-thumb">
-            <img src={photo.previewUrl} alt={photo.name} />
+            {photo.isImage === false ? (
+              <span className="upload-file">
+                <bdi dir="auto">{photo.name}</bdi>
+              </span>
+            ) : (
+              <img src={photo.previewUrl} alt={photo.name} />
+            )}
             <IconButton
               label={t('photos.remove', { name: photo.name })}
               className="photo-remove"
@@ -118,7 +143,7 @@ export function PhotoInput({
               onClick={() => inputRef.current?.click()}
               aria-describedby={`${id}-hint`}
             >
-              {value.length === 0 ? t('photos.add') : t('photos.addMore')}
+              {addLabel ?? (value.length === 0 ? t('photos.add') : t('photos.addMore'))}
             </Button>
           </li>
         )}
@@ -127,11 +152,11 @@ export function PhotoInput({
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-        capture="environment"
-        multiple
+        accept={accept}
+        {...(camera ? { capture: 'environment' as const } : {})}
+        multiple={max > 1}
         tabIndex={-1}
-        aria-label={t('photos.add')}
+        aria-label={addLabel ?? t('photos.add')}
         className="visually-hidden"
         onChange={(e) => {
           void add(e.target.files);

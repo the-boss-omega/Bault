@@ -45,10 +45,10 @@ const facilityCode = async (client: Client) =>
   ((await client.get('/me/inbound-addresses')).body as { code: string }[])[0]!.code;
 
 describe('who may put bytes in the bucket', () => {
-  it('refuses a customer: no screen a customer sees uploads anything', async () => {
+  it('refuses a customer the staff purposes: a collector uploads nothing but a cash-in receipt', async () => {
     const collector = await signIn(SEED.collector);
-    const res = await upload(collector, 'item_intake');
-    expect(res.status).toBe(403);
+    expect((await upload(collector, 'item_intake')).status).toBe(403);
+    expect((await upload(collector, 'parcel')).status).toBe(403);
   });
 
   it('still lets both staff roles upload, which is what the benches need', async () => {
@@ -158,7 +158,7 @@ describe('a key with a dot segment', () => {
     expect(res.body.error.message).toMatch(/segment/);
   });
 
-  it('still accepts an ordinary file name with dots in it', async () => {
+  it('lets an ordinary file name with dots in it past the segment check, to be judged by who uploaded it', async () => {
     const collector = await signIn(SEED.collector);
     const res = await collector.post('/finance/wallet-requests', {
       type: 'cash_in',
@@ -168,7 +168,9 @@ describe('a key with a dot segment', () => {
       reference: `dots-${Date.now()}`,
       documentKey: 'receipts/2026/receipt.v2.pdf',
     });
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).not.toMatch(/segment/);
+    expect(res.body.error.message).toMatch(/was not uploaded here/);
   });
 });
 
