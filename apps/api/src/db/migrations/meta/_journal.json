@@ -344,6 +344,13 @@
       "when": 1785076400000,
       "tag": "0048_moving_money_is_not_use",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1785076500000,
+      "tag": "0049_fees_that_are_not_use_and_ticket_assignees",
+      "breakpoints": true
     }
   ]
 }

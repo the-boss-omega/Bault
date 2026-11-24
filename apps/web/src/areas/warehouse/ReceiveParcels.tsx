@@ -27,8 +27,10 @@ interface ReceivedParcel {
 
 export function ReceiveParcels({
   onReceived,
+  onRead,
 }: {
   onReceived: (fn: () => Promise<unknown>, ok: string) => Promise<void>;
+  onRead?: () => void;
 }) {
   const { t, locale } = useI18n();
   const precisePointer = useMediaQuery('(pointer: fine)');
@@ -287,7 +289,7 @@ export function ReceiveParcels({
           {next && <span className="field-hint" role="status">{next}</span>}
         </div>
       </div>
-      {toRead && <OcrReview key={toRead} subject="parcel" id={toRead} />}
+      {toRead && <OcrReview key={toRead} subject="parcel" id={toRead} onSaved={onRead} />}
     </Panel>
   );
 }

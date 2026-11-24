@@ -38,7 +38,7 @@ export function billableActions(): BillableAction[] {
     action('parcel_processing', 'required', 'inv/parcel.service.ts', 'Receiving, opening and cataloguing a parcel.'),
     action('parcel_forwarding', 'required', 'inv/parcel.service.ts', 'Forwarding a parcel from a receiving-only address.'),
 
-    action('storage', 'required', 'worker jobs/storage-fee.ts, adm/adm.service.ts', 'Storage after the included period. Without it the daily sweep bills nothing.'),
+    action('storage', 'required', 'worker jobs/storage-fee.ts', 'Storage after the included period. Without it the daily sweep bills nothing.'),
     action('storage_oversized', 'fallback_rule', 'worker jobs/storage-fee.ts', 'Storage terms for oversized items.', 'storage'),
 
     action('service', 'required', 'dis/service.service.ts, mkt/trade.service.ts', 'The flat fee for a service request, and each side of a swap.'),

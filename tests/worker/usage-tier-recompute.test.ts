@@ -105,6 +105,30 @@ describe('the nightly usage tier recompute', () => {
   });
 });
 
+describe('a shipment cancelled after its service was paid for', () => {
+  it('charges a restocking fee that does not count toward the usage tier', async () => {
+    const user = await createUser(pool);
+    await charges(user, 9, 5_000);
+    for (let i = 0; i < 3; i += 1) {
+      await pool.query(
+        `INSERT INTO charge (user_id, action_type, pricing_rule_snapshot, amount, currency, payment_means, status)
+         VALUES ($1, 'shipping_restocking_fee', '{"restockingFee": 1500}'::jsonb, 1500, 'USD', 'wallet', 'settled')`,
+        [user],
+      );
+    }
+    const counts = await pool.query<{ actions: number; spent_minor: string }>(
+      `SELECT actions, spent_minor::text FROM usage_tier_counts($1)`,
+      [user],
+    );
+    expect(counts.rows[0]).toEqual({ actions: 9, spent_minor: '45000' });
+    expect((await tierOf(user)).usage_tier).toBe('bronze');
+
+    await recomputeUsageTiers(pool);
+    expect((await tierOf(user)).usage_tier).toBe('bronze');
+    expect(await history(user)).toEqual([]);
+  });
+});
+
 describe('a paid membership after memberships stopped being sold', () => {
   const allowanceLive = async (membershipId: string) =>
     (

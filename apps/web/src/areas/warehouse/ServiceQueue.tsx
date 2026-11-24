@@ -176,7 +176,7 @@ export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | 
                   </td>
                   <td data-label={t('queue.col.status')}>
                     <StatusBadge tone={STATUS_TONE[q.status] ?? 'neutral'}>
-                      {serviceStatusLabel(t, q.status)}
+                      {serviceStatusLabel(t, q.status, q.type)}
                     </StatusBadge>
                   </td>
                   <td data-label={t('queue.col.actions')}>

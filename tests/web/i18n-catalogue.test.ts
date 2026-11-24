@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -125,5 +127,20 @@ describe('every catalogued string is used', () => {
       (key) => !literals.has(key) && ![...prefixes].some((prefix) => key.startsWith(prefix)),
     );
     expect(unused).toEqual([]);
+  });
+});
+
+describe('brand in the style sheets', () => {
+  it('prints Card Embassy, never Bault, in any generated content', () => {
+    const dir = join(__dirname, '../../apps/web/src');
+    const offenders = readdirSync(dir)
+      .filter((name) => name.endsWith('.css'))
+      .flatMap((name) =>
+        [...readFileSync(join(dir, name), 'utf8').matchAll(/content:\s*([^;]*);/g)]
+          .map((m) => m[1]!)
+          .filter((value) => /bault/i.test(value))
+          .map((value) => `${name}: ${value}`),
+      );
+    expect(offenders).toEqual([]);
   });
 });

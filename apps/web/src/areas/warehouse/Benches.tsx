@@ -810,7 +810,7 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
                     {code(w.code ?? w.id.slice(0, 8))}
                     <span className="hint">
                       {' '}
-                      {t('warehouse.pack.row', {
+                      {t(w.itemIds.length === 1 ? 'warehouse.pack.rowOne' : 'warehouse.pack.row', {
                         owner: w.username ? `@${w.username}` : '—',
                         count: w.itemIds.length,
                       })}

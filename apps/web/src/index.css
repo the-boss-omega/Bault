@@ -1548,6 +1548,10 @@ input[type='search'] {
   gap: var(--sp-4);
 }
 
+.form-grid > * {
+  min-width: 0;
+}
+
 .check {
   display: inline-flex;
   align-items: center;

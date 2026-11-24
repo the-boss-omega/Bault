@@ -17,7 +17,7 @@ describe('PRC a new price rule is held to sane bounds', () => {
 
     const huge = await admin.post('/pricing/rules', rule({ value: 100_000_000 }));
     expect(huge.status).toBe(400);
-    expect(huge.body.error.message).toMatch(/at most \$10000\.00/);
+    expect(huge.body.error.message).toMatch(/at most \$10,000\.00/);
     expect((await admin.post('/pricing/rules', rule({ actionType: 'x'.repeat(81) }))).status).toBe(400);
     expect((await admin.post('/pricing/rules', rule({ itemClass: 'y'.repeat(81) }))).status).toBe(400);
     expect((await admin.post('/pricing/rules', rule({ description: 'z'.repeat(301) }))).status).toBe(400);

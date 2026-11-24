@@ -469,7 +469,7 @@ function TrackingTab({
   );
 
   const selected = useMemo(
-    () => (shipments ?? []).find((shipment) => shipment.id === openId) ?? null,
+    () => (shipments ?? []).find((shipment) => shipment.id === openId || shipment.code === openId) ?? null,
     [shipments, openId],
   );
   const missing = Boolean(openId && shipments !== null && !selected);
@@ -558,7 +558,7 @@ function TrackingTab({
                 {rows.map((shipment) => (
                   <tr
                     key={shipment.id}
-                    className={'is-clickable' + (shipment.id === openId ? ' is-selected' : '')}
+                    className={'is-clickable' + (shipment.id === selected?.id ? ' is-selected' : '')}
                     onClick={() => onOpen(shipment.id)}
                   >
                     <td data-label={t('ss.tracking.col.recipient')} className="dt-primary">
@@ -1014,7 +1014,7 @@ function RequestTable({
         : [
             request.code ?? '',
             serviceTypeLabel(t, request.type),
-            serviceStatusLabel(t, request.status),
+            serviceStatusLabel(t, request.status, request.type),
             request.itemId ? (serials.get(request.itemId) ?? '') : '',
             String((request.typeFields as { summary?: string } | null)?.summary ?? ''),
           ]
@@ -1145,7 +1145,7 @@ function RequestTable({
                   </td>
                   <td data-label={t('services.colStatus')}>
                     <StatusBadge tone={STATUS_TONE[request.status] ?? 'neutral'}>
-                      {serviceStatusLabel(t, request.status)}
+                      {serviceStatusLabel(t, request.status, request.type)}
                     </StatusBadge>
                     {awaitingAnswer(request) && <span className="dt-sub">{t('ship.requests.waitingOnYou')}</span>}
                   </td>

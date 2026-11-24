@@ -156,7 +156,7 @@ describe('booking in a box of different units', () => {
     post.mockResolvedValue([{ id: 'i1', barcode: 'SN-1' }, { id: 'i2', barcode: 'SN-2' }]);
     await user.click(within(bench).getByRole('button', { name: /book in 2 units/i }));
 
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/intake/items/batch', expect.anything()));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/intake/items/batch', expect.anything(), expect.anything()));
     const [, body] = post.mock.calls.find(([p]) => p === '/intake/items/batch')!;
     const sent = (body as { units: Record<string, unknown>[] }).units;
     expect(sent).toHaveLength(2);
@@ -180,6 +180,38 @@ describe('booking in a box of different units', () => {
 
     const [, body] = post.mock.calls.find(([p]) => p === '/intake/items/batch')!;
     expect((body as { units: unknown[] }).units).toHaveLength(1);
+  });
+
+  it('sends one idempotency key per booking, the same key again on a retry, and a fresh one after a success', async () => {
+    const user = userEvent.setup();
+    renderConsole();
+
+    const bench = await waitFor(() => panel(/receive bench/i));
+    await user.type(within(bench).getByLabelText(/owner username/i), 'red');
+    await user.type(within(bench).getByLabelText(/description/i), 'Loose stock');
+
+    const keys = () =>
+      post.mock.calls
+        .filter(([p]) => p === '/intake/items/batch')
+        .map(([, , headers]) => (headers as Record<string, string> | undefined)?.['Idempotency-Key']);
+
+    post.mockRejectedValueOnce(new Error('The network dropped.'));
+    await user.click(within(bench).getByRole('button', { name: /^intake$/i }));
+    await waitFor(() => expect(keys()).toHaveLength(1));
+    expect(keys()[0]).toMatch(/^[0-9a-f-]{36}$/);
+
+    post.mockResolvedValueOnce([{ id: 'i1', barcode: 'SN-1' }]);
+    await user.click(within(bench).getByRole('button', { name: /^intake$/i }));
+    await waitFor(() => expect(keys()).toHaveLength(2));
+    expect(keys()[1]).toBe(keys()[0]);
+
+    await waitFor(() => expect(within(bench).getByLabelText(/description/i)).toHaveValue(''));
+    await user.type(within(bench).getByLabelText(/description/i), 'Loose stock');
+    post.mockResolvedValueOnce([{ id: 'i2', barcode: 'SN-2' }]);
+    await user.click(within(bench).getByRole('button', { name: /^intake$/i }));
+    await waitFor(() => expect(keys()).toHaveLength(3));
+    expect(keys()[2]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keys()[2]).not.toBe(keys()[0]);
   });
 
   it('will not submit with nothing described', async () => {
@@ -236,6 +268,45 @@ describe('photographs', () => {
     }
   });
 
+
+  it('refreshes the parcel table once the label reading of a received parcel is saved', async () => {
+    const user = userEvent.setup();
+    get.mockImplementation((path: string) =>
+      path === '/parcels/p9/ocr'
+        ? Promise.resolve({
+            ready: true,
+            consumedAt: null,
+            fields: { senderName: 'SAM SENDER' },
+            confidence: { senderName: 0.9 },
+          })
+        : apiFor()(path),
+    );
+    post.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === '/media/uploads'
+          ? { objectKey: 'parcels/2026/09/abc.png' }
+          : path === '/parcels/receive/batch'
+            ? [{ id: 'p9', code: 'PKG-NEW', status: 'received' }]
+            : { status: 'saved' },
+      ),
+    );
+    renderConsole();
+
+    const receiving = await waitFor(() => panel(/receive an arrival/i));
+    await user.upload(receiving.querySelector('input[type="file"]') as HTMLInputElement, file());
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/media/uploads', expect.anything()));
+    await user.type(within(receiving).getByLabelText(/username on the parcel/i), 'red');
+    await user.click(within(receiving).getByRole('button', { name: /^receive parcel$/i }));
+
+    await screen.findByRole('heading', { name: 'Read from the label photo' });
+    const queueLoads = () => get.mock.calls.filter(([p]) => p === '/parcels' || String(p).startsWith('/parcels?')).length;
+    const before = queueLoads();
+    await user.click(screen.getByRole('checkbox', { name: /matches the photo/i }));
+    await user.click(screen.getByRole('button', { name: 'Save the checked details' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/parcels/p9/ocr/confirm', expect.anything()));
+    await waitFor(() => expect(queueLoads()).toBeGreaterThan(before));
+  });
   it('uploads on selection and holds the key, never the bytes', async () => {
     const user = userEvent.setup();
     post.mockResolvedValue({ objectKey: 'parcels/2026/09/abc.png' });
@@ -321,7 +392,7 @@ describe('photographs', () => {
     await user.type(within(bench).getByLabelText(/description/i), 'Photographed');
     await user.click(within(bench).getByRole('button', { name: /^intake$/i }));
 
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/intake/items/batch', expect.anything()));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/intake/items/batch', expect.anything(), expect.anything()));
     const [, body] = post.mock.calls.find(([p]) => p === '/intake/items/batch')!;
     const units = (body as { units: { photoKeys: string[] }[] }).units;
     expect(units[0]!.photoKeys).toEqual(['intake/2026/09/xyz.png']);

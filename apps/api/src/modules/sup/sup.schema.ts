@@ -31,7 +31,7 @@ export const supportTicket = pgTable(
     relatedType: text('related_type'),
     relatedId: text('related_id'),
 
-    assignedTo: text('assigned_to'),
+    assignedTo: uuid('assigned_to').references(() => userAccount.id, { onDelete: 'restrict' }),
 
     lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull().defaultNow(),
 

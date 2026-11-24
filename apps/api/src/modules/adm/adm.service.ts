@@ -283,8 +283,31 @@ export class AdmService {
     });
   }
 
-  listStorageFeeRuns() {
-    return this.db.select().from(storageFeeRun).orderBy(sql`${storageFeeRun.runAt} desc`);
+  async listStorageFeeRuns() {
+    const runs = await this.db.select().from(storageFeeRun).orderBy(sql`${storageFeeRun.runAt} desc`);
+    const idsOf = (ids: unknown): string[] => (Array.isArray(ids) ? ids.filter((v): v is string => typeof v === 'string') : []);
+    const ids = [...new Set(runs.flatMap((r) => idsOf(r.chargedItemIds)))];
+    const items =
+      ids.length === 0
+        ? []
+        : await this.db
+            .select({
+              id: item.id,
+              serialNumber: item.serialNumber,
+              description: item.description,
+              ownerUsername: userAccount.username,
+            })
+            .from(item)
+            .innerJoin(userAccount, eq(userAccount.id, item.ownerId))
+            .where(inArray(item.id, ids));
+    const byId = new Map(items.map((it) => [it.id, it]));
+    return runs.map((r) => ({
+      ...r,
+      chargedItems: idsOf(r.chargedItemIds).flatMap((id) => {
+        const it = byId.get(id);
+        return it ? [it] : [];
+      }),
+    }));
   }
   async recentLogins(limit = 200) {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);

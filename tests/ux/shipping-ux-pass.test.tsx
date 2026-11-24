@@ -258,6 +258,14 @@ describe('tracking', () => {
     expect(await screen.findByText('That shipment is not among yours any more. Pick one from the list.')).toBeInTheDocument();
   });
 
+  it('opens the shipment a link names by its code, as a notification links to it', async () => {
+    serve({ '/vault/items': [], '/services/mine': [], '/shipping/shipments': [SHIPMENT] });
+    renderPage('#/shipping-services/tracking?shipment=SHP-AAAA1111');
+
+    expect(await screen.findByText(/With the carrier\. Follow it with the tracking number/)).toBeInTheDocument();
+    expect(screen.queryByText('That shipment is not among yours any more. Pick one from the list.')).not.toBeInTheDocument();
+  });
+
   it('takes one Tab stop per row, on its Details button', async () => {
     serve({ '/vault/items': [], '/services/mine': [], '/shipping/shipments': [SHIPMENT] });
     renderPage('#/shipping-services/tracking');

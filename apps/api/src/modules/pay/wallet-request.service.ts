@@ -61,6 +61,7 @@ export interface WalletRequestFilters {
 }
 
 export const REVIEW_QUEUE_MAX_LIMIT = 500;
+export const REVIEW_QUEUE_DEFAULT_LIMIT = 100;
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -316,10 +317,9 @@ export class WalletRequestService {
       .leftJoin(userAccount, eq(userAccount.id, walletRequest.userId))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(walletRequest.createdAt), desc(walletRequest.id));
-    const rows =
-      filters.limit === undefined
-        ? await query
-        : await query.limit(Math.min(Math.max(1, filters.limit), REVIEW_QUEUE_MAX_LIMIT));
+    const rows = await query.limit(
+      Math.min(Math.max(1, filters.limit ?? REVIEW_QUEUE_DEFAULT_LIMIT), REVIEW_QUEUE_MAX_LIMIT),
+    );
 
     return rows.map((row) => ({
       ...row.request,

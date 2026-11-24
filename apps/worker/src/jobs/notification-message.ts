@@ -298,7 +298,7 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     case 'swap_proposed':
       return `Another collector proposed a swap with you — review it in the marketplace.`;
     case 'swap_completed':
-      return `Your swap was completed and ownership of the items has transferred.`;
+      return `Your swap${code(p, 'transactionCode') ? ` ${code(p, 'transactionCode')}` : ''} was completed and ownership of the items has transferred.`;
     case 'swap_rejected': {
       const gift = str(p, 'kind') === 'gift';
       if (str(p, 'rejectedBy') === 'proposer') {
@@ -311,7 +311,7 @@ export function notificationMessage(eventType: string, payload: Payload | null):
         : `Your swap proposal was turned down. Your cards stay in your vault.`;
     }
     case 'transfer_completed':
-      return `Your item transfer was completed and ownership has changed.`;
+      return `Your item transfer${code(p, 'transactionCode') ? ` ${code(p, 'transactionCode')}` : ''} was completed and ownership has changed.`;
     case 'buyout_quoted':
       return amount != null
         ? `Card Embassy offers ${usd(amount)} to buy your card outright on ${named(p, 'request', 'requestCode', 'your buyout request')}. Nothing changes hands until you accept it.`

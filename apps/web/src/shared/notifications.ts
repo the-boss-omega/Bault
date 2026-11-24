@@ -90,6 +90,48 @@ export function notificationBarcode(content: unknown): string | null {
   return typeof barcode === 'string' && /^[A-Z]{2,4}-[A-Z0-9]+-\d{3,}$/.test(barcode) ? barcode : null;
 }
 
+export interface NotificationLink {
+  section: string;
+  tab: string;
+  params: Record<string, string>;
+  label: MessageKey;
+}
+
+const SHIPMENT_EVENTS = new Set([
+  'shipment_out',
+  'shipment_delivered',
+  'shipment_exception',
+  'shipment_cancelled',
+  'shipment_expired',
+  'direct_ship_booked',
+]);
+
+const contentCode = (content: unknown, key: string): string | null => {
+  if (content == null || typeof content !== 'object') return null;
+  const value = (content as Record<string, unknown>)[key];
+  return typeof value === 'string' && /^[A-Z][A-Z0-9]*-[A-Z0-9-]+$/.test(value) ? value : null;
+};
+
+export function notificationLink(eventType: string, content: unknown): NotificationLink | null {
+  if (eventType.startsWith('parcel_')) {
+    const code = contentCode(content, 'parcelCode');
+    return code ? { section: 'inbound', tab: 'parcels', params: { parcel: code }, label: 'notif.openParcel' } : null;
+  }
+  if (SHIPMENT_EVENTS.has(eventType)) {
+    const code = contentCode(content, 'shipmentCode');
+    return code
+      ? { section: 'shipping-services', tab: 'tracking', params: { shipment: code }, label: 'notif.openShipment' }
+      : null;
+  }
+  if (eventType === 'offer_received' || eventType === 'offer_countered') {
+    return { section: 'marketplace', tab: 'offers', params: {}, label: 'notif.openOffers' };
+  }
+  if (eventType === 'swap_proposed' || eventType === 'swap_completed' || eventType === 'transfer_completed') {
+    return { section: 'marketplace', tab: 'trade', params: {}, label: 'notif.openTrades' };
+  }
+  return null;
+}
+
 export type NotificationGlyph = 'card' | 'market' | 'escrow' | 'wallet' | 'shipping' | 'inbox' | 'help' | 'bell';
 
 /** What kind of thing an event is about, for the mark in front of it: by the way its name starts. */
