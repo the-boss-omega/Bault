@@ -30,7 +30,8 @@ describe('MKT the Bault store', () => {
     const bought = await collector.post(`/marketplace/house/listings/${p.id}/purchase`);
     expect(bought.status).toBe(201);
     expect(bought.body.serialNumber).toMatch(/^SN-/);
-    expect(bought.body.barcode).toBe(bought.body.serialNumber);
+    expect(bought.body.barcode).toBeUndefined();
+    expect(bought.body.transactionId).toBeUndefined();
     expect(bought.body.orderCode).toMatch(/^ORD-/);
 
     const after = (await collector.get('/finance/wallet')).body.amount as number;
@@ -82,7 +83,8 @@ describe('MKT the Bault store', () => {
     const queue = (await operator.get('/marketplace/house/orders/queue')).body as Array<Record<string, unknown>>;
     const row = queue.find((o) => o.itemId === bought.itemId);
     expect(row).toBeDefined();
-    expect(row!.barcode).toBe(bought.barcode);
+    expect(row!.serialNumber).toBe(bought.serialNumber);
+    expect(row!.barcode).toBe(bought.serialNumber);
     expect(row!.photoRef).toBe('SN-CL10-0005');
 
     const stowed = await operator.post(`/marketplace/house/orders/${row!.id}/stow`, { autoStow: true });

@@ -52,6 +52,41 @@ describe('the sentence a collector reads for each event', () => {
     noIds(toSeller);
   });
 
+  it('tells a buyer their offer was accepted, and either side that an offer is off the table', () => {
+    const accepted = notificationMessage('offer_accepted', {
+      listingId: LISTING,
+      amount: 20_000,
+      itemDescription: 'Rayquaza ex #97/97',
+      recipientIds: [PERSON],
+    });
+    expect(accepted).toBe('The seller accepted your offer of $200.00 on Rayquaza ex #97/97. It is paid for and in your vault.');
+    noIds(accepted);
+    expect(notificationMessage('offer_rejected', { amount: 15_000, rejectedBy: 'seller', proposedBy: 'buyer' })).toBe(
+      'The seller turned down your offer of $150.00 on the card. You can make a new offer.',
+    );
+    expect(notificationMessage('offer_rejected', { amount: 15_000, rejectedBy: 'buyer', proposedBy: 'buyer' })).toBe(
+      'The buyer withdrew their offer of $150.00 on the card. Your listing stays up.',
+    );
+    expect(notificationMessage('offer_rejected', { rejectedBy: 'buyer', proposedBy: 'seller', itemDescription: 'A slab' })).toBe(
+      'The buyer turned down your counter-offer on A slab. Your listing stays up.',
+    );
+  });
+
+  it('tells the other side when a swap or a gift is called off', () => {
+    expect(notificationMessage('swap_rejected', { kind: 'swap', rejectedBy: 'responder', recipientIds: [PERSON] })).toBe(
+      'Your swap proposal was turned down. Your cards stay in your vault.',
+    );
+    expect(notificationMessage('swap_rejected', { kind: 'gift', rejectedBy: 'proposer' })).toBe(
+      'A gift that was waiting for you was withdrawn by the collector who offered it.',
+    );
+  });
+
+  it('tells the other side when a deal is called off before it is funded', () => {
+    const cancelled = notificationMessage('escrow_cancelled', { dealCode: 'ESC-7K2M9QRS', reason: 'Changed my mind.' });
+    expect(cancelled).toBe('Deal ESC-7K2M9QRS was called off before any money was held. The reason given: Changed my mind.');
+    noIds(cancelled);
+  });
+
   it('writes a buyout quote and each custom request step as a sentence', () => {
     expect(
       notificationMessage('buyout_quoted', { requestCode: 'SR-7K2M9QRS', amount: 12_000 }),

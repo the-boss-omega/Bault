@@ -536,6 +536,43 @@ describe('A8 marketplace reads as a collector receives them', () => {
   });
 });
 
+describe('A8b marketplace answers a collector receives', () => {
+  it('answers an offer, a counter and a swap proposal without either party’s account id', async () => {
+    const operator = await signIn(SEED.operator);
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+    const item = await intakeFor(operator, SEED.collector, { description: 'Countered view card' });
+    const listed = await red.post('/marketplace/listings', { itemId: item.id, askingPrice: 90_00 });
+    expect(listed.status).toBe(201);
+    await fundWallet(SEED.collector2, 20_000);
+
+    const offered = await golden.post(`/marketplace/listings/${listed.body.id}/offers`, { amount: 60_00 });
+    expect(offered.status).toBe(201);
+    expectWithout(offered.body, ['buyerId', 'sellerId', 'parentOfferId']);
+    expectWith(offered.body, ['id', 'amount', 'currency', 'status', 'proposedBy', 'createdAt']);
+
+    const countered = await red.post(`/marketplace/offers/${offered.body.id}/respond`, { action: 'counter', amount: 80_00 });
+    expect(countered.status).toBe(201);
+    expectWithout(countered.body, ['buyerId', 'sellerId', 'parentOfferId']);
+    expectWith(countered.body, ['id', 'amount', 'currency', 'status', 'proposedBy', 'createdAt']);
+    expect(countered.body.proposedBy).toBe('seller');
+
+    const mine = await intakeFor(operator, SEED.collector2, { description: 'Swap view card offered' });
+    const theirs = await intakeFor(operator, SEED.collector, { description: 'Swap view card requested' });
+    const proposed = await golden.post('/marketplace/swaps', {
+      responderUsername: 'red',
+      offeredItemIds: [mine.id],
+      requestedItemIds: [theirs.id],
+    });
+    expect(proposed.status).toBe(201);
+    expectWithout(proposed.body, ['proposerId', 'responderId', 'ownerId']);
+    expect(proposed.body.proposerUsername).toBe('golden');
+    expect(proposed.body.responderUsername).toBe('red');
+    expect(proposed.body.offeredItems.map((i: { id: string }) => i.id)).toEqual([mine.id]);
+    expect(proposed.body.requestedItems.map((i: { id: string }) => i.id)).toEqual([theirs.id]);
+  });
+});
+
 describe('A9 the pricing rule table', () => {
   it('is for admins only, while the public price list stays open', async () => {
     const red = await signIn(SEED.collector);
