@@ -196,6 +196,8 @@ export class HumanFulfilmentService {
         );
       }
 
+      await this.profiles.loadShippableItems(s.userId, (s.itemIds as string[]) ?? [], tx as Database);
+      await this.shipments.assertItemsFree(s.userId, (s.itemIds as string[]) ?? [], s.id, tx as Database);
       await this.ledger.lockWallet(s.userId, tx as Database);
       const balance = await this.ledger.balanceOf(s.userId, tx);
       if (balance.amount < s.quoteMinor) {
@@ -211,7 +213,15 @@ export class HumanFulfilmentService {
         .values({
           userId: s.userId,
           actionType: 'shipping',
-          pricingRuleSnapshot: { whiteGlove: true, quoteMinor: s.quoteMinor, quotedBy: s.quotedBy },
+          pricingRuleSnapshot: {
+            whiteGlove: true,
+            quoteMinor: s.quoteMinor,
+            quotedBy: s.quotedBy,
+            tier: await this.pricing.tierOf(s.userId, tx as Database),
+            discountBps: 0,
+            listMinor: s.quoteMinor,
+            chargedMinor: s.quoteMinor,
+          },
           amount: s.quoteMinor!,
           currency: s.currency ?? DEFAULT_CURRENCY,
           paymentMeans: 'wallet',

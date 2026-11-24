@@ -473,6 +473,11 @@ describe('A7 shipping as a collector reads it', () => {
     expectWithout(created.body, SHIPMENT_DROPPED);
     expectWith(created.body, ['id', 'code', 'status', 'itemIds']);
 
+    const patched = await red.patch(`/shipping/shipments/${created.body.id}`, { recipientName: 'Red A. Ashwood' });
+    expect(patched.status).toBe(200);
+    expectWithout(patched.body, SHIPMENT_DROPPED);
+    expectWith(patched.body, ['id', 'code', 'status', 'itemIds', 'recipientName']);
+
     const rates = await red.get(`/shipping/shipments/${created.body.id}/rates`);
     expectWithout(rates.body, ['providerShipmentId', 'providerRateId']);
 

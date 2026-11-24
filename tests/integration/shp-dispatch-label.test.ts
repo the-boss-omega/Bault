@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
 import { activeAccount, passwordOnly } from './helpers/mfa';
-import { closeDb, honouredMembership } from './helpers/db';
+import { closeDb, honouredMembership, sql as dbSql } from './helpers/db';
 import type { LabelResult, Rate, RateRequest, ShippingAdapter, ShippingCallOptions, TrackingStatus } from '@bault/adapters';
 import { createDb, type Database } from '../../apps/api/src/db/client';
 import { CustodyService } from '../../apps/api/src/modules/cst/custody.service';
@@ -373,6 +373,16 @@ describe('a label refused at dispatch', () => {
     expect(again.status).toBe(201);
     expect(again.body).toMatchObject({ status: 'rates_selected', cost: dearer.totalMinor });
     expect(before - (await walletOf(owner))).toBe(dearer.totalMinor - chosen.totalMinor);
+    const [difference] = await dbSql<{ amount: number; snapshot: Record<string, unknown> }>(
+      "select amount, pricing_rule_snapshot as snapshot from charge where reference_id = $1 and pricing_rule_snapshot ? 'rateChangeAfterRefusedLabel'",
+      [shipmentId],
+    );
+    expect(Number(difference!.amount)).toBe(dearer.totalMinor - chosen.totalMinor);
+    expect(difference!.snapshot).toMatchObject({
+      listMinor: dearer.totalMinor - chosen.totalMinor,
+      chargedMinor: dearer.totalMinor - chosen.totalMinor,
+      newTotal: dearer.totalMinor,
+    });
   });
 
   it('refuses a dearer rate the wallet cannot cover, and changes nothing', async () => {
