@@ -158,4 +158,4 @@ These small files need no separate time.
 
 `scripts/test.mjs` is what `pnpm test` runs, and 2.10 describes it with the suites. `packages/adapters/src/index.ts` and `packages/config/src/index.ts` are barrels, files that only re-export. `packages/adapters/package.json`, `packages/config/package.json` and `packages/contracts/package.json` are the package manifests. CI and every Dockerfile install from `pnpm-lock.yaml` with `--frozen-lockfile`, so a stale lockfile fails the install.
 
-`.gitignore` also ignores the `CURRENT_TAG` and `PREVIOUS_TAG` files that `infra/production/deploy.sh` writes. `.specify/`, `.github/agents/`, `.github/prompts/`, `.agents/`, `.claude/` and `skills-lock.json` are coding-agent tooling. `docs/` and `specs/` are documents.
+`.gitignore` also ignores the `CURRENT_TAG` and `PREVIOUS_TAG` files that `infra/production/deploy.sh` writes. `.specify/`, `.github/agents/`, `.github/prompts/`, `.agents/` and `skills-lock.json` are coding-agent tooling. `docs/` and `specs/` are documents.

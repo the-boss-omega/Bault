@@ -2,6 +2,8 @@
 
 This guide is for the day Card Embassy passes from its current owner to the customer, and for the first weeks after. It is written for the customer's technical person, who is comfortable in a terminal but has never seen this repository, working next to the owner.
 
+The pull request numbers in this guide (for example #117) refer to the development repository `the-boss-omega/Bault`, where the work was reviewed and merged. The product was then published as one fresh commit in `the-boss-omega/card-embassy`, which is the repository the customer receives; the development repository stays archived so that those references keep resolving.
+
 Read it once from top to bottom before handover day. Then work through it in order. Every step is a command or a click, followed by what you should see when it worked.
 
 Two names appear throughout. **Card Embassy** is the product that people see. **bault** is the internal name, and it stays in package names, paths, the database, image names and server users (`bault-api`, `/opt/bault`, `bault_owner`). Do not rename them.

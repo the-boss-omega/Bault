@@ -40,7 +40,6 @@ assets1
 
 # AI tool folders. Kept in the repository (that is a separate decision) and
 # kept out of every image.
-.claude
 .agents
 .specify
 .github/agents
