@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -10,14 +10,7 @@ import { item } from '../cst/cst.schema';
 import { listing } from './mkt.schema';
 import { closeOpenOffers } from './open-offers';
 import { DEFAULT_CURRENCY } from '../pay/ledger.service';
-import { escrowDeal } from '../esc/escrow.schema';
-import { shipment } from '../shp/shp.schema';
-import { ShipmentService } from '../shp/shipment.service';
-import { serviceRequest } from '../dis/dis.schema';
-
-const OPEN_ESCROW_STATUSES = ['proposed', 'agreed', 'funded', 'inspecting', 'awaiting_release'] as const;
-
-const OWNERSHIP_CHANGING_SERVICES = ['buyout', 'consignment', 'donation'] as const;
+import { assertItemUncommitted } from '../../shared/item-commitment';
 
 @Injectable()
 export class ListingService {
@@ -36,7 +29,7 @@ export class ListingService {
       if (it.lifecycleState !== 'stored') {
         throw new AppError(ErrorCode.CONFLICT, 'Only a stored item can be listed', 409);
       }
-      await this.assertNotCommitted(tx as Database, itemId);
+      await assertItemUncommitted(tx as Database, itemId);
 
       await this.custody.changeState(tx, itemId, 'listed', sellerId, 'listed for sale');
       const [created] = await tx
@@ -45,45 +38,6 @@ export class ListingService {
         .returning();
       return created;
     });
-  }
-
-  private async assertNotCommitted(tx: Database, itemId: string): Promise<void> {
-    const committed = (to: string) =>
-      new AppError(ErrorCode.ITEM_COMMITTED, `This card is already committed to ${to}, so it cannot be listed.`, 409, {
-        itemId,
-      });
-
-    const [deal] = await tx
-      .select({ code: escrowDeal.code })
-      .from(escrowDeal)
-      .where(and(eq(escrowDeal.itemId, itemId), inArray(escrowDeal.status, [...OPEN_ESCROW_STATUSES])))
-      .limit(1);
-    if (deal) throw committed(`escrow deal ${deal.code}`);
-
-    const [parcel] = await tx
-      .select({ code: shipment.code })
-      .from(shipment)
-      .where(
-        and(
-          sql`${shipment.itemIds} @> ${JSON.stringify([itemId])}::jsonb`,
-          inArray(shipment.status, [...ShipmentService.OPEN_STATUSES]),
-        ),
-      )
-      .limit(1);
-    if (parcel) throw committed(`shipment ${parcel.code ?? ''}`.trim());
-
-    const [request] = await tx
-      .select({ code: serviceRequest.code, type: serviceRequest.type })
-      .from(serviceRequest)
-      .where(
-        and(
-          eq(serviceRequest.itemId, itemId),
-          inArray(serviceRequest.type, [...OWNERSHIP_CHANGING_SERVICES]),
-          inArray(serviceRequest.status, ['requested', 'in_progress']),
-        ),
-      )
-      .limit(1);
-    if (request) throw committed(`a ${request.type} (${request.code})`);
   }
 
   async reprice(sellerId: string, listingId: string, askingPrice: number) {

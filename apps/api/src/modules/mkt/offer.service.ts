@@ -16,6 +16,20 @@ type Side = 'buyer' | 'seller';
 
 const ONE_OPEN_OFFER_PER_BUYER = 'offer_one_open_per_buyer';
 
+const NOT_FOR_SALE = 'This listing is no longer for sale.';
+
+function offerView(o: typeof offer.$inferSelect) {
+  return {
+    id: o.id,
+    listingId: o.listingId,
+    amount: o.amount,
+    currency: o.currency,
+    status: o.status,
+    proposedBy: o.proposedBy,
+    createdAt: o.createdAt,
+  };
+}
+
 @Injectable()
 export class OfferService {
   constructor(
@@ -27,7 +41,7 @@ export class OfferService {
 
   async submit(buyerId: string, listingId: string, amount: number) {
     const [l] = await this.db.select().from(listing).where(eq(listing.id, listingId)).limit(1);
-    if (!l || l.status !== 'active') throw new AppError(ErrorCode.CONFLICT, 'Listing not active', 409);
+    if (!l || l.status !== 'active') throw new AppError(ErrorCode.CONFLICT, NOT_FOR_SALE, 409);
     if (l.sellerId === buyerId) {
       throw new AppError(ErrorCode.SELF_DEALING_FORBIDDEN, 'You cannot offer on your own listing', 403);
     }
@@ -54,12 +68,12 @@ export class OfferService {
     const listingId = l.id;
     return this.db.transaction(async (tx) => {
       const [still] = await tx.select({ status: listing.status }).from(listing).where(eq(listing.id, listingId)).for('share').limit(1);
-      if (still?.status !== 'active') throw new AppError(ErrorCode.CONFLICT, 'Listing not active', 409);
+      if (still?.status !== 'active') throw new AppError(ErrorCode.CONFLICT, NOT_FOR_SALE, 409);
       const [created] = await tx
         .insert(offer)
         .values({ listingId, buyerId, amount, currency: l.currency, status: 'pending', proposedBy: 'buyer' })
         .returning();
-      if (!created) throw AppError.validation('Failed to create offer');
+      if (!created) throw AppError.validation('The offer could not be saved. Try again.');
 
       const [listed] = await tx
         .select({ barcode: item.barcode, description: item.description })
@@ -79,7 +93,7 @@ export class OfferService {
           itemDescription: listed?.description,
         },
       });
-      return created;
+      return offerView(created);
     });
   }
 
@@ -138,17 +152,30 @@ export class OfferService {
   }
 
   async accept(actorId: string, offerId: string, idempotencyKey: string) {
-    const { o, l, side } = await this.loadParticipating(actorId, offerId);
+    const { o, side } = await this.loadParticipating(actorId, offerId);
     OfferService.assertNotProposer(side, o.proposedBy, o.amount);
 
     await this.assertCanCover(o.buyerId, o.amount, 'accept');
-    const result = await this.purchase.purchase(o.buyerId, o.listingId, idempotencyKey, o.amount, async (tx) => {
+    const result = await this.purchase.purchase(o.buyerId, o.listingId, idempotencyKey, o.amount, async (tx, sold) => {
       const [accepted] = await tx
         .update(offer)
         .set({ status: 'accepted', updatedAt: new Date() })
         .where(and(eq(offer.id, offerId), eq(offer.status, 'pending')))
         .returning({ id: offer.id });
       if (!accepted) throw new AppError(ErrorCode.CONFLICT, 'That offer is no longer open.', 409);
+      if (side === 'seller') {
+        await this.outbox.emit(tx, {
+          aggregateType: 'offer',
+          aggregateId: offerId,
+          eventType: 'offer_accepted',
+          payload: {
+            listingId: o.listingId,
+            amount: o.amount,
+            itemDescription: sold.itemDescription,
+            recipientIds: [o.buyerId],
+          },
+        });
+      }
     });
 
     return {
@@ -161,28 +188,46 @@ export class OfferService {
   }
 
   async reject(actorId: string, offerId: string) {
-    const { side } = await this.loadParticipating(actorId, offerId);
-    const [rejected] = await this.db
-      .update(offer)
-      .set({ status: 'rejected', updatedAt: new Date() })
-      .where(and(eq(offer.id, offerId), eq(offer.status, 'pending')))
-      .returning({ id: offer.id });
-    if (!rejected) throw new AppError(ErrorCode.CONFLICT, 'That offer is no longer open.', 409);
-    return { status: 'rejected', by: side };
+    const { o, l, side } = await this.loadParticipating(actorId, offerId);
+    return this.db.transaction(async (tx) => {
+      const [rejected] = await tx
+        .update(offer)
+        .set({ status: 'rejected', updatedAt: new Date() })
+        .where(and(eq(offer.id, offerId), eq(offer.status, 'pending')))
+        .returning({ id: offer.id });
+      if (!rejected) throw new AppError(ErrorCode.CONFLICT, 'That offer is no longer open.', 409);
+      const [listed] = await tx.select({ description: item.description }).from(item).where(eq(item.id, l.itemId)).limit(1);
+      await this.outbox.emit(tx, {
+        aggregateType: 'offer',
+        aggregateId: offerId,
+        eventType: 'offer_rejected',
+        payload: {
+          listingId: o.listingId,
+          amount: o.amount,
+          rejectedBy: side,
+          proposedBy: o.proposedBy,
+          itemDescription: listed?.description,
+          recipientIds: [side === 'seller' ? o.buyerId : l.sellerId],
+        },
+      });
+      return { status: 'rejected', by: side };
+    });
   }
 
   async counter(actorId: string, offerId: string, amount: number) {
     const { o, l, side } = await this.loadParticipating(actorId, offerId);
-    if (side === 'buyer') {
-      if (amount > l.askingPrice) {
-        throw AppError.validation(
-          `The asking price is ${formatMinor(l.askingPrice)}. You can buy it now for that — a counter above it would only cost you more.`,
-        );
-      }
-      await this.assertCanCover(o.buyerId, amount, 'offer');
-    }
+    OfferService.assertAtMostAsking(side, amount, l.askingPrice);
+    if (side === 'buyer') await this.assertCanCover(o.buyerId, amount, 'offer');
 
     return this.db.transaction(async (tx) => {
+      const [still] = await tx
+        .select({ status: listing.status, askingPrice: listing.askingPrice })
+        .from(listing)
+        .where(eq(listing.id, o.listingId))
+        .for('share')
+        .limit(1);
+      if (still?.status !== 'active') throw new AppError(ErrorCode.CONFLICT, NOT_FOR_SALE, 409);
+      OfferService.assertAtMostAsking(side, amount, still.askingPrice);
       const [countered] = await tx
         .update(offer)
         .set({ status: 'countered', updatedAt: new Date() })
@@ -201,7 +246,7 @@ export class OfferService {
           proposedBy: side,
         })
         .returning();
-      if (!child) throw AppError.validation('Failed to create counter-offer');
+      if (!child) throw AppError.validation('The counter-offer could not be saved. Try again.');
       const [listed] = await tx
         .select({ description: item.description })
         .from(item)
@@ -221,7 +266,16 @@ export class OfferService {
           recipientIds: [side === 'seller' ? o.buyerId : l.sellerId],
         },
       });
-      return child;
+      return offerView(child);
     });
+  }
+
+  private static assertAtMostAsking(side: Side, amount: number, askingPrice: number): void {
+    if (amount <= askingPrice) return;
+    throw AppError.validation(
+      side === 'buyer'
+        ? `The asking price is ${formatMinor(askingPrice)}. You can buy it now for that — a counter above it would only cost you more.`
+        : `The asking price is ${formatMinor(askingPrice)}. A counter cannot ask more than that; change the asking price instead.`,
+    );
   }
 }
