@@ -7,7 +7,6 @@ import { ErrorCode } from '../../shared/errors/error-codes';
 import { BILLING_PORT, type BillingPort, type ChargeOutcome } from '../../shared/billing/billing.port';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { ConfirmationService } from '../../shared/confirmation/confirmation.service';
-import { assertItemUncommitted } from '../../shared/item-commitment';
 import { formatMinor } from '../../shared/money';
 import { CustodyService } from '../cst/custody.service';
 import { OutboxService } from '../not/outbox/outbox.service';
@@ -15,10 +14,9 @@ import { item } from '../cst/cst.schema';
 import { charge } from '../pay/pay.schema';
 import { swapProposal, transaction } from './mkt.schema';
 import { DEFAULT_CURRENCY, LedgerService } from '../pay/ledger.service';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
 
 type Kind = 'swap' | 'gift';
-
-const COMMITTED_REFUSAL = 'so it cannot be swapped or given away';
 
 @Injectable()
 export class TradeService {
@@ -42,6 +40,7 @@ export class TradeService {
     }
     await this.assertTradable(proposerId, offeredItemIds, 'swap', null);
     await this.assertTradable(responder.id, requestedItemIds, 'swap', responder.username);
+    await assertItemsUncommitted(this.db, [...offeredItemIds, ...requestedItemIds], 'offered in a swap');
 
     return this.db.transaction(async (tx) => {
       const [s] = await tx
@@ -64,6 +63,7 @@ export class TradeService {
       throw new AppError(ErrorCode.SELF_DEALING_FORBIDDEN, 'You cannot give a card to yourself.', 403);
     }
     await this.assertTradable(fromUserId, [itemId], 'gift', null);
+    await assertItemsUncommitted(this.db, [itemId], 'given away');
     return this.confirmation.issue(fromUserId, 'transfer', { itemId, toUserId });
   }
 
@@ -73,6 +73,8 @@ export class TradeService {
       'transfer',
       confirmationToken,
     );
+    await this.assertTradable(fromUserId, [itemId], 'gift', null);
+    await assertItemsUncommitted(this.db, [itemId], 'given away');
     const [s] = await this.db
       .insert(swapProposal)
       .values({ proposerId: fromUserId, responderId: toUserId, offeredItemIds: [itemId], requestedItemIds: [], proposerApproved: true, responderApproved: false })
@@ -104,7 +106,7 @@ export class TradeService {
       }
 
       await this.custody.lockItems(tx, [...offered, ...requested]);
-      for (const id of [...offered, ...requested]) await assertItemUncommitted(tx as Database, id, COMMITTED_REFUSAL);
+      await assertItemsUncommitted(tx as Database, [...offered, ...requested], isTransfer ? 'given away' : 'swapped', { swapId });
       for (const id of offered) {
         await this.custody.transferOwnership(tx, id, s.responderId, actorId, isTransfer ? 'gift transfer' : 'swap', {
           ownerId: s.proposerId,
@@ -226,7 +228,6 @@ export class TradeService {
           409,
         );
       }
-      await assertItemUncommitted(this.db, id, COMMITTED_REFUSAL);
     }
   }
 }

@@ -9,8 +9,8 @@ import { CustodyService } from '../cst/custody.service';
 import { item } from '../cst/cst.schema';
 import { listing } from './mkt.schema';
 import { closeOpenOffers } from './open-offers';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
 import { DEFAULT_CURRENCY } from '../pay/ledger.service';
-import { assertItemUncommitted } from '../../shared/item-commitment';
 
 @Injectable()
 export class ListingService {
@@ -29,7 +29,7 @@ export class ListingService {
       if (it.lifecycleState !== 'stored') {
         throw new AppError(ErrorCode.CONFLICT, 'Only a stored item can be listed', 409);
       }
-      await assertItemUncommitted(tx as Database, itemId);
+      await assertItemsUncommitted(tx as Database, [itemId], 'listed');
 
       await this.custody.changeState(tx, itemId, 'listed', sellerId, 'listed for sale');
       const [created] = await tx

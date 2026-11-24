@@ -183,6 +183,7 @@ export class AccountingService {
                  WHEN l.type = 'service_refund' AND s.type::text = 'custom' THEN 'custom_request_fee'
                  WHEN l.type = 'service_refund' THEN 'service_charge'
                  WHEN l.type = 'interest' THEN 'interest'
+                 WHEN c.action_type = 'custom' THEN 'custom_request_fee'
                  WHEN l.type = 'service_charge' THEN 'service_charge'
                  WHEN c.pricing_rule_snapshot ? 'escrowFeeBps' THEN 'escrow_fee'
                  WHEN c.pricing_rule_snapshot ->> 'cashOutFee' = 'true' THEN 'cash_out_fee'

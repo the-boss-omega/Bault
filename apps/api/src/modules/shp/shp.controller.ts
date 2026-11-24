@@ -7,6 +7,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsISO8601,
   IsObject,
   IsOptional,
   IsString,
@@ -100,12 +101,12 @@ class DirectShipDto {
 class HandDeliveryDto {
   @IsArray() @ArrayNotEmpty() @IsString({ each: true }) itemIds!: string[];
   @IsString() @MaxLength(400) pickupAddress!: string;
-  @IsString() pickupFrom!: string;
-  @IsString() pickupTo!: string;
+  @IsISO8601({}, { message: 'Give the start of the pickup window as a date and time.' }) pickupFrom!: string;
+  @IsISO8601({}, { message: 'Give the end of the pickup window as a date and time.' }) pickupTo!: string;
   @IsString() @MaxLength(400) deliveryAddress!: string;
   @IsOptional() @IsString() @MaxLength(40) contactPhone?: string;
-  @IsString() deliverFrom!: string;
-  @IsString() deliverTo!: string;
+  @IsISO8601({}, { message: 'Give the start of the delivery window as a date and time.' }) deliverFrom!: string;
+  @IsISO8601({}, { message: 'Give the end of the delivery window as a date and time.' }) deliverTo!: string;
   @IsString() @MaxLength(2) destinationCountry!: string;
   @IsOptional() @IsString() @MaxLength(140) recipientName?: string;
   @IsOptional() @IsString() @MaxLength(500) customerNotes?: string;
@@ -287,8 +288,10 @@ export class ShpController {
   }
 
   @Patch('shipments/:id')
-  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateShipmentDto) {
-    return this.edits.update(id, user, dto);
+  async update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateShipmentDto) {
+    const row = await this.edits.update(id, user, dto);
+    const staff = user.role === 'warehouse_operator' || user.role === 'admin';
+    return staff ? row : collectorShipmentRowView(row);
   }
 
   @Post('shipments/:id/merge')

@@ -22,6 +22,7 @@ import {
 } from './escrow-terms';
 import { formatMinor } from '../../shared/money';
 import { MembershipService } from '../mem/membership.service';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
 
 type Deal = typeof escrowDeal.$inferSelect;
 
@@ -415,6 +416,7 @@ export class EscrowService {
         )
         .limit(1);
       if (other) throw new AppError(ErrorCode.CONFLICT, `That item is already in deal ${other.code}`, 409);
+      await assertItemsUncommitted(tx as Database, [itemId], 'taken into escrow', { escrowDealId: dealId });
 
       await tx
         .update(escrowDeal)
