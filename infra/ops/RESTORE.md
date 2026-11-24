@@ -166,7 +166,8 @@ database and never over the live one.
    ```
 
    (`restore` asks for the database name. Piping it is fine in a drill and
-   deliberate in an incident.)
+   deliberate in an incident. It restores in one transaction, so a restore
+   that fails part-way leaves the database as it was, and can be run again.)
 
 4. **Check the application can use it:** step 6 of Drill 1, against
    `bault_restore` as `bault_app`.
@@ -179,8 +180,17 @@ database and never over the live one.
 ## In a real incident
 
 1. **Stop the worker first**, because it moves money on a schedule. Then stop
-   the API: `docker compose stop worker api`. Caddy now answers 502, which is
-   correct.
+   the API. On the host, as `deploy`, with the `bault` alias from
+   `infra/production/README.md` ("Day to day"):
+
+   ```
+   cd /opt/bault
+   alias bault='BAULT_TAG=$(cat /opt/bault/CURRENT_TAG) docker compose --env-file /etc/bault/production.env -f /opt/bault/infra/production/compose.yml'
+   bault stop worker api
+   ```
+
+   On Google Cloud add `-f /opt/bault/infra/gcp/compose.gcp.yml` to the alias,
+   after the first `-f`. Caddy now answers 502, which is correct.
 2. **Choose T:** just before the damage. A bad deploy has its time in the
    deploy run and in `CURRENT_TAG`'s mtime; for a bad statement, look in the
    provider's logs.
@@ -195,10 +205,10 @@ database and never over the live one.
    If `api.env` names a pooler, point the pooler at the new cluster instead.
    On Google Cloud the URLs name the proxy and stay as they are: set
    `CLOUDSQL_INSTANCE` in `/etc/bault/production.env` to the new instance and
-   recreate the proxy (`docker compose … up -d cloudsql`).
+   recreate the proxy (`bault up -d cloudsql`).
    Re-run `roles.sql` without passwords (it only re-asserts grants), then
-   `docker compose up -d api` and `readyz`. Start the worker last, once the API
-   is ready.
+   `bault up -d api` and `readyz`. Start the worker last (`bault up -d worker`),
+   once the API is ready.
 5. **Reconcile what happened outside the database after T.** PayPal captures and
    payouts, and EasyPost labels bought, are real and are not in the restored
    ledger. List them from each provider's dashboard for the window between T

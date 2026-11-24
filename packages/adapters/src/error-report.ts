@@ -19,6 +19,7 @@ const QUERY_PARAMS = /(Failed query: [\s\S]*?\nparams: )[\s\S]*?(?=\n\s+at |$)/g
 const PROVIDER_REPLIES = [
   /(EasyPost \d{3} on [^\s:]+): [\s\S]*?(?=\n\s+at |$)/g,
   /(PayPal \S+ failed \(\d{3}\)): [\s\S]*?(?=\n\s+at |$)/g,
+  /(Coinbase Commerce \S+ failed \(\d{3}\)): [\s\S]*?(?=\n\s+at |$)/g,
 ];
 
 function withoutQueryParams<T extends string | undefined>(text: T): T {
@@ -37,7 +38,7 @@ const CREDENTIAL_HEADERS = new Set([
   'x-api-key',
 ]);
 
-const SECRET_BODY_ROUTES = [/(^|\/)auth(\/|$)/, /(^|\/)me\/password/];
+const SECRET_BODY_ROUTES = [/(^|\/)auth(\/|$)/, /(^|\/)me\/password/, /(^|\/)me\/email(\/|$)/];
 
 function pathOf(url: string | undefined): string {
   if (!url) return '';

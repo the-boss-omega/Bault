@@ -760,7 +760,13 @@ export class MfaService {
     await this.withdrawEmailCodes(exec, userId);
   }
 
-  private async refuseWhileLocked(userId: string): Promise<void> {
+  async spendAuthenticatorCode(exec: Exec, userId: string, code: string): Promise<boolean> {
+    const f = await this.enabledFactor(exec, userId);
+    if (f.method !== 'totp') return false;
+    return this.spendTotp(exec, f, code);
+  }
+
+  async refuseWhileLocked(userId: string): Promise<void> {
     const wait = await this.attempts.secondFactorLockedFor(userId);
     if (wait > 0) throw this.attempts.lockedError(wait);
   }

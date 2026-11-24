@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { VerificationService } from './verification.service';
 import { PasswordService } from './password.service';
 import { ProfileService } from './profile.service';
+import { EmailChangeService } from './email-change.service';
 import { SessionService } from './session.service';
 import { SessionAuthGuard } from './session-auth.guard';
 import { LoginAttemptService } from './login-attempts.service';
@@ -20,6 +21,7 @@ import { MFA_POLICY, mfaPolicyProvider } from './mfa/mfa-policy';
     VerificationService,
     PasswordService,
     ProfileService,
+    EmailChangeService,
     SessionService,
     SessionAuthGuard,
     LoginAttemptService,

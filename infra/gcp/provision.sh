@@ -170,7 +170,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
   echo "gcloud account: $account"
   gcloud projects describe "$PROJECT" > /dev/null || die "cannot read project $PROJECT"
   gcloud projects describe "$BACKUP_PROJECT" > /dev/null || die "cannot read project $BACKUP_PROJECT"
-  # Step 7 makes the images key after half an hour of Cloud SQL, so ask now.
+  # Step 8 makes the images key after half an hour of Cloud SQL, so ask now.
   if [ -z "$(saved STORAGE_ACCESS_KEY)" ] || [ -z "$(saved STORAGE_SECRET_KEY)" ]; then
     enforced="$(gcloud resource-manager org-policies describe iam.disableServiceAccountKeyCreation \
       --project="$PROJECT" --effective --format='value(booleanPolicy.enforced)' 2> /dev/null || true)"
@@ -301,7 +301,12 @@ if ! exists gcloud compute instances describe "$VM" --zone="$ZONE" --project="$P
   [ -z "$keyfile" ] || rm -f "$keyfile"
 fi
 
-step "7/9 an HMAC key for the images bucket"
+step "7/9 read back what was created"
+STATIC_IP="$(value static-ip gcloud compute addresses describe "$IP_NAME" --region="$REGION" --project="$PROJECT" --format='value(address)')"
+CONNECTION="$(value connection-name gcloud sql instances describe "$SQL" --project="$PROJECT" --format='value(connectionName)')"
+PRIVATE_IP="$(value private-ip gcloud sql instances describe "$SQL" --project="$PROJECT" --format='value(ipAddresses[0].ipAddress)')"
+
+step "8/9 an HMAC key for the images bucket"
 IMAGES_KEY="$(saved STORAGE_ACCESS_KEY)"
 IMAGES_SECRET="$(saved STORAGE_SECRET_KEY)"
 if [ -z "$IMAGES_KEY" ] || [ -z "$IMAGES_SECRET" ]; then
@@ -323,11 +328,6 @@ if [ -z "$IMAGES_KEY" ] || [ -z "$IMAGES_SECRET" ]; then
     IMAGES_SECRET="$(printf '%s' "$pair" | cut -f2)"
   fi
 fi
-
-step "8/9 read back what was created"
-STATIC_IP="$(value static-ip gcloud compute addresses describe "$IP_NAME" --region="$REGION" --project="$PROJECT" --format='value(address)')"
-CONNECTION="$(value connection-name gcloud sql instances describe "$SQL" --project="$PROJECT" --format='value(connectionName)')"
-PRIVATE_IP="$(value private-ip gcloud sql instances describe "$SQL" --project="$PROJECT" --format='value(ipAddresses[0].ipAddress)')"
 
 step "9/9 ${OUT}"
 if [ "$DRY_RUN" -eq 1 ]; then

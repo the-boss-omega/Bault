@@ -351,6 +351,13 @@
       "when": 1785076500000,
       "tag": "0049_fees_that_are_not_use_and_ticket_assignees",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1785076700000,
+      "tag": "0051_an_account_email_can_change",
+      "breakpoints": true
     }
   ]
 }

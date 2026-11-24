@@ -86,6 +86,26 @@ describe('tracking refresh', () => {
     expect(await statusOf(pool, brokenId)).toBe('shipped');
   });
 
+  it('moves a parcel the carrier keeps erroring on to the back of the queue, so the others are still polled', async () => {
+    const { refreshTracking } = await import('../../apps/worker/src/jobs/tracking-refresh');
+    const broken = `EZ${Date.now()}NEVERKNOWN`;
+    const waiting = `EZ${Date.now()}WAITINGTURN`;
+    answers[broken] = { status: 404, body: { error: { message: 'tracking number not found' } } };
+    answers[waiting] = { status: 200, body: { status: 'delivered' } };
+    const brokenId = await shipment(pool, broken);
+    const waitingId = await shipment(pool, waiting);
+    await pool.query(`UPDATE shipment SET updated_at = '1990-01-01T00:00:00Z' WHERE id = $1`, [brokenId]);
+    await pool.query(`UPDATE shipment SET updated_at = '1990-01-02T00:00:00Z' WHERE id = $1`, [waitingId]);
+
+    const polled = () => calls.filter((c) => c.code === broken || c.code === waiting).map((c) => c.code);
+    await refreshTracking(pool, undefined, 1);
+    expect(polled()).toEqual([broken]);
+    await refreshTracking(pool, undefined, 1);
+    expect(polled()).toEqual([broken, waiting]);
+    expect(await statusOf(pool, waitingId)).toBe('delivered');
+    expect(await statusOf(pool, brokenId)).toBe('shipped');
+  });
+
   const eventsFor = async (id: string) =>
     (
       await pool.query<{ event_type: string; user_id: string | null }>(

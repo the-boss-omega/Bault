@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { S3StorageAdapter, SandboxStorageAdapter } from '@bault/adapters';
+import { createServer } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
+import { S3_REQUEST_TIMEOUT_MS, S3StorageAdapter, SandboxStorageAdapter } from '@bault/adapters';
 
 const CONFIG = {
   endpoint: process.env.STORAGE_ENDPOINT ?? 'http://localhost:9000',
@@ -154,5 +156,31 @@ describe('the sandbox adapter', () => {
 
     const url = await sandbox.getSignedUrl('intake/2026/09/whatever.png');
     expect(url).not.toContain('X-Amz-Signature');
+  });
+});
+
+describe('an object store that stops answering', () => {
+  it('is given up on after the request time limit, on a read and on an upload', async () => {
+    expect(S3_REQUEST_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(S3_REQUEST_TIMEOUT_MS).toBeLessThanOrEqual(60_000);
+    const held: Socket[] = [];
+    const silent = createServer((socket) => {
+      held.push(socket);
+      socket.on('error', () => undefined);
+    });
+    await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
+    const { port } = silent.address() as AddressInfo;
+    try {
+      const s3 = new S3StorageAdapter({ ...CONFIG, endpoint: `http://127.0.0.1:${port}`, timeoutMs: 300 });
+      const started = Date.now();
+      await expect(s3.getObject('items/silent.png')).rejects.toThrow();
+      await expect(
+        s3.putObject({ key: 'items/silent.png', body: Buffer.from('x'), contentType: 'image/png' }),
+      ).rejects.toThrow();
+      expect(Date.now() - started).toBeLessThan(3_000);
+    } finally {
+      for (const socket of held) socket.destroy();
+      await new Promise<void>((resolve) => silent.close(() => resolve()));
+    }
   });
 });

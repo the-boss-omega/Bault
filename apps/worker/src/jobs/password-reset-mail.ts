@@ -2,7 +2,6 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { loadEnv } from '@bault/config';
 import type { EmailAdapter } from '@bault/adapters';
-import { log } from '../log';
 
 export const PASSWORD_RESET_REQUESTED = 'password_reset_requested';
 
@@ -31,14 +30,10 @@ export async function sendPasswordReset(
   );
 
   const base = loadEnv().APP_BASE_URL.replace(/\/+$/, '');
-  try {
-    await mailer.send({
-      to: email,
-      subject: 'Reset your Card Embassy password',
-      template: 'password_reset',
-      variables: { link: `${base}/#/reset-password?token=${encodeURIComponent(raw)}` },
-    });
-  } catch (err) {
-    log.error('password reset mail failed', { job: 'outbox.dispatch', error: (err as Error).message });
-  }
+  await mailer.send({
+    to: email,
+    subject: 'Reset your Card Embassy password',
+    template: 'password_reset',
+    variables: { link: `${base}/#/reset-password?token=${encodeURIComponent(raw)}` },
+  });
 }

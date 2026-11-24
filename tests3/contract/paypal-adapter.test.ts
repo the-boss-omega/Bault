@@ -212,6 +212,31 @@ describe('a cash-out is a payout to an email', () => {
     expect(sent.items[0].amount).toEqual({ value: '25.00', currency: 'USD' });
   });
 
+  it('does not call a payout paid because its batch was processed; the item says what became of it', async () => {
+    const batchOnly = adapter({ '/payouts': { batch_header: { payout_batch_id: 'BATCH2', batch_status: 'SUCCESS' } } });
+    const request = { userId: 'u', amountMinor: 2_500, currency: 'USD', idempotencyKey: 'payout-2', destinationToken: 'c@example.com' };
+    expect(await batchOnly.createPayout(request)).toEqual({ providerRef: 'BATCH2', status: 'pending' });
+
+    const itemFailed = adapter({
+      '/payouts': {
+        batch_header: { payout_batch_id: 'BATCH3', batch_status: 'SUCCESS' },
+        items: [{ transaction_status: 'FAILED' }],
+      },
+    });
+    expect((await itemFailed.createPayout(request)).status).toBe('failed');
+
+    const itemPaid = adapter({
+      '/payouts': {
+        batch_header: { payout_batch_id: 'BATCH4', batch_status: 'SUCCESS' },
+        items: [{ transaction_status: 'SUCCESS' }],
+      },
+    });
+    expect((await itemPaid.createPayout(request)).status).toBe('succeeded');
+
+    const denied = adapter({ '/payouts': { batch_header: { payout_batch_id: 'BATCH5', batch_status: 'DENIED' } } });
+    expect((await denied.createPayout(request)).status).toBe('failed');
+  });
+
   it('refuses a payout with no destination', async () => {
     const a = adapter({});
     await expect(
