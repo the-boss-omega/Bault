@@ -48,6 +48,23 @@ export default defineWorkspace([
       testTimeout: 60_000,
     },
   },
+  {
+    resolve: {
+      alias: {
+        '@bault/adapters': ADAPTERS_SRC,
+        '@bault/config': CONFIG_SRC,
+        pg: `${WORKER_MODULES}/pg/esm/index.mjs`,
+      },
+    },
+    test: {
+      name: 'journeys',
+      environment: 'node',
+      include: ['tests/journeys/**/*.test.ts'],
+      fileParallelism: false,
+      testTimeout: 90_000,
+      hookTimeout: 120_000,
+    },
+  },
   { test: { name: 'web', environment: 'node', include: ['tests/web/**/*.test.ts'] } },
   { test: { name: 'config', environment: 'node', include: ['tests/config/**/*.test.ts'] } },
   {
