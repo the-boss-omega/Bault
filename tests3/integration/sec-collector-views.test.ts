@@ -670,6 +670,26 @@ describe('A11 support tickets as a collector reads them', () => {
   });
 });
 
+describe('A11b notification preferences as a collector reads them', () => {
+  it('sends the matrix of choices and answers a change with the choice alone', async () => {
+    const red = await signIn(SEED.collector);
+    const saved = await red.request('PUT', '/notifications/preferences', {
+      eventType: 'item_sold',
+      channel: 'email',
+      enabled: false,
+    });
+    expect(saved.status).toBeLessThan(300);
+    expect(saved.body).toEqual({ eventType: 'item_sold', channel: 'email', enabled: false });
+
+    const prefs = await red.get('/notifications/preferences');
+    expect(prefs.status).toBe(200);
+    expectWithout(prefs.body, ['rows', 'id', 'userId', 'createdAt', 'updatedAt']);
+    expectWith(prefs.body, ['categories', 'channels', 'events', 'eventType', 'enabled', 'isDefault', 'mandatory']);
+
+    await red.request('PUT', '/notifications/preferences', { eventType: 'item_sold', channel: 'email', enabled: true });
+  });
+});
+
 describe('A12 saved addresses as a collector reads them', () => {
   it('leaves out the owner id and the creation time', async () => {
     const red = await signIn(SEED.collector);

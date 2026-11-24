@@ -1,14 +1,15 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { NAME_PART_MAX } from '../../shared/names';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { ShelfYieldService } from './shelf-yield.service';
-import { AdmService } from './adm.service';
+import { AdmService, DISPUTE_TEXT_MAX } from './adm.service';
 import { OutboxAdminService } from './outbox-admin.service';
 import { MfaService } from '../acc/mfa/mfa.service';
+import { IdParam, UUID_PATTERN } from '../../shared/uuid-param';
 
 class UpdateUserDto {
   @IsOptional() @IsIn(['user', 'warehouse_operator', 'admin']) role?: 'user' | 'warehouse_operator' | 'admin';
@@ -21,7 +22,7 @@ class UpdateItemDto {
   @IsOptional() @IsString() typeClass?: string;
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsString() conditionGrade?: string;
-  @IsOptional() @IsString() ownerId?: string;
+  @IsOptional() @IsString() @Matches(UUID_PATTERN, { message: 'The new owner is not in a valid format.' }) ownerId?: string;
   @IsOptional() @IsString() binId?: string;
   @IsOptional() @IsIn(['received', 'stored', 'listed', 'on-hold', 'sold', 'shipped', 'donated', 'consigned'])
   lifecycleState?: 'received' | 'stored' | 'listed' | 'on-hold' | 'sold' | 'shipped' | 'donated' | 'consigned';
@@ -29,8 +30,11 @@ class UpdateItemDto {
 }
 
 class OpenDisputeDto {
-  @IsString() transactionId!: string;
-  @IsOptional() @IsString() note?: string;
+  @IsString() @Matches(UUID_PATTERN, { message: 'The transaction is not in a valid format.' }) transactionId!: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(DISPUTE_TEXT_MAX, { message: `The note can be at most ${DISPUTE_TEXT_MAX} characters.` })
+  note?: string;
 }
 
 class UpdateDisputeDto {
@@ -76,13 +80,13 @@ export class AdmController {
   }
 
   @Patch('users/:id')
-  updateUser(@CurrentUser() actor: AuthUser, @Param('id') id: string, @Body() dto: UpdateUserDto) {
+  updateUser(@CurrentUser() actor: AuthUser, @IdParam() id: string, @Body() dto: UpdateUserDto) {
     return this.adm.updateUser(actor.id, id, dto);
   }
 
   @Post('users/:id/mfa/reset')
   @HttpCode(200)
-  async resetMfa(@CurrentUser() actor: AuthUser, @Param('id') id: string) {
+  async resetMfa(@CurrentUser() actor: AuthUser, @IdParam() id: string) {
     const { sessionsEnded } = await this.mfa.resetFor(actor.id, id);
     return { status: 'mfa_reset', sessionsEnded };
   }
@@ -94,7 +98,7 @@ export class AdmController {
 
   @Post('outbox/:id/requeue')
   @HttpCode(200)
-  requeueOutbox(@CurrentUser() actor: AuthUser, @Param('id') id: string) {
+  requeueOutbox(@CurrentUser() actor: AuthUser, @IdParam() id: string) {
     return this.outbox.requeue(actor.id, id);
   }
 
@@ -104,7 +108,7 @@ export class AdmController {
   }
 
   @Patch('items/:id')
-  updateItem(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateItemDto) {
+  updateItem(@CurrentUser() user: AuthUser, @IdParam() id: string, @Body() dto: UpdateItemDto) {
     return this.adm.updateItem(user.id, id, dto);
   }
 
@@ -119,7 +123,7 @@ export class AdmController {
   }
 
   @Patch('disputes/:id')
-  updateDispute(@Param('id') id: string, @Body() dto: UpdateDisputeDto) {
+  updateDispute(@IdParam() id: string, @Body() dto: UpdateDisputeDto) {
     return this.adm.updateDispute(id, { status: dto.status, ruling: dto.ruling });
   }
 
