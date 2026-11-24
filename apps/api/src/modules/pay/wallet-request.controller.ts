@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   IsIn,
@@ -42,6 +42,10 @@ class SubmitWalletRequestDto {
   @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) reference?: string;
   @IsOptional() @IsString() @MaxLength(400) @IsObjectKey() documentKey?: string;
   @IsOptional() @IsString() @MaxLength(MAX_NOTE_LENGTH) notes?: string;
+}
+
+class ReceiptDto {
+  @IsString() @MinLength(1) @MaxLength(400) @IsObjectKey() documentKey!: string;
 }
 
 class CancelDto {
@@ -107,6 +111,16 @@ export class WalletRequestController {
   @Get('finance/wallet-requests/:id')
   detail(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.requests.collectorDetail(id, user.id);
+  }
+
+  @Get('finance/wallet-requests/:id/receipt')
+  receipt(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.requests.receiptFor(id, user.id);
+  }
+
+  @Put('finance/wallet-requests/:id/receipt')
+  async attachReceipt(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: ReceiptDto) {
+    return collectorWalletRequestView(await this.requests.attachReceipt(id, user, dto.documentKey));
   }
 
   @Post('finance/wallet-requests/:id/cancel')

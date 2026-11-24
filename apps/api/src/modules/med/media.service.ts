@@ -1,6 +1,6 @@
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { inArray, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { isSafeObjectKey, type StorageAdapter } from '@bault/adapters';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
@@ -15,20 +15,68 @@ const ALLOWED_TYPES: Record<string, string> = {
   'image/webp': 'webp',
   'image/heic': 'heic',
   'image/heif': 'heif',
+  'application/pdf': 'pdf',
 };
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
+export const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
+
 export const FOREIGN_UPLOAD_WINDOW_MS = 30 * 60 * 1000;
 
-export type UploadPurpose = 'item_intake' | 'parcel';
+export const RECEIPT_URL_SECONDS = 300;
 
-const PURPOSE_PREFIX: Record<UploadPurpose, string> = {
-  item_intake: 'intake',
-  parcel: 'parcels',
+export type UploadPurpose = 'item_intake' | 'parcel' | 'cash_in_receipt';
+
+export const STAFF_UPLOAD_PURPOSES: readonly UploadPurpose[] = ['item_intake', 'parcel'];
+
+export const COLLECTOR_UPLOAD_PURPOSES: readonly UploadPurpose[] = ['cash_in_receipt'];
+
+interface PurposeRule {
+  prefix: (uploaderId: string) => string;
+  types: readonly string[];
+  maxBytes: number;
+  noun: string;
+  kinds: string;
+  attachedTo: string;
+  ownOnly: boolean;
+}
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+
+const PURPOSES: Record<UploadPurpose, PurposeRule> = {
+  item_intake: {
+    prefix: () => 'intake',
+    types: IMAGE_TYPES,
+    maxBytes: MAX_IMAGE_BYTES,
+    noun: 'photo',
+    kinds: 'a JPEG, PNG, WebP or HEIC image',
+    attachedTo: 'an item',
+    ownOnly: false,
+  },
+  parcel: {
+    prefix: () => 'parcels',
+    types: IMAGE_TYPES,
+    maxBytes: MAX_IMAGE_BYTES,
+    noun: 'photo',
+    kinds: 'a JPEG, PNG, WebP or HEIC image',
+    attachedTo: 'a parcel',
+    ownOnly: false,
+  },
+  cash_in_receipt: {
+    prefix: (uploaderId) => `receipts/${uploaderId}`,
+    types: [...IMAGE_TYPES, 'application/pdf'],
+    maxBytes: MAX_RECEIPT_BYTES,
+    noun: 'receipt',
+    kinds: 'a PDF or a JPEG, PNG, WebP or HEIC image',
+    attachedTo: 'a cash-in receipt',
+    ownOnly: true,
+  },
 };
 
 const MB = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+const capitalised = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
 
 export function sniffImageType(body: Buffer): string | null {
   const ascii = (from: number, to: number) => body.subarray(from, to).toString('latin1');
@@ -41,6 +89,11 @@ export function sniffImageType(body: Buffer): string | null {
     if (brand === 'mif1' || brand === 'msf1') return 'image/heif';
   }
   return null;
+}
+
+export function sniffUploadType(body: Buffer): string | null {
+  if (body.length >= 5 && body.subarray(0, 5).toString('latin1') === '%PDF-') return 'application/pdf';
+  return sniffImageType(body);
 }
 
 function decodedLength(base64: string): number {
@@ -64,10 +117,12 @@ export class MediaService {
     contentType: string;
     dataBase64: string;
   }): Promise<{ objectKey: string; bytes: number; contentType: string }> {
+    const rule = PURPOSES[input.purpose];
+    const limit = `${rule.maxBytes / 1024 / 1024} MB`;
     const declared = input.contentType.trim().toLowerCase();
-    if (!ALLOWED_TYPES[declared]) {
+    if (!rule.types.includes(declared)) {
       throw AppError.validation(
-        `A photo has to be a JPEG, PNG, WebP or HEIC image. This one says it is "${input.contentType}".`,
+        `A ${rule.noun} has to be ${rule.kinds}. This one says it is "${input.contentType}".`,
       );
     }
 
@@ -76,31 +131,27 @@ export class MediaService {
       : input.dataBase64;
 
     const estimated = decodedLength(payload);
-    if (estimated > MAX_IMAGE_BYTES) {
-      throw AppError.validation(
-        `That image is ${MB(estimated)}. The largest a photo can be is ${MAX_IMAGE_BYTES / 1024 / 1024} MB.`,
-      );
+    if (estimated > rule.maxBytes) {
+      throw AppError.validation(`That file is ${MB(estimated)}. The largest a ${rule.noun} can be is ${limit}.`);
     }
 
     const body = Buffer.from(payload, 'base64');
-    if (body.byteLength === 0) throw AppError.validation('That image is empty.');
-    if (body.byteLength > MAX_IMAGE_BYTES) {
-      throw AppError.validation(
-        `That image is ${MB(body.byteLength)}. The largest a photo can be is ${MAX_IMAGE_BYTES / 1024 / 1024} MB.`,
-      );
+    if (body.byteLength === 0) throw AppError.validation('That file is empty.');
+    if (body.byteLength > rule.maxBytes) {
+      throw AppError.validation(`That file is ${MB(body.byteLength)}. The largest a ${rule.noun} can be is ${limit}.`);
     }
 
-    const contentType = sniffImageType(body);
-    if (!contentType) {
+    const contentType = sniffUploadType(body);
+    if (!contentType || !rule.types.includes(contentType)) {
       throw AppError.validation(
-        'That file is not a photograph. A photo has to be a JPEG, PNG, WebP or HEIC image.',
+        `That file is not what it says it is. A ${rule.noun} has to be ${rule.kinds}.`,
       );
     }
     const extension = ALLOWED_TYPES[contentType]!;
 
     const now = new Date();
     const key = [
-      PURPOSE_PREFIX[input.purpose],
+      rule.prefix(input.uploaderId),
       String(now.getUTCFullYear()),
       String(now.getUTCMonth() + 1).padStart(2, '0'),
       `${randomUUID()}.${extension}`,
@@ -112,7 +163,7 @@ export class MediaService {
       this.logger.error(`Storage refused ${key}: ${e instanceof Error ? e.message : String(e)}`);
       throw new AppError(
         ErrorCode.STORAGE_UNAVAILABLE,
-        'Photo storage cannot be reached right now, so the photo was not saved. Try again in a few minutes.',
+        `File storage cannot be reached right now, so the ${rule.noun} was not saved. Try again in a few minutes.`,
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
@@ -136,7 +187,9 @@ export class MediaService {
     if (unique.length === 0) return;
     for (const key of unique) {
       if (!isSafeObjectKey(key)) {
-        throw AppError.validation(`Photo "${key}" has a "." or ".." segment, which a key cannot have.`);
+        throw AppError.validation(
+          `${capitalised(PURPOSES[expected.purpose].noun)} "${key}" has a "." or ".." segment, which a key cannot have.`,
+        );
       }
     }
 
@@ -153,24 +206,38 @@ export class MediaService {
     for (const key of unique) {
       const row = byKey.get(key);
       if (!row) {
-        throw AppError.validation(`Photo "${key}" was not uploaded here. Take or choose the photo again.`);
-      }
-      if (row.purpose !== expected.purpose) {
         throw AppError.validation(
-          `Photo "${key}" was taken for ${row.purpose === 'parcel' ? 'a parcel' : 'an item'}, not for this.`,
+          `${capitalised(PURPOSES[expected.purpose].noun)} "${key}" was not uploaded here. Choose the file again.`,
         );
+      }
+      const rule = PURPOSES[expected.purpose];
+      const what = capitalised(rule.noun);
+      if (row.purpose !== expected.purpose) {
+        throw AppError.validation(`${what} "${key}" was uploaded for ${PURPOSES[row.purpose].attachedTo}, not for this.`);
+      }
+      if (row.uploadedBy !== expected.actorId && rule.ownOnly) {
+        throw AppError.forbidden(`${what} "${key}" was uploaded by somebody else. Upload your own.`);
       }
       if (row.uploadedBy !== expected.actorId && !row.recent) {
         throw AppError.forbidden(
-          `Photo "${key}" was uploaded by somebody else more than ${FOREIGN_UPLOAD_WINDOW_MS / 60_000} minutes ago. Take the photo again.`,
+          `${what} "${key}" was uploaded by somebody else more than ${FOREIGN_UPLOAD_WINDOW_MS / 60_000} minutes ago. Take the photo again.`,
         );
       }
     }
   }
 
-  async signed(objectKey: string): Promise<string | null> {
+  async contentTypeOf(objectKey: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ contentType: mediaUpload.contentType })
+      .from(mediaUpload)
+      .where(eq(mediaUpload.objectKey, objectKey))
+      .limit(1);
+    return row?.contentType ?? null;
+  }
+
+  async signed(objectKey: string, expiresInSeconds?: number): Promise<string | null> {
     try {
-      return await this.storage.getSignedUrl(objectKey);
+      return await this.storage.getSignedUrl(objectKey, expiresInSeconds);
     } catch {
       return null;
     }

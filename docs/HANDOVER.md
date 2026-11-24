@@ -584,7 +584,6 @@ Each of these was checked against `origin/master` on the day this guide was writ
 | **Dependabot #104 and the others** | Open (5.1, item 16). | Review, test, then merge or close. |
 | **Stage 3 tasks** | P1 to P15 are all marked Done (pull requests #75 and #84). Its "After launch" list is the known backlog. | Nothing for P1 to P15; the After launch list as the customer prioritises it. |
 | **Compliance** | Open (5.1, item 12). | The customer's lawyer and policy, then code. |
-| **A receipt with a bank cash-in** | Not built. `POST /media/uploads` is for staff only, so the cash-in form has no document field and a reviewer sees no receipt. | A decision on whether reviewers need it, then a collector upload route limited to that one purpose and to images and PDFs, the key saved as the request's `documentKey`, and the field back on the cash-in form. |
 
 ---
 
