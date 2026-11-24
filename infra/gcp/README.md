@@ -63,8 +63,8 @@ Everything below runs in **Cloud Shell**, the `>_` button at the top right of
 the console: `gcloud` is installed there and signed in as you, and the server
 never talks to your own computer. Have these ready for step 5: the PayPal
 sandbox app's client ID and secret, an EasyPost test key (`EZTK…`), your SMTP
-provider's host, user and password, the bank details collectors transfer to,
-and your age public key (`age1…`, from `age-keygen`; the private key stays in
+provider's host, user and password and the address mail is sent from, the bank
+details collectors transfer to, and your age public key (`age1…`, from `age-keygen`; the private key stays in
 your password manager).
 
 ## 1. Create everything (Cloud Shell, 20 to 30 minutes, mostly waiting for Cloud SQL)
@@ -121,7 +121,7 @@ file anywhere; step 5 copies it to the server.
 
 ## 2. SSH through IAP (Cloud Shell, once)
 
-The zone is `us-east4-a` unless you gave `provision.sh` another region
+The zone is `us-east4-a` unless you gave `provision.sh` another region or zone
 (`GCP_ZONE` in `~/bault-gcp.env`).
 
 ```sh
@@ -162,8 +162,8 @@ forwarding (production README, section 1).
 ## 4. The release
 
 The release is a tag, such as `v0.1.0`, published in GitHub (Releases → Draft a
-new release). `release.yml` then builds `bault-api`, `bault-web` and
-`bault-worker` into `ghcr.io/<owner>`. GitHub makes a new package private, so
+new release). `release.yml` waits for CI to pass on the tagged commit, then
+builds `bault-api`, `bault-web` and `bault-worker` into `ghcr.io/<owner>`. GitHub makes a new package private, so
 either set each of the three to public (the package's page → Package settings
 → Change visibility), which is fine because an image holds no secret, or log
 the server in with a token that may only read packages:
@@ -190,23 +190,32 @@ infra/gcp/configure.sh
 `configure.sh` writes `/etc/bault/production.env`, `api.env`, `worker.env`,
 `migrate.env` and `backup.env` (mode 600) from `~/bault-gcp.env` and the
 templates, and copies the system CA bundle to `db-ca.crt`, which compose mounts
-although the proxy needs none. It generates `MFA_ENCRYPTION_KEY`, and asks for:
+although the proxy needs none. It generates `MFA_ENCRYPTION_KEY`, sets
+`BAULT_REGISTRY` from the checkout's origin, and asks for:
 
 - the host name, where Enter takes the free `<ip-with-dashes>.sslip.io`;
-- PayPal: `sandbox`, the client ID and secret, and the ID of a webhook you add
-  in the PayPal app for `https://<host>/api/v1/webhooks/payment`;
-- the EasyPost key, and SMTP (587 or 465, since Compute Engine blocks 25);
+- PayPal: the environment (`sandbox` or `live`; Enter takes `sandbox`), the
+  client ID and secret, and the ID of a webhook you add in the PayPal app for
+  `https://<host>/api/v1/webhooks/payment`;
+- whether to take cash-ins in crypto through Coinbase Commerce (`yes` or `no`;
+  `yes` then asks for the API key and the webhook shared secret);
+- the EasyPost key, and SMTP: the host, the port (587 or 465, since Compute
+  Engine blocks 25), the user, the password and the sender address;
 - the bank details, where Enter leaves one out;
 - the support email, phone, hours and team shown on the contact page, and a
   Sentry DSN, where Enter leaves one out;
 - your age public key.
 
-Secrets are read without echo, and nothing it prints holds one. It ends with a
-check of every value production refuses to start without, and offers to delete
-`~/bault-gcp.env`. Run it again whenever you like: it keeps what is set, and
-`--change smtp` (or `domain`, `paypal`, `checkout`, `easypost`, `bank`,
-`support`, `sentry`, `age`)
-asks for one group again. `--change checkout` turns on cash-in by PayPal
+Secrets are read without echo, and nothing it prints holds one. On a later run
+it asks before it replaces an `api.env`, `worker.env` or `migrate.env` that
+holds other connection settings. It ends with a check of every value
+production refuses to start without: when one is missing it prints `not
+ready:` with each problem and exits 1, and when all are set it prints `ready:
+every value production needs is set` and offers to delete `~/bault-gcp.env`.
+Run it again whenever you like: it keeps what is set, and `--change smtp` (or
+`domain`, `paypal`, `checkout`, `crypto`, `easypost`, `bank`, `support`,
+`sentry`, `age`, or a single key such as `--change SENTRY_DSN`) asks for that
+group or key again; `--change` can be given more than once. `--change checkout` turns on cash-in by PayPal
 checkout (`PAYPAL_CHECKOUT_ENABLED`, off until then): first subscribe the same
 PayPal webhook to `CHECKOUT.ORDER.APPROVED` and to `PAYMENT.CAPTURE.COMPLETED`,
 `PENDING`, `DENIED`, `DECLINED`, `REFUNDED` and `REVERSED`, then restart the
@@ -250,8 +259,11 @@ cd /opt/bault && git fetch --tags && git checkout <tag>
 `production.env`, so it adds `compose.gcp.yml`, starts the proxy and waits for
 it before the backup. The first start takes a few seconds more while Caddy
 fetches the certificate. For day to day, the `bault` alias in step 6 replaces
-the one in the production README's "Day to day", with the tag taken from
-`/opt/bault/CURRENT_TAG`.
+the one in the production README's "Day to day"; in a new shell, set the tag
+from `/opt/bault/CURRENT_TAG` first
+(`export BAULT_TAG=$(cat /opt/bault/CURRENT_TAG) BAULT_ENV_DIR=/etc/bault`), or
+put `BAULT_TAG=$(cat /opt/bault/CURRENT_TAG)` at the front of the alias as that
+README does.
 
 ## 8. The first administrator (after the first deploy only)
 
@@ -326,7 +338,8 @@ Let's Encrypt certificate for it, and browsers show a normal secure site.
 `configure.sh` offers that name as its default (step 5), and sets:
 - `BAULT_DOMAIN=<ip-with-dashes>.sslip.io`, built from `<STATIC_IP>`;
 - `APP_BASE_URL=https://<ip-with-dashes>.sslip.io`;
-- `CADDY_LOCAL_CERTS` empty.
+- nothing for `CADDY_LOCAL_CERTS`, which the template names only in a comment,
+  so it stays empty.
 
 Deploy as usual. The first request after the start takes a few seconds while
 Caddy fetches the certificate. Check it from your own machine:

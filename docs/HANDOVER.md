@@ -597,7 +597,7 @@ Everything runs in **Cloud Shell** (the `>_` button at the top right of the Goog
 
 ### 6.1 A fresh production, from zero
 
-Before you start, have these ready: the PayPal live app's client ID, secret and webhook ID (2.1); the EasyPost `EZAK` key (2.2); the SMTP host, user and password (2.3); the Sentry DSN (2.4); the bank details collectors transfer to; and the age public key (2.8). You also need the two projects with billing, the budget alert and 2-Step Verification (2.5).
+Before you start, have these ready: the PayPal live app's client ID, secret and webhook ID (2.1); the EasyPost `EZAK` key (2.2); the SMTP host, user, password and sender address (2.3); the Sentry DSN (2.4); the bank details collectors transfer to; and the age public key (2.8). You also need the two projects with billing, the budget alert and 2-Step Verification (2.5).
 
 **Create everything (20 to 30 minutes, mostly waiting for Cloud SQL)**
 
@@ -643,7 +643,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
 
 **Connect to the server through IAP (once)**
 
-5. Add the SSH configuration. The zone is `us-east4-a` unless you gave another region:
+5. Add the SSH configuration. The zone is `us-east4-a` unless you gave another region or zone (`GCP_ZONE` in `~/bault-gcp.env`):
 
    ```sh
    cat >> ~/.ssh/config <<EOF
@@ -701,7 +701,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
     infra/gcp/configure.sh
     ```
 
-    It asks for: the host name (press Enter for the free `<ip-with-dashes>.sslip.io` until the domain is ready); PayPal (`live`, the client ID, the secret, the webhook ID); whether to take crypto cash-ins (answer no until 2.9 is done); the EasyPost key; SMTP (587 or 465); the bank details and the support details (Enter leaves one out); the Sentry DSN; and the age public key. PayPal checkout stays off until you run `--change checkout`. Secrets are read without echo. It generates `MFA_ENCRYPTION_KEY`. When it worked, it ends with `ready: every value production needs is set` and offers to delete `~/bault-gcp.env`. Say yes once its copy is in the password manager.
+    It asks for: the host name (press Enter for the free `<ip-with-dashes>.sslip.io` until the domain is ready); PayPal (the environment, where you type `live` because Enter takes `sandbox`, then the client ID, the secret and the webhook ID); whether to take crypto cash-ins (answer no until 2.9 is done); the EasyPost key; SMTP (the host, the port 587 or 465, the user, the password and the sender address); the bank details and the support details (Enter leaves one out); the Sentry DSN (Enter leaves it off); and the age public key. PayPal checkout stays off until you run `--change checkout`. Secrets are read without echo. It generates `MFA_ENCRYPTION_KEY`. When it worked, it ends with `ready: every value production needs is set` and offers to delete `~/bault-gcp.env`. Say yes once its copy is in the password manager.
 
 11. Back in Cloud Shell, keep `~/bault-gcp.env` in the password manager (⋮, Download), then `shred -u ~/bault-gcp.env`. Also store a copy of `/etc/bault/production.env` in the password manager: losing `MFA_ENCRYPTION_KEY` locks every authenticator out.
 
@@ -724,7 +724,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
       -c 'show statement_timeout'      # 30s
     ```
 
-    `claim-database.sql` prints the database `bault` with owner `bault_owner`. `roles.sql` ends with a table of the three roles and their settings. The last line prints `30s`.
+    `claim-database.sql` prints the database `bault` with owner `bault_owner`. `roles.sql` ends with a table of the three roles and their settings, then `worker_db_create`, which is `t` until the worker has started once and pg-boss has installed itself (the second `roles.sql` run in `deploy.sh` turns it off). The last line prints `30s`.
 
 13. Check that the migration created the platform custodian (stage 3's P1):
 
@@ -767,7 +767,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
 
 **The one setting `configure.sh` does not ask for**
 
-17. On the server, edit `/etc/bault/production.env` with an editor (`nano /etc/bault/production.env`, not `echo`, so that nothing goes into the shell history) and decide `PAYOUT_MODE` (`manual` or `provider`). `SENTRY_DSN` and the `SUPPORT_*` details were asked for in step 10; `configure.sh --change sentry` or `--change support` changes them later. Then:
+17. On the server, edit `/etc/bault/production.env` with an editor (`nano /etc/bault/production.env`, not `echo`, so that nothing goes into the shell history) and decide `PAYOUT_MODE` (`manual` or `provider`); `configure.sh` leaves it at `manual`. `SENTRY_DSN` and the `SUPPORT_*` details were asked for in step 10; `configure.sh --change sentry` or `--change support` changes them later. Then:
 
     ```sh
     BAULT_TAG=$(cat /opt/bault/CURRENT_TAG) bault up -d api worker
@@ -782,7 +782,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
     (set -a && . /etc/bault/backup.env && set +a && ./infra/ops/backup.sh dump)
     ```
 
-    The dump prints `==> dumping to …`, `==> encrypting for 1 recipient(s)`, `==> uploading to backup:…/nightly/bault-….dump.age`, and finally the file's path. From Cloud Shell, `gcloud storage ls gs://<backups-project>-bault-backups/nightly/` lists it.
+    The dump prints `==> dumping to …`, `==> encrypting for 1 recipient(s)`, `==> … (<size>), checksum written`, `==> uploading to backup:…/nightly/bault-….dump.age`, `==> pruning local backups older than 14 days`, and finally the file's path. From Cloud Shell, `gcloud storage ls gs://<backups-project>-bault-backups/nightly/` lists it.
 
 **An alert when the site is down**
 
@@ -798,10 +798,10 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
     pnpm install
     pnpm prices:load --url https://<domain> --dry-run   # what would change
     pnpm prices:load --url https://<domain>             # load what the server lacks
-    pnpm prices:load --url https://<domain> --check     # exit 0 only when the server matches the file
+    pnpm prices:load --url https://<domain> --check     # exit 0 only when the server matches the file and coverage is ready
     ```
 
-    It asks for the administrator's password and authenticator code and stores neither.
+    It asks for the administrator's e-mail or username, password and authenticator code (or reads `BAULT_ADMIN_IDENTIFIER`, `BAULT_ADMIN_PASSWORD` and `BAULT_ADMIN_TOTP`) and stores none of them.
 
 **Checks before launch**
 
@@ -812,7 +812,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
     pnpm ops:load-test --url https://<staging domain> --target staging --rps <three times your busiest second>
     ```
 
-    `ops:security-check` exits 0 only when HTTPS redirects, the certificate, TLS versions, the SSL Labs grade, the security headers, the closed API docs, the open ports (80 and 443 only) and the administrator's two-factor all pass.
+    `ops:security-check` exits 0 only when none of these fails: HTTPS redirects, the certificate, TLS versions, the SSL Labs grade, the security headers, the closed API docs, the open ports (80 and 443 only) and the administrator's two-factor. A check skipped with `--skip-ssllabs` or `--skip-admin` prints SKIP and does not fail it.
 
 23. Run each restore drill once (6.4) and write it in the log in `infra/ops/RESTORE.md`. Launch waits for both.
 
@@ -838,7 +838,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
 
 6. Check from outside as in 6.1, step 15.
 
-`.github/workflows/deploy.yml` can run step 5 for you, but GitHub's own runners cannot reach port 22, which admits IAP only. It checks that first and stops with an explanation. To use it, register a self-hosted runner that the firewall admits, set the job's `runs-on` to its label, and create `DEPLOY_HOST`, `DEPLOY_SSH_KEY` and `DEPLOY_KNOWN_HOSTS` on each GitHub environment. Do not widen the SSH rule for it.
+`.github/workflows/deploy.yml` can run the second line of step 5 for you (it does not check out the tag), but GitHub's own runners cannot reach port 22, which admits IAP only. It checks that first and stops with an explanation. On Google Cloud no runner gets further: the workflow connects to `DEPLOY_HOST` directly, not through an IAP tunnel, and the VPC firewall admits port 22 from the IAP range only, so deploy by hand as above. On another host whose SSH rule admits a self-hosted runner, set the job's `runs-on` to its label, and create the variable `DEPLOY_HOST` and the secrets `DEPLOY_SSH_KEY` and `DEPLOY_KNOWN_HOSTS` on each GitHub environment. Do not widen the SSH rule for it.
 
 ### 6.3 Rolling back
 
@@ -860,7 +860,7 @@ bault stop worker api
 ./infra/ops/backup.sh restore <dump file> <database-url>
 ```
 
-Read "In a real incident" in `infra/ops/RESTORE.md` first. It restores into a new database, never over the live one, and it lists what to reconcile with PayPal and EasyPost afterwards.
+`backup.sh restore` checks the dump's checksum and asks you to type the target database's name before it changes anything. The dumps on Google Cloud are encrypted (`.age`) and need `--age-identity <keyfile>`, and the age private key is never on the server, so run the restore from a restore machine as in `infra/ops/RESTORE.md`, Drill 2. Read "In a real incident" in `infra/ops/RESTORE.md` first. It restores into a new database, never over the live one, and it lists what to reconcile with PayPal and EasyPost afterwards.
 
 ### 6.4 Backups and a tested restore
 
@@ -869,7 +869,7 @@ There are two ways back, and both must be drilled (`infra/ops/RESTORE.md`):
 | | Cloud SQL point-in-time recovery | Nightly dump (`backup.sh`) |
 |---|---|---|
 | Recovery point | Any second in the last 7 days | The last 01:17 UTC dump, so up to 24 hours lost |
-| Kept | 7 days of transaction logs and 14 daily backups | At least 30 days (retention lock) and deleted after 120 (lifecycle), in the backups project |
+| Kept | 7 days of transaction logs and 14 daily backups | At least 30 days (the bucket's retention policy) and deleted after 120 (lifecycle), in the backups project; 14 days on the server's disk |
 | Who holds the key | Google | The customer: the age private key in the password manager |
 
 The nightly job runs at 01:17 UTC from `deploy`'s crontab. It encrypts the dump to `BACKUP_AGE_RECIPIENT` and uploads it with rclone, as the server's own service account, which may add files and nothing else. `deploy.sh` also takes a dump before every migration. Its log is `/var/log/bault/backup.log`.
@@ -879,7 +879,7 @@ The nightly job runs at 01:17 UTC from `deploy`'s crontab. It encrypts the dump 
 - Drill 1 clones Cloud SQL to a chosen minute T (`gcloud sql instances clone bault-db bault-pitr-drill --project=<project> --point-in-time='<T>'`), checks a witness row either side of T, verifies with `backup.sh verify`, starts the API image against it and asks `readyz`, and then deletes the clone.
 - Drill 2 fetches the latest dump with your own login (`gcloud storage cp 'gs://<backup-bucket>/nightly/bault-<stamp>.dump.age*' ./drill/`), verifies it with the age key (`backup.sh verify … --age-identity ./bault-backup.key`), restores it into a new database owned by a non-superuser `bault_owner`, runs the migrations and `roles.sql`, and asks `readyz`.
 
-`backup.sh verify` exits 0 only when the checksum, the decryption, a full restore, the row counts and the invariants (no orphaned items, custody or ledger rows, and every append-only trigger present) all pass. Write every drill in the log at the bottom of `RESTORE.md`, with the timings.
+`backup.sh verify` exits 0 only when the checksum matches, the decryption and a full restore into a scratch database succeed, and the invariants hold (no orphaned items, custody or ledger rows, no item in a bin that does not exist, and every append-only trigger and the item delete guard present). It prints the row counts of the main tables along the way, and drops the scratch database at the end. Write every drill in the log at the bottom of `RESTORE.md`, with the timings.
 
 ### 6.5 Monitoring and alerts
 
@@ -908,7 +908,7 @@ The nightly job runs at 01:17 UTC from `deploy`'s crontab. It encrypts the dump 
     --paypal-receiver <sandbox personal account>@personal.example.com --manual
   ```
 
-  It prints PASS, FAIL, SKIP or BY HAND per check, and exits 1 if anything failed. It refuses production, `BAULT_PRODUCTION_HOST` and its `www.`. The by-hand list it prints (emails not in spam, the forged webhook in Sentry, a refused label, a delivered parcel, the requeue drill, and checkout if it is enabled) is part of the check.
+  It prints PASS, FAIL, SKIP or BY HAND per check, and exits 1 if anything failed. It refuses to run, and exits 2, without `--target staging` and `BAULT_PRODUCTION_HOST`, against that host or its `www.`, or with a PayPal receiver outside `.example.com`. The by-hand list it prints at the end (emails not in spam, the forged webhook in Sentry, a refused label, a delivered parcel, the requeue drill) is part of the check, and so are the PayPal checkout cash-in, when it is enabled, and the browser error in Sentry, which `infra/production/README.md`, section 8, lists and the script does not print.
 
 ### 6.6 The domain and Cloudflare
 
