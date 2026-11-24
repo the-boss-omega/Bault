@@ -723,9 +723,9 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       effectiveFrom: '2026-10-27T12:00:00.000Z',
     });
     const RULES = [
-      RULE('r1', 'service_fee:condition_inspection', 'Per-area condition report against a fixed severity scale'),
-      RULE('r2', 'consignment_fee:auction_house', 'Commission on an auction-house consignment sale'),
-      RULE('r3', 'shipping_addon:gps_tracker', 'A tracker placed in the parcel'),
+      RULE('r1', 'service_fee:surface_condition_rescan', 'Per-area condition report against a fixed severity scale'),
+      RULE('r2', 'consignment_fee:regional_auction_house', 'Commission on an auction-house consignment sale'),
+      RULE('r3', 'shipping_addon:temperature_logger', 'A tracker placed in the parcel'),
     ];
 
     it('breaks the name of an action that has none of its own where it is made of parts, never inside a word', async () => {

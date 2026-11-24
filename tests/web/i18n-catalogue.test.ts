@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_LOCALE, LOCALES, MESSAGE_KEYS, hasMessage, t } from '../../apps/web/src/shared/i18n';
 
@@ -59,7 +61,8 @@ describe('retired keys are really gone', () => {
   it('replaced the tracking-by-id strings with list strings', () => {
     expect(hasMessage('ss.tracking.idLabel')).toBe(false);
     expect(hasMessage('ss.tracking.idPlaceholder')).toBe(false);
-    expect(hasMessage('ss.tracking.searchPlaceholder')).toBe(true);
+    expect(hasMessage('ss.tracking.searchPlaceholder')).toBe(false);
+    expect(hasMessage('ss.tracking.searchLabel')).toBe(true);
     expect(hasMessage('ss.tracking.col.username')).toBe(false);
   });
 });
@@ -83,5 +86,52 @@ describe('brand', () => {
   it('names Card Embassy in the strings that carry the product name', () => {
     expect(t('app.title')).toContain('Card Embassy');
     expect(t('error.unreachable')).toContain('Card Embassy');
+  });
+});
+
+describe('unused strings', () => {
+  const source = (dir: string): string =>
+    readdirSync(dir)
+      .map((name) => join(dir, name))
+      .map((path) =>
+        statSync(path).isDirectory()
+          ? source(path)
+          : /\.tsx?$/.test(path) && !path.endsWith('i18n.tsx')
+            ? readFileSync(path, 'utf8')
+            : '',
+      )
+      .join('\n');
+
+  it('keeps no string that the web app never shows', () => {
+    const code = source(join(__dirname, '../../apps/web/src'));
+    const prefixes = new Set<string>();
+    for (const m of code.matchAll(/`([\w.-]+\.)\$\{/g)) prefixes.add(m[1]!);
+    for (const m of code.matchAll(/'([\w.-]+\.)' *\+/g)) prefixes.add(m[1]!);
+    for (const m of code.matchAll(/'([\w.-]+)'(?: : '([\w.-]+)')?\}\.\$\{/g)) {
+      prefixes.add(`${m[1]!}.`);
+      if (m[2]) prefixes.add(`${m[2]}.`);
+    }
+    const unused = MESSAGE_KEYS.filter(
+      (key) =>
+        !code.includes(`'${key}'`) &&
+        !code.includes(`"${key}"`) &&
+        ![...prefixes].some((prefix) => key.startsWith(prefix)),
+    );
+    expect(unused).toEqual([]);
+  });
+});
+
+describe('brand in the style sheets', () => {
+  it('prints Card Embassy, never Bault, in any generated content', () => {
+    const dir = join(__dirname, '../../apps/web/src');
+    const offenders = readdirSync(dir)
+      .filter((name) => name.endsWith('.css'))
+      .flatMap((name) =>
+        [...readFileSync(join(dir, name), 'utf8').matchAll(/content:\s*([^;]*);/g)]
+          .map((m) => m[1]!)
+          .filter((value) => /bault/i.test(value))
+          .map((value) => `${name}: ${value}`),
+      );
+    expect(offenders).toEqual([]);
   });
 });

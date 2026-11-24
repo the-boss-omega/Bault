@@ -11,6 +11,7 @@ interface FeeRun {
   thresholdDays: number;
   runAt: string;
   chargedItemIds: string[];
+  chargedItems?: { id: string; serialNumber: string; description: string; ownerUsername: string }[];
   totalAmount: number;
   currency: string;
 }
@@ -79,6 +80,26 @@ function FeeStatement({ runs, locale }: { runs: FeeRun[]; locale: string }) {
               {t('admin.storage.col.chargedItems')}{' '}
               {Array.isArray(run.chargedItemIds) ? run.chargedItemIds.length : 0}
             </span>
+            {(run.chargedItems?.length ?? 0) > 0 && (
+              <details className="fee-run-items">
+                <summary>
+                  {run.chargedItems!.length === 1
+                    ? t('admin.storage.itemsChargedOne')
+                    : t('admin.storage.itemsCharged', { count: run.chargedItems!.length })}
+                </summary>
+                <ul>
+                  {run.chargedItems!.map((it) => (
+                    <li key={it.id}>
+                      <span className="serial" dir="ltr">
+                        {it.serialNumber}
+                      </span>{' '}
+                      {it.description || t('admin.storage.noDescription')} ·{' '}
+                      <span dir="ltr">@{it.ownerUsername}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
           </li>
         ))}
       </ol>

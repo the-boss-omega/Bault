@@ -64,7 +64,7 @@ About 1.5 minutes. It builds on T4.4, T8.4 and T6.1.
 
 These two files let a module use a service without importing the module behind it. `AdaptersModule` is global and provides `PAYMENT_ADAPTER`, `SHIPPING_ADAPTER`, `EMAIL_ADAPTER` and `STORAGE_ADAPTER`. It builds them with the factories in `packages/adapters/src/select.ts`, so the API and the worker choose the same way. A sandbox payment, shipping or storage adapter fails the boot in production.
 
-`BILLING_PORT`, `BillingPort` and `BillableAction` let a module charge a fee without importing the payments module, `pay`. `PayModule` provides the port with `BillingService`. `charge` runs in the caller's `tx`, so the fee commits or rolls back with the work. `itemClass` and `feeActionType` select a narrower pricing rule. `charge` returns a `ChargeOutcome`, which is `charged` with the charge's id and amount, `covered` with the membership period and the allowance spent, or `free`. `BillingModule` and `NoopBillingAdapter`, in the same file, are imported by nothing.
+`BILLING_PORT`, `BillingPort` and `BillableAction` let a module charge a fee without importing the payments module, `pay`. `PayModule` provides the port with `BillingService`. `charge` runs in the caller's `tx`, so the fee commits or rolls back with the work. `itemClass` and `feeActionType` select a narrower pricing rule. `charge` returns a `ChargeOutcome`, which is `charged` with the charge's id and amount, `covered` with the membership period and the allowance spent, or `free`. The file holds only the port and its types.
 
 #### `apps/api/src/shared/idempotency/idempotency.service.ts`, `apps/api/src/shared/idempotency/idempotency.schema.ts`
 
@@ -88,7 +88,7 @@ These files hold the two-step confirmation for irreversible actions, and the tok
 
 About 2 minutes. It builds on T5.4, T5.5, T2.1 and T7.1.
 
-These files hold value rules that several modules share. `money`, `add`, `subtract`, `sum` and `applyBasisPoints` work in integer minor units. A fraction or a mix of currencies throws, and basis points round to the nearest cent. `formatMinor` prints `4137` as `$41.37` in messages.
+These files hold value rules that several modules share. `money`, `add`, `subtract`, `sum` and `applyBasisPoints` work in integer minor units. A fraction or a mix of currencies throws, and basis points round to the nearest cent. `formatMinor` prints `4137` as `$41.37` and `275000` as `$2,750.00` in messages, with the thousands separator the web app uses (`tests3/contract/money-format.test.ts`).
 
 `prefixedId`, `ID_PREFIX` and `newShipmentCode` make codes such as `SHP-` and `TKT-` followed by eight characters. The characters are never 0, O, 1 or I, so none can be misread. No caller of `prefixedId` retries. So if a new code ever repeats a unique code, the insert fails and the user gets a 500. `WalletRequestService` uses `'WR'`, which is not in `ID_PREFIX`.
 

@@ -9,6 +9,7 @@ import {
   channelLabel,
   eventLabel,
   notificationBarcode,
+  notificationLink,
   notificationGlyph,
   notificationMessage,
   type NotificationGlyph,
@@ -229,6 +230,7 @@ export function NotificationsPage({
                     <ul className="timeline timeline--stamped" aria-labelledby={`day-${key}`}>
                       {items.map((n: AppNotification) => {
                         const barcode = notificationBarcode(n.content);
+                        const link = notificationLink(n.eventType, n.content);
                         const kind = eventLabel(t, n.eventType);
                         const message = notificationMessage(n.content);
                         return (
@@ -252,6 +254,15 @@ export function NotificationsPage({
                                     onClick={() => navigate({ section: 'vault', tab: 'active', params: { q: barcode } })}
                                   >
                                     {t('notif.findInVault')}
+                                  </Button>
+                                )}
+                                {link && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => navigate({ section: link.section, tab: link.tab, params: link.params })}
+                                  >
+                                    {t(link.label)}
                                   </Button>
                                 )}
                               </div>

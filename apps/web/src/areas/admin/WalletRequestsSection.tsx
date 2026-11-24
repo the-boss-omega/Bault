@@ -48,6 +48,8 @@ type Need = 'decide' | 'carry' | 'settled';
 
 const NEEDS: readonly Need[] = ['decide', 'carry', 'settled'];
 
+const PAGE_SIZE = 100;
+
 const NEED_LABEL: Record<Need, MessageKey> = {
   decide: 'admin.requests.need.decide',
   carry: 'admin.requests.need.carry',
@@ -111,6 +113,9 @@ export function WalletRequestsSection({
   const openId = route.params.request ?? null;
 
   const [requests, setRequests] = useState<WalletRequest[] | null>(null);
+  const [more, setMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
   const [detail, setDetail] = useState<WalletRequestDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   // What the last thing done in the drawer came to is told in the drawer: the page's own line is behind its backdrop.
@@ -136,22 +141,49 @@ export function WalletRequestsSection({
     to !== '' ||
     query.trim() !== '';
 
+  const page = useCallback(
+    (before?: string) => {
+      const params = new URLSearchParams();
+      if (typeFilter !== 'all') params.set('type', typeFilter);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      params.set('limit', String(PAGE_SIZE));
+      if (before) params.set('before', before);
+      return api.get<WalletRequest[]>('/admin/wallet-requests?' + params.toString());
+    },
+    [typeFilter, statusFilter, from, to],
+  );
+
   const load = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (typeFilter !== 'all') params.set('type', typeFilter);
-    if (statusFilter !== 'all') params.set('status', statusFilter);
-    if (from) params.set('from', from);
-    if (to) params.set('to', to);
-    const search = params.toString();
     setLoadError(null);
     try {
-      setRequests(
-        await api.get<WalletRequest[]>('/admin/wallet-requests' + (search ? '?' + search : '')),
-      );
+      const first = await page();
+      setRequests(first);
+      setMore(first.length === PAGE_SIZE);
     } catch (e) {
       setLoadError((e as Error).message);
     }
-  }, [typeFilter, statusFilter, from, to]);
+  }, [page]);
+
+  async function loadMore() {
+    const last = requests?.at(-1);
+    if (!last) return;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const next = await page(last.id);
+      setRequests((prev) => {
+        const seen = new Set((prev ?? []).map((r) => r.id));
+        return [...(prev ?? []), ...next.filter((r) => !seen.has(r.id))];
+      });
+      setMore(next.length === PAGE_SIZE);
+    } catch (e) {
+      setMoreError((e as Error).message);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -400,6 +432,18 @@ export function WalletRequestsSection({
                 );
               })}
             </table>
+          </div>
+        )}
+        {requests !== null && !loadError && more && (
+          <div className="row stack-top">
+            <Button size="sm" variant="secondary" loading={loadingMore} onClick={() => void loadMore()}>
+              {t('admin.requests.loadMore')}
+            </Button>
+            {moreError && (
+              <p className="field-error" role="alert">
+                {moreError}
+              </p>
+            )}
           </div>
         )}
       </Panel>

@@ -418,6 +418,8 @@ On production you should see `PAYPAL_ENVIRONMENT=live`, `EZAK`, and the customer
 
 **Where:** the web app's text is in `apps/web/src/shared/i18n.tsx`. Its `<title>` is "Card Embassy", the authenticator app label (the TOTP issuer in `apps/api/src/modules/acc/mfa/mfa.service.ts`) is "Card Embassy", and the payout email subject is "Your Card Embassy cash-out". A search of the web app, the API, the worker and the adapters for string literals with "Bault" found one place that people see: the administrator's ledger export downloads as `bault-ledger-<from>-to-<to>.csv` (`apps/api/src/modules/adm/accounting.controller.ts`). Only administrators see it. Browser storage keys such as `bault.theme` are not visible.
 
+The landing page's card slab and the statement's wordmark, drawn by CSS in `landing.css` and `screens.css`, say "CARD EMBASSY", and `tests/web/i18n-catalogue.test.ts` refuses "Bault" in the generated content of any style sheet.
+
 Other text to confirm with the customer:
 
 - `landing.foot`: "Card Embassy — collectibles vault and marketplace. Facilities in New Jersey and Delaware. Settled in USD."
@@ -578,6 +580,8 @@ Each of these was checked against `origin/master` on the day this guide was writ
 | **Dependabot #56 and the others** | Open (5.1, item 16). | Review, test, then merge or close. |
 | **Stage 3 tasks** | All marked Done (pull requests #75 and #84). | Nothing. |
 | **Compliance** | Open (5.1, item 12). | The customer's lawyer and policy, then code. |
+| **Changing the account email** | Not built. No route changes the email address on an account, for the collector or for an administrator. | A decision on the flow, then `POST /me/email` that mails a link to the new address and changes it only once that link is opened, a notice to the old address, sessions revoked on the change, and a field on the profile page. |
+| **A receipt with a bank cash-in** | Not built. `POST /media/uploads` is for staff only, so the cash-in form has no document field and a reviewer sees no receipt. | A decision on whether reviewers need it, then a collector upload route limited to that one purpose and to images and PDFs, the key saved as the request's `documentKey`, and the field back on the cash-in form. |
 
 ---
 

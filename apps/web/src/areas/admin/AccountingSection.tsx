@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../../shared/api';
+import { ChargebacksPanel } from './ChargebacksPanel';
 import { formatDateTime, formatUsd } from '../../shared/money';
 import { hasMessage, useI18n, type MessageKey, type TranslateFn } from '../../shared/i18n';
 import {
@@ -291,6 +292,8 @@ export function AccountingSection(_props: { onError?: (m: string) => void }) {
           <ReconciliationView recon={recon} locale={locale} />
         )}
       </Panel>
+
+      <ChargebacksPanel />
     </>
   );
 }

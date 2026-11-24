@@ -100,7 +100,7 @@ describe('PAY wallet request refusals are written for a person', () => {
       destinationAccount: 'red@example.test',
       beneficiaryName: 'Red Fox',
     });
-    expect(large.body.error.message).toBe('The largest cash-out is $20000.00.');
+    expect(large.body.error.message).toBe('The largest cash-out is $20,000.00.');
     const legacy = await collector.post('/finance/wallet/topups', { amountMinor: 500 });
     expect(legacy.body.error.message).toBe('The smallest cash-in is $10.00.');
     expect(JSON.stringify(legacy.body)).not.toMatch(/cents|bank_transfer/);
@@ -165,6 +165,13 @@ describe('PAY the review queue', () => {
     expect((await admin.get('/admin/wallet-requests?limit=501')).status).toBe(400);
     expect((await admin.get('/admin/wallet-requests?before=not-an-id')).status).toBe(400);
     for (const id of ids) await collector.post(`/finance/wallet-requests/${id}/cancel`, {});
+  });
+
+  it('answers a hundred at most when no limit is asked for', async () => {
+    const admin = await signIn(SEED.admin);
+    const [count] = await sql<{ n: number }>('SELECT count(*)::int AS n FROM wallet_request');
+    const page = (await admin.get('/admin/wallet-requests')).body as { id: string }[];
+    expect(page).toHaveLength(Math.min(count!.n, 100));
   });
 });
 

@@ -262,7 +262,7 @@ export function WarehouseConsole() {
               { id: 'house-orders', label: t('warehouse.jump.storeSales') },
             ]}
           />
-          <ReceiveParcels onReceived={receiveParcels} />
+          <ReceiveParcels onReceived={receiveParcels} onRead={() => setQueueVersion((v) => v + 1)} />
 
           <ParcelQueue
             key={queueVersion}
