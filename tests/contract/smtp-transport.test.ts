@@ -3,7 +3,14 @@ import { createServer, type Server } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { SmtpEmailAdapter, createEmailAdapter } from '@bault/adapters';
 
-type Options = { secure?: boolean; requireTLS?: boolean; tls?: { rejectUnauthorized?: boolean } };
+type Options = {
+  secure?: boolean;
+  requireTLS?: boolean;
+  tls?: { rejectUnauthorized?: boolean };
+  connectionTimeout?: number;
+  greetingTimeout?: number;
+  socketTimeout?: number;
+};
 
 function transportOptions(adapter: unknown): Options {
   expect(adapter).toBeInstanceOf(SmtpEmailAdapter);
@@ -101,6 +108,18 @@ describe('SMTP transport options', () => {
     for (const NODE_ENV of ['production', 'development']) {
       expect(transportOptions(smtp({ NODE_ENV })).tls?.rejectUnauthorized).not.toBe(false);
     }
+  });
+});
+
+describe('a mail server that stops answering', () => {
+  it('is given up on within a minute at each step, not after nodemailer\'s ten minutes', () => {
+    const options = transportOptions(smtp());
+    expect(options.connectionTimeout).toBeGreaterThan(0);
+    expect(options.connectionTimeout).toBeLessThanOrEqual(15_000);
+    expect(options.greetingTimeout).toBeGreaterThan(0);
+    expect(options.greetingTimeout).toBeLessThanOrEqual(15_000);
+    expect(options.socketTimeout).toBeGreaterThan(0);
+    expect(options.socketTimeout).toBeLessThanOrEqual(60_000);
   });
 });
 

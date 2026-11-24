@@ -21,6 +21,25 @@ const account = async (pool: Pool, id: string) =>
   ).rows[0]!;
 
 describe('wallet suspension sweep', () => {
+  it('does not suspend an account whose money arrived after the balances were read', async () => {
+    const debtor = await createUser(pool);
+    await ledger(pool, debtor, 'debit', 5_000, 1);
+    let first = true;
+    const racing = {
+      query: async (...args: Parameters<Pool['query']>) => {
+        const result = await (pool.query as (...a: unknown[]) => Promise<unknown>)(...args);
+        if (first) {
+          first = false;
+          await ledger(pool, debtor, 'credit', 6_000);
+        }
+        return result;
+      },
+    } as unknown as Pool;
+
+    await sweepWalletSuspensions(racing);
+    expect(await account(pool, debtor)).toEqual({ status: 'active', auto: false });
+  });
+
   it('suspends once and reinstates once, however often it runs', async () => {
     const debtor = await createUser(pool);
     await ledger(pool, debtor, 'debit', 5_000, 1);

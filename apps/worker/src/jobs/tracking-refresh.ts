@@ -27,13 +27,17 @@ function nextStatus(tracking: TrackingStatus): string | null {
   }
 }
 
-export async function refreshTracking(pool: Pool, shipping: ShippingAdapter = carrier()): Promise<void> {
+export async function refreshTracking(
+  pool: Pool,
+  shipping: ShippingAdapter = carrier(),
+  perRun: number = PER_RUN,
+): Promise<void> {
   const { rows } = await pool.query<{ id: string; tracking_number: string }>(
     `SELECT id, tracking_number FROM shipment
       WHERE status = ANY($1::shipment_status[]) AND tracking_number IS NOT NULL
       ORDER BY updated_at ASC
       LIMIT $2`,
-    [MOVABLE, PER_RUN],
+    [MOVABLE, perRun],
   );
 
   let moved = 0;
@@ -44,11 +48,23 @@ export async function refreshTracking(pool: Pool, shipping: ShippingAdapter = ca
       next = nextStatus(await shipping.getTracking(row.tracking_number));
     } catch (err) {
       failed += 1;
-      log.warn('carrier lookup failed; the parcel is retried next run', {
+      log.warn('carrier lookup failed; the parcel is retried after the others', {
         job: 'shipment.tracking-refresh',
         shipmentId: row.id,
         error: (err as Error).message,
       });
+      await pool
+        .query(`UPDATE shipment SET updated_at = now() WHERE id = $1 AND status = ANY($2::shipment_status[])`, [
+          row.id,
+          MOVABLE,
+        ])
+        .catch((touchErr: Error) =>
+          log.warn('could not move the parcel to the back of the queue', {
+            job: 'shipment.tracking-refresh',
+            shipmentId: row.id,
+            error: touchErr.message,
+          }),
+        );
       continue;
     }
 

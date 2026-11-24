@@ -128,6 +128,22 @@ export class EmailDto {
   email!: string;
 }
 
+export class ChangeEmailDto {
+  @trimmed()
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+
+  @IsString()
+  @MaxLength(PASSWORD_MAX)
+  currentPassword!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  code?: string;
+}
+
 export class ResetPasswordDto {
   @IsString()
   token!: string;

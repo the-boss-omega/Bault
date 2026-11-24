@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 
@@ -493,7 +493,9 @@ case " $* " in
     fi
     printf 'GOOG1IMAGESKEY\\t%s\\n' "$STUB_SECRET" ;;
   *"--format=value(address)"*) echo 34.1.2.3 ;;
-  *"--format=value(connectionName)"*) echo bault-prod-x:us-east4:bault-db ;;
+  *"--format=value(connectionName)"*)
+    [ -e "$STUB/readback-fails" ] && { echo "ERROR: (gcloud.sql.instances.describe) a transient error" >&2; exit 1; }
+    echo bault-prod-x:us-east4:bault-db ;;
   *"--format=value(ipAddresses[0].ipAddress)"*) echo 10.30.0.3 ;;
   *" describe "*) exit 1 ;;
 esac
@@ -598,6 +600,14 @@ exit 0
     expect(existsSync(out)).toBe(false);
   });
 
+  it('makes the images key only after everything else is read back, so a failed read-back loses no secret', () => {
+    writeFileSync(join(stub, 'readback-fails'), '');
+    const r = provision();
+    expect(r.status).toBe(1);
+    expect(calls().filter((c) => c.startsWith('storage hmac create'))).toEqual([]);
+    expect(existsSync(out)).toBe(false);
+  });
+
   it('does not stop for the policy when it already holds the images key', () => {
     const saved = `STORAGE_ACCESS_KEY=GOOG1SAVEDKEY\nSTORAGE_SECRET_KEY=${IMAGES_SECRET}\n`;
     writeFileSync(out, saved, { mode: 0o600 });
@@ -640,7 +650,7 @@ case "$1" in
       *Health*) cat "$STUB/health-$id" 2>/dev/null || true ;;
     esac ;;
   exec) case "$*" in *readyz/worker*) cat "$STUB/status-worker" ;; *) cat "$STUB/status-ready" ;; esac ;;
-  restart) echo "\${!#}" >> "$STUB/restarts" ;;
+  restart) echo "\${!#}" >> "$STUB/restarts"; echo "$*" >> "$STUB/restart-args" ;;
   *) echo "unexpected: docker $*" >&2; exit 1 ;;
 esac
 `,
@@ -711,6 +721,18 @@ esac
     expect(restarts()).toBe('wrk1\n');
   });
 
+  it('gives the worker as long to drain as compose does when it stops it', () => {
+    writeFileSync(join(stub, 'status-worker'), '503');
+    const r = watchdog();
+    expect(r.status, r.output).toBe(0);
+    expect(restarts()).toBe('wrk1\n');
+    const given = Number(/--time (\d+)/.exec(readFileSync(join(stub, 'restart-args'), 'utf8'))?.[1]);
+    const compose = readFileSync(join(ROOT, 'infra', 'production', 'compose.yml'), 'utf8');
+    const grace = Number(/\n {2}worker:\n[\s\S]*?stop_grace_period: (\d+)s/.exec(compose)?.[1]);
+    expect(grace).toBeGreaterThan(0);
+    expect(given).toBeGreaterThanOrEqual(grace);
+  });
+
   it('gives up after three restarts in six hours, and says so once', () => {
     writeFileSync(join(stub, 'health-api1'), 'unhealthy\n');
     mkdirSync(state);
@@ -773,9 +795,11 @@ describe('infra/ops/backup.sh dump', () => {
       `#!/bin/bash
 [ -e "$STUB_FAIL" ] && { echo "pg_dump: connection refused" >&2; exit 1; }
 for a in "$@"; do case "$a" in --file=*) echo dump > "\${a#--file=}" ;; esac; done
+[ -e "$STUB_FAIL_LATE" ] && { echo "pg_dump: connection lost" >&2; exit 1; }
+exit 0
 `,
     );
-    writeFileSync(join(bin, 'pg_restore'), '#!/bin/bash\nexit 0\n');
+    writeFileSync(join(bin, 'pg_restore'), '#!/bin/bash\necho "$*" >> "$STUB_RESTORE_ARGS"\nexit 0\n');
     chmodSync(join(bin, 'pg_dump'), 0o755);
     chmodSync(join(bin, 'pg_restore'), 0o755);
   });
@@ -789,6 +813,8 @@ for a in "$@"; do case "$a" in --file=*) echo dump > "\${a#--file=}" ;; esac; do
         BACKUP_RETAIN_DAYS: '0',
         DIRECT_DATABASE_URL: 'postgres://bault_owner:pw@127.0.0.1:5432/bault',
         STUB_FAIL: join(scratch, 'fail'),
+        STUB_FAIL_LATE: join(scratch, 'fail-late'),
+        STUB_RESTORE_ARGS: join(scratch, 'restore-args'),
         ...extra,
       },
       encoding: 'utf8',
@@ -816,5 +842,69 @@ for a in "$@"; do case "$a" in --file=*) echo dump > "\${a#--file=}" ;; esac; do
     expect(r.status).not.toBe(0);
     expect(r.output).toContain('DIRECT_DATABASE_URL is not set');
     expect(existsSync(marker())).toBe(true);
+  });
+
+  const dumps = () => (existsSync(backups) ? readdirSync(backups).filter((f) => f.startsWith('bault-')) : []);
+
+  it('leaves no half-written dump behind when pg_dump fails part-way', () => {
+    writeFileSync(join(scratch, 'fail-late'), '');
+    const r = dump();
+    expect(r.status).not.toBe(0);
+    expect(dumps()).toEqual([]);
+    expect(existsSync(marker())).toBe(true);
+  });
+
+  it('leaves no unencrypted dump on the host when the encryption fails', () => {
+    writeFileSync(join(bin, 'age'), '#!/bin/bash\necho "age: no identity matched" >&2\nexit 1\n');
+    chmodSync(join(bin, 'age'), 0o755);
+    const r = dump({ BACKUP_AGE_RECIPIENT: AGE });
+    expect(r.status).not.toBe(0);
+    expect(dumps()).toEqual([]);
+    expect(existsSync(marker())).toBe(true);
+  });
+});
+
+describe('infra/ops/backup.sh verify and restore', () => {
+  let scratch: string;
+  let bin: string;
+  let file: string;
+
+  beforeEach(() => {
+    scratch = mkdtempSync(join(tmpdir(), 'bault-restore-'));
+    bin = join(scratch, 'bin');
+    mkdirSync(bin);
+    writeFileSync(join(bin, 'pg_restore'), '#!/bin/bash\necho "$*" >> "$STUB_RESTORE_ARGS"\nexit 0\n');
+    chmodSync(join(bin, 'pg_restore'), 0o755);
+    file = join(scratch, 'bault-20261124T011700Z.dump');
+    writeFileSync(file, 'dump\n');
+    writeFileSync(`${file}.sha256`, `${createHash('sha256').update('dump\n').digest('hex')}  bault-20261124T011700Z.dump\n`);
+  });
+  afterEach(() => rmSync(scratch, { recursive: true, force: true }));
+
+  function run(args: string[], env: Record<string, string>, input = '') {
+    const r = spawnSync('bash', [BACKUP, ...args], {
+      env: { PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`, STUB_RESTORE_ARGS: join(scratch, 'restore-args'), ...env },
+      input,
+      encoding: 'utf8',
+      timeout: 30_000,
+    });
+    return { status: r.status, output: `${r.stdout}${r.stderr}` };
+  }
+
+  it('never prints the password of a URL it refuses', () => {
+    const r = run(['verify', file], { DIRECT_DATABASE_URL: 'postgresql+x://bault_owner:s3cretPw0rd@db.internal/bault' });
+    expect(r.status).not.toBe(0);
+    expect(r.output).toContain('not a postgres:// URL');
+    expect(r.output).not.toContain('s3cretPw0rd');
+    expect(r.output).not.toContain('bault_owner');
+  });
+
+  it('restores in one transaction, so a restore that fails leaves the target as it was', () => {
+    const r = run(['restore', file, 'postgres://bault_owner:pw@127.0.0.1:5432/bault_restore'], {}, 'bault_restore\n');
+    expect(r.status, r.output).toBe(0);
+    const calls = readFileSync(join(scratch, 'restore-args'), 'utf8').trimEnd().split('\n');
+    const restore = calls.find((c) => c.includes('--dbname='));
+    expect(restore).toContain('--single-transaction');
+    expect(restore).toContain('--exit-on-error');
   });
 });

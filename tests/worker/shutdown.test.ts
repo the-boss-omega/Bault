@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { drainWithin } from '../../apps/worker/src/shutdown';
 
 const WORKER_DIR = fileURLToPath(new URL('../../apps/worker', import.meta.url));
 
@@ -44,5 +45,40 @@ describe('worker shutdown', () => {
     } finally {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
     }
+  });
+});
+
+describe('the drain on shutdown', () => {
+  it('shares one budget between its steps, so a slow first step shortens the next instead of adding to it', async () => {
+    const given: number[] = [];
+    const hangs = (ms: number) => {
+      given.push(ms);
+      return new Promise<void>(() => undefined);
+    };
+    const started = Date.now();
+    await drainWithin(400, [hangs, hangs, hangs]);
+    const took = Date.now() - started;
+
+    expect(took).toBeGreaterThanOrEqual(390);
+    expect(took).toBeLessThan(700);
+    expect(given[0]).toBeGreaterThan(350);
+    expect(given[1]).toBeLessThan(50);
+    expect(given[2]).toBeLessThan(50);
+  });
+
+  it('runs every step though one fails, and does not wait out the budget when the steps finish early', async () => {
+    const ran: string[] = [];
+    const started = Date.now();
+    await drainWithin(5_000, [
+      async () => {
+        ran.push('ocr');
+        throw new Error('the reader did not close');
+      },
+      async () => {
+        ran.push('queue');
+      },
+    ]);
+    expect(ran).toEqual(['ocr', 'queue']);
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 });

@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Patch, Post, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { IdParam } from '../../shared/uuid-param';
 import { ApiTags } from '@nestjs/swagger';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
@@ -7,7 +8,10 @@ import { AllowSuspended } from './allow-suspended.decorator';
 import { AllowWithoutMfa } from './mfa/allow-without-mfa.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { ProfileService } from './profile.service';
-import { UpdateProfileDto } from './acc.dto';
+import { ChangeEmailDto, UpdateProfileDto } from './acc.dto';
+import { EmailChangeService } from './email-change.service';
+import { MAIL_ROUTE } from './auth.controller';
+import { AuthBucket } from '../../shared/throttle/auth-bucket';
 import { IsShippableCountry } from '../shp/country.validator';
 
 class CreateAddressDto {
@@ -39,7 +43,10 @@ class UpdateAddressDto {
 @ApiTags('ACC')
 @Controller('me')
 export class ProfileController {
-  constructor(private readonly profiles: ProfileService) {}
+  constructor(
+    private readonly profiles: ProfileService,
+    private readonly emailChange: EmailChangeService,
+  ) {}
 
   @AllowSuspended()
   @AllowWithoutMfa()
@@ -51,6 +58,31 @@ export class ProfileController {
   @Patch('profile')
   update(@CurrentUser() user: AuthUser, @Body() dto: UpdateProfileDto) {
     return this.profiles.update(user.id, { firstName: dto.firstName, lastName: dto.lastName });
+  }
+
+  @AuthBucket(MAIL_ROUTE)
+  @Post('email')
+  @HttpCode(202)
+  async requestEmailChange(@CurrentUser() user: AuthUser, @Body() dto: ChangeEmailDto, @Req() req: Request) {
+    const { pendingEmail } = await this.emailChange.request(user.id, dto.email, dto.currentPassword, dto.code, {
+      ip: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+    return { status: 'confirmation_sent', pendingEmail };
+  }
+
+  @AuthBucket(MAIL_ROUTE)
+  @Post('email/resend')
+  @HttpCode(202)
+  async resendEmailChange(@CurrentUser() user: AuthUser) {
+    const { pendingEmail } = await this.emailChange.resend(user.id);
+    return { status: 'confirmation_sent', pendingEmail };
+  }
+
+  @Delete('email')
+  async cancelEmailChange(@CurrentUser() user: AuthUser) {
+    await this.emailChange.cancel(user.id);
+    return { status: 'cancelled' };
   }
 
   @Get('addresses')

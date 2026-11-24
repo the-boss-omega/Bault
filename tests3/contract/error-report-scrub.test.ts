@@ -125,6 +125,19 @@ describe('a provider failure reported from any process', () => {
   });
 });
 
+describe('a Coinbase Commerce failure', () => {
+  it('keeps the provider, path and status, and loses the reply', () => {
+    const coinbase =
+      'Coinbase Commerce /charges failed (400): {"error":{"type":"invalid_request","message":"redirect_url https://app.example/#/wallet/cash-in?payment=pay-7f3a is invalid"}}';
+    const out = scrubErrorEvent({
+      message: coinbase,
+      exception: { values: [{ value: coinbase }] },
+    } as Event & Record<string, unknown>) as Record<string, unknown>;
+    expect(leaks(out as Event, 'invalid_request', 'pay-7f3a', 'redirect_url')).toEqual([]);
+    expect(JSON.stringify(out)).toContain('Coinbase Commerce /charges failed (400)');
+  });
+});
+
 describe('a crash on a credential route', () => {
   it('drops the body of a sign-in', () => {
     const out = scrubErrorEvent(
@@ -150,6 +163,16 @@ describe('a crash on a credential route', () => {
         crashDuring('PATCH', url, { currentPassword: 'old-secret-pw', newPassword: 'new-secret-pw' }),
       );
       expect(leaks(out, 'old-secret-pw', 'new-secret-pw'), url).toEqual([]);
+    }
+  });
+
+  it('drops the body of an email change, which carries the current password and a code', () => {
+    for (const url of ['/api/v1/me/email', '/api/v1/me/email/resend']) {
+      const out = scrubErrorEvent(
+        crashDuring('POST', url, { email: 'next@example.test', currentPassword: 'old-secret-pw', code: '123456' }),
+      );
+      expect(leaks(out, 'old-secret-pw', 'next@example.test', '123456'), url).toEqual([]);
+      expect(out?.request?.data, url).toBeUndefined();
     }
   });
 

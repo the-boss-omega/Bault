@@ -46,6 +46,7 @@ import { LandingPage } from './areas/customer/marketing/LandingPage';
 import { TierPage } from './areas/customer/tier/TierPage';
 import { VerifyEmailPage } from './areas/customer/auth/VerifyEmailPage';
 import { ResetPasswordPage } from './areas/customer/auth/ResetPasswordPage';
+import { ConfirmEmailPage } from './areas/customer/auth/ConfirmEmailPage';
 import { VaultPage } from './areas/customer/vault/VaultPage';
 import { InboundPage } from './areas/customer/inbound/InboundPage';
 import { SupportPage } from './areas/customer/support/SupportPage';
@@ -145,7 +146,7 @@ type BootState =
   | { status: 'ready'; user: SessionUser }
   | { status: 'blocked'; messageKey: MessageKey; detail: string | null };
 
-const TOKEN_ROUTES = ['verify-email', 'reset-password'] as const;
+const TOKEN_ROUTES = ['verify-email', 'reset-password', 'confirm-email'] as const;
 
 const AUTH_ROUTES: Record<string, AuthMode> = {
   signin: 'signIn',
@@ -206,6 +207,8 @@ export default function App() {
       <AuthShell bare>
         {route.section === 'verify-email' ? (
           <VerifyEmailPage token={token} />
+        ) : route.section === 'confirm-email' ? (
+          <ConfirmEmailPage token={token} />
         ) : (
           <ResetPasswordPage token={token} />
         )}

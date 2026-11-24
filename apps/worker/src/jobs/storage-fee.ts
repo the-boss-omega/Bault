@@ -148,8 +148,6 @@ export async function runStorageFees(pool: Pool): Promise<void> {
                 s.covered_until
            FROM stored s CROSS JOIN policy p
        ),
-       -- When this item's chargeable clock started: the end of its included
-       -- window, or the last time a membership covered it, whichever is later.
        anchored AS (
          SELECT c.*,
                 GREATEST(c.received_at + make_interval(days => c.free_days), c.covered_until) AS clock_from
@@ -157,8 +155,6 @@ export async function runStorageFees(pool: Pool): Promise<void> {
        ),
        elapsed AS (
          SELECT a.*,
-                -- Periods that have STARTED since the clock started.
-                -- floor(days_since / period) + 1, never below zero.
                 GREATEST(
                   0,
                   FLOOR(
