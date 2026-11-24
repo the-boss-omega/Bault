@@ -7,7 +7,10 @@ export interface S3Config {
   bucket: string;
   accessKey: string;
   secretKey: string;
+  timeoutMs?: number;
 }
+
+export const S3_REQUEST_TIMEOUT_MS = 30_000;
 
 const SERVICE = 's3';
 const MAX_READ_BYTES = 20 * 1024 * 1024;
@@ -39,6 +42,7 @@ function signingKey(secretKey: string, dateStamp: string, region: string): Buffe
 
 export class S3StorageAdapter implements StorageAdapter {
   private readonly endpoint: URL;
+  private readonly timeoutMs: number;
 
   constructor(private readonly config: S3Config) {
     if (!config.endpoint) throw new Error('S3StorageAdapter needs an endpoint');
@@ -47,6 +51,7 @@ export class S3StorageAdapter implements StorageAdapter {
       throw new Error('S3StorageAdapter needs an access key and a secret key');
     }
     this.endpoint = new URL(config.endpoint);
+    this.timeoutMs = config.timeoutMs ?? S3_REQUEST_TIMEOUT_MS;
   }
 
   private urlFor(key: string): URL {
@@ -101,6 +106,7 @@ export class S3StorageAdapter implements StorageAdapter {
 
     const response = await fetch(url, {
       method: 'PUT',
+      signal: AbortSignal.timeout(this.timeoutMs),
       headers: {
         ...headers,
         authorization:
@@ -122,7 +128,7 @@ export class S3StorageAdapter implements StorageAdapter {
   }
 
   async getObject(key: string): Promise<Buffer> {
-    const response = await fetch(await this.getSignedUrl(key, 60));
+    const response = await fetch(await this.getSignedUrl(key, 60), { signal: AbortSignal.timeout(this.timeoutMs) });
     if (!response.ok) {
       throw new Error(`Storage read failed (${response.status} ${response.statusText}) for key "${key}"`);
     }

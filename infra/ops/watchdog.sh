@@ -74,7 +74,7 @@ restart() {
     return 0
   fi
   log "$service: $reason; restarting"
-  if docker restart --time 30 "$id" > /dev/null; then
+  if docker restart --time 45 "$id" > /dev/null; then
     printf '%s\n' "${recent[@]+"${recent[@]}"}" "$NOW" | sed '/^$/d' > "$file"
   else
     log "$service: docker restart failed"
