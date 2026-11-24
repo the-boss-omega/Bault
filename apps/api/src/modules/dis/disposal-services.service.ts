@@ -9,6 +9,8 @@ import { CustodyService } from '../cst/custody.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { item, itemChangeHistory } from '../cst/cst.schema';
 import { ServiceRequestService } from './service.service';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
+import { itemStateWords } from '../../shared/item-state-words';
 
 export interface DeslabFulfillment {
   itemVerified: boolean;
@@ -38,12 +40,13 @@ export class DisposalServicesService {
     const [it] = await this.db.select().from(item).where(eq(item.id, itemId)).limit(1);
     if (!it || it.ownerId !== ownerId) throw AppError.forbidden('Not your item');
     if (it.lifecycleState !== 'stored') {
-      throw new AppError(ErrorCode.CONFLICT, `Item must be stored (it is ${it.lifecycleState})`, 409);
+      throw new AppError(ErrorCode.CONFLICT, `This card is ${itemStateWords(it.lifecycleState)}. It has to be in the vault first.`, 409);
     }
     if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
     if (!it.conditionGrade || /^raw$/i.test(it.conditionGrade)) {
       throw AppError.validation('This item has no grade recorded — there is nothing to crack it out of.');
     }
+    await assertItemsUncommitted(this.db, [itemId], 'cracked out of its slab');
     return this.confirmation.issue(ownerId, 'deslab', { itemId });
   }
 
@@ -62,6 +65,7 @@ export class DisposalServicesService {
         type: 'deslab',
         requesterId: ownerId,
         itemId,
+        commits: 'cracked out of its slab',
         feeActionType: 'service_fee:deslab',
       });
     });
@@ -109,7 +113,7 @@ export class DisposalServicesService {
     for (const it of rows) {
       if (it.ownerId !== ownerId) throw AppError.forbidden('Not your item');
       if (it.lifecycleState !== 'stored') {
-        throw new AppError(ErrorCode.CONFLICT, `${it.serialNumber} is ${it.lifecycleState}`, 409);
+        throw new AppError(ErrorCode.CONFLICT, `${it.serialNumber} is ${itemStateWords(it.lifecycleState)}, so it cannot be culled.`, 409);
       }
       if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, `${it.serialNumber} is on hold`, 409);
       if (!it.receivedAt || it.receivedAt.getTime() < cutoff) {
@@ -120,6 +124,7 @@ export class DisposalServicesService {
         );
       }
     }
+    await assertItemsUncommitted(this.db, ids, outcome === 'donate' ? 'donated' : 'discarded');
 
     return this.confirmation.issue(ownerId, 'remove_commons', { itemIds: ids, outcome });
   }
@@ -131,6 +136,10 @@ export class DisposalServicesService {
     }>(ownerId, 'remove_commons', confirmationToken);
 
     return this.custody.run(async (tx) => {
+      await this.custody.lockItems(tx, itemIds);
+      for (const itemId of itemIds) await this.custody.lockExpecting(tx, itemId, { ownerId });
+      await assertItemsUncommitted(tx, itemIds, outcome === 'donate' ? 'donated' : 'discarded');
+
       const req = await this.requests.create(tx, {
         type: 'remove_commons',
         requesterId: ownerId,
@@ -140,9 +149,6 @@ export class DisposalServicesService {
       if (!req) throw AppError.validation('Failed to record the cull');
 
       const platformId = outcome === 'donate' ? await this.requests.platformAccountId(tx) : null;
-
-      await this.custody.lockItems(tx, itemIds);
-      for (const itemId of itemIds) await this.custody.lockExpecting(tx, itemId, { ownerId });
 
       for (const itemId of itemIds) {
         if (platformId) {

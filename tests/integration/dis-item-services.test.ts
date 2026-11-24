@@ -84,6 +84,34 @@ describe('DIS services on a stored item', () => {
     expect(after.some((r) => r.id === req.id)).toBe(true);
   });
 
+  it('refunds and closes a walkthrough request an admin refuses', async () => {
+    const { item } = await freshItem();
+    const collector = await signIn(SEED.collector);
+    await fundWallet(SEED.collector, 100_000);
+    const before = await walletOf(collector);
+    const req = (
+      await collector.post('/services/grading', {
+        itemId: item.id,
+        tier: 'psa_walkthrough',
+        declaredMinor: 800_000,
+      })
+    ).body;
+    expect(await walletOf(collector)).toBeLessThan(before);
+
+    const admin = await signIn(SEED.admin);
+    const refused = await admin.post(`/services/grading/${req.id}/approval`, {
+      approve: false,
+      reason: 'Declared value is not supported by comps.',
+    });
+    expect(refused.status).toBe(201);
+    expect(refused.body.status).toBe('cancelled');
+    expect(await walletOf(collector)).toBe(before);
+
+    const again = await admin.post(`/services/grading/${req.id}/approval`, { approve: false, reason: 'Twice.' });
+    expect(again.status).toBe(409);
+    expect(await walletOf(collector)).toBe(before);
+  });
+
   it('takes the card out of circulation while it is at the grader, and brings it back', async () => {
     const { operator, item } = await freshItem();
     const collector = await signIn(SEED.collector);
@@ -307,7 +335,7 @@ describe('DIS services on a stored item', () => {
     expect(confirmed.body.error.code).toBe('item_on_hold');
   });
 
-  it('does not crack a slab that was sold after the request was accepted', async () => {
+  it('will not list a slab waiting to be cracked, and does not crack one that changed hands after the request was accepted', async () => {
     const { operator, item } = await freshItem({ conditionGrade: 'CGC 9', description: 'Deslab sold before the bench' });
     const collector = await signIn(SEED.collector);
     const challenge = (await collector.post('/services/deslab', { itemId: item.id })).body;
@@ -316,7 +344,12 @@ describe('DIS services on a stored item', () => {
     ).body;
     await accepted(operator, req.id);
 
-    await sellTo(SEED.collector, SEED.collector2, item.id);
+    const listed = await collector.post('/marketplace/listings', { itemId: item.id, askingPrice: 5_000 });
+    expect(listed.status).toBe(409);
+    expect(listed.body.error.code).toBe('item_committed');
+    const golden = await signIn(SEED.collector2);
+    const goldenId = (await golden.get('/me/profile')).body.id as string;
+    expect((await (await signIn(SEED.admin)).patch(`/admin/items/${item.id}`, { ownerId: goldenId })).status).toBe(200);
 
     const done = await operator.post(`/services/deslab/${req.id}/complete`, {
       itemVerified: true,
@@ -327,6 +360,13 @@ describe('DIS services on a stored item', () => {
     expect(done.body.error.code).toBe('item_no_longer_available');
     const card = (await (await signIn(SEED.collector2)).get(`/vault/items/${item.id}`)).body;
     expect(card.item.conditionGrade).toBe('CGC 9');
+
+    const before = await walletOf(collector);
+    const closed = await operator.post(`/services/requests/${req.id}/deny`);
+    expect(closed.status).toBe(201);
+    expect(closed.body.status).toBe('cancelled');
+    expect(await walletOf(collector)).toBeGreaterThan(before);
+    expect((await operator.post(`/services/requests/${req.id}/deny`)).status).toBe(409);
   });
 
   it('lets the owner ask for a lot to be split, and produces one item per card', async () => {
@@ -399,5 +439,115 @@ describe('DIS services on a stored item', () => {
 
     const still = (await collector.get(`/vault/items/${mine.id}`)).body;
     expect(still.item.lifecycleState).toBe('stored');
+  });
+
+  async function gradingAtStage(stage: 'requested' | 'accepted' | 'shipped') {
+    const { operator, item } = await freshItem({ description: `Grading ${stage}` });
+    const collector = await signIn(SEED.collector);
+    await fundWallet(SEED.collector, 100_000);
+    const req = (
+      await collector.post('/services/grading', { itemId: item.id, tier: 'psa_regular', declaredMinor: 50_000 })
+    ).body;
+    let submission: { id: string } | undefined;
+    if (stage !== 'requested') await accepted(operator, req.id);
+    if (stage === 'shipped') {
+      submission = (await operator.post('/services/grading/submissions', { gradingBody: 'PSA' })).body;
+      expect((await operator.post(`/services/grading/submissions/${submission!.id}/add`, { requestId: req.id })).status).toBe(201);
+      const shipped = await operator.post(`/services/grading/submissions/${submission!.id}/ship`, {
+        trackingNumber: '9400111899223197428491',
+        externalReference: 'PSA-SUB-77124',
+        notes: 'One card.',
+      });
+      expect(shipped.status).toBe(201);
+    }
+    return { operator, collector, item, req, submission };
+  }
+
+  it('refuses an approval decision on a walkthrough request staff already cancelled, and refunds once', async () => {
+    const { operator, item } = await freshItem();
+    const collector = await signIn(SEED.collector);
+    await fundWallet(SEED.collector, 100_000);
+    const before = await walletOf(collector);
+    const req = (
+      await collector.post('/services/grading', { itemId: item.id, tier: 'psa_walkthrough', declaredMinor: 800_000 })
+    ).body;
+    expect(await walletOf(collector)).toBeLessThan(before);
+
+    const denied = await operator.post(`/services/requests/${req.id}/deny`);
+    expect(denied.status).toBe(201);
+    expect(await walletOf(collector)).toBe(before);
+
+    const admin = await signIn(SEED.admin);
+    const refused = await admin.post(`/services/grading/${req.id}/approval`, { approve: false, reason: 'Too late.' });
+    expect(refused.status).toBe(409);
+    const approved = await admin.post(`/services/grading/${req.id}/approval`, { approve: true, reason: 'Too late.' });
+    expect(approved.status).toBe(409);
+    expect(await walletOf(collector)).toBe(before);
+  });
+
+  it('does not send a card to the grader once it has changed hands', async () => {
+    const { operator, item, req } = await gradingAtStage('accepted');
+    const submission = (await operator.post('/services/grading/submissions', { gradingBody: 'PSA' })).body;
+    expect((await operator.post(`/services/grading/submissions/${submission.id}/add`, { requestId: req.id })).status).toBe(201);
+
+    const admin = await signIn(SEED.admin);
+    const golden = await signIn(SEED.collector2);
+    const goldenId = (await golden.get('/me/profile')).body.id as string;
+    expect((await admin.patch(`/admin/items/${item.id}`, { ownerId: goldenId })).status).toBe(200);
+
+    const shipped = await operator.post(`/services/grading/submissions/${submission.id}/ship`, {
+      trackingNumber: '9400111899223197428492',
+      externalReference: 'PSA-SUB-77125',
+      notes: 'One card.',
+    });
+    expect(shipped.status).toBe(409);
+    expect(shipped.body.error.code).toBe('item_no_longer_available');
+    const card = (await golden.get(`/vault/items/${item.id}`)).body;
+    expect(card.item.lifecycleState).toBe('stored');
+  });
+
+  it('does not write a grade onto a card that changed hands while it was away', async () => {
+    const { operator, item, req } = await gradingAtStage('shipped');
+    const admin = await signIn(SEED.admin);
+    const golden = await signIn(SEED.collector2);
+    const goldenId = (await golden.get('/me/profile')).body.id as string;
+    expect((await admin.patch(`/admin/items/${item.id}`, { ownerId: goldenId })).status).toBe(200);
+
+    const done = await operator.post(`/services/grading/${req.id}/complete`, {
+      grade: 'PSA 10',
+      gradingBody: 'PSA',
+      certificateNumber: 'PSA-11223344',
+      itemVerified: true,
+      notes: 'Returned sealed.',
+    });
+    expect(done.status).toBe(409);
+    expect(done.body.error.code).toBe('item_no_longer_available');
+    const card = (await golden.get(`/vault/items/${item.id}`)).body;
+    expect(card.item.conditionGrade).not.toBe('PSA 10');
+  });
+
+  it('brings a card back on hold when its grading is cancelled while it is at the grader', async () => {
+    const { operator, collector, item, req, submission } = await gradingAtStage('shipped');
+    const before = await walletOf(collector);
+
+    const denied = await operator.post(`/services/requests/${req.id}/deny`);
+    expect(denied.status).toBe(201);
+    expect(denied.body.status).toBe('cancelled');
+    expect(await walletOf(collector)).toBeGreaterThan(before);
+
+    const card = (await collector.get(`/vault/items/${item.id}`)).body;
+    expect(card.item.lifecycleState).toBe('stored');
+    expect(card.item.holdFlag).toBe(true);
+
+    const listed = await collector.post('/marketplace/listings', { itemId: item.id, askingPrice: 12_000 });
+    expect(listed.status).toBe(409);
+    expect((await operator.post(`/services/grading/${req.id}/complete`, {
+      grade: 'PSA 9',
+      gradingBody: 'PSA',
+      certificateNumber: 'PSA-55667788',
+      itemVerified: true,
+      notes: 'Late.',
+    })).status).toBe(409);
+    expect((await operator.post(`/services/grading/submissions/${submission!.id}/close`)).status).toBe(201);
   });
 });

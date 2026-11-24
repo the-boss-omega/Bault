@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, SEED_USERNAME, signIn, intakeFor } from '../../tests/integration/helpers/http';
+import { closeDb, sql } from '../../tests/integration/helpers/db';
+
+afterAll(closeDb);
 
 const ASK = {
   summary: 'Sleeve before shipping',
@@ -194,15 +197,21 @@ describe('booking a run of collectibles in at once', () => {
     });
     expect(res.status).toBe(201);
 
-    const made = res.body as { serialNumber: string; barcode: string; isLot: boolean }[];
+    const made = res.body as { id: string; serialNumber: string; barcode: string; isLot: boolean }[];
     expect(made).toHaveLength(12);
     expect(new Set(made.map((i) => i.serialNumber)).size).toBe(12);
     expect(new Set(made.map((i) => i.barcode)).size).toBe(12);
     expect(made.every((i) => !i.isLot)).toBe(true);
 
+    const charges = await sql<{ reference_id: string; amount: number }>(
+      `SELECT reference_id, amount::int AS amount FROM charge WHERE action_type = 'intake' AND reference_id = any($1)`,
+      [made.map((i) => i.id)],
+    );
+    expect(new Set(charges.map((c) => c.reference_id)).size).toBe(12);
+    expect(charges).toHaveLength(12);
+    expect(charges.every((c) => c.amount > 0)).toBe(true);
     const after = (await owner.get('/finance/wallet')).body.amount as number;
-    expect(before - after).toBeGreaterThan(0);
-    expect((before - after) % 12).toBe(0);
+    expect(before - after).toBe(charges.reduce((sum, c) => sum + c.amount, 0));
   });
 
   it('still treats a lot as the single thing it is', async () => {

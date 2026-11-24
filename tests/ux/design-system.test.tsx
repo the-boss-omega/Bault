@@ -102,24 +102,24 @@ describe('a button that is working', () => {
 });
 
 describe('the theme', () => {
-  it('follows the system by default, stamping nothing', () => {
+  it('is dark by default', () => {
     renderIn(<ThemeToggle />);
-    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
-  it('cycles light → dark → system on one control', async () => {
+  it('cycles dark → system → light on one control', async () => {
     const user = userEvent.setup();
     renderIn(<ThemeToggle />);
     const toggle = screen.getByRole('button');
+
+    await user.click(toggle);
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
 
     await user.click(toggle);
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
 
     await user.click(toggle);
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
-
-    await user.click(toggle);
-    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
   });
 
   it('remembers the choice', async () => {
@@ -127,7 +127,7 @@ describe('the theme', () => {
     renderIn(<ThemeToggle />);
     await user.click(screen.getByRole('button'));
     await user.click(screen.getByRole('button'));
-    expect(localStorage.getItem('bault.theme')).toBe('dark');
+    expect(localStorage.getItem('bault.theme')).toBe('light');
   });
 
   it('says which theme is on, so the control is not a mystery', () => {

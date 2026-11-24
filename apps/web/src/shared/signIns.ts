@@ -1,3 +1,5 @@
+import { dayKey } from './money';
+
 export type SignInOutcome = 'success' | 'bad_credentials' | 'unverified' | 'refused' | 'mfa_challenged' | 'mfa_failed';
 
 export interface SignInAttempt {
@@ -58,4 +60,16 @@ export function describeDevice(ua: string | null | undefined): string {
   if (browser && os) return `${browser} · ${os}`;
   if (browser) return browser;
   return ua.length > 40 ? `${ua.slice(0, 40)}…` : ua;
+}
+
+/** The log, newest first, in runs of one calendar day. */
+export function attemptsByDay(attempts: readonly SignInAttempt[]) {
+  const days: Array<{ key: string; items: SignInAttempt[]; first: SignInAttempt }> = [];
+  for (const attempt of attempts) {
+    const key = dayKey(attempt.occurredAt);
+    const last = days[days.length - 1];
+    if (last && last.key === key) last.items.push(attempt);
+    else days.push({ key, items: [attempt], first: attempt });
+  }
+  return days;
 }

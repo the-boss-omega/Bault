@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { billableActions, coverage } from '../../apps/api/src/modules/prc/billable-actions';
 import { ITEM_CLASSES } from '../../apps/api/src/modules/inv/item-classes';
-import { MEMBERSHIP_TIERS } from '../../apps/api/src/modules/mem/tiers';
 import { ESCROW_FEE_ACTION, ESCROW_FEE_BPS } from '../../apps/api/src/modules/esc/escrow-terms';
 import {
   CASHOUT_FEE_ACTION,
@@ -16,11 +15,10 @@ import {
   parsePriceFile,
   plan,
   readPriceFile,
-  withTierParameters,
 } from '../../scripts/ops/prices.mjs';
 
 const file = readPriceFile(DEFAULT_FILE);
-const rules = withTierParameters(file.rules, MEMBERSHIP_TIERS);
+const rules = file.rules;
 
 const asServerRules = (list: typeof rules) =>
   list.map((r) => ({
@@ -50,6 +48,11 @@ describe('infra/production/prices.json', () => {
     expect(result.unknownRules).toEqual([]);
   });
 
+  it('gives a percentage only to an action priced on an amount, as the API requires', () => {
+    const onAmount = new Set(billableActions().filter((a) => a.percentOf).map((a) => a.actionType));
+    for (const r of rules.filter((x) => x.model === 'percentage')) expect(onAmount, keyOf(r)).toContain(r.actionType);
+  });
+
   it('names only item classes the intake bench knows', () => {
     const known = new Set(ITEM_CLASSES.map((c) => c.key));
     for (const r of rules.filter((x) => x.itemClass)) expect(known, keyOf(r)).toContain(r.itemClass);
@@ -72,12 +75,8 @@ describe('infra/production/prices.json', () => {
     }
   });
 
-  it('gives each membership the allowances of its tier, and both storage rules the terms the sweep reads', () => {
-    for (const tier of MEMBERSHIP_TIERS) {
-      const r = rules.find((x) => x.actionType === tier.feeActionType)!;
-      expect(r.parameters).toMatchObject({ storedItems: tier.storedItems, postageCreditMinor: tier.postageCreditMinor });
-      expect(r.billingTrigger).toBe('monthly');
-    }
+  it('sells no membership, and gives both storage rules the terms the sweep reads', () => {
+    expect(rules.filter((x) => x.actionType.startsWith('membership:'))).toEqual([]);
     for (const actionType of ['storage', 'storage_oversized']) {
       const r = rules.find((x) => x.actionType === actionType)!;
       expect(Object.keys(r.parameters ?? {}).sort()).toEqual(['freeDays', 'percentOfIntakeBps', 'periodDays']);
@@ -114,9 +113,7 @@ describe('scripts/ops/prices.mjs', () => {
     expect(() => parsePriceFile(doc([rule(), rule()]))).toThrow(/twice/);
     expect(() => parsePriceFile(doc([rule({ description: ' ' })]))).toThrow(/description/);
     expect(() => parsePriceFile(doc([rule({ billingTrigger: 'yearly' })]))).toThrow(/billingTrigger/);
-    expect(() =>
-      parsePriceFile(doc([rule({ actionType: 'membership:folio', parameters: { storedItems: 1 } })])),
-    ).toThrow(/tier catalogue/);
+    expect(() => parsePriceFile(doc([rule({ actionType: 'membership:bronze' })]))).toThrow(/no longer sold/);
     expect(() => parsePriceFile(doc([rule({ actionType: 'storage' })]))).toThrow(/freeDays/);
     expect(() => parsePriceFile(doc([rule()], 'yes'))).toThrow(/reviewed/);
     expect(() => parsePriceFile({ ...doc([rule()]), currency: 'EUR' })).toThrow(/USD/);

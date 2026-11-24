@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, sql, type SQL } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -12,19 +12,54 @@ import {
   isKnownChannel,
   isKnownEventType,
   isMandatory,
-  type NotificationChannel,
 } from './event-types';
+
+export const FEED_PAGE_DEFAULT = 50;
+export const FEED_PAGE_MAX = 100;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const COLLECTOR_CONTENT_KEY = /^(message|barcode|code|trackingNumber|amount|price)$|Code$|Minor$/;
+
+function collectorContent(content: unknown): Record<string, string | number> {
+  if (!content || typeof content !== 'object' || Array.isArray(content)) return {};
+  const kept: Record<string, string | number> = {};
+  for (const [key, value] of Object.entries(content as Record<string, unknown>)) {
+    if (!COLLECTOR_CONTENT_KEY.test(key)) continue;
+    if (typeof value === 'number' && Number.isFinite(value)) kept[key] = value;
+    if (typeof value === 'string' && !UUID.test(value)) kept[key] = value;
+  }
+  return kept;
+}
+
+function collectorNotificationView(row: typeof notification.$inferSelect) {
+  return {
+    id: row.id,
+    eventType: row.eventType,
+    createdAt: row.createdAt,
+    content: collectorContent(row.content),
+  };
+}
 
 @Injectable()
 export class NotificationService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  listMine(userId: string) {
-    return this.db
+  async listMine(userId: string, page: { limit?: number; before?: string } = {}) {
+    const conditions: SQL[] = [eq(notification.userId, userId), eq(notification.channel, 'in_app')];
+    if (page.before) {
+      conditions.push(
+        sql`(${notification.createdAt}, ${notification.id}) < (
+          select n.created_at, n.id from notification n where n.id = ${page.before} and n.user_id = ${userId}
+        )`,
+      );
+    }
+    const rows = await this.db
       .select()
       .from(notification)
-      .where(eq(notification.userId, userId))
-      .orderBy(sql`${notification.createdAt} desc`);
+      .where(and(...conditions))
+      .orderBy(sql`${notification.createdAt} desc`, sql`${notification.id} desc`)
+      .limit(page.limit ?? FEED_PAGE_DEFAULT);
+    return rows.map(collectorNotificationView);
   }
 
   async getPreferences(userId: string) {
@@ -50,7 +85,7 @@ export class NotificationService {
       }),
     }));
 
-    return { categories: EVENT_CATEGORIES, channels: NOTIFICATION_CHANNELS, events: matrix, rows };
+    return { categories: EVENT_CATEGORIES, channels: NOTIFICATION_CHANNELS, events: matrix };
   }
 
   async setPreference(userId: string, eventType: string, channel: string, enabled: boolean) {
@@ -58,65 +93,38 @@ export class NotificationService {
     if (!isKnownEventType(eventType)) throw AppError.validation(`Unknown event type "${eventType}"`);
     if (!enabled && isMandatory(eventType, channel)) {
       throw AppError.validation(
-        'This one cannot be switched off. It only fires when something of yours did not survive contact with the warehouse, and you are entitled to be told.',
+        'This notice cannot be turned off: we must tell you when something of yours arrives damaged or cannot be accepted.',
       );
     }
 
-    return this.db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(notificationPreference)
-        .where(
-          and(
-            eq(notificationPreference.userId, userId),
-            eq(notificationPreference.eventType, eventType),
-            eq(notificationPreference.channel, channel),
-          ),
-        )
-        .limit(1);
-
-      if (existing) {
-        const [updated] = await tx
-          .update(notificationPreference)
-          .set({ enabled, updatedAt: new Date() })
-          .where(eq(notificationPreference.id, existing.id))
-          .returning();
-        if (!updated) throw AppError.validation('Failed to update preference');
-        return updated;
-      }
-
-      const [created] = await tx
-        .insert(notificationPreference)
-        .values({ userId, eventType, channel, enabled })
-        .returning();
-      if (!created) throw AppError.validation('Failed to create preference');
-      return created;
-    });
+    const [saved] = await this.db
+      .insert(notificationPreference)
+      .values({ userId, eventType, channel, enabled })
+      .onConflictDoUpdate({
+        target: [notificationPreference.userId, notificationPreference.eventType, notificationPreference.channel],
+        set: { enabled, updatedAt: new Date() },
+      })
+      .returning({
+        eventType: notificationPreference.eventType,
+        channel: notificationPreference.channel,
+        enabled: notificationPreference.enabled,
+      });
+    if (!saved) throw AppError.validation('Failed to save preference');
+    return saved;
   }
 
   async setChannel(userId: string, channel: string, enabled: boolean) {
     if (!isKnownChannel(channel)) throw AppError.validation(`Unknown channel "${channel}"`);
-    let changed = 0;
-    for (const event of NOTIFICATION_EVENT_TYPES) {
-      if (!enabled && isMandatory(event.key, channel)) continue;
-      await this.setPreference(userId, event.key, channel, enabled);
-      changed += 1;
+    const events = NOTIFICATION_EVENT_TYPES.filter((event) => enabled || !isMandatory(event.key, channel));
+    if (events.length > 0) {
+      await this.db
+        .insert(notificationPreference)
+        .values(events.map((event) => ({ userId, eventType: event.key, channel, enabled })))
+        .onConflictDoUpdate({
+          target: [notificationPreference.userId, notificationPreference.eventType, notificationPreference.channel],
+          set: { enabled, updatedAt: new Date() },
+        });
     }
-    return { channel, enabled, changed };
-  }
-
-  async isEnabled(userId: string, eventType: string, channel: NotificationChannel = 'in_app'): Promise<boolean> {
-    const [row] = await this.db
-      .select({ enabled: notificationPreference.enabled })
-      .from(notificationPreference)
-      .where(
-        and(
-          eq(notificationPreference.userId, userId),
-          eq(notificationPreference.eventType, eventType),
-          eq(notificationPreference.channel, channel),
-        ),
-      )
-      .limit(1);
-    return row ? row.enabled : defaultEnabled(eventType, channel);
+    return { channel, enabled, changed: events.length };
   }
 }

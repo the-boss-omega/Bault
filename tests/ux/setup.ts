@@ -24,8 +24,3 @@ if (!window.scrollTo) {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = function scrollIntoView() {};
 }
-
-import { beforeEach } from 'vitest';
-beforeEach(() => {
-  localStorage.setItem('bault.locale', 'en');
-});

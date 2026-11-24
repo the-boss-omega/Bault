@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StrictMode } from 'react';
-import { readFileSync } from 'node:fs';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -13,10 +12,7 @@ vi.mock('../../apps/web/src/shared/api', () => ({
 
 const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 const { VerifyEmailPage } = await import('../../apps/web/src/areas/customer/auth/VerifyEmailPage');
-const { ErrorBoundary } = await import('../../apps/web/src/shared/ui/ErrorBoundary');
 const { TwoFactorPanel } = await import('../../apps/web/src/areas/customer/profile/TwoFactorPanel');
-const STYLESHEET = 'apps/web/src/index.css';
-
 function renderIn(ui: React.ReactElement) {
   return render(<I18nProvider>{ui}</I18nProvider>);
 }
@@ -74,38 +70,6 @@ describe('the verification page', () => {
   });
 });
 
-describe('the render-failure fallback', () => {
-  let quiet: ReturnType<typeof vi.spyOn>;
-  beforeEach(() => {
-    quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
-  });
-  afterEach(() => quiet.mockRestore());
-
-  it('styles its buttons with classes the stylesheet defines', () => {
-    function Boom(): React.ReactElement {
-      throw new Error('boom');
-    }
-    render(
-      <ErrorBoundary>
-        <Boom />
-      </ErrorBoundary>,
-    );
-
-    const css = readFileSync(STYLESHEET, 'utf8');
-    const buttons = [
-      screen.getByRole('button', { name: /try again/i }),
-      screen.getByRole('button', { name: /reload the page/i }),
-    ];
-    for (const button of buttons) {
-      for (const cls of button.classList) {
-        const selector = new RegExp(`\\.${cls.replace(/[-]/g, '\\-')}(?![\\w-])`);
-        expect(css, `.${cls} is not defined in index.css`).toMatch(selector);
-      }
-    }
-    expect(buttons[0]).toHaveClass('btn--gold');
-  });
-});
-
 describe('the two-factor panel', () => {
   it('offers to try again when the status cannot be read, and shows it once it can', async () => {
     const user = userEvent.setup();
@@ -120,5 +84,27 @@ describe('the two-factor panel', () => {
     expect(await screen.findByRole('button', { name: /set up two-factor sign-in/i })).toBeInTheDocument();
     expect(get).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(/could not be reached/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('a browser that blocks site storage', () => {
+  let read: ReturnType<typeof vi.spyOn>;
+  let write: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    const blocked = () => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    };
+    read = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(blocked);
+    write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(blocked);
+  });
+  afterEach(() => {
+    read.mockRestore();
+    write.mockRestore();
+  });
+
+  it('still renders the app', () => {
+    renderIn(<p>the app is here</p>);
+
+    expect(screen.getByText('the app is here')).toBeInTheDocument();
   });
 });

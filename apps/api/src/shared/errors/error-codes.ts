@@ -27,9 +27,13 @@ export const ErrorCode = {
   MFA_NOT_ENABLED: 'mfa_not_enabled',
   MFA_REQUIRED_FOR_ROLE: 'mfa_required_for_role',
   MFA_FACTOR_UNREADABLE: 'mfa_factor_unreadable',
+  MFA_CODE_EXPIRED: 'mfa_code_expired',
+  MFA_METHOD_NOT_ALLOWED: 'mfa_method_not_allowed',
+  MFA_EMAIL_ADDRESS_CHANGED: 'mfa_email_address_changed',
   WEBHOOK_UNVERIFIED: 'webhook_unverified',
   OUTBOX_NOT_PARKED: 'outbox_not_parked',
   ADDRESS_REGION_REQUIRED: 'address_region_required',
+  QUOTE_CHANGED: 'quote_changed',
   INTERNAL: 'internal',
 } as const;
 

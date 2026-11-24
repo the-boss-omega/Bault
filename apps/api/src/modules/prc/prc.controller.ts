@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsIn, IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
@@ -8,14 +8,14 @@ import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { pricingRule } from './prc.schema';
-import { PricingService } from './pricing.service';
+import { MAX_ACTION_TYPE_LENGTH, MAX_ITEM_CLASS_LENGTH, MAX_RULE_DESCRIPTION_LENGTH, PricingService } from './pricing.service';
 import { PriceListService } from './price-list.service';
 import { Public } from '../acc/public.decorator';
 
 class CreateRuleDto {
-  @IsString() actionType!: string;
-  @IsOptional() @IsString() itemClass?: string;
-  @IsString() description!: string;
+  @IsString() @MaxLength(MAX_ACTION_TYPE_LENGTH) actionType!: string;
+  @IsOptional() @IsString() @MaxLength(MAX_ITEM_CLASS_LENGTH) itemClass?: string;
+  @IsString() @MaxLength(MAX_RULE_DESCRIPTION_LENGTH) description!: string;
   @IsIn(['fixed', 'percentage']) model!: 'fixed' | 'percentage';
   @IsInt() @Min(0) value!: number;
   @IsIn(['per_event', 'daily', 'weekly', 'monthly'])
@@ -38,6 +38,7 @@ export class PrcController {
     return this.priceList.publicList();
   }
 
+  @Roles('admin')
   @Get('rules')
   list() {
     return this.db.select().from(pricingRule).orderBy(sql`${pricingRule.effectiveFrom} desc`);

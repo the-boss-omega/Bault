@@ -1,34 +1,29 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { DEFAULT_LOCALE, LOCALES, MESSAGE_KEYS, hasMessage, t } from '../../apps/web/src/shared/i18n';
 
 describe('message catalogues', () => {
-  it('exposes exactly the two supported locales, Hebrew first', () => {
-    expect([...LOCALES]).toEqual(['he', 'en']);
-    expect(DEFAULT_LOCALE).toBe('he');
+  it('has one language, English', () => {
+    expect([...LOCALES]).toEqual(['en']);
+    expect(DEFAULT_LOCALE).toBe('en');
   });
 
-  it('resolves a known key in both locales', () => {
-    for (const locale of LOCALES) {
-      expect(t('app.title', locale)).toBeTruthy();
-      expect(t('nav.primary', locale)).toBeTruthy();
-    }
+  it('resolves a known key', () => {
+    expect(t('app.title')).toBeTruthy();
+    expect(t('nav.primary')).toBeTruthy();
   });
 
-  it('translates the same key differently per locale where it should', () => {
-    expect(t('nav.primary', 'he')).not.toBe(t('nav.primary', 'en'));
-    expect(t('wallet.tab.requests', 'he')).not.toBe(t('wallet.tab.requests', 'en'));
-  });
-
-  it('substitutes placeholders in both locales', () => {
-    for (const locale of LOCALES) {
-      const rendered = t('wallet.request.submitted', locale, { code: 'WR-TEST0001' });
-      expect(rendered).toContain('WR-TEST0001');
-      expect(rendered).not.toContain('{code}');
-    }
+  it('substitutes placeholders', () => {
+    const rendered = t('wallet.request.submittedNext', 'en', { code: 'WR-TEST0001', amount: '$1.00' });
+    expect(rendered).toContain('WR-TEST0001');
+    expect(rendered).not.toContain('{code}');
   });
 
   it('leaves an unmatched placeholder verbatim rather than printing "undefined"', () => {
-    expect(t('wallet.request.submitted', 'en', {})).toContain('{code}');
+    expect(t('wallet.request.submittedNext', 'en', {})).toContain('{code}');
   });
 
   it('reports unknown keys as absent, so callers can omit rather than print them', () => {
@@ -38,6 +33,12 @@ describe('message catalogues', () => {
 });
 
 describe('retired keys are really gone', () => {
+  it('has no strings for choosing a language — there is one', () => {
+    for (const key of ['app.switchLanguage', 'app.switchLanguageLabel', 'menu.language', 'menu.languageCurrent']) {
+      expect(hasMessage(key), `${key} should be gone`).toBe(false);
+    }
+  });
+
   it('has no pin/unpin strings — the rail is not pinnable', () => {
     expect(hasMessage('nav.pin')).toBe(false);
     expect(hasMessage('nav.unpin')).toBe(false);
@@ -62,46 +63,84 @@ describe('retired keys are really gone', () => {
   it('replaced the tracking-by-id strings with list strings', () => {
     expect(hasMessage('ss.tracking.idLabel')).toBe(false);
     expect(hasMessage('ss.tracking.idPlaceholder')).toBe(false);
-    expect(hasMessage('ss.tracking.searchPlaceholder')).toBe(true);
-    expect(hasMessage('ss.tracking.col.username')).toBe(true);
+    expect(hasMessage('ss.tracking.searchPlaceholder')).toBe(false);
+    expect(hasMessage('ss.tracking.col.username')).toBe(false);
   });
 });
 
 describe('brand', () => {
-  it('says Bault, never ShipMyCards, in every catalogued string', () => {
+  it('says Card Embassy, never Bault or ShipMyCards, in every catalogued string', () => {
     expect(MESSAGE_KEYS.length).toBeGreaterThan(100);
 
     const offenders: string[] = [];
     for (const key of MESSAGE_KEYS) {
-      for (const locale of LOCALES) {
-        const value = t(key, locale);
-        if (/ship\s*my\s*cards/i.test(value)) offenders.push(`${locale}:${key} = ${value}`);
-      }
+      const value = t(key);
+      if (/ship\s*my\s*cards|\bbault\b/i.test(value)) offenders.push(`${key} = ${value}`);
     }
     expect(offenders).toEqual([]);
   });
 
-  it('has no untranslated English string left as its Hebrew original', () => {
-    const suspicious = MESSAGE_KEYS.filter((key) => {
-      const he = t(key, 'he');
-      const en = t(key, 'en');
-      return he === en && he.length > 25 && /[֐-׿]/.test(he);
+  it('is written in English: no string in the catalogue is in Hebrew', () => {
+    expect(MESSAGE_KEYS.filter((key) => /\p{Script=Hebrew}/u.test(t(key)))).toEqual([]);
+  });
+
+  it('names Card Embassy in the strings that carry the product name', () => {
+    expect(t('app.title')).toContain('Card Embassy');
+    expect(t('error.unreachable')).toContain('Card Embassy');
+  });
+});
+
+describe('every catalogued string is used', () => {
+  const root = resolve(__dirname, '../../apps/web/src');
+
+  function sources(dir: string): string[] {
+    return readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) return sources(path);
+      return /\.(ts|tsx)$/.test(name) ? [path] : [];
     });
-    expect(suspicious).toEqual([]);
-  });
+  }
 
-  it('keeps the same placeholders in both locales', () => {
-    const placeholders = (value: string) => (value.match(/\{(\w+)\}/g) ?? []).sort();
-    const mismatched = MESSAGE_KEYS.filter(
-      (key) => placeholders(t(key, 'he')).join() !== placeholders(t(key, 'en')).join(),
-    );
-    expect(mismatched).toEqual([]);
-  });
+  it('has no key that no screen asks for, counting a key built from a literal prefix as used', () => {
+    const catalogue = readFileSync(join(root, 'shared/i18n.tsx'), 'utf8');
+    const start = catalogue.indexOf('const en = {');
+    const end = catalogue.indexOf('} as const;', start);
+    expect(start).toBeGreaterThan(-1);
+    const code = sources(root)
+      .map((path) => {
+        const text = readFileSync(path, 'utf8');
+        return path.endsWith(join('shared', 'i18n.tsx')) ? text.slice(0, start) + text.slice(end) : text;
+      })
+      .join('\n');
 
-  it('names Bault in the strings that carry the product name', () => {
-    for (const locale of LOCALES) {
-      expect(t('app.title', locale)).toContain('Bault');
-      expect(t('error.unreachable', locale)).toContain('Bault');
+    const literals = new Set<string>();
+    for (const m of code.matchAll(/'([^'\\\n]*)'|"([^"\\\n]*)"/g)) literals.add(m[1] ?? m[2] ?? '');
+    for (const m of code.matchAll(/`([a-zA-Z][\w.-]*)`/g)) literals.add(m[1]!);
+    const prefixes = new Set<string>();
+    for (const m of code.matchAll(/`([^`$]*)\$\{/g)) if (m[1]!.includes('.')) prefixes.add(m[1]!);
+    for (const literal of literals) if (/^[a-zA-Z][\w-]*(\.[\w-]+)*\.$/.test(literal)) prefixes.add(literal);
+    for (const m of code.matchAll(/`\$\{([^}]*)\}\./g)) {
+      for (const stem of m[1]!.matchAll(/'([^'\\\n]+)'|"([^"\\\n]+)"/g)) prefixes.add(`${stem[1] ?? stem[2]}.`);
     }
+
+    const unused = MESSAGE_KEYS.filter(
+      (key) => !literals.has(key) && ![...prefixes].some((prefix) => key.startsWith(prefix)),
+    );
+    expect(unused).toEqual([]);
+  });
+});
+
+describe('brand in the style sheets', () => {
+  it('prints Card Embassy, never Bault, in any generated content', () => {
+    const dir = join(__dirname, '../../apps/web/src');
+    const offenders = readdirSync(dir)
+      .filter((name) => name.endsWith('.css'))
+      .flatMap((name) =>
+        [...readFileSync(join(dir, name), 'utf8').matchAll(/content:\s*([^;]*);/g)]
+          .map((m) => m[1]!)
+          .filter((value) => /bault/i.test(value))
+          .map((value) => `${name}: ${value}`),
+      );
+    expect(offenders).toEqual([]);
   });
 });

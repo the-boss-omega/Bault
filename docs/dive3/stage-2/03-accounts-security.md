@@ -1,171 +1,143 @@
 ## 2.3 Accounts, security, support and media
 
-Four modules: `acc` (accounts, sessions, two-factor sign-in), `sec` (roles, audit), `sup` (the helpdesk) and `med` (photo uploads). The guards come first, in the order a request meets them after the rate limits of 2.2. Then the account flows, two-factor sign-in, the profile and the schema, and last the helpdesk and media. Budget: 30 minutes.
+This section covers four modules. The accounts module `acc` holds accounts, sessions and two-factor sign-in. The security module `sec` holds roles and audit. `sup` is the helpdesk, and `med` stores photos. Read the guards first, in the order a request meets them after the rate limits of section 2.2. Then read the account flows, two-factor sign-in, the profile and the schema, and end with the helpdesk and media. The section takes about 30 minutes.
 
-#### `apps/api/src/modules/sec/auth-context.ts`, `apps/api/src/modules/sec/current-user.decorator.ts` · 1 min · T6.3, T7.1, T7.7
-- `AuthUser` — what an authenticated request carries: `id`, `role` (`Role`: `user`, `warehouse_operator`, `admin`), `status` (`AccountStatus`) and `mfaEnabled`. The file adds `user` to Express's `Request`.
-- `CurrentUser` — the handler parameter decorator; a 401 when no user is attached.
+#### `apps/api/src/modules/sec/auth-context.ts`, `apps/api/src/modules/sec/current-user.decorator.ts`
 
-#### `apps/api/src/modules/acc/session-auth.guard.ts`, `apps/api/src/modules/acc/public.decorator.ts`, `apps/api/src/modules/acc/allow-suspended.decorator.ts`, `apps/api/src/modules/acc/allow-any-status.decorator.ts` · 1.5 min · T6.3, T7.1, T7.4
-The second global guard: who is calling, and may their account act.
-- `canActivate` — resolves the `SESSION_COOKIE_NAME` cookie with `SessionService.resolve`. The account must be `active`, or it gets a 403 `account_suspended`, unless the route is `@AllowSuspended()` (for `suspended`) or `@AllowAnyStatus()`. Then `req.user` is set, a `@Public()` route passes, and any other route without a user gets a 401.
-- `@Public()` — sign-up, sign-in, email links, reset, public browsing and reference lists, the payment webhook and the probes.
-- `@AllowSuspended()` — only the five collector helpdesk routes and `GET /me/profile`, so an account suspended for debt can ask for help. `closed` never passes.
-- `@AllowAnyStatus()` — only `POST /auth/logout`.
+About 1 minute. It builds on T6.3, T7.1 and T7.7.
 
-**Watch:** the status check comes before the `@Public()` check, so a suspended or closed account with a live cookie gets a 403 on public routes too, `POST /auth/login` included, until it signs out.
+`AuthUser` is the signed-in user that an authenticated request carries. It holds the `id`, a `Role` of `user`, `warehouse_operator` or `admin`, an `AccountStatus`, `mfaEnabled` and `mfaMethod`, the `MfaMethod` in force, `totp` or `email`. The file adds `user` to Express's `Request`. `CurrentUser` hands that user to a handler, and it answers 401 when there is none.
 
-#### `apps/api/src/modules/acc/session.service.ts` · 1.5 min · T7.4, T5.4
-Opaque random session tokens; `login_session` stores only their SHA-256 hash.
-- `create` — seven days (`SESSION_TTL_MS`), with the client's `ip` and user agent (`clampUserAgent`). The optional `tx` lets the second sign-in step open the session in the transaction that spends the code.
-- `resolve` — one query per request: session, role, status, and whether an `mfa_factor` is enabled. Revoked or expired is null.
-- `revoke` ends one session; `revokeAllFor` ends all of a user's, optionally except the caller's, and returns the count.
+#### `apps/api/src/modules/acc/session-auth.guard.ts`, `apps/api/src/modules/acc/public.decorator.ts`, `apps/api/src/modules/acc/allow-suspended.decorator.ts`, `apps/api/src/modules/acc/allow-any-status.decorator.ts`
 
-**Watch:** expiry is fixed at sign-in; use doesn't extend it. `resolve` joins `userAccount.id` to `loginSession.userId` through the uuid-text operator (2.2), which keeps the primary-key index; casting the id to text would scan the account table on every request.
+About 1.5 minutes. It builds on T6.3, T7.1 and T7.4.
 
-#### `apps/api/src/modules/acc/mfa/mfa-enrollment.guard.ts`, `apps/api/src/modules/acc/mfa/mfa-policy.ts`, `apps/api/src/modules/acc/mfa/allow-without-mfa.decorator.ts` · 1 min · T4.2, T6.3, T7.6
-The third guard: a role that requires a second factor gets nothing until it has one.
-- `MfaEnrollmentGuard` — passes `@AllowWithoutMfa()`, `@Public()` and anonymous requests. A user whose role is in the policy and whose `mfaEnabled` isn't `true` gets a 403 `mfa_enrollment_required`.
-- `mfaPolicyProvider` — `MFA_REQUIRED_ROLES`, read once. Unset, it means both staff roles in production and nobody elsewhere.
-- `@AllowWithoutMfa()` — only `GET /auth/mfa`, `setup`, `confirm`, sign-out and `GET /me/profile`. `tests3/contract/mfa-enforcement.test.ts` pins that list.
+`SessionAuthGuard` works out who is calling from the session cookie. It is the second global guard, after the rate limiter. `canActivate` resolves the `SESSION_COOKIE_NAME` cookie with `SessionService.resolve`. An account that is not `active` gets a 403 `account_suspended`, with two exceptions. Its message tells a suspended account that it can still open a support ticket, and a closed one only that it is closed. A `suspended` account passes on an `@AllowSuspended()` route, and any account passes on an `@AllowAnyStatus()` route. The guard then sets `req.user`. A `@Public()` route passes with or without a user, and any other route without a user gets a 401.
 
-#### `apps/api/src/modules/sec/roles.decorator.ts`, `apps/api/src/modules/sec/roles.guard.ts` · 1 min · T6.3, T7.7
-- `Roles` sets the allowed roles on a handler or class. `RolesGuard` passes a route without it; otherwise the user's role must be listed, or it is a 403.
+`@Public()` marks sign-up, sign-in, the email links, password reset, public browsing, reference lists, the payment webhook and the probes. `@AllowSuspended()` marks only the five collector helpdesk routes and `GET /me/profile`, so an account suspended for debt can still ask for help. `@AllowAnyStatus()` marks only `POST /auth/logout`. The status check runs before the `@Public()` check. So a suspended or closed account with a live cookie gets a 403 on public routes too, `POST /auth/login` included, until it signs out.
 
-**Watch:** a route without `@Roles` is open to every signed-in account. Ownership ("is this my item") is never a guard; each service checks it.
+#### `apps/api/src/modules/acc/session.service.ts`
 
-#### `apps/api/src/modules/sec/audit.interceptor.ts`, `apps/api/src/modules/sec/audit.service.ts`, `apps/api/src/modules/sec/audit.schema.ts` · 1.5 min · T6.7, T5.6
-The audit log, in the append-only `audit_record`.
-- `AuditInterceptor` — global. After a successful POST, PUT, PATCH or DELETE it records the actor, method and path as `action`, the first path segment as `targetEntity`, the first id-like route param as `targetId`, and the params.
-- `AuditService.record` — one INSERT; with `tx` it commits with the change, as in `MfaService` and `WalletRequestService`.
+About 1.5 minutes. It builds on T7.4 and T5.4.
 
-**Watch:** the interceptor's write is fire-and-forget, outside the request's transaction, with failures swallowed, so a row can be lost. It stores no body: it says which route ran, not what changed. Failed requests leave no row; failed sign-ins are in `login_attempt`.
+`SessionService` opens, checks and ends sign-in sessions. A `login_session` row stores only the SHA-256 hash of an opaque random token, so a leaked table holds no usable cookie. `create` opens a seven-day session, `SESSION_TTL_MS`, with the `ip` and the user agent from `clampUserAgent`. Its optional `tx` lets the second sign-in step open the session in the transaction that spends the code. Using a session never extends its expiry. `resolve` reads the session, the role, the status and the method of the enabled `mfa_factor`, if any, in one query per request. It joins only an enabled factor, because an account can have a second, unconfirmed one. It returns null for a revoked or expired session. Since migration `0042` both `userAccount.id` and `loginSession.userId` are uuids, so the join is a plain uuid equality and the account's primary-key index serves it. `revoke` ends one session. `revokeAllFor` ends a user's sessions, optionally except the caller's, and returns the count.
 
-#### `apps/api/src/modules/acc/acc.module.ts`, `apps/api/src/modules/acc/acc.dto.ts` · 1 min · T6.2, T7.2, T7.3
-- `AccModule` — `AuthController`, `ProfileController`, `MfaController` and their services. It exports `SessionService`, `SessionAuthGuard`, `MfaService`, `MfaEnrollmentGuard` and `MFA_POLICY` for the global guards and the admin's two-factor reset.
-- `RegisterDto` — `username` is 3 to 32 letters, digits, `.`, `-` or `_`, never an `@`, so it can't look like an email. Names refuse markup and control characters. `password` needs 8 characters and is never trimmed. `acceptedTermsVersion` is required.
-- `LoginDto` takes one `identifier`, email or username. The rest are small: `LoginMfaDto`, `ConfirmMfaDto`, `DisableMfaDto`, `ResetPasswordDto`, `ChangePasswordDto`, `UpdateProfileDto`.
+#### `apps/api/src/modules/acc/mfa/mfa-enrollment.guard.ts`, `apps/api/src/modules/acc/mfa/mfa-policy.ts`, `apps/api/src/modules/acc/mfa/allow-without-mfa.decorator.ts`
 
-**Watch:** no DTO accepts `username` after registration, and the `user_account_username_immutable` trigger (migration 0004) refuses the write anyway.
+About 1 minute. It builds on T4.2, T6.3 and T7.6.
 
-#### `apps/api/src/modules/acc/auth.controller.ts` · 2 min · T7.3, T7.4, T7.6, T6.7
-The `/auth` routes.
-- `register`, `verify-email`, `verify-email/resend`.
-- `login` — sets the cookie and answers `{ id, role, mfaEnrollmentRequired }`, or `mfa_required` with a `challengeToken` for an enrolled account, never cached. It sets `req.user` so the audit row names the actor.
-- `loginMfa` — the challenge plus exactly one of `code` and `recoveryCode`.
-- `logout` — `@AllowWithoutMfa()` and `@AllowAnyStatus()`.
-- `password/reset-request`, `password/reset`, `password/change`, `sessions/revoke-others`.
-- `setSessionCookie` — `httpOnly`, `secure` in production, `sameSite: 'lax'`, expiring with the session.
-- `CREDENTIAL_ROUTE` (`AUTH_RATE_LIMIT_PER_MINUTE`) meters every route that checks a credential; `MAIL_ROUTE`, a fixed 5 a minute, the two that mail an address the caller chose.
+`MfaEnrollmentGuard` makes the roles that need two-factor sign-in set it up before anything else. It is the third global guard. It passes `@AllowWithoutMfa()` routes, `@Public()` routes and anonymous requests. A user whose role is in the policy and whose `mfaEnabled` is not `true`, or whose `mfaMethod` is `email`, gets a 403 `mfa_enrollment_required`. So a role that requires a second factor requires the authenticator app, and emailed codes do not count for it. `mfaPolicyProvider` reads `MFA_REQUIRED_ROLES` once. Unset, it means both staff roles in production and nobody elsewhere. `@AllowWithoutMfa()` marks only `GET /auth/mfa`, `setup`, `confirm`, sign-out and `GET /me/profile`, the routes a blocked user needs to enrol with the app. `tests3/contract/mfa-enforcement.test.ts` pins that exact list.
 
-**Watch:** keep credential routes under `/auth`; the error scrubber drops request bodies only there and under `/me/password` (2.2).
+#### `apps/api/src/modules/sec/roles.decorator.ts`, `apps/api/src/modules/sec/roles.guard.ts`
 
-#### `apps/api/src/modules/acc/auth.service.ts` · 2 min · T7.2, T7.3, T7.6, T15.3
-Registration and both sign-in steps.
-- `register` — refuses any `acceptedTermsVersion` but `CURRENT_TERMS_VERSION`, normalises email and username, hashes with argon2, inserts a `pending` account with its terms acceptance, and sends the verification mail. The unique indexes are the guarantee; `isUniqueViolation` catches a racing duplicate.
-- `login` — runs `attempt` through `perIdentifier`, a `OneAtATime`, so the lockout counts a burst one by one.
-- `attempt` — refuses a locked identifier first, even with the right password. It always runs one argon2 verify, against `dummyHash` when nobody matched, so an unknown account and a wrong password look alike. `pending` gets `email_unverified`, `closed` gets `account_suspended`, `suspended` signs in. An enrolled account gets a challenge, others a session. Every checked attempt is logged.
-- `completeSecondFactor` — in the same queue, checks both locks, calls `MfaService.redeemChallenge`, and records the outcome.
+About 1 minute. It builds on T6.3 and T7.7.
 
-**Watch:** sign-up answers "Email is already registered", so registration does reveal whether an address has an account.
+These files limit a route to certain roles. `Roles` sets the allowed roles on a handler or a class. `RolesGuard`, the last global guard, passes a route without `Roles`. Otherwise the user's role must be listed, or the request gets a 403 that says "This page is for Card Embassy staff.", without naming the internal roles. So a route without `@Roles` is open to every signed-in account. No guard checks ownership, so each service must check that the caller owns what it touches.
 
-#### `apps/api/src/modules/acc/login-attempts.service.ts` · 1.5 min · T7.3, T7.8, T15.3
-The sign-in log and its lockout.
-- `record` — one `login_attempt` row per attempt: typed identifier, account, `LoginOutcome`, IP, user agent. A failed write never breaks sign-in.
-- `lockedFor` — locked while the identifier's last 10 failures (`bad_credentials` or `mfa_failed`) span at most 15 minutes and the newest is under 15 minutes old.
-- `secondFactorLockedFor` — the same rule on one account's `mfa_failed` rows, from any identifier or route.
-- `lockedError` — a 429 `rate_limited` with `retryAfterSeconds`.
+#### `apps/api/src/modules/sec/audit.interceptor.ts`, `apps/api/src/modules/sec/audit.service.ts`, `apps/api/src/modules/sec/audit.schema.ts`, `apps/api/src/modules/sec/sec.module.ts`
 
-**Watch:** keyed on what was typed, an unknown identifier locks like a real one, but an account's email and username count separately. Refusals during a lock write nothing, so they can't extend it.
+About 1.5 minutes. It builds on T6.7 and T5.6.
 
-#### `apps/api/src/modules/acc/verification.service.ts`, `apps/api/src/modules/acc/password.service.ts` · 2 min · T7.2, T7.5, T14.3, T15.3
-Email links and passwords. A link is a single-use `verification_token` row, stored as a hash.
-- `issueEmailVerification` — a 24-hour link into the SPA's hash route (`emailLink`), mailed at once through `EMAIL_ADAPTER`.
-- `verifyEmail` — one transaction: a conditional UPDATE consumes the token, then the account moves from `pending` to `active`, and from nothing else.
-- `resend` — a fresh link for a `pending` account; silent otherwise.
-- `change` — checks the current password, sets the new one, then ends every other session.
-- `requestReset` — only writes the outbox event `PASSWORD_RESET_REQUESTED`, for any address. `apps/worker/src/jobs/password-reset-mail.ts` looks the address up, mints the token and mails it.
-- `reset` — consumes the token and sets the password in one transaction, then ends every session.
+These files keep the audit log of who changed what. `AuditInterceptor` is global. After a successful POST, PUT, PATCH or DELETE, it writes a row to the append-only `audit_record`. The row holds the actor, the method and path as `action`, the first path segment after `/api/v1/` as `targetEntity`, the first id-like parameter as `targetId`, and the parameters. The write is not awaited, runs outside the request's transaction and swallows failures, so a row can be lost without notice. The row holds no request body, so it shows which route ran but not what changed. A failed request leaves no row, and failed sign-ins are in `login_attempt`.
 
-**Watch:** `resend` looks the address up and mails inside the request, so unlike `requestReset` its timing can reveal a pending account. A wrong current password in `change` isn't logged in `login_attempt`; only the rate limit slows a stolen session guessing it.
+`AuditService.record` is one INSERT. Given a `tx`, it commits or rolls back with the change it describes, as in `MfaService` and `WalletRequestService`. The global `SecModule` provides `AuditService`, `AuditInterceptor` and `RolesGuard`.
 
-#### `apps/api/src/modules/acc/mfa/mfa.controller.ts` · 1 min · T7.6
-The signed-in half of two-factor, under `/auth/mfa` so the scrubber drops its bodies.
-- `status`, `setup` and `confirm` are `@AllowWithoutMfa()`, so a staff account can enrol.
-- `confirm`, `recovery-codes` and `disable` check codes and use the credential rate limit.
-- Responses carrying a secret or recovery codes are `no-store`.
+#### `apps/api/src/modules/acc/acc.module.ts`, `apps/api/src/modules/acc/acc.dto.ts`
 
-#### `apps/api/src/modules/acc/mfa/mfa.service.ts` · 3 min · T7.6, T7.7, T15.1
-TOTP sign-in. Spending a code, a recovery code or a challenge is always a conditional UPDATE inside the transaction that acts on it, which holds across API processes.
-- `beginSetup` — a new sealed secret, upserted into `mfa_factor` only while not enabled (`setWhere`), returned as an `otpauth` URI, text and a QR code.
-- `confirmSetup` — password and code. One transaction locks the factor, sets `enabledAt` and `lastUsedStep`, makes ten recovery codes (shown only here), ends every other session and audits.
-- `regenerateRecoveryCodes` — a current code replaces the set in one transaction.
-- `disable` — password and code, and never for a role that requires it (`mfa_required_for_role`).
-- `resetFor` — an admin removes another account's factor and ends its sessions, audited; never their own. Called from `apps/api/src/modules/adm/adm.controller.ts`.
-- `issueChallenge` — five minutes (`CHALLENGE_TTL_MINUTES`), stored as a hash. `findChallenge` reads a live one under `CHALLENGE_MAX_FAILURES` (5).
-- `redeemChallenge` — locks and re-checks the challenge, refuses an account closed since the password step, then `spendTotp` or `spendRecoveryCode`. A wrong code increments `failedAttempts`, and that commits; a right one consumes the challenge and opens the session together.
-- `spendTotp` — accepts a step only if it is later than `lastUsedStep`, compared inside the UPDATE, so a replayed or simultaneous code fails.
+About 1 minute. It builds on T6.2, T7.2 and T7.3.
 
-**Watch:** a secret that won't open is a 409 `mfa_factor_unreadable` and one error log line, usually after `MFA_ENCRYPTION_KEY` changed. Recovery codes are hashed under a key derived from it, so after a change they fail like a typo.
+`AccModule` wires the accounts module, and `acc.dto.ts` holds the request shapes it accepts. `AccModule` holds `AuthController`, `ProfileController`, `MfaController` and their services. It exports `SessionService`, `SessionAuthGuard`, `MfaService`, `MfaEnrollmentGuard` and `MFA_POLICY` for the global guards and the admin's two-factor reset. In `RegisterDto`, `username` is 3 to 32 letters, digits, dots, dashes or underscores. It has no `@`, so it cannot look like an email. The name fields refuse markup and control characters, with a message that names the field in words. `password` needs 8 to 256 characters, `PASSWORD_MAX`, and is never trimmed, and `acceptedTermsVersion` is required. The cap keeps a huge body away from argon2 on the public routes, and `ResetPasswordDto` and `ChangePasswordDto` hold the new password to the same 8 to 256. `LoginDto` takes one `identifier`, an email or a username. `SetupMfaDto` and `ConfirmMfaDto` take an optional `method`, `totp` or `email`, and a missing one means `totp`, as before emailed codes, so older clients and the scripts still set up the app. The other DTOs, such as `LoginMfaDto`, `ResendCodeDto` and `ChangePasswordDto`, are small. No DTO accepts `username` after registration, and the `user_account_username_immutable` trigger from migration `0004` refuses the change anyway.
 
-#### `apps/api/src/modules/acc/mfa/totp.ts`, `apps/api/src/modules/acc/mfa/secret-box.ts`, `apps/api/src/modules/acc/mfa/recovery-codes.ts` · 1.5 min · T7.6, T4.5
-Pure crypto on `node:crypto`, pinned by `tests3/contract/mfa-crypto.test.ts`.
-- `matchTotp` — RFC 6238: HMAC-SHA1, 30-second steps, six digits, one step either side (`TOTP_WINDOW`). It returns the matched step and compares every candidate in constant time.
-- `sealSecret` and `openSecret` — AES-256-GCM under `MFA_ENCRYPTION_KEY`, with the account id as authenticated data, so a ciphertext copied to another row won't open. Failure is `UnreadableSecretError`.
-- `deriveSubkey` — HKDF, so recovery codes use their own key.
-- `generateRecoveryCodes`, `normalizeRecoveryCode`, `hashRecoveryCode` — ten 12-character Crockford base32 codes, forgiving about case, dashes and look-alike letters, stored as HMAC-SHA256.
+#### `apps/api/src/modules/acc/auth.controller.ts`
 
-**Watch:** back up `MFA_ENCRYPTION_KEY` with the database. Without it, every enrolled account needs an admin reset.
+About 2 minutes. It builds on T7.3, T7.4, T7.6 and T6.7.
 
-#### `apps/api/src/modules/acc/profile.controller.ts`, `apps/api/src/modules/acc/profile.service.ts` · 1.5 min · T7.1, T13.1
-`/me/profile` and `/me/addresses`, always the caller's own.
-- `get` — the `ProfileView`, including `nameReviewRequired`, the terms acceptance, `mfaEnabled` and `mfaRequired`. It is `@AllowSuspended()` and `@AllowWithoutMfa()` because the SPA's shell boots from it.
-- `update` — writes `firstName` and `lastName` only, and clears `nameReviewRequired`.
-- `listAddresses`, `addAddress`, `updateAddress`, `deleteAddress` — scoped to the caller; an address is found by its id and the caller's id. `country` must pass `IsShippableCountry` and is stored via `toCountryCode`. `regionFor` checks `region` against the country through `normalizeRegion`: a US or Canadian code, upper-cased, is required; elsewhere it is optional free text. An edit re-checks the pair only when it changes `country` or `region`. A new default demotes the old one in the same transaction.
+`AuthController` serves sign-up, sign-in, sign-out and the password routes under `/auth`. `login` sets the session cookie and answers `id`, `role` and `mfaEnrollmentRequired`. An account with two-factor sign-in gets `mfa_required`, a `challengeToken` and the `method` instead. For `email` it also says whether a code was mailed, as `codeSent`, where, as `sentTo` with the address masked to its first letter and its domain, and when another may be asked for, as `resendAfterSeconds`. The answer is `no-store`, so it is never cached. `login` sets `req.user` so the audit row names who signed in. `loginMfa` takes the challenge and exactly one of `code` and `recoveryCode`, and answers `mfaEnrollmentRequired` from `MfaService.mustEnrol`, so a member of staff whose second factor is emailed codes is sent to set up the app. `resendCode`, at `POST /auth/login/mfa/resend`, is public, takes the challenge and mails a new code. `logout` is `@AllowWithoutMfa()` and `@AllowAnyStatus()`, so any account can always sign out. The other handlers are `register`, `verifyEmail`, `resend`, `resetRequest`, `reset`, `change` and `revokeOtherSessions`.
 
-**Watch:** no unique index backs "one default address", so two concurrent saves can leave two defaults.
+The two constants `CREDENTIAL_ROUTE` and `MAIL_ROUTE` sit below the imports. `setSessionCookie` sets `httpOnly`, `secure` in production and `sameSite: 'lax'`, and the cookie expires with the session. `CREDENTIAL_ROUTE`, from `AUTH_RATE_LIMIT_PER_MINUTE`, is the rate limit for sign-up and every route that checks a credential. `MAIL_ROUTE`, a fixed 5 a minute, limits the two routes that mail an address the caller chose. The two routes that mail a code use `CREDENTIAL_ROUTE`, because they only ever mail the account's own address and `MfaService` counts their mail per account. Keep credential routes under `/auth`. The error scrubber of section 2.2 drops request bodies only there and under `/me/password`, so an error on a credential route elsewhere would send its password to the error reports.
 
-#### `apps/api/src/modules/acc/acc.schema.ts`, `apps/api/src/modules/acc/address.schema.ts` · 1 min · T5.4, T7.1, T7.2
-- `userAccount` — `accountStatus` (`pending`, `active`, `suspended`, `closed`), `userRole`, unique `email` and `username`. `autoSuspendedAt` marks a debt-sweep suspension: the sweep lifts only those, and any status an admin sets clears it. `user_account_terms_acceptance_complete` keeps the two terms columns set together. Nothing writes `intakeId` or `legacyDisplayName`.
-- `verificationToken`, `loginSession`, `loginAttempt`, `mfaFactor`, `mfaRecoveryCode`, `mfaChallenge` and `shippingAddress`. `shippingAddress.region`, added by `0037`, is nullable: rows saved before it have none.
+#### `apps/api/src/modules/acc/auth.service.ts`, `apps/api/src/modules/acc/terms.ts`
 
-**Watch:** every `user_id` here is `text` with no foreign key.
+About 2 minutes. It builds on T7.2, T7.3, T7.6 and T15.3.
 
-#### `apps/api/src/modules/sup/sup.controller.ts`, `apps/api/src/modules/sup/sup.module.ts` · 1 min · T7.1, T7.7, T6.3
-`/support`.
-- Collector routes, all `@AllowSuspended()`: `tickets` (list and open), `tickets/:id`, `tickets/:id/messages`, `awaiting`.
-- Staff routes, `@Roles('warehouse_operator', 'admin')`: `queue`, `queue/count`, `tickets/:id/assign`, `tickets/:id/resolve`.
+`AuthService` creates accounts and runs both steps of sign-in. `register` refuses any `acceptedTermsVersion` but `CURRENT_TERMS_VERSION` from `terms.ts`. `tests/web/faq-legal.test.ts` checks that constant against the SPA's `TERMS_VERSION`. `register` then normalises the email and username, hashes the password with argon2, inserts a `pending` account with its terms acceptance and sends the verification mail. The unique indexes are the real guard against duplicates, and `isUniqueViolation` catches one that races past the first look-up. Sign-up says when an email is already registered, so it reveals whether an address has an account.
 
-**Watch:** `CATEGORIES` includes `private_sale`; the service's `TicketCategory` type doesn't, and the database enum accepts it.
+`login` runs `attempt` through `perIdentifier`, an in-memory `OneAtATime` queue per typed identifier. So the lockout counts a burst of guesses one by one, but only within one API process. `attempt` refuses a locked identifier first, even with the right password. It always runs one argon2 verify, against `dummyHash` when nobody matched, so an unknown account looks like a wrong password. A `pending` account gets `email_unverified`, a `closed` one gets `account_suspended`, and a `suspended` one signs in. An account with two-factor sign-in gets a challenge from `MfaService.issueChallenge`, which mails a code when the method is `email`, and others get a session. Every attempt that reaches the password check is logged. `completeSecondFactor` runs in the same queue and checks both the identifier lock and the account's second-factor lock. It then calls `MfaService.redeemChallenge` and logs the outcome, and a refused emailed code is an `mfa_failed` like a wrong code from the app. `resendSignInCode` finds the live challenge, refuses while either lock holds, and asks `MfaService.resendSignInCode` for a new code.
 
-#### `apps/api/src/modules/sup/support.service.ts`, `apps/api/src/modules/sup/sup.schema.ts` · 2 min · T15.1, T14.3, T5.6
-Status says whose turn it is: `open` (staff), `awaiting_customer` or `resolved`.
-- `open` — the ticket, with a `TKT-` code, and its first message in one transaction.
-- `loadFor` — staff see every ticket, a collector only their own; another's reads as a 404. `staff` requires an `active` account, so a suspended operator is a customer here.
-- `reply` — sets the status by who spoke; a customer reply reopens a resolved ticket. A staff reply claims an unassigned ticket and emits `support_ticket_replied`.
-- `resolve` and `assign` — conditional UPDATEs, so two staff clicking together act once. `resolve` emits `support_ticket_resolved`.
-- `listQueue` — unresolved tickets, longest wait first.
-- `supportMessage` — append-only, and every message is visible to both sides.
+#### `apps/api/src/modules/acc/login-attempts.service.ts`
 
-**Watch:** `relatedType` and `relatedId` are free text; nothing checks that the record exists or is the customer's.
+About 1.5 minutes. It builds on T7.3, T7.8 and T15.3.
 
-#### `apps/api/src/modules/med/med.controller.ts`, `apps/api/src/modules/med/med.module.ts`, `apps/api/src/modules/med/med.schema.ts` · 1 min · T7.10, T9.1, T9.2
-- `POST /media/uploads` — staff only; `UploadDto` takes `contentType`, `dataBase64` and a `purpose` of `item_intake` or `parcel`.
-- `MedModule` — global, so `inv` and `mkt` inject `MediaService` freely.
-- `mediaUpload` — a `media_upload` row per stored image: key, purpose, uploader, sniffed type, size.
+`LoginAttemptService` logs sign-in attempts and decides when an identifier is locked out. `record` writes one `login_attempt` row per attempt, with the typed identifier, account, `LoginOutcome`, IP and user agent. A failed write never breaks sign-in. A failure is a `bad_credentials` or `mfa_failed` row. `lockedFor` reports a lock while the identifier's last 10 failures span at most 15 minutes and the newest is under 15 minutes old. `secondFactorLockedFor` applies the same rule to one account's `mfa_failed` rows, from any identifier or route. `lockedError` is a 429 `rate_limited` with `retryAfterSeconds`. The lock is keyed on what was typed. So an unknown identifier locks like a real one, but an account's email and username count separately. A refusal during a lock writes nothing, so it cannot extend the lock.
 
-**Watch:** collectors cannot upload. The wallet request's `documentKey` is typed text that nothing uploads, checks or signs.
+#### `apps/api/src/modules/acc/verification.service.ts`, `apps/api/src/modules/acc/password.service.ts`
 
-#### `apps/api/src/modules/med/media.service.ts` · 2 min · T7.10, T9.1, T9.2
-Upload the bytes for a key, then name the key when creating the record.
-- `upload` — the declared type must be in `ALLOWED_TYPES`, and `decodedLength` checks `MAX_IMAGE_BYTES` (10 MB) before decoding. `sniffImageType` takes the real type from the first bytes and refuses anything else. The key is a prefix, the date and a UUID, never caller input. A store failure is a 503 `storage_unavailable`; the row is written only after the bytes are stored.
-- `assertAttachable` — in the caller's transaction: each key must be safe, recorded, of the expected purpose, and the actor's own or a colleague's from the last 30 minutes (`FOREIGN_UPLOAD_WINDOW_MS`). Called by `IntakeService`, `ParcelService` and `HouseStoreService`.
-- `signed`, `signAll` — signed URLs; a key that can't be signed is left out.
+About 2 minutes. It builds on T7.2, T7.5, T14.3 and T15.3.
 
-**Watch:** nothing records that a key was attached, so one upload can be attached to several records, and nothing removes uploads never attached.
+These services handle the emailed links and every password change. A link is a single-use `verification_token` row, stored as a hash. `issueEmailVerification` builds a 24-hour link into the SPA's hash route with `emailLink`, and it mails the link at once through `EMAIL_ADAPTER`. In one transaction, `verifyEmail` consumes the token with a conditional UPDATE, so the link works once. It moves the account from `pending` to `active`, and no other status. `resend` mails a fresh link only to a `pending` account. It looks the address up and mails inside the request, so unlike `requestReset` its timing can reveal a pending account.
 
-**Also in this area**
-- `apps/api/src/modules/acc/terms.ts` — `CURRENT_TERMS_VERSION`; `tests/web/faq-legal.test.ts` checks it matches the SPA's `TERMS_VERSION`.
-- `apps/api/src/modules/acc/intake-id.ts` — `generateIntakeId`, which nothing calls.
-- `apps/api/src/modules/sec/pii.ts` — `Pii` and `PiiInterceptor`, used nowhere.
-- `apps/api/src/modules/sec/sec.module.ts` — global; provides `AuditService`, `AuditInterceptor`, `RolesGuard`, `PiiInterceptor`.
+`change` checks the current password, then in one transaction sets the new one, spends every unconsumed `password_reset` token of the account, withdraws its live `mfa_challenge` rows and ends every other session. So an older reset link cannot undo the new password, and a sign-in that passed the old password cannot be finished with the second factor. A wrong current password there is not logged in `login_attempt`, so only the rate limit slows someone with a stolen session who guesses it. `requestReset` only writes the outbox event `PASSWORD_RESET_REQUESTED`, for any address, so its answer reveals nothing. The worker job `apps/worker/src/jobs/password-reset-mail.ts` then looks the address up, creates the token and mails it. `reset` consumes the token with a conditional UPDATE, and in the same transaction sets the password, spends the account's other reset links, withdraws its live challenges and ends every session, through the same `writePassword` that `change` uses. Two links mailed in one hour therefore work once between them, which `tests/integration/acc-lifecycle.test.ts` pins.
+
+#### `apps/api/src/modules/acc/mfa/mfa.controller.ts`
+
+About 1 minute. It builds on T7.6.
+
+`MfaController` is where a signed-in user sets up, checks or turns off two-factor sign-in. Its routes sit under `/auth/mfa`, so the error scrubber drops their bodies. `status`, `setup` and `confirm` are `@AllowWithoutMfa()`, so a blocked staff account can still enrol. `status` answers the method in force, a `pendingMethod`, the `methods` the role may choose with `email` first for a collector and only `totp` for a role that requires a second factor, and the `email` codes go to. `setup` and `confirm` take the `method`. `sendEmailCode`, at `POST /auth/mfa/email/code`, mails a code for the settings, to prove the address being set up or to turn emailed codes off. `confirm`, `regenerate`, `disable` and `sendEmailCode` use the credential rate limit. Responses that carry a secret or recovery codes are `no-store`.
+
+#### `apps/api/src/modules/acc/mfa/mfa.service.ts`
+
+About 3 minutes. It builds on T7.6, T7.7 and T15.1.
+
+`MfaService` sets up, checks and removes the second factor, an authenticator app, `totp`, or a six-digit code by email, `email`. A TOTP step, a recovery code or an emailed code is spent by a conditional UPDATE, and a challenge is spent under a row lock. Each is spent in the transaction that acts on it, so a code works once even across API processes. `beginSetup` sets up the app or emailed codes, and an account with a factor in force must turn it off first, so a stolen session cannot swap it. The exception is a role that requires the app whose factor is emailed codes, which may set up the app beside them. For the app it upserts a new sealed secret into `mfa_factor`. Through `setWhere` it writes only while the factor is not enabled, so it cannot replace a working authenticator. It returns an `otpauth` URI, the secret as text and a QR code. For email it upserts an unconfirmed `email` factor and asks for a code to the account's address, and a role that requires a second factor gets a 403 `mfa_method_not_allowed`.
+
+`confirmSetup` checks the password first. One transaction then locks the factor of the chosen method and checks the code. For email the code proves the address it was mailed to, which must still be the account's, and that address is stored as `emailAddress`, so the factor is the address that was proved. The transaction removes the account's factor of the other method, sets `enabledAt` and `lastUsedStep`, and makes ten recovery codes that only this response shows. It ends every other session and writes an audit row that names the method. `regenerateRecoveryCodes` takes a current code, from the app or one mailed for the settings, and replaces the set in one transaction. `disable` checks the password and such a code, and a role that requires a second factor gets `mfa_required_for_role`. It does not look at the code after a wrong password, and every failure reads the same, so the route says nothing about the password to whoever holds the session. These three methods refuse while the account's second factor is locked and log a failure as `mfa_failed`, though `confirmSetup` logs a wrong password and a wrong emailed code, but not a wrong code from the app. `resetFor` lets an admin remove another account's factors of either method, withdraw any emailed code on its way and end its sessions, with an audit row that names the method, but never their own. `apps/api/src/modules/adm/adm.controller.ts` calls it with the `:id` through `IdParam` from `apps/api/src/shared/uuid-param.ts`, which refuses anything but a uuid and lower-cases it, and `resetFor` compares the two ids with `sameId`, so an admin's own id written in upper case is refused like the lower-case one.
+
+`issueChallenge` stores a five-minute challenge, `CHALLENGE_TTL_MINUTES`, as a hash. One for emailed codes lasts 30 minutes, `EMAIL_CHALLENGE_TTL_MINUTES`, because a mail can take a minute and a second code may be asked for, and a code is asked for at once unless the account's second factor is locked. `findChallenge` reads a live challenge with fewer failures than `CHALLENGE_MAX_FAILURES`, which is 5. `redeemChallenge` locks and re-checks the challenge, and refuses an account closed since the password step. Then it calls `spendTotp`, `spendEmailCode` or `spendRecoveryCode`. A wrong code from the app or a wrong recovery code adds one to the challenge's `failedAttempts`, and that commits, so the limit of five holds. A wrong emailed code counts against the code instead, so after five a new code is needed, not a new password. A right code consumes the challenge and opens the session in the same transaction. `spendTotp` accepts a step only if it is later than `lastUsedStep`, compared inside the UPDATE. So a replayed code fails, and of two copies sent at once only one succeeds. A secret that will not open is a 409 `mfa_factor_unreadable` and one error log line, usually after `MFA_ENCRYPTION_KEY` changed. Recovery codes and emailed codes are hashed under keys derived from it, so after a change they fail like a typo.
+
+Emailed codes go through `requestCode`, which writes an `mfa_email_code` row and the outbox event `MFA_EMAIL_CODE_REQUESTED` in one transaction. The worker mints the code and mails it, so the request never waits on mail and no table holds the code. `lockCodesOf` takes a transaction-level advisory lock per account, so two requests at once take turns. At sign-in and at the start of a setup, a usable code asked for under a minute ago stays in place, and a person who asks again within that minute, `EMAIL_CODE_RESEND_SECONDS`, gets a 429 `rate_limited`. No account gets more than five codes an hour, `EMAIL_CODES_PER_HOUR`, whatever they were for. A new code replaces the one before it, so only the newest works. A code is never asked for when the account's address is no longer the one its email factor proved, and that is a 409 `mfa_email_address_changed`, at sign-in a challenge with `codeSent` false, which a recovery code still finishes. `spendEmailCode` takes the newest live code for the purpose, `sign_in` or `settings`, under its row lock. It must have been mailed, be under ten minutes old, have fewer than five wrong tries, `EMAIL_CODE_MAX_FAILURES`, and have gone to the address the factor proved, which must still be the account's. A wrong guess adds one to its count and says how many tries are left. `emailCodeRefused` turns every other refusal into a 401 or 400 `mfa_code_expired` that says what to do. `EmailCodeRefusal` names why a code was not taken, and only `wrong` means it was compared. `resendSignInCode` and `sendSettingsCode` serve the two routes that ask for a code, the first after its caller has checked the challenge and the lockout. The file carries no comments, so this chapter is where its reasons live.
+
+#### `apps/api/src/modules/acc/mfa/totp.ts`, `apps/api/src/modules/acc/mfa/secret-box.ts`, `apps/api/src/modules/acc/mfa/recovery-codes.ts`, `apps/api/src/modules/acc/mfa/email-codes.ts`
+
+About 1.5 minutes. It builds on T7.6 and T4.5.
+
+These files are the pure cryptography of two-factor sign-in on `node:crypto`, pinned by `tests3/contract/mfa-crypto.test.ts`. `matchTotp` follows RFC 6238 with HMAC-SHA1, 30-second steps, six digits and one step either side, `TOTP_WINDOW`. It returns the matched step and compares every candidate in constant time, so timing reveals nothing. `sealSecret` and `openSecret` use AES-256-GCM under `MFA_ENCRYPTION_KEY`, with the account id as authenticated data, so a ciphertext copied to another row will not open. A failure is an `UnreadableSecretError`. `otpauthUri` percent-encodes the issuer, as it does the label, because `URLSearchParams` would write the space in "Card Embassy" as a plus sign, which the key URI format does not read as a space. `deriveSubkey` uses HKDF to give recovery codes their own key. `generateRecoveryCodes` makes ten 12-character Crockford base32 codes. `normalizeRecoveryCode` forgives case, dashes and look-alike letters, and `hashRecoveryCode` stores each as HMAC-SHA256. `email-codes.ts` keys emailed codes with their own subkey, `emailCodeKey`. `emailCodeHash` is an HMAC-SHA256 of the code row's id and the digits, so a copy of the table is not a million guesses away from a live code, and `emailCodeMatches` compares in constant time. The worker repeats the key and the hash, and `tests/worker/mfa-email-code.test.ts` holds the two to the same answer. `normalizeEmailCode` forgives spaces and a dash, and `maskEmail` shows an address as its first letter and its domain. Back up `MFA_ENCRYPTION_KEY` with the database. Without it, no enrolled account can sign in until an admin resets its second factor.
+
+#### `apps/api/src/modules/acc/profile.controller.ts`, `apps/api/src/modules/acc/profile.service.ts`
+
+About 1.5 minutes. It builds on T7.1 and T13.1.
+
+These files let a user read their profile, fix their name and manage addresses, under `/me`. `get` returns the caller's `ProfileView`, including `nameReviewRequired`, the terms acceptance, `mfaEnabled` and `mfaRequired`. It also carries `mfaMethod`. It is `@AllowSuspended()` and `@AllowWithoutMfa()` because the SPA's shell boots from it. `update` writes only `firstName` and `lastName` and clears `nameReviewRequired`. `listAddresses` returns the caller's addresses. It and the add and edit routes send each address through `addressView`, which leaves out the owner id and `createdAt`. `updateAddress` and `deleteAddress` find an address by its id and the caller's id, so another person's address is a 404, and the `:id` passes `IdParam` first. `addressText` trims `label`, `recipient`, `line1`, `city` and `postalCode`, folds runs of spaces, refuses an empty one, caps them at 60, 120, 120, 80 and 16 characters and refuses markup and control characters, each with a 400 that names the field in words, on an add and on an edit alike. `country` must pass `IsShippableCountry` and is stored through `toCountryCode`. `regionFor` checks `region` with `normalizeRegion`. A US or Canadian address needs a known two-letter code, stored upper-cased, and elsewhere the region is optional free text. An edit re-checks the pair only when it changes `country` or `region`. `line2`, the apartment, suite or unit, and `phone`, for the carrier, are both optional and trimmed, and an empty one is stored as null. `line2Of` caps the line at `ADDRESS_LINE2_MAX`, 100 characters, and refuses markup and control characters, and `phoneOf` takes 6 to 20 digits, spaces, plus signs and dashes with at least six digits among them, and refuses anything else with a 400 that names the phone. Only the owner's own address views carry the phone. A new default demotes the old one in the same transaction. No unique index enforces a single default, so two saves at once can leave two defaults.
+
+#### `apps/api/src/modules/acc/acc.schema.ts`, `apps/api/src/modules/acc/address.schema.ts`
+
+About 1 minute. It builds on T5.4, T7.1 and T7.2.
+
+These files define the account tables. `userAccount` has a `status` from `accountStatus`, a `role` from `userRole`, and a unique `email` and `username`. `autoSuspendedAt` marks a debt-sweep suspension. The sweep lifts only those, and any status an admin sets clears it. `user_account_terms_acceptance_complete` keeps the two terms columns both set or both empty. Only the seed writes `intakeId` and `legacyDisplayName`. The other tables are `verificationToken`, `loginSession`, `loginAttempt`, `mfaFactor`, `mfaRecoveryCode`, `mfaChallenge`, `mfaEmailCode` and `shippingAddress`. Since migration `0039` a factor has a `method`, `totp` with a sealed secret or `email` with the `emailAddress` it proved, and its key is the account and the method. A partial unique index keeps one enabled factor per account, and another keeps one live `mfaEmailCode` per account and purpose. `shippingAddress.region` came with migration `0037` and is nullable, so older rows have none. `line2` and `phone` came with migration `0041`, both nullable for the same reason. Migration `0038` writes the platform custodian as a `closed` `user`, so it never signs in, and 2.2 says why. Since `0042` every `user_id` here is a `uuid` with a foreign key to `user_account`, so an account that has any of these rows cannot be deleted.
+
+#### `apps/api/src/modules/sup/sup.controller.ts`, `apps/api/src/modules/sup/sup.module.ts`
+
+About 1 minute. It builds on T7.1, T7.7 and T6.3.
+
+`SupController` serves the helpdesk under `/support`, and `SupModule` wires it to `SupportService`. The collector routes are `mine`, `open`, `thread`, `reply` and `awaiting`, all `@AllowSuspended()`. The staff routes are `queue`, `queueCount`, `assign` and `resolve`, all under `@Roles('warehouse_operator', 'admin')`. `CATEGORIES` includes `private_sale`, as do the service's `TicketCategory` type and the database enum. Every `:id` passes `IdParam`, so a malformed id is a 400 before the service runs.
+
+#### `apps/api/src/modules/sup/support.service.ts`, `apps/api/src/modules/sup/sup.schema.ts`
+
+About 2 minutes. It builds on T15.1, T14.3 and T5.6.
+
+`SupportService` runs tickets between a collector and staff. The status says whose turn it is. It is `open` when staff must answer, `awaiting_customer` when the customer must, or `resolved`. The method `open` writes the ticket, with a `TKT-` code, and its first message in one transaction. `loadFor` shows staff every ticket and a collector only their own, and another person's ticket reads as a 404. `staff` requires an `active` account as well as a staff role. So a staff role on a suspended account gets a 403 on another person's ticket, and on its own tickets its replies count as a customer's. A collector receives a reduced view: `thread` sends `collectorTicketView`, without the user id, `assignedTo` and `resolvedBy`, and marks each message `fromStaff`, naming only the collector's own messages, while `listMine` and `open` leave out `relatedType` and `relatedId`.
+
+`reply` reads the ticket with `loadFor` inside its transaction under `SELECT ... FOR UPDATE`, so it waits for an `assign` or `resolve` in flight and acts on what they wrote. It sets the status by who spoke, so a customer reply reopens a resolved ticket. A customer reply leaves `assignedTo` alone, and a staff reply claims only an unassigned ticket, as `coalesce(assigned_to, actor)` in the UPDATE, and emits `support_ticket_replied`. So a reply that races an `assign` cannot undo it, which `tests/concurrency/support-reply-race.test.ts` pins. `assigned_to` is a `uuid` with a foreign key to `user_account`, `ON DELETE RESTRICT`, like `resolved_by`, since migration `0049_fees_that_are_not_use_and_ticket_assignees`, which first cleared any value that was not the id of an account (`tests/integration/sup-ticket-assignee.test.ts`). `resolve` and `assign` are conditional UPDATEs, so when two staff click at once, one acts and the other gets a 409. `resolve` emits `support_ticket_resolved`. `listQueue` lists unresolved tickets, longest wait first. `supportMessage` is append-only, and both sides see every message. `relatedType` and `relatedId` are free text, and nothing checks them against a real record or the customer.
+
+#### `apps/api/src/modules/med/med.controller.ts`, `apps/api/src/modules/med/med.module.ts`, `apps/api/src/modules/med/med.schema.ts`
+
+About 1 minute. It builds on T7.10, T9.1 and T9.2.
+
+These files take photo uploads and record each stored image. `POST /media/uploads` is staff only, so collectors cannot upload. `UploadDto` takes `contentType`, `dataBase64` and a `purpose` of `item_intake` or `parcel`. `MedModule` is global, so the inbound module `inv` and the marketplace module `mkt` inject `MediaService` freely. `mediaUpload` keeps one `media_upload` row per stored image, with key, purpose, uploader, sniffed type and size. The wallet request's `documentKey` is free text a caller of the API may send; the collector's form no longer asks for it. Its shape is checked, but nothing uploads it, looks it up or signs it.
+
+#### `apps/api/src/modules/med/media.service.ts`
+
+About 2 minutes. It builds on T7.10, T9.1 and T9.2.
+
+`MediaService` stores photos and checks that a photo key may go on a record. A client uploads the bytes first and names the returned key when it creates the record. `upload` needs a declared type in `ALLOWED_TYPES`. `decodedLength` checks `MAX_IMAGE_BYTES`, 10 MB, before decoding, so an oversized body is refused cheaply. `sniffImageType` takes the real type from the first bytes and refuses anything else. The key is built from a purpose prefix, the year and month and a UUID, and never from caller input. A store failure is a 503 `storage_unavailable`, and the row is written only after the bytes are stored.
+
+`assertAttachable` normally runs in the caller's transaction. Each key must have no `.` or `..` segment, must be recorded in `media_upload`, and must have the expected purpose. It must also be the actor's own upload or a colleague's from the last 30 minutes, `FOREIGN_UPLOAD_WINDOW_MS`. `IntakeService`, `ParcelService` and `HouseStoreService` call it. `signed` and `signAll` return signed URLs and drop a key that cannot be signed. Nothing records that a key was attached, so one upload can go on several records, and unattached uploads are never removed.

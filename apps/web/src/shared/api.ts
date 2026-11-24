@@ -1,4 +1,8 @@
+import { t } from './i18n';
+
 const BASE = '/api/v1';
+
+export const NETWORK_FAILURE = t('error.unreachable');
 
 export type ApiErrorKind =
   | 'unreachable'
@@ -60,6 +64,20 @@ function kindForStatus(status: number, code: string | undefined): ApiErrorKind {
   return 'client';
 }
 
+type SessionEndedHandler = () => void;
+
+let sessionEnded: SessionEndedHandler | null = null;
+
+export function onSessionEnded(handler: SessionEndedHandler | null): void {
+  sessionEnded = handler;
+}
+
+function plainMessage(kind: ApiErrorKind, status: number, statusText: string, fromServer: string | undefined): string {
+  if (kind === 'unreachable') return NETWORK_FAILURE;
+  if (kind === 'server') return t('error.server');
+  return fromServer || statusText || `HTTP ${status}`;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
@@ -68,20 +86,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       ...options,
       headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
     });
-  } catch (cause) {
-    throw new ApiError(
-      'unreachable',
-      0,
-      cause instanceof Error && cause.message ? cause.message : 'Network request failed',
-    );
+  } catch {
+    throw new ApiError('unreachable', 0, NETWORK_FAILURE);
   }
 
   const body = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
     const envelope = (body as { error?: { code?: string; message?: string } } | null)?.error;
     const code = envelope?.code;
-    const message = envelope?.message || res.statusText || `HTTP ${res.status}`;
-    throw new ApiError(kindForStatus(res.status, code), res.status, message, code);
+    const kind = kindForStatus(res.status, code);
+    const ended = kind === 'unauthenticated' && sessionEnded !== null && !path.startsWith('/auth/');
+    const message = ended ? t('error.sessionEnded') : plainMessage(kind, res.status, res.statusText, envelope?.message);
+    if (ended) sessionEnded?.();
+    throw new ApiError(kind, res.status, message, code);
   }
   return body as T;
 }

@@ -7,6 +7,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsISO8601,
   IsObject,
   IsOptional,
   IsString,
@@ -17,7 +18,12 @@ import { Public } from '../acc/public.decorator';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
-import { ShipmentService } from './shipment.service';
+import {
+  ShipmentService,
+  collectorQuoteView,
+  collectorRateView,
+  collectorShipmentRowView,
+} from './shipment.service';
 import { ShipmentEditService } from './shipment-edit.service';
 import { GroupShipmentService } from './group-shipment.service';
 import { CustomsService } from './customs.service';
@@ -95,11 +101,12 @@ class DirectShipDto {
 class HandDeliveryDto {
   @IsArray() @ArrayNotEmpty() @IsString({ each: true }) itemIds!: string[];
   @IsString() @MaxLength(400) pickupAddress!: string;
-  @IsString() pickupFrom!: string;
-  @IsString() pickupTo!: string;
+  @IsISO8601({}, { message: 'Give the start of the pickup window as a date and time.' }) pickupFrom!: string;
+  @IsISO8601({}, { message: 'Give the end of the pickup window as a date and time.' }) pickupTo!: string;
   @IsString() @MaxLength(400) deliveryAddress!: string;
-  @IsString() deliverFrom!: string;
-  @IsString() deliverTo!: string;
+  @IsOptional() @IsString() @MaxLength(40) contactPhone?: string;
+  @IsISO8601({}, { message: 'Give the start of the delivery window as a date and time.' }) deliverFrom!: string;
+  @IsISO8601({}, { message: 'Give the end of the delivery window as a date and time.' }) deliverTo!: string;
   @IsString() @MaxLength(2) destinationCountry!: string;
   @IsOptional() @IsString() @MaxLength(140) recipientName?: string;
   @IsOptional() @IsString() @MaxLength(500) customerNotes?: string;
@@ -108,6 +115,10 @@ class HandDeliveryDto {
 class QuoteDto {
   @IsInt() @Min(1) quoteMinor!: number;
   @IsString() @MaxLength(1000) notes!: string;
+}
+
+class AcceptQuoteDto {
+  @IsInt() @Min(1) quoteMinor!: number;
 }
 
 class PickupDto {
@@ -155,13 +166,13 @@ export class ShpController {
   }
 
   @Post('quote')
-  quote(@CurrentUser() user: AuthUser, @Body() dto: CreateShipmentDto) {
-    return this.shipments.quote(user.id, dto);
+  async quote(@CurrentUser() user: AuthUser, @Body() dto: CreateShipmentDto) {
+    return collectorQuoteView(await this.shipments.quote(user.id, dto));
   }
 
   @Post('shipments')
-  create(@CurrentUser() user: AuthUser, @Body() dto: CreateShipmentDto) {
-    return this.shipments.create(user.id, dto);
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateShipmentDto) {
+    return collectorShipmentRowView(await this.shipments.create(user.id, dto));
   }
 
   @Get('shipments')
@@ -171,7 +182,7 @@ export class ShpController {
 
   @Get('groups')
   myGroups(@CurrentUser() user: AuthUser) {
-    return this.groups.mine(user.id);
+    return this.groups.mine(user);
   }
 
   @Post('groups')
@@ -190,8 +201,8 @@ export class ShpController {
   }
 
   @Get('groups/:id')
-  group(@Param('id') id: string) {
-    return this.groups.describe(id);
+  group(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.groups.describeFor(id, user);
   }
 
   @Post('groups/:id/lock')
@@ -210,8 +221,8 @@ export class ShpController {
   }
 
   @Post('white-glove')
-  requestHandDelivery(@CurrentUser() user: AuthUser, @Body() dto: HandDeliveryDto) {
-    return this.human.requestHandDelivery(user.id, dto);
+  async requestHandDelivery(@CurrentUser() user: AuthUser, @Body() dto: HandDeliveryDto) {
+    return collectorShipmentRowView(await this.human.requestHandDelivery(user.id, dto));
   }
 
   @Roles('warehouse_operator', 'admin')
@@ -221,18 +232,18 @@ export class ShpController {
   }
 
   @Post('white-glove/:id/accept')
-  acceptQuote(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.human.acceptQuote(id, user);
+  acceptQuote(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: AcceptQuoteDto) {
+    return this.human.acceptQuote(id, user, dto.quoteMinor);
   }
 
   @Get('pickup/shows')
   pickupShows() {
-    return this.human.pickupShows();
+    return this.human.collectorPickupShows();
   }
 
   @Post('pickup')
-  requestPickup(@CurrentUser() user: AuthUser, @Body() dto: PickupDto) {
-    return this.human.requestPickup(user.id, dto);
+  async requestPickup(@CurrentUser() user: AuthUser, @Body() dto: PickupDto) {
+    return collectorShipmentRowView(await this.human.requestPickup(user.id, dto));
   }
 
   @Get('direct/terms')
@@ -255,8 +266,10 @@ export class ShpController {
   }
 
   @Get('shipments/:id/rates')
-  rates(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.shipments.rates(id, user);
+  async rates(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    const rates = await this.shipments.rates(id, user);
+    const staff = user.role === 'warehouse_operator' || user.role === 'admin';
+    return staff ? rates : rates.map(collectorRateView);
   }
 
   @Post('shipments/:id/select-rate')
@@ -275,13 +288,20 @@ export class ShpController {
   }
 
   @Patch('shipments/:id')
-  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateShipmentDto) {
-    return this.edits.update(id, user, dto);
+  async update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateShipmentDto) {
+    const row = await this.edits.update(id, user, dto);
+    const staff = user.role === 'warehouse_operator' || user.role === 'admin';
+    return staff ? row : collectorShipmentRowView(row);
   }
 
   @Post('shipments/:id/merge')
   merge(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: MergeDto) {
     return this.edits.merge(id, dto.sourceShipmentId, user);
+  }
+
+  @Get('shipments/:id/cancel-fee')
+  cancelFee(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.edits.cancelFee(id, user);
   }
 
   @Post('shipments/:id/cancel')

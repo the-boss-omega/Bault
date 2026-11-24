@@ -1,5 +1,7 @@
-import { pgEnum, pgTable, text, integer, timestamp, uniqueIndex, jsonb } from 'drizzle-orm/pg-core';
+import { foreignKey, pgEnum, pgTable, text, integer, timestamp, uniqueIndex, jsonb, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
+import { item } from '../cst/cst.schema';
 
 export const escrowStatus = pgEnum('escrow_status', [
   'proposed',
@@ -25,10 +27,10 @@ export const escrowDeal = pgTable(
     id: pkId(),
     code: text('code').notNull(),
 
-    raisedBy: text('raised_by').notNull(),
+    raisedBy: uuid('raised_by').notNull(),
     raiserRole: escrowRole('raiser_role').notNull(),
 
-    counterpartyUserId: text('counterparty_user_id'),
+    counterpartyUserId: uuid('counterparty_user_id'),
     counterpartyName: text('counterparty_name'),
     counterpartyEmail: text('counterparty_email'),
 
@@ -42,21 +44,21 @@ export const escrowDeal = pgTable(
 
     fundingSource: text('funding_source'),
     fundedAt: timestamp('funded_at', { withTimezone: true }),
-    fundingAttestedBy: text('funding_attested_by'),
+    fundingAttestedBy: uuid('funding_attested_by').references(() => userAccount.id, { onDelete: 'restrict' }),
     fundingReference: text('funding_reference'),
 
-    itemId: text('item_id'),
+    itemId: uuid('item_id').references(() => item.id, { onDelete: 'restrict' }),
     itemReceivedAt: timestamp('item_received_at', { withTimezone: true }),
 
-    inspectedBy: text('inspected_by'),
+    inspectedBy: uuid('inspected_by').references(() => userAccount.id, { onDelete: 'restrict' }),
     inspectedAt: timestamp('inspected_at', { withTimezone: true }),
     inspectionMatches: text('inspection_matches'),
     inspectionNotes: text('inspection_notes'),
 
     buyerReleasedAt: timestamp('buyer_released_at', { withTimezone: true }),
-    buyerReleaseAttestedBy: text('buyer_release_attested_by'),
+    buyerReleaseAttestedBy: uuid('buyer_release_attested_by').references(() => userAccount.id, { onDelete: 'restrict' }),
     sellerReleasedAt: timestamp('seller_released_at', { withTimezone: true }),
-    sellerReleaseAttestedBy: text('seller_release_attested_by'),
+    sellerReleaseAttestedBy: uuid('seller_release_attested_by').references(() => userAccount.id, { onDelete: 'restrict' }),
 
     settledAt: timestamp('settled_at', { withTimezone: true }),
     returnedAt: timestamp('returned_at', { withTimezone: true }),
@@ -66,19 +68,33 @@ export const escrowDeal = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => ({ escrowDealCodeUnique: uniqueIndex('escrow_deal_code_unique').on(t.code) }),
+  (t) => ({
+    escrowDealCodeUnique: uniqueIndex('escrow_deal_code_unique').on(t.code),
+    raisedByFk: foreignKey({ name: 'escrow_deal_raised_by_fk', columns: [t.raisedBy], foreignColumns: [userAccount.id] }),
+    counterpartyFk: foreignKey({
+      name: 'escrow_deal_counterparty_fk',
+      columns: [t.counterpartyUserId],
+      foreignColumns: [userAccount.id],
+    }),
+  }),
 );
 
-export const escrowEvent = pgTable('escrow_event', {
-  id: pkId(),
-  dealId: text('deal_id').notNull(),
-  eventType: text('event_type').notNull(),
-  fromStatus: text('from_status'),
-  toStatus: text('to_status'),
-  actorId: text('actor_id'),
-  onBehalfOf: text('on_behalf_of'),
-  notes: text('notes'),
-  metadata: jsonb('metadata'),
-  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
-  createdAt: createdAt(),
-});
+export const escrowEvent = pgTable(
+  'escrow_event',
+  {
+    id: pkId(),
+    dealId: uuid('deal_id').notNull(),
+    eventType: text('event_type').notNull(),
+    fromStatus: text('from_status'),
+    toStatus: text('to_status'),
+    actorId: uuid('actor_id').references(() => userAccount.id, { onDelete: 'restrict' }),
+    onBehalfOf: text('on_behalf_of'),
+    notes: text('notes'),
+    metadata: jsonb('metadata'),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    dealFk: foreignKey({ name: 'escrow_event_deal_fk', columns: [t.dealId], foreignColumns: [escrowDeal.id] }),
+  }),
+);

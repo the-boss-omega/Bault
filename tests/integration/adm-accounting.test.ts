@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, SEED_USERNAME, fundWallet, signIn, type Client } from './helpers/http';
+import { SEED, SEED_USERNAME, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
 
 type Summary = {
   byType: { type: string; direction: string; totalMinor: number }[];
-  revenue: { lines: { key: string; totalMinor: number }[] };
+  revenue: { lines: { key: string; totalMinor: number }[]; refundsMinor: number };
 };
 
 const day = (offsetDays: number) => new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
@@ -132,7 +132,11 @@ describe('N40 monthly summary', () => {
     expect(lines.reduce((a, l) => a + l.totalMinor, 0)).toBe(after.revenue.totalMinor);
     const net = (type: string) => total(after, type, 'debit') - total(after, type, 'credit');
     expect(after.revenue.totalMinor).toBe(
-      net('fee') + net('service_charge') + net('interest') - after.revenue.cashOutFeesReturnedMinor,
+      net('fee') +
+        net('service_charge') +
+        net('interest') -
+        after.revenue.cashOutFeesReturnedMinor -
+        after.revenue.refundsMinor,
     );
 
     expect(after.balancesHeld.customerTotalMinor - before.balancesHeld.customerTotalMinor).toBe(
@@ -141,6 +145,51 @@ describe('N40 monthly summary', () => {
     expect(after.balancesHeld.customerTotalMinor).toBe(
       after.balancesHeld.owedToCustomersMinor - after.balancesHeld.owedByCustomersMinor,
     );
+  });
+
+  it("takes a cancelled shipment's refund off the shipping revenue it was counted in", async () => {
+    const admin = await signIn(SEED.admin);
+    const operator = await signIn(SEED.operator);
+    const collector = await signIn(SEED.collector);
+    const month = day(0).slice(0, 7);
+    const read = async () => (await admin.get(`/admin/accounting/summary?month=${month}`)).body as Summary;
+    const shipping = (s: Summary) => s.revenue.lines.find((l) => l.key === 'service_charge')?.totalMinor ?? 0;
+
+    const item = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
+    const address = await collector.post('/me/addresses', {
+      label: 'Accounting',
+      recipient: 'Red Ashwood',
+      line1: '12 Vine St',
+      city: 'Trenton',
+      region: 'NJ',
+      country: 'US',
+      postalCode: '08608',
+    });
+    expect(address.status).toBe(201);
+    await fundWallet(SEED.collector, 20_000);
+    const s = (await collector.post('/shipping/shipments', { itemIds: [item.id], addressId: address.body.id })).body;
+    const rates = (await collector.get(`/shipping/shipments/${s.id}/rates`)).body as {
+      carrier: string;
+      serviceLevel: string;
+      eligible: boolean;
+    }[];
+    const pick = rates.find((r) => r.eligible)!;
+    const selected = await collector.post(`/shipping/shipments/${s.id}/select-rate`, {
+      carrier: pick.carrier,
+      serviceLevel: pick.serviceLevel,
+    });
+    const paid = selected.body.cost as number;
+    expect(paid).toBeGreaterThan(0);
+
+    const before = await read();
+    const cancelled = await collector.post(`/shipping/shipments/${s.id}/cancel`, { reason: 'Changed my mind.' });
+    expect(cancelled.status).toBe(201);
+    expect(cancelled.body.refundedMinor).toBe(paid);
+    const fee = cancelled.body.restockingFeeMinor as number;
+    const after = await read();
+
+    expect(shipping(after) - shipping(before)).toBe(fee - paid);
+    expect(after.revenue.refundsMinor - before.revenue.refundsMinor).toBe(paid);
   });
 
   it('reports a month with no activity as zeroes rather than an error', async () => {

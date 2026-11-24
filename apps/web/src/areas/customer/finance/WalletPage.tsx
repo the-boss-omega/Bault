@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
 import { formatDate, formatDateTime, formatLedgerAmount, formatUsd } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { useRoute, useNavigation } from '../../../shared/routing';
+import { useChargeNames, type ChargeNames } from './chargeNames';
 import { Amount, Code } from '../../../shared/ui/Serial';
 import {
+  WALLET_REQUEST_STATUSES,
   WALLET_REQUEST_TONE,
   canCancel as canCancelRequest,
   fundingSourceLabel,
@@ -14,15 +16,16 @@ import {
   type WalletRequest,
   type WalletRequestDetail,
 } from '../../../shared/walletRequests';
-import { WalletRequestForm } from './WalletRequestForms';
-import { TopUpPanel } from './MoneyPanels';
+import { WalletRequestForm, type SubmittedRequest } from './WalletRequestForms';
+import { TopUpPanel, cryptoReturnFrom } from './MoneyPanels';
+import { paypalReturnFromSearch } from '../../../shared/paypalCheckout';
+import { InTransit, StatementSlip } from './StatementSlip';
 import {
   Button,
   ContextTabs,
   DetailRow,
   EmptyState,
   ErrorState,
-  MetricCard,
   Panel,
   SkeletonBlock,
   SkeletonTable,
@@ -32,9 +35,8 @@ import {
   ViewAllLink,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import {
-  IconArrowDown,
-  IconArrowUp,
   IconCalendar,
   IconChart,
   IconChevronDown,
@@ -47,8 +49,6 @@ import {
   IconShield,
   IconTag,
   IconUpload,
-  IconWallet,
-  VaultDoorArt,
 } from '../../../shared/ui/icons';
 
 interface Money {
@@ -63,7 +63,9 @@ interface LedgerRow {
   direction: string;
   currency: string;
   referenceType: string | null;
-  referenceId: string | null;
+  referenceId?: string | null;
+  chargeAction?: string | null;
+  chargeItemClass?: string | null;
   occurredAt: string;
 }
 
@@ -108,11 +110,18 @@ const REF_LABEL: Record<string, MessageKey> = {
   service_request: 'wallet.ref.service_request',
   shipment: 'wallet.ref.shipment',
   wallet_request: 'wallet.ref.wallet_request',
+  interest: 'wallet.ref.interest',
 };
 
 function refLabel(t: TranslateFn, referenceType: string): string {
   const key = REF_LABEL[referenceType];
   return key ? t(key) : referenceType.replace(/_/g, ' ');
+}
+
+function rowDescription(t: TranslateFn, row: LedgerRow, prices: ChargeNames): string {
+  const name = row.chargeAction ? prices.get(row.chargeAction, row.chargeItemClass) : null;
+  if (name) return name;
+  return row.referenceType ? refLabel(t, row.referenceType) : t('wallet.tx.noReference');
 }
 
 const RANGES = [
@@ -122,10 +131,101 @@ const RANGES = [
   { key: '90', days: 90, label: 'wallet.range.90' as MessageKey },
 ];
 
+const SORTS = [
+  { key: 'newest', label: 'wallet.sort.newest' as MessageKey },
+  { key: 'oldest', label: 'wallet.sort.oldest' as MessageKey },
+  { key: 'largest', label: 'wallet.sort.largest' as MessageKey },
+  { key: 'smallest', label: 'wallet.sort.smallest' as MessageKey },
+];
+
+function sortRows<T>(
+  rows: readonly T[],
+  sort: string,
+  when: (row: T) => string,
+  amount: (row: T) => number,
+): T[] {
+  const out = [...rows];
+  if (sort === 'oldest') out.sort((a, b) => when(a).localeCompare(when(b)));
+  else if (sort === 'largest') out.sort((a, b) => amount(b) - amount(a));
+  else if (sort === 'smallest') out.sort((a, b) => amount(a) - amount(b));
+  else out.sort((a, b) => when(b).localeCompare(when(a)));
+  return out;
+}
+
+function SortControl({
+  value,
+  onChange,
+  t,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  t: TranslateFn;
+}) {
+  return (
+    <label className="control">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={t('wallet.sort.label')}
+      >
+        {SORTS.map((s) => (
+          <option key={s.key} value={s.key}>
+            {t(s.label)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function SearchControl({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  label: string;
+}) {
+  return (
+    <div className="search">
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={label}
+        aria-label={label}
+      />
+    </div>
+  );
+}
+
 export function WalletPage() {
   const { t, locale } = useI18n();
   const route = useRoute();
-  const { goTab, openRecord, closeRecord } = useNavigation(route);
+  const { goTab, openRecord, closeRecord, setParams } = useNavigation(route);
+  const paypalParam = route.params.paypal ?? '';
+  const paymentParam = route.params.payment ?? '';
+  const paypalReturn = useMemo(
+    () =>
+      paypalReturnFromSearch(
+        new URLSearchParams({ paypal: paypalParam, payment: paymentParam }).toString(),
+      ),
+    [paypalParam, paymentParam],
+  );
+  const clearPayPalReturn = useCallback(
+    () => setParams({ paypal: null, payment: null }),
+    [setParams],
+  );
+  const cryptoParam = route.params.crypto ?? '';
+  const cryptoReturn = useMemo(
+    () => cryptoReturnFrom(cryptoParam, paymentParam),
+    [cryptoParam, paymentParam],
+  );
+  const clearCryptoReturn = useCallback(
+    () => setParams({ crypto: null, payment: null, charge: null }),
+    [setParams],
+  );
 
   const [balance, setBalance] = useState<Money | null>(null);
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
@@ -135,6 +235,9 @@ export function WalletPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState('all');
   const [rangeFilter, setRangeFilter] = useState('all');
+  const [txQuery, setTxQuery] = useState('');
+  const [txSort, setTxSort] = useState('newest');
+  const prices = useChargeNames();
 
   const tab: WalletTab = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as WalletTab)
@@ -171,35 +274,47 @@ export function WalletPage() {
 
   const balanceAfter = useMemo(() => runningBalances(ledger ?? []), [ledger]);
 
+  const flows = useMemo(() => {
+    const rows = ledger ?? [];
+    const inflow = rows
+      .filter((r) => r.direction === 'credit')
+      .reduce((sum, r) => sum + r.amount, 0);
+    const outflow = rows
+      .filter((r) => r.direction === 'debit')
+      .reduce((sum, r) => sum + r.amount, 0);
+    return { inflow, outflow, count: rows.length };
+  }, [ledger]);
+
   const tabs = TABS.map((key) => ({ key, label: t(`wallet.tab.${key}` as MessageKey) }));
+
+  async function submitted(created: SubmittedRequest) {
+    await load();
+    goTab('requests');
+    setStatus(
+      t('wallet.request.submittedNext', {
+        code: created.code,
+        amount: formatUsd(created.amountMinor),
+      }),
+    );
+  }
 
   return (
     <>
       {balance ? (
-        <section className="hero-balance">
-          <div className="hero-inner">
-            <p className="hero-label">{t('wallet.currentBalance')}</p>
-            <p className="hero-value" dir="ltr">
-              {formatUsd(balance.amount)}
-            </p>
-            <div className="hero-meta">
-              <span className="hero-currency">
-                <IconChevronDown />
-                {t('wallet.currencyName')}
-              </span>
-              <span className="hero-note">{t('wallet.derivedNote')}</span>
-            </div>
-          </div>
-          <div className="hero-art" aria-hidden="true">
-            <VaultDoorArt />
-          </div>
-        </section>
+        <StatementSlip
+          amount={balance.amount}
+          flows={flows}
+          expanded={tab === 'overview' && ledger !== null}
+          t={t}
+        />
       ) : (
         <SkeletonBlock className="skel-hero" />
       )}
 
       {status && <SuccessNote>{status}</SuccessNote>}
-      {error && <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
+      {error && (
+        <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />
+      )}
 
       <ContextTabs
         label={t('wallet.title')}
@@ -207,14 +322,16 @@ export function WalletPage() {
         active={tab}
         onSelect={(key) => goTab(key)}
         actions={
-          <>
-            <Button variant="gold" icon={<IconPlus />} onClick={() => goTab('cash-in')}>
-              {t('wallet.action.cashIn')}
-            </Button>
-            <Button variant="secondary" icon={<IconUpload />} onClick={() => goTab('cash-out')}>
-              {t('wallet.action.cashOut')}
-            </Button>
-          </>
+          tab === 'cash-in' || tab === 'cash-out' ? undefined : (
+            <>
+              <Button variant="primary" icon={<IconPlus />} onClick={() => goTab('cash-in')}>
+                {t('wallet.action.cashIn')}
+              </Button>
+              <Button variant="secondary" icon={<IconUpload />} onClick={() => goTab('cash-out')}>
+                {t('wallet.action.cashOut')}
+              </Button>
+            </>
+          )
         }
       />
 
@@ -224,10 +341,12 @@ export function WalletPage() {
             pending={pending}
             ledger={ledger}
             balanceAfter={balanceAfter}
+            prices={prices}
             locale={locale}
             t={t}
             onOpen={(id) => openRecord('transaction', id)}
             onViewAll={() => goTab('transactions')}
+            onCashIn={() => goTab('cash-in')}
             selectedId={route.params.transaction ?? null}
           />
         </TabPanel>
@@ -238,6 +357,7 @@ export function WalletPage() {
           <TransactionsTab
             ledger={ledger}
             balanceAfter={balanceAfter}
+            prices={prices}
             locale={locale}
             t={t}
             onOpen={(id) => openRecord('transaction', id)}
@@ -246,40 +366,61 @@ export function WalletPage() {
             setType={setTypeFilter}
             range={rangeFilter}
             setRange={setRangeFilter}
+            query={txQuery}
+            setQuery={setTxQuery}
+            sort={txSort}
+            setSort={setTxSort}
           />
         </TabPanel>
       )}
 
       {tab === 'cash-in' && (
         <TabPanel tab="cash-in">
-          <TopUpPanel onError={setError} onStatus={setStatus} onChanged={() => void load()} />
+          <TopUpPanel
+            onError={setError}
+            onStatus={setStatus}
+            onChanged={() => void load()}
+            paypalReturn={paypalReturn}
+            onPayPalReturnHandled={clearPayPalReturn}
+            cryptoReturn={cryptoReturn}
+            onCryptoReturnHandled={clearCryptoReturn}
+          />
 
-          <Panel title={t('wallet.cashIn.title')} subtitle={t('wallet.cashIn.subtitle')}>
+          <CashInRequest t={t}>
             <WalletRequestForm
               type="cash_in"
               availableMinor={balance?.amount ?? 0}
               existingRequests={requests ?? []}
-              onSubmitted={async () => {
-                await load();
-                goTab('requests');
-              }}
+              onSubmitted={submitted}
             />
-          </Panel>
+          </CashInRequest>
         </TabPanel>
       )}
 
       {tab === 'cash-out' && (
         <TabPanel tab="cash-out">
           <Panel title={t('wallet.cashOut.title')} subtitle={t('wallet.cashOut.subtitle')}>
-            <WalletRequestForm
-              type="cash_out"
-              availableMinor={balance?.amount ?? 0}
-              existingRequests={requests ?? []}
-              onSubmitted={async () => {
-                await load();
-                goTab('requests');
-              }}
-            />
+            {balance === null ? (
+              <SkeletonTable rows={3} columns={2} />
+            ) : balance.amount <= 0 ? (
+              <EmptyState
+                title={t('wallet.cashOut.nothing')}
+                text={t('wallet.cashOut.nothingText', { amount: formatUsd(balance.amount) })}
+                icon={<IconUpload />}
+                action={
+                  <Button variant="secondary" icon={<IconPlus />} onClick={() => goTab('cash-in')}>
+                    {t('wallet.action.cashIn')}
+                  </Button>
+                }
+              />
+            ) : (
+              <WalletRequestForm
+                type="cash_out"
+                availableMinor={balance.amount}
+                existingRequests={requests ?? []}
+                onSubmitted={submitted}
+              />
+            )}
           </Panel>
         </TabPanel>
       )}
@@ -291,6 +432,7 @@ export function WalletPage() {
             locale={locale}
             t={t}
             onOpen={(id) => openRecord('request', id)}
+            onCashIn={() => goTab('cash-in')}
             selectedId={route.params.request ?? null}
           />
         </TabPanel>
@@ -299,9 +441,16 @@ export function WalletPage() {
       {selected && (
         <TransactionDrawer
           row={selected}
+          balanceAfter={balanceAfter.get(selected.id) ?? null}
+          chargeName={
+            selected.chargeAction
+              ? prices.get(selected.chargeAction, selected.chargeItemClass)
+              : null
+          }
           locale={locale}
           t={t}
           onClose={() => closeRecord('transaction')}
+          onOpenRequest={(id) => setParams({ transaction: null, request: id }, { replace: false })}
         />
       )}
 
@@ -312,102 +461,81 @@ export function WalletPage() {
           t={t}
           onClose={() => closeRecord('request')}
           onChanged={load}
+          onCancelled={(code) => setStatus(t('wallet.requests.cancelledCode', { code }))}
         />
       )}
     </>
   );
 }
 
+function CashInRequest({ t, children }: { t: TranslateFn; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) body.current?.querySelector<HTMLElement>('input, select, textarea')?.focus();
+  }, [open]);
+  return (
+    <Panel title={t('wallet.cashIn.other')} subtitle={t('wallet.cashIn.otherText')}>
+      {open ? (
+        <div ref={body}>{children}</div>
+      ) : (
+        <Button
+          variant="secondary"
+          icon={<IconChevronDown />}
+          aria-expanded={false}
+          onClick={() => setOpen(true)}
+        >
+          {t('wallet.cashIn.otherOpen')}
+        </Button>
+      )}
+    </Panel>
+  );
+}
+
 function OverviewTab({
   ledger,
   balanceAfter,
+  prices,
   pending,
   locale,
   t,
   onOpen,
   onViewAll,
+  onCashIn,
   selectedId,
 }: {
   ledger: LedgerRow[] | null;
   balanceAfter: ReadonlyMap<string, number>;
+  prices: ChargeNames;
   pending: PendingTotals | null;
   locale: string;
   t: TranslateFn;
   onOpen: (id: string) => void;
   onViewAll: () => void;
+  onCashIn: () => void;
   selectedId: string | null;
 }) {
-  const flows = useMemo(() => {
-    const rows = ledger ?? [];
-    const inflow = rows.filter((r) => r.direction === 'credit').reduce((sum, r) => sum + r.amount, 0);
-    const outflow = rows.filter((r) => r.direction === 'debit').reduce((sum, r) => sum + r.amount, 0);
-    return { inflow, outflow, count: rows.length };
-  }, [ledger]);
-
   const recent = (ledger ?? []).slice(0, 6);
 
   return (
     <>
-      <div className="metric-grid">
-        <MetricCard
-          label={t('wallet.inflow')}
-          value={<span dir="ltr">{formatUsd(flows.inflow)}</span>}
-          icon={<IconArrowDown />}
-          tone="green"
-          footer={t('wallet.inflowNote')}
-        />
-        <MetricCard
-          label={t('wallet.outflow')}
-          value={<span dir="ltr">{formatUsd(flows.outflow)}</span>}
-          icon={<IconArrowUp />}
-          tone="amber"
-          footer={t('wallet.outflowNote')}
-        />
-        <MetricCard
-          label={t('wallet.netFlow')}
-          value={<span dir="ltr">{formatUsd(flows.inflow - flows.outflow)}</span>}
-          icon={<IconWallet />}
-          tone="blue"
-          footer={t('wallet.netFlowNote')}
-        />
-        <MetricCard
-          label={t('wallet.txCount')}
-          value={flows.count}
-          icon={<IconReceipt />}
-          tone="violet"
-          footer={t('wallet.txCountNote')}
-        />
-      </div>
-
       {pending && pending.count > 0 && (
-        <div className="metric-grid">
-          <MetricCard
-            label={t('wallet.pendingIn')}
-            value={<span dir="ltr">{formatUsd(pending.cashInMinor)}</span>}
-            icon={<IconArrowDown />}
-            tone="blue"
-            footer={t('wallet.pendingNote')}
-          />
-          <MetricCard
-            label={t('wallet.pendingOut')}
-            value={<span dir="ltr">{formatUsd(pending.cashOutMinor)}</span>}
-            icon={<IconUpload />}
-            tone="amber"
-            footer={t('wallet.pendingNote')}
-          />
-        </div>
+        <InTransit cashIn={pending.cashInMinor} cashOut={pending.cashOutMinor} t={t} />
       )}
 
       <Panel
         title={t('wallet.recent')}
         flush
         footer={
-          recent.length > 0 ? <ViewAllLink onClick={onViewAll}>{t('wallet.viewAll')}</ViewAllLink> : undefined
+          recent.length > 0 ? (
+            <ViewAllLink onClick={onViewAll}>{t('wallet.viewAll')}</ViewAllLink>
+          ) : undefined
         }
       >
         <TransactionTable
           rows={recent}
           balanceAfter={balanceAfter}
+          prices={prices}
           loading={ledger === null}
           locale={locale}
           t={t}
@@ -415,6 +543,11 @@ function OverviewTab({
           selectedId={selectedId}
           emptyTitle={t('wallet.empty.title')}
           emptyText={t('wallet.empty.overviewText')}
+          emptyAction={
+            <Button size="sm" variant="secondary" icon={<IconPlus />} onClick={onCashIn}>
+              {t('wallet.action.cashIn')}
+            </Button>
+          }
         />
       </Panel>
     </>
@@ -424,6 +557,7 @@ function OverviewTab({
 function TransactionsTab({
   ledger,
   balanceAfter,
+  prices,
   locale,
   t,
   onOpen,
@@ -432,9 +566,14 @@ function TransactionsTab({
   setType,
   range,
   setRange,
+  query,
+  setQuery,
+  sort,
+  setSort,
 }: {
   ledger: LedgerRow[] | null;
   balanceAfter: ReadonlyMap<string, number>;
+  prices: ChargeNames;
   locale: string;
   t: TranslateFn;
   onOpen: (id: string) => void;
@@ -443,6 +582,10 @@ function TransactionsTab({
   setType: (next: string) => void;
   range: string;
   setRange: (next: string) => void;
+  query: string;
+  setQuery: (next: string) => void;
+  sort: string;
+  setSort: (next: string) => void;
 }) {
   const types = useMemo(() => {
     const present = new Set((ledger ?? []).map((r) => r.type));
@@ -453,49 +596,77 @@ function TransactionsTab({
     const rows = ledger ?? [];
     const days = RANGES.find((r) => r.key === range)?.days ?? null;
     const cutoff = days === null ? null : Date.now() - days * 86_400_000;
-    return rows.filter((row) => {
+    const needle = query.trim().toLowerCase();
+    const kept = rows.filter((row) => {
       if (type !== 'all' && row.type !== type) return false;
       if (cutoff !== null && new Date(row.occurredAt).getTime() < cutoff) return false;
+      if (needle) {
+        const text = [
+          typeLabel(t, row.type),
+          rowDescription(t, row, prices),
+          formatLedgerAmount(row.amount, row.direction),
+          formatUsd(row.amount),
+          formatDate(row.occurredAt, locale),
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!text.includes(needle)) return false;
+      }
       return true;
     });
-  }, [ledger, type, range]);
+    return sortRows(
+      kept,
+      sort,
+      (r) => r.occurredAt,
+      (r) => r.amount,
+    );
+  }, [ledger, type, range, query, sort, t, prices, locale]);
 
-  const filtersActive = type !== 'all' || range !== 'all';
+  const filtersActive = type !== 'all' || range !== 'all' || query.trim() !== '';
 
   return (
     <Panel
       title={t('wallet.allTransactions')}
       subtitle={t('wallet.countShown', { shown: filtered.length, total: (ledger ?? []).length })}
       flush
-      tools={
-        <>
-          <label className="control">
-            <IconFilter />
-            <select value={type} onChange={(e) => setType(e.target.value)} aria-label={t('ui.filters')}>
-              <option value="all">{t('wallet.filter.allTypes')}</option>
-              {types.map((value) => (
-                <option key={value} value={value}>
-                  {typeLabel(t, value)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="control">
-            <IconCalendar />
-            <select value={range} onChange={(e) => setRange(e.target.value)} aria-label={t('ui.dateRange')}>
-              {RANGES.map((r) => (
-                <option key={r.key} value={r.key}>
-                  {t(r.label)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </>
-      }
     >
+      <div className="filter-bar" role="group" aria-label={t('wallet.filtersLabel')}>
+        <SearchControl value={query} onChange={setQuery} label={t('wallet.search.placeholder')} />
+        <label className="control">
+          <IconFilter />
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            aria-label={t('ui.filters')}
+          >
+            <option value="all">{t('wallet.filter.allTypes')}</option>
+            {types.map((value) => (
+              <option key={value} value={value}>
+                {typeLabel(t, value)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="control">
+          <IconCalendar />
+          <select
+            value={range}
+            onChange={(e) => setRange(e.target.value)}
+            aria-label={t('ui.dateRange')}
+          >
+            {RANGES.map((r) => (
+              <option key={r.key} value={r.key}>
+                {t(r.label)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <SortControl value={sort} onChange={setSort} t={t} />
+      </div>
       <TransactionTable
         rows={filtered}
         balanceAfter={balanceAfter}
+        prices={prices}
         loading={ledger === null}
         locale={locale}
         t={t}
@@ -510,6 +681,7 @@ function TransactionsTab({
               onClick={() => {
                 setType('all');
                 setRange('all');
+                setQuery('');
               }}
             >
               {t('wallet.clearFilters')}
@@ -524,8 +696,10 @@ function TransactionsTab({
 function runningBalances(ledger: readonly LedgerRow[]): Map<string, number> {
   const out = new Map<string, number>();
   let running = 0;
-  for (let i = ledger.length - 1; i >= 0; i -= 1) {
-    const row = ledger[i]!;
+  const order = ledger
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => a.row.occurredAt.localeCompare(b.row.occurredAt) || b.index - a.index);
+  for (const { row } of order) {
     running += row.direction === 'credit' ? row.amount : -row.amount;
     out.set(row.id, running);
   }
@@ -535,6 +709,7 @@ function runningBalances(ledger: readonly LedgerRow[]): Map<string, number> {
 function TransactionTable({
   rows,
   balanceAfter,
+  prices,
   loading,
   locale,
   t,
@@ -546,6 +721,7 @@ function TransactionTable({
 }: {
   rows: readonly LedgerRow[];
   balanceAfter: ReadonlyMap<string, number>;
+  prices: ChargeNames;
   loading: boolean;
   locale: string;
   t: TranslateFn;
@@ -562,7 +738,7 @@ function TransactionTable({
 
   return (
     <div className="dt-wrap dt-wrap--stack">
-      <table className="data-table">
+      <table className="data-table data-table--ledger">
         <caption>{t('wallet.transactions')}</caption>
         <thead>
           <tr>
@@ -606,14 +782,7 @@ function TransactionTable({
                 </td>
                 <td data-label={t('wallet.col.description')}>
                   {row.referenceType ? (
-                    <>
-                      <span>{refLabel(t, row.referenceType)}</span>
-                      {row.referenceId && (
-                        <span className="dt-sub">
-                          <Code value={row.referenceId.slice(0, 8)} />
-                        </span>
-                      )}
-                    </>
+                    <span>{rowDescription(t, row, prices)}</span>
                   ) : (
                     <span className="muted">{t('wallet.tx.noReference')}</span>
                   )}
@@ -637,33 +806,44 @@ function TransactionTable({
 
 function TransactionDrawer({
   row,
+  balanceAfter,
+  chargeName,
   locale,
   t,
   onClose,
+  onOpenRequest,
 }: {
   row: LedgerRow;
+  balanceAfter: number | null;
+  chargeName: string | null;
   locale: string;
   t: TranslateFn;
   onClose: () => void;
+  onOpenRequest: (id: string) => void;
 }) {
   const credit = row.direction === 'credit';
+  const requestId =
+    row.referenceType === 'wallet_request' && row.referenceId ? row.referenceId : null;
 
   function downloadReceipt() {
     const lines = [
-      'BAULT — TRANSACTION RECEIPT',
+      t('wallet.tx.receiptHeading'),
       '',
       `${t('wallet.col.type')}: ${typeLabel(t, row.type)}`,
       `${t('wallet.col.date')}: ${formatDateTime(row.occurredAt, locale)}`,
-      `${t('wallet.tx.recordId')}: ${row.id}`,
-      `${t('wallet.tx.reference')}: ${row.referenceId ?? '—'}`,
+      `${t('wallet.tx.reference')}: ${row.referenceType ? refLabel(t, row.referenceType) : t('wallet.tx.noReference')}`,
+      ...(chargeName ? [`${t('wallet.tx.chargeFor')}: ${chargeName}`] : []),
       `${t('wallet.tx.direction')}: ${credit ? t('wallet.direction.credit') : t('wallet.direction.debit')}`,
       `${t('wallet.col.amount')}: ${formatLedgerAmount(row.amount, row.direction)} ${row.currency}`,
+      ...(balanceAfter !== null
+        ? [`${t('wallet.tx.balanceAfter')}: ${formatUsd(balanceAfter)} ${row.currency}`]
+        : []),
     ];
     const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `bault-receipt-${row.id.slice(0, 8)}.txt`;
+    link.download = `card-embassy-receipt-${row.occurredAt.slice(0, 10)}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -684,39 +864,47 @@ function TransactionDrawer({
         </>
       }
     >
+      <DrawerTag
+        kicker={t('wallet.col.amount')}
+        amount={formatLedgerAmount(row.amount, row.direction)}
+        status={<StatusBadge tone="success">{t('wallet.tx.settled')}</StatusBadge>}
+        note={<span dir="ltr">{row.currency}</span>}
+      />
+
       <dl className="detail-list">
         <DetailRow label={t('wallet.col.type')}>{typeLabel(t, row.type)}</DetailRow>
         <DetailRow label={t('wallet.col.date')}>
-          <span dir="ltr">{formatDateTime(row.occurredAt, locale)}</span>
+          <span className="date">{formatDateTime(row.occurredAt, locale)}</span>
         </DetailRow>
-        <DetailRow label={t('wallet.tx.recordId')}>
-          <code dir="ltr">{row.id}</code>
+        <DetailRow label={t('wallet.tx.reference')}>
+          {row.referenceType ? refLabel(t, row.referenceType) : t('wallet.tx.noReference')}
         </DetailRow>
-        <DetailRow
-          label={t('wallet.tx.reference')}
-          sub={row.referenceType ? refLabel(t, row.referenceType) : undefined}
-        >
-          {row.referenceId ? <code dir="ltr">{row.referenceId}</code> : t('wallet.tx.noReference')}
-        </DetailRow>
+        {chargeName && (
+          <DetailRow label={t('wallet.tx.chargeFor')}>
+            <span>{chargeName}</span> <a href="#/faq/prices">{t('wallet.tx.priceList')}</a>
+          </DetailRow>
+        )}
+        {requestId && (
+          <DetailRow label={t('wallet.ref.wallet_request')}>
+            <Button size="sm" variant="secondary" onClick={() => onOpenRequest(requestId)}>
+              {t('wallet.tx.openRequest')}
+            </Button>
+          </DetailRow>
+        )}
         <DetailRow label={t('wallet.tx.direction')}>
           <StatusBadge tone={credit ? 'success' : 'info'}>
             {credit ? t('wallet.direction.credit') : t('wallet.direction.debit')}
           </StatusBadge>
         </DetailRow>
+        {balanceAfter !== null && (
+          <DetailRow label={t('wallet.tx.balanceAfter')}>
+            <Amount>{formatUsd(balanceAfter)}</Amount>
+          </DetailRow>
+        )}
         <DetailRow label={t('wallet.tx.status')} sub={t('wallet.tx.statusNote')}>
           <StatusBadge tone="success">{t('wallet.tx.settled')}</StatusBadge>
         </DetailRow>
-        <DetailRow label={t('wallet.tx.currency')}>
-          <span dir="ltr">{row.currency}</span>
-        </DetailRow>
       </dl>
-
-      <div className="detail-amount">
-        <p className="detail-amount-label">{t('wallet.col.amount')}</p>
-        <p className={`detail-amount-value ${credit ? 'amt-pos' : 'amt-neg'}`} dir="ltr">
-          {formatLedgerAmount(row.amount, row.direction)}
-        </p>
-      </div>
     </DetailDrawer>
   );
 }
@@ -726,46 +914,92 @@ function RequestsTab({
   locale,
   t,
   onOpen,
+  onCashIn,
   selectedId,
 }: {
   requests: WalletRequest[] | null;
   locale: string;
   t: TranslateFn;
   onOpen: (id: string) => void;
+  onCashIn: () => void;
   selectedId: string | null;
 }) {
   const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sort, setSort] = useState('newest');
 
   const rows = useMemo(
-    () => (requests ?? []).filter((r) => matchesRequestSearch(r, query)),
-    [requests, query],
+    () =>
+      sortRows(
+        (requests ?? []).filter(
+          (r) =>
+            matchesRequestSearch(r, query) && (statusFilter === 'all' || r.status === statusFilter),
+        ),
+        sort,
+        (r) => r.createdAt,
+        (r) => r.amount,
+      ),
+    [requests, query, statusFilter, sort],
   );
+  const filtersActive = query.trim() !== '' || statusFilter !== 'all';
 
   return (
-    <Panel
-      title={t('wallet.requests.title')}
-      subtitle={t('wallet.requests.subtitle')}
-      flush
-      tools={
-        <div className="search">
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('wallet.requests.searchPlaceholder')}
-            aria-label={t('wallet.requests.searchPlaceholder')}
-          />
-        </div>
-      }
-    >
+    <Panel title={t('wallet.requests.title')} subtitle={t('wallet.requests.subtitle')} flush>
+      <div className="filter-bar" role="group" aria-label={t('wallet.filtersLabel')}>
+        <SearchControl
+          value={query}
+          onChange={setQuery}
+          label={t('wallet.requests.searchPlaceholder')}
+        />
+        <label className="control">
+          <IconFilter />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label={t('wallet.requests.filterStatus')}
+          >
+            <option value="all">{t('wallet.requests.allStatuses')}</option>
+            {WALLET_REQUEST_STATUSES.map((value) => (
+              <option key={value} value={value}>
+                {requestStatusLabel(t, value)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <SortControl value={sort} onChange={setSort} t={t} />
+      </div>
       {requests === null ? (
         <SkeletonTable rows={4} columns={5} />
       ) : rows.length === 0 ? (
-        <EmptyState
-          title={t('wallet.requests.empty')}
-          text={t('wallet.requests.emptyText')}
-          icon={<IconReceipt />}
-        />
+        filtersActive ? (
+          <EmptyState
+            title={t('wallet.requests.noneMatch')}
+            text={t('wallet.empty.filteredText')}
+            icon={<IconReceipt />}
+            action={
+              <Button
+                size="sm"
+                onClick={() => {
+                  setQuery('');
+                  setStatusFilter('all');
+                }}
+              >
+                {t('wallet.clearFilters')}
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            title={t('wallet.requests.empty')}
+            text={t('wallet.requests.emptyText')}
+            icon={<IconReceipt />}
+            action={
+              <Button size="sm" variant="secondary" icon={<IconPlus />} onClick={onCashIn}>
+                {t('wallet.action.cashIn')}
+              </Button>
+            }
+          />
+        )
       ) : (
         <div className="dt-wrap dt-wrap--stack">
           <table className="data-table">
@@ -788,6 +1022,12 @@ function RequestsTab({
                   key={request.id}
                   className={'is-clickable' + (request.id === selectedId ? ' is-selected' : '')}
                   tabIndex={0}
+                  aria-label={t('wallet.requests.rowLabel', {
+                    code: request.code,
+                    type: requestTypeLabel(t, request.type),
+                    amount: formatUsd(request.amount),
+                    status: requestStatusLabel(t, request.status),
+                  })}
                   onClick={() => onOpen(request.id)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -799,7 +1039,9 @@ function RequestsTab({
                   <td data-label={t('wallet.requests.col.code')} className="dt-primary">
                     <Code value={request.code} />
                   </td>
-                  <td data-label={t('wallet.requests.col.type')}>{requestTypeLabel(t, request.type)}</td>
+                  <td data-label={t('wallet.requests.col.type')}>
+                    {requestTypeLabel(t, request.type)}
+                  </td>
                   <td data-label={t('wallet.requests.col.amount')} className="td-end num">
                     <span className={request.type === 'cash_in' ? 'amt-pos' : 'amt-neg'} dir="ltr">
                       {formatUsd(request.amount)}
@@ -811,10 +1053,10 @@ function RequestsTab({
                     </StatusBadge>
                   </td>
                   <td data-label={t('wallet.requests.col.created')}>
-                    <span dir="ltr">{formatDate(request.createdAt, locale)}</span>
+                    <span className="date">{formatDate(request.createdAt, locale)}</span>
                   </td>
                   <td data-label={t('wallet.requests.col.updated')}>
-                    <span dir="ltr">{formatDate(request.updatedAt, locale)}</span>
+                    <span className="date">{formatDate(request.updatedAt, locale)}</span>
                   </td>
                 </tr>
               ))}
@@ -832,17 +1074,20 @@ function RequestDrawer({
   t,
   onClose,
   onChanged,
+  onCancelled,
 }: {
   requestId: string;
   locale: string;
   t: TranslateFn;
   onClose: () => void;
   onChanged: () => Promise<void>;
+  onCancelled: (code: string) => void;
 }) {
   const [detail, setDetail] = useState<WalletRequestDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -862,9 +1107,12 @@ function RequestDrawer({
     try {
       await api.post('/finance/wallet-requests/' + requestId + '/cancel', {});
       setConfirmCancel(false);
+      setCancelled(true);
+      if (detail) onCancelled(detail.code);
       await load();
       await onChanged();
     } catch (e) {
+      setConfirmCancel(false);
       setError((e as Error).message);
     } finally {
       setBusy(false);
@@ -890,22 +1138,26 @@ function RequestDrawer({
           </>
         }
       >
-        {error && <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
+        {error && (
+          <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />
+        )}
+        {cancelled && <SuccessNote>{t('wallet.requests.cancelled')}</SuccessNote>}
+
+        {!detail && !error && <SkeletonTable rows={5} columns={2} />}
 
         {detail && (
           <>
-            <dl className="detail-list">
-              <DetailRow label={t('wallet.requests.col.status')}>
+            <DrawerTag
+              kicker={requestTypeLabel(t, detail.type)}
+              amount={formatUsd(detail.amount)}
+              status={
                 <StatusBadge tone={WALLET_REQUEST_TONE[detail.status] ?? 'neutral'}>
                   {requestStatusLabel(t, detail.status)}
                 </StatusBadge>
-              </DetailRow>
-              <DetailRow label={t('wallet.requests.col.type')}>{requestTypeLabel(t, detail.type)}</DetailRow>
-              <DetailRow label={t('wallet.requests.col.amount')}>
-                <span dir="ltr">
-                  {formatUsd(detail.amount)} {detail.currency}
-                </span>
-              </DetailRow>
+              }
+              note={<span dir="ltr">{detail.currency}</span>}
+            />
+            <dl className="detail-list">
               {detail.type === 'cash_in' ? (
                 <DetailRow label={t('wallet.request.fundingSource')}>
                   {fundingSourceLabel(t, detail.fundingSource)}
@@ -923,25 +1175,26 @@ function RequestDrawer({
               <DetailRow label={t('wallet.request.reference')}>{detail.reference || '—'}</DetailRow>
               <DetailRow label={t('wallet.request.notes')}>{detail.notes || '—'}</DetailRow>
               <DetailRow label={t('wallet.requests.col.created')}>
-                <span dir="ltr">{formatDateTime(detail.createdAt, locale)}</span>
+                <span className="date">{formatDateTime(detail.createdAt, locale)}</span>
               </DetailRow>
               <DetailRow label={t('wallet.requests.col.updated')}>
-                <span dir="ltr">{formatDateTime(detail.updatedAt, locale)}</span>
+                <span className="date">{formatDateTime(detail.updatedAt, locale)}</span>
               </DetailRow>
               {detail.rejectionReason && (
-                <DetailRow label={t('wallet.requests.rejectionReason')}>{detail.rejectionReason}</DetailRow>
-              )}
-              {detail.settledLedgerId && (
-                <DetailRow label={t('wallet.requests.settledLedger')}>
-                  <code dir="ltr">{detail.settledLedgerId}</code>
+                <DetailRow label={t('wallet.requests.rejectionReason')}>
+                  {detail.rejectionReason}
                 </DetailRow>
               )}
             </dl>
 
-            <Panel title={t('wallet.requests.history')} subtitle={t('wallet.requests.historyNote')} flush>
+            <Panel
+              title={t('wallet.requests.history')}
+              subtitle={t('wallet.requests.historyNote')}
+              flush
+            >
               <ul className="timeline">
-                {detail.history.map((event) => (
-                  <li key={event.id}>
+                {detail.history.map((event, i) => (
+                  <li key={`${event.occurredAt}-${event.toStatus}-${i}`}>
                     <p className="dt-primary">
                       {event.fromStatus
                         ? t('wallet.requests.event', {
@@ -952,9 +1205,7 @@ function RequestDrawer({
                             to: requestStatusLabel(t, event.toStatus),
                           })}
                     </p>
-                    <p className="dt-sub" dir="ltr">
-                      {formatDateTime(event.occurredAt, locale)}
-                    </p>
+                    <p className="dt-sub">{formatDateTime(event.occurredAt, locale)}</p>
                     {event.reason && <p className="card-desc">{event.reason}</p>}
                   </li>
                 ))}

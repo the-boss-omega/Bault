@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/node';
-import { scrubErrorEvent } from '@bault/adapters';
+import { Inject, Injectable, Optional, type OnApplicationShutdown } from '@nestjs/common';
+import { SHUTDOWN_FLUSH_MS, flushWithin, scrubErrorEvent, type ReportFlusher } from '@bault/adapters';
 import type { Env } from '@bault/config';
 
 let enabled = false;
@@ -45,4 +46,17 @@ export const reportException: ExceptionReporter = (error, request) => {
 
 export async function flushErrorReporting(timeoutMs = 2_000): Promise<void> {
   if (enabled) await Sentry.flush(timeoutMs);
+}
+
+export const REPORT_FLUSHER = Symbol('REPORT_FLUSHER');
+
+@Injectable()
+export class FlushReportsOnShutdown implements OnApplicationShutdown {
+  constructor(
+    @Optional() @Inject(REPORT_FLUSHER) private readonly flush: ReportFlusher = flushErrorReporting,
+  ) {}
+
+  async onApplicationShutdown(): Promise<void> {
+    await flushWithin(this.flush, SHUTDOWN_FLUSH_MS);
+  }
 }

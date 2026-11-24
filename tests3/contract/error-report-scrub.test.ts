@@ -34,9 +34,56 @@ describe('every report', () => {
     expect(out?.request?.headers?.['x-request-id']).toBe('req-1');
   });
 
-  it('keeps the body of an ordinary request, which is what makes the report useful', () => {
-    const out = scrubErrorEvent(crashDuring('POST', '/api/v1/vault/items', { description: 'Rayquaza VMAX' }));
-    expect(out?.request?.data).toEqual({ description: 'Rayquaza VMAX' });
+  it('keeps the field names of an ordinary request and none of what the customer typed', () => {
+    const out = scrubErrorEvent(
+      crashDuring('POST', '/api/v1/shipping/shipments', {
+        recipientName: 'Red Ashwood',
+        destinationAddress: { street1: '1140 W Addison St', city: 'Chicago', region: 'IL', postalCode: '60613', country: 'US' },
+        itemIds: ['item-aaa', 'item-bbb'],
+        parcels: [{ weightGrams: 410, note: 'fragile, leave with neighbour' }],
+        insured: true,
+        declaredValue: 98765,
+      }),
+    );
+    expect(leaks(out, 'Red Ashwood', '1140 W Addison', 'Chicago', '60613', 'item-aaa', 'fragile', '98765')).toEqual([]);
+    expect(out?.request?.data).toEqual([
+      'declaredValue',
+      'destinationAddress.city',
+      'destinationAddress.country',
+      'destinationAddress.postalCode',
+      'destinationAddress.region',
+      'destinationAddress.street1',
+      'insured',
+      'itemIds[]',
+      'parcels[].note',
+      'parcels[].weightGrams',
+      'recipientName',
+    ]);
+    expect(out?.request?.method).toBe('POST');
+    expect(out?.request?.url).toBe('/api/v1/shipping/shipments');
+  });
+
+  it('keeps the field names of a body that arrives as text, and drops text it cannot read', () => {
+    const json = scrubErrorEvent(
+      crashDuring('POST', '/api/v1/wallet/cash-out', JSON.stringify({ amount: 5000, destination: { email: 'red@example.test' } })),
+    );
+    expect(leaks(json, 'red@example.test', '5000')).toEqual([]);
+    expect(json?.request?.data).toEqual(['amount', 'destination.email']);
+    const form = scrubErrorEvent(crashDuring('POST', '/api/v1/support/tickets', 'subject=help&body=my+card+number+is+4111'));
+    expect(leaks(form, '4111', 'help')).toEqual([]);
+    expect(form?.request?.data).toEqual(['body', 'subject']);
+    const prose = scrubErrorEvent(crashDuring('POST', '/api/v1/support/tickets', 'my card number is 4111'));
+    expect(leaks(prose, '4111')).toEqual([]);
+    expect(prose?.request?.data).toBeUndefined();
+  });
+
+  it('keeps the names of the query parameters and none of their values', () => {
+    const event = crashDuring('GET', 'https://api.local/api/v1/marketplace/search?q=Red+Ashwood+collection&page=2');
+    event.request!.query_string = 'q=Red+Ashwood+collection&page=2';
+    const out = scrubErrorEvent(event);
+    expect(leaks(out, 'Ashwood')).toEqual([]);
+    expect(out?.request?.url).toBe('https://api.local/api/v1/marketplace/search');
+    expect(out?.request?.query_string).toBe('q&page');
   });
 
   it('passes an event with no request through untouched', () => {
@@ -58,6 +105,23 @@ describe('a failed query', () => {
     const text = JSON.stringify(out);
     expect(text).toContain('where email = $1 and last_name = $2');
     expect(text).toContain('queryWithCache');
+  });
+});
+
+describe('a provider failure reported from any process', () => {
+  it('keeps the provider, status and path, and loses the reply that quoted what was sent', () => {
+    const easyPost = 'EasyPost 422 on /shipments: Unable to verify 1140 W Addison St for Red Ashwood';
+    const payPal = 'PayPal /v1/payments/payouts failed (422): {"message":"receiver red@example.test is not eligible"}';
+    const out = scrubErrorEvent({
+      message: payPal,
+      exception: { values: [{ value: easyPost }, { value: payPal }] },
+      breadcrumbs: [{ message: `EasyPostError: ${easyPost}\n    at EasyPostShippingAdapter.call (easypost.js:96:13)` }],
+    } as Event & Record<string, unknown>) as Record<string, unknown>;
+    expect(leaks(out as Event, '1140 W Addison', 'Red Ashwood', 'red@example.test', 'not eligible')).toEqual([]);
+    const text = JSON.stringify(out);
+    expect(text).toContain('EasyPost 422 on /shipments');
+    expect(text).toContain('PayPal /v1/payments/payouts failed (422)');
+    expect(text).toContain('EasyPostShippingAdapter.call');
   });
 });
 
@@ -90,7 +154,8 @@ describe('a crash on a credential route', () => {
   });
 
   it('does not mistake a route that merely mentions the word for one of them', () => {
-    const out = scrubErrorEvent(crashDuring('POST', '/api/v1/admin/authors-note', { note: 'kept' }));
-    expect(out?.request?.data).toEqual({ note: 'kept' });
+    const out = scrubErrorEvent(crashDuring('POST', '/api/v1/admin/authors-note', { note: 'typed by the customer' }));
+    expect(out?.request?.data).toEqual(['note']);
+    expect(leaks(out, 'typed by the customer')).toEqual([]);
   });
 });

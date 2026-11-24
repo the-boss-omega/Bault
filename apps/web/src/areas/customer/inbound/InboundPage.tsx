@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { formatDate, formatUsd } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { useNavigation, useRoute } from '../../../shared/routing';
+import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
   PARCEL_TONE,
   addressLines,
@@ -21,23 +21,17 @@ import {
   EmptyState,
   ErrorState,
   Field,
-  MetricCard,
   Panel,
   SkeletonTable,
   StatusBadge,
   SuccessNote,
   TabPanel,
 } from '../../../shared/ui/primitives';
-import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import {
-  IconAlert,
-  IconBox,
-  IconCheck,
-  IconClock,
-  IconInbox,
-  IconLocation,
-  IconPlus,
-} from '../../../shared/ui/icons';
+import { Barcode } from '../../../shared/Barcode';
+import { CountUp } from '../../../shared/ui/CountUp';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
+import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { IconCheck, IconInbox, IconLocation, IconPlus, IconSearch, IconVault } from '../../../shared/ui/icons';
 
 const TABS = ['addresses', 'parcels', 'processing'] as const;
 type InboundTab = (typeof TABS)[number];
@@ -49,7 +43,9 @@ export function InboundPage() {
 
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [parcelsError, setParcelsError] = useState<string | null>(null);
   const [parcels, setParcels] = useState<ParcelSummary[] | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   const tab: InboundTab = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as InboundTab)
@@ -58,10 +54,10 @@ export function InboundPage() {
   const loadParcels = useCallback(async () => {
     try {
       setParcels(await api.get<ParcelSummary[]>('/me/parcels'));
-      setError(null);
+      setParcelsError(null);
     } catch (e) {
-      setError((e as Error).message);
-      setParcels([]);
+      setParcelsError((e as Error).message);
+      setParcels((prev) => prev ?? []);
     }
   }, []);
 
@@ -71,16 +67,33 @@ export function InboundPage() {
 
   const tabs = TABS.map((key) => ({ key, label: t(`inbound.tab.${key}` as MessageKey) }));
 
+  const retry = () => {
+    setError(null);
+    setParcelsError(null);
+    setAttempt((n) => n + 1);
+    void loadParcels();
+  };
+
   return (
     <>
-      <ContextTabs label={t('inbound.title')} tabs={tabs} active={tab} onSelect={goTab} />
+      <ContextTabs
+        label={t('inbound.title')}
+        tabs={tabs}
+        active={tab}
+        onSelect={(next) => {
+          setStatus(null);
+          goTab(next);
+        }}
+      />
 
       {status && <SuccessNote>{status}</SuccessNote>}
-      {error && <ErrorState message={error} onRetry={() => void loadParcels()} retryLabel={t('ui.retry')} />}
+      {(error ?? parcelsError) && (
+        <ErrorState message={error ?? parcelsError ?? ''} onRetry={retry} retryLabel={t('ui.retry')} />
+      )}
 
       {tab === 'addresses' && (
         <TabPanel tab="addresses">
-          <AddressesTab onError={setError} />
+          <AddressesTab key={attempt} onError={setError} />
         </TabPanel>
       )}
 
@@ -102,7 +115,7 @@ export function InboundPage() {
 
       {tab === 'processing' && (
         <TabPanel tab="processing">
-          <ProcessingTab onError={setError} />
+          <ProcessingTab key={attempt} onError={setError} />
         </TabPanel>
       )}
     </>
@@ -200,7 +213,7 @@ function AddressesTab({ onError }: { onError: (m: string) => void }) {
               <div className="actions">
                 <Button
                   size="sm"
-                  variant={copied === address.code ? 'secondary' : 'gold'}
+                  variant={copied === address.code ? 'secondary' : 'primary'}
                   icon={copied === address.code ? <IconCheck /> : undefined}
                   onClick={() => void copy(address)}
                 >
@@ -237,6 +250,9 @@ function AddressesTab({ onError }: { onError: (m: string) => void }) {
   );
 }
 
+/** The stops of a parcel's journey, in order; unclaimed and disposed are not on it. */
+const PARCEL_STOPS = ['expected', 'received', 'opened', 'processed'] as const;
+
 function ParcelsTab({
   parcels,
   openId,
@@ -253,16 +269,62 @@ function ParcelsTab({
   onError: (m: string) => void;
 }) {
   const { t, locale } = useI18n();
+  const [q, setQ] = useState('');
+  const [registering, setRegistering] = useState(false);
   const selected = useMemo(
-    () => (parcels ?? []).find((p) => p.id === openId) ?? null,
+    () => (parcels ?? []).find((p) => p.id === openId || p.code === openId) ?? null,
     [parcels, openId],
   );
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const list = [...(parcels ?? [])].sort((a, b) => lastStamp(b) - lastStamp(a));
+    if (!needle) return list;
+    return list.filter((p) =>
+      [p.code, p.trackingNumber, p.carrier, p.declaredContents, p.facilityName, parcelStatusLabel(t, p.status)]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(needle)),
+    );
+  }, [parcels, q, t]);
+  const hasParcels = (parcels ?? []).length > 0;
+  const formOpen = registering || (parcels !== null && !hasParcels);
 
   return (
     <>
-      <RegisterParcelForm onRegistered={onChanged} onError={onError} />
+      {formOpen ? (
+        <RegisterParcelForm
+          onRegistered={async (message) => {
+            setRegistering(false);
+            await onChanged(message);
+          }}
+          onError={onError}
+          onCancel={hasParcels ? () => setRegistering(false) : undefined}
+        />
+      ) : (
+        parcels !== null && (
+          <div className="row">
+            <Button variant="primary" icon={<IconPlus />} onClick={() => setRegistering(true)}>
+              {t('inbound.register.title')}
+            </Button>
+            <span className="field-hint">{t('inbound.register.optional')}</span>
+          </div>
+        )
+      )}
 
       <Panel title={t('inbound.parcels.title')} subtitle={t('inbound.parcels.subtitle')} flush>
+        {hasParcels && (
+          <div className="vault-command">
+            <div className="vault-search">
+              <IconSearch />
+              <input
+                type="search"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={t('inbound.parcels.searchPlaceholder')}
+                aria-label={t('inbound.parcels.search')}
+              />
+            </div>
+          </div>
+        )}
         {parcels === null ? (
           <SkeletonTable rows={4} columns={5} />
         ) : parcels.length === 0 ? (
@@ -270,63 +332,81 @@ function ParcelsTab({
             title={t('inbound.parcels.empty')}
             text={t('inbound.parcels.emptyText')}
             icon={<IconInbox />}
+            action={
+              <Button size="sm" onClick={() => navigate({ section: 'inbound', tab: 'addresses' })}>
+                {t('inbound.parcels.seeAddresses')}
+              </Button>
+            }
+          />
+        ) : shown.length === 0 ? (
+          <EmptyState
+            title={t('inbound.parcels.noMatch')}
+            text={t('inbound.parcels.noMatchText')}
+            icon={<IconSearch />}
+            action={
+              <Button size="sm" onClick={() => setQ('')}>
+                {t('vault.clearSearch')}
+              </Button>
+            }
           />
         ) : (
-          <div className="dt-wrap dt-wrap--stack">
-            <table className="data-table">
-              <caption>{t('inbound.parcels.title')}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">{t('inbound.parcels.col.parcel')}</th>
-                  <th scope="col">{t('inbound.parcels.col.tracking')}</th>
-                  <th scope="col">{t('inbound.parcels.col.where')}</th>
-                  <th scope="col">{t('inbound.parcels.col.status')}</th>
-                  <th scope="col">{t('inbound.parcels.col.updated')}</th>
-                  <th scope="col" className="td-tight" />
-                </tr>
-              </thead>
-              <tbody>
-                {parcels.map((p) => (
-                  <tr
-                    key={p.id}
-                    className={'is-clickable' + (p.id === openId ? ' is-selected' : '')}
-                    tabIndex={0}
-                    onClick={() => onOpen(p.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onOpen(p.id);
-                      }
-                    }}
-                  >
-                    <td data-label={t('inbound.parcels.col.parcel')} className="dt-primary">
-                      {p.declaredContents || t('inbound.parcels.undeclared')}
-                      <span className="dt-sub" dir="ltr">
+          <ul className="labels" aria-label={t('inbound.parcels.title')}>
+            {shown.map((p) => {
+              const stamps: Record<(typeof PARCEL_STOPS)[number], string | null> = {
+                expected: p.expectedAt,
+                received: p.receivedAt,
+                opened: p.openedAt,
+                processed: p.processedAt,
+              };
+              const onTrack = (PARCEL_STOPS as readonly string[]).includes(p.status);
+              return (
+                <li
+                  key={p.id}
+                  className={'label-card' + (p.id === selected?.id ? ' is-selected' : '')}
+                  onClick={() => onOpen(p.id)}
+                >
+                  <div className="label-main">
+                    <div className="label-head">
+                      <span className="label-code" dir="ltr">
                         {p.code}
                       </span>
-                    </td>
-                    <td data-label={t('inbound.parcels.col.tracking')} dir="ltr">
-                      {p.trackingNumber ? <code>{p.trackingNumber}</code> : <span className="muted">—</span>}
-                      {p.carrier && <span className="dt-sub">{p.carrier}</span>}
-                    </td>
-                    <td data-label={t('inbound.parcels.col.where')}>
-                      {p.facilityName ?? '—'}
-                      {p.forwardedAt && (
-                        <span className="dt-sub">{t('inbound.parcels.forwarded')}</span>
-                      )}
-                    </td>
-                    <td data-label={t('inbound.parcels.col.status')}>
                       <StatusBadge tone={PARCEL_TONE[p.status] ?? 'neutral'}>
                         {parcelStatusLabel(t, p.status)}
                       </StatusBadge>
-                    </td>
-                    <td data-label={t('inbound.parcels.col.updated')}>
-                      {formatDate(
-                        p.processedAt ?? p.openedAt ?? p.receivedAt ?? p.expectedAt ?? '',
-                        locale,
-                      ) || '—'}
-                    </td>
-                    <td className="td-tight">
+                    </div>
+
+                    <p className="label-what">{p.declaredContents || t('inbound.parcels.undeclared')}</p>
+
+                    <p className="label-meta">
+                      <span>{p.facilityName ?? '—'}</span>
+                      {p.forwardedAt && <span>{t('inbound.parcels.forwarded')}</span>}
+                      <span>
+                        {t('inbound.parcels.col.updated')}{' '}
+                        {formatDate(
+                          p.processedAt ?? p.openedAt ?? p.receivedAt ?? p.expectedAt ?? '',
+                          locale,
+                        ) || '—'}
+                      </span>
+                    </p>
+
+                    {onTrack && (
+                      <ol className="label-track" aria-label={t('inbound.parcels.col.status')}>
+                        {PARCEL_STOPS.map((stop) => (
+                          <li
+                            key={stop}
+                            data-reached={stamps[stop] ? 'true' : 'false'}
+                            aria-current={p.status === stop ? 'step' : undefined}
+                          >
+                            <span className="label-stop">{parcelStatusLabel(t, stop)}</span>
+                            <span className="label-when">
+                              {stamps[stop] ? formatDate(stamps[stop] ?? '', locale) : ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+
+                    <div className="label-actions">
                       <Button
                         size="sm"
                         variant="secondary"
@@ -335,14 +415,22 @@ function ParcelsTab({
                           onOpen(p.id);
                         }}
                       >
-                        {t('ss.tracking.details')}
+                        {t('inbound.parcels.details')}
                       </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+
+                  <div className="label-stub">
+                    <span className="label-bars" aria-hidden="true" />
+                    <span className="label-tracking" dir="ltr">
+                      {p.trackingNumber ? <code>{p.trackingNumber}</code> : <span className="muted">—</span>}
+                    </span>
+                    {p.carrier && <span className="label-carrier">{p.carrier}</span>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </Panel>
 
@@ -360,12 +448,19 @@ function ParcelsTab({
   );
 }
 
-function RegisterParcelForm({
+function lastStamp(p: ParcelSummary): number {
+  const at = p.processedAt ?? p.openedAt ?? p.receivedAt ?? p.expectedAt;
+  return at ? new Date(at).getTime() : 0;
+}
+
+export function RegisterParcelForm({
   onRegistered,
   onError,
+  onCancel,
 }: {
   onRegistered: (message: string) => Promise<void>;
   onError: (m: string) => void;
+  onCancel?: () => void;
 }) {
   const { t } = useI18n();
   const [addresses, setAddresses] = useState<InboundAddress[]>([]);
@@ -375,6 +470,8 @@ function RegisterParcelForm({
   const [declaredContents, setDeclaredContents] = useState('');
   const [internationalOrigin, setInternationalOrigin] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -391,6 +488,8 @@ function RegisterParcelForm({
 
   async function submit() {
     setBusy(true);
+    setSubmitError(null);
+    setTrackingError(null);
     try {
       const created = await api.post<{ code: string }>('/me/parcels', {
         facilityCode,
@@ -405,55 +504,113 @@ function RegisterParcelForm({
       setInternationalOrigin(false);
       await onRegistered(t('inbound.register.done', { code: created.code }));
     } catch (e) {
-      onError((e as Error).message);
+      const failure = e as Error & { status?: number };
+      if (failure.status === 409) setTrackingError(failure.message);
+      else setSubmitError(failure.message);
     } finally {
       setBusy(false);
     }
   }
 
+  const facility = addresses.find((a) => a.code === facilityCode);
+  const tracking = trackingNumber.trim();
+  const contents = declaredContents.trim();
+
   return (
     <Panel title={t('inbound.register.title')} subtitle={t('inbound.register.subtitle')}>
-      <div className="stack stack--tight" style={{ maxWidth: 560 }}>
-        <div className="form-grid">
-          <label className="field">
-            <span className="field-label">{t('inbound.register.facility')}</span>
-            <select value={facilityCode} onChange={(e) => setFacilityCode(e.target.value)}>
-              {addresses.map((a) => (
-                <option key={a.code} value={a.code}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+      <div className="request-form">
+        <div className="stack stack--tight request-form-fields">
+          <div className="form-grid">
+            <label className="field">
+              <span className="field-label">{t('inbound.register.facility')}</span>
+              <select value={facilityCode} onChange={(e) => setFacilityCode(e.target.value)}>
+                {addresses.map((a) => (
+                  <option key={a.code} value={a.code}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="field-label">{t('inbound.register.carrier')}</span>
+              <input value={carrier} onChange={(e) => setCarrier(e.target.value)} dir="auto" maxLength={60} />
+            </label>
+            <Field
+              label={t('inbound.register.tracking')}
+              hint={t('inbound.register.trackingHint')}
+              error={trackingError ?? undefined}
+            >
+              <input
+                value={trackingNumber}
+                onChange={(e) => {
+                  setTrackingNumber(e.target.value);
+                  setTrackingError(null);
+                }}
+                dir="ltr"
+                maxLength={120}
+                aria-invalid={trackingError ? true : undefined}
+              />
+            </Field>
+            <label className="field">
+              <span className="field-label">{t('inbound.register.contents')}</span>
+              <input
+                value={declaredContents}
+                onChange={(e) => setDeclaredContents(e.target.value)}
+                dir="auto"
+                maxLength={500}
+              />
+            </label>
+          </div>
+
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={internationalOrigin}
+              onChange={(e) => setInternationalOrigin(e.target.checked)}
+            />
+            {t('inbound.register.international')}
           </label>
-          <label className="field">
-            <span className="field-label">{t('inbound.register.carrier')}</span>
-            <input value={carrier} onChange={(e) => setCarrier(e.target.value)} />
-          </label>
-          <Field label={t('inbound.register.tracking')} hint={t('inbound.register.trackingHint')}>
-            <input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} dir="ltr" />
-          </Field>
-          <label className="field">
-            <span className="field-label">{t('inbound.register.contents')}</span>
-            <input value={declaredContents} onChange={(e) => setDeclaredContents(e.target.value)} />
-          </label>
+          {internationalOrigin && (
+            <p className="field-hint">{t('inbound.register.internationalHint')}</p>
+          )}
+          {submitError && <ErrorState message={submitError} />}
         </div>
 
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={internationalOrigin}
-            onChange={(e) => setInternationalOrigin(e.target.checked)}
-          />
-          {t('inbound.register.international')}
-        </label>
-        {internationalOrigin && (
-          <p className="field-hint">{t('inbound.register.internationalHint')}</p>
-        )}
+        <aside className="request-slip">
+          <DrawerTag
+            kicker={t('inbound.register.title')}
+            title={contents || <span className="drawer-tag-quiet">{t('inbound.parcels.undeclared')}</span>}
+            status={<StatusBadge tone={PARCEL_TONE.expected ?? 'neutral'}>{parcelStatusLabel(t, 'expected')}</StatusBadge>}
+            lines={[
+              { label: t('inbound.register.facility'), value: facility?.name ?? '—' },
+              ...(carrier.trim() ? [{ label: t('inbound.register.carrier'), value: carrier.trim() }] : []),
+              ...(internationalOrigin ? [{ label: t('inbound.register.international'), value: '✓' }] : []),
+            ]}
+          >
+            <div className="parcel-stub">
+              {tracking ? (
+                <Barcode value={tracking} options={{ moduleWidth: 1, height: 44 }} />
+              ) : (
+                <span className="parcel-stub-empty">{t('inbound.parcels.col.tracking')} —</span>
+              )}
+            </div>
+          </DrawerTag>
+        </aside>
 
-        <div className="row">
-          <Button variant="gold" icon={<IconPlus />} disabled={busy || !facilityCode} onClick={() => void submit()}>
+        <div className="row request-form-actions">
+          <Button
+            variant="primary"
+            icon={<IconPlus />}
+            disabled={busy || !facilityCode}
+            onClick={() => void submit()}
+          >
             {t('inbound.register.submit')}
           </Button>
+          {onCancel && (
+            <Button variant="ghost" onClick={onCancel}>
+              {t('ui.cancel')}
+            </Button>
+          )}
         </div>
       </div>
     </Panel>
@@ -476,6 +633,7 @@ function ParcelDrawer({
   onError: (m: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   async function cancel() {
     setBusy(true);
@@ -487,10 +645,12 @@ function ParcelDrawer({
       onError((e as Error).message);
     } finally {
       setBusy(false);
+      setConfirming(false);
     }
   }
 
   return (
+    <>
     <DetailDrawer
       title={parcel.code}
       subtitle={parcelStatusLabel(t, parcel.status)}
@@ -498,8 +658,13 @@ function ParcelDrawer({
       footer={
         <>
           {parcel.status === 'expected' && (
-            <Button variant="danger" disabled={busy} onClick={() => void cancel()}>
+            <Button variant="danger" disabled={busy} onClick={() => setConfirming(true)}>
               {t('inbound.parcel.cancel')}
+            </Button>
+          )}
+          {parcel.status === 'processed' && (
+            <Button variant="primary" icon={<IconVault />} onClick={() => navigate({ section: 'vault', tab: 'active' })}>
+              {t('inbound.parcel.toVault')}
             </Button>
           )}
           <Button variant="ghost" onClick={onClose}>
@@ -529,22 +694,22 @@ function ParcelDrawer({
         )}
         {parcel.receivedAt && (
           <DetailRow label={t('inbound.parcel.receivedAt')}>
-            <span dir="ltr">{formatDate(parcel.receivedAt, locale)}</span>
+            <span className="date">{formatDate(parcel.receivedAt, locale)}</span>
           </DetailRow>
         )}
         {parcel.forwardedAt && (
           <DetailRow label={t('inbound.parcel.forwardedAt')}>
-            <span dir="ltr">{formatDate(parcel.forwardedAt, locale)}</span>
+            <span className="date">{formatDate(parcel.forwardedAt, locale)}</span>
           </DetailRow>
         )}
         {parcel.openedAt && (
           <DetailRow label={t('inbound.parcel.openedAt')}>
-            <span dir="ltr">{formatDate(parcel.openedAt, locale)}</span>
+            <span className="date">{formatDate(parcel.openedAt, locale)}</span>
           </DetailRow>
         )}
         {parcel.processedAt && (
           <DetailRow label={t('inbound.parcel.processedAt')}>
-            <span dir="ltr">{formatDate(parcel.processedAt, locale)}</span>
+            <span className="date">{formatDate(parcel.processedAt, locale)}</span>
           </DetailRow>
         )}
         {parcel.condition && (
@@ -556,7 +721,21 @@ function ParcelDrawer({
           </DetailRow>
         )}
       </dl>
+      <p className="field-hint">{t(`inbound.parcel.next.${parcel.status}` as MessageKey)}</p>
     </DetailDrawer>
+    {confirming && (
+      <ConfirmationModal
+        title={t('inbound.parcel.cancelTitle')}
+        body={<p>{t('inbound.parcel.cancelBody', { code: parcel.code })}</p>}
+        confirmLabel={t('inbound.parcel.cancel')}
+        cancelLabel={t('inbound.parcel.keep')}
+        tone="danger"
+        busy={busy}
+        onConfirm={() => void cancel()}
+        onCancel={() => setConfirming(false)}
+      />
+    )}
+    </>
   );
 }
 
@@ -568,49 +747,58 @@ function ProcessingTab({ onError }: { onError: (m: string) => void }) {
     try {
       setWorkflow(await api.get<ParcelWorkflow>('/parcels/workflow/status'));
     } catch (e) {
-      onError((e as Error).message);
+      onError(t('inbound.workflow.failed', { reason: (e as Error).message }));
     }
-  }, [onError]);
+  }, [onError, t]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  const stations = [
+    {
+      key: 'open',
+      label: t('inbound.workflow.awaitingOpen'),
+      note: t('inbound.workflow.awaitingOpenNote'),
+      count: workflow?.awaitingOpen,
+    },
+    {
+      key: 'processing',
+      label: t('inbound.workflow.awaitingProcessing'),
+      note: t('inbound.workflow.awaitingProcessingNote'),
+      count: workflow?.awaitingProcessing,
+    },
+  ];
+
   return (
     <>
-      <div className="metric-grid">
-        <MetricCard
-          label={t('inbound.workflow.awaitingOpen')}
-          value={workflow?.awaitingOpen ?? '—'}
-          icon={<IconBox />}
-          tone="blue"
-          footer={t('inbound.workflow.awaitingOpenNote')}
-        />
-        <MetricCard
-          label={t('inbound.workflow.awaitingProcessing')}
-          value={workflow?.awaitingProcessing ?? '—'}
-          icon={<IconClock />}
-          tone="amber"
-          footer={t('inbound.workflow.awaitingProcessingNote')}
-        />
-        <MetricCard
-          label={t('inbound.workflow.oldest')}
-          value={
-            workflow?.oldestWaitingHours == null
+      <section className="queue-board">
+        <ol className="queue" aria-label={t('inbound.tab.processing')}>
+          {stations.map((station) => (
+            <li className="queue-stop" key={station.key} data-waiting={station.count ? 'true' : 'false'}>
+              <p className="slip-label">{station.label}</p>
+              <p className="queue-figure">
+                {workflow ? <CountUp value={String(station.count ?? 0)} /> : '—'}
+              </p>
+              <p className="queue-note">{station.note}</p>
+            </li>
+          ))}
+        </ol>
+
+        <p className="queue-oldest">
+          <span className="slip-label">{t('inbound.workflow.oldest')}</span>
+          <span className="queue-hours">
+            {workflow?.oldestWaitingHours == null
               ? '—'
-              : t('inbound.workflow.hours', { hours: workflow.oldestWaitingHours })
-          }
-          icon={<IconAlert />}
-          tone="violet"
-          footer={
-            workflow?.oldestReceivedAt
-              ? t('inbound.workflow.since', {
-                  date: formatDate(workflow.oldestReceivedAt, locale),
-                })
-              : t('inbound.workflow.oldestNote')
-          }
-        />
-      </div>
+              : t('inbound.workflow.hours', { hours: workflow.oldestWaitingHours })}
+          </span>
+          <span className="queue-note">
+            {workflow?.oldestReceivedAt
+              ? t('inbound.workflow.since', { date: formatDate(workflow.oldestReceivedAt, locale) })
+              : t('inbound.workflow.oldestNote')}
+          </span>
+        </p>
+      </section>
 
       <Panel title={t('inbound.workflow.title')} subtitle={t('inbound.workflow.subtitle')}>
         <p className="field-hint">{t('inbound.workflow.explainer')}</p>

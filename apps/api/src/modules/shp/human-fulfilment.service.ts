@@ -21,10 +21,23 @@ import {
   WHITE_GLOVE_BASE_INTERNATIONAL_MINOR,
   WHITE_GLOVE_QUOTE_HOURS,
   checkHandDelivery,
+  contactPhoneOf,
   whiteGloveFeeAction,
 } from './fulfilment';
-import { formatMinor } from '../../shared/money';
-import { MembershipService } from '../mem/membership.service';
+import { usdAmount } from './shipping-options';
+import { MembershipService, type AppliedShippingCover } from '../mem/membership.service';
+
+function pickupCover(tier: string | null, periodId: string): AppliedShippingCover {
+  return {
+    tier: tier ?? '',
+    insuredShipment: false,
+    insuranceMinor: 0,
+    postageMinor: 0,
+    rushMinor: 0,
+    addOns: { show_pickup: 1 },
+    spentInPeriodId: periodId,
+  };
+}
 
 @Injectable()
 export class HumanFulfilmentService {
@@ -61,6 +74,7 @@ export class HumanFulfilmentService {
       pickupFrom: string;
       pickupTo: string;
       deliveryAddress: string;
+      contactPhone?: string;
       deliverFrom: string;
       deliverTo: string;
       destinationCountry: string;
@@ -79,8 +93,10 @@ export class HumanFulfilmentService {
       deliverTo: new Date(input.deliverTo),
       pickupAddress: input.pickupAddress,
       deliveryAddress: input.deliveryAddress,
+      contactPhone: input.contactPhone,
     });
     if (problems.length > 0) throw AppError.validation(problems[0]!.message, { problems });
+    const contactPhone = contactPhoneOf(input.contactPhone);
 
     return this.db.transaction(async (tx) => {
       await this.profiles.loadShippableItems(userId, input.itemIds, tx as Database);
@@ -95,6 +111,7 @@ export class HumanFulfilmentService {
           destinationAddress: input.deliveryAddress.trim(),
           destinationCountry: input.destinationCountry.trim().toUpperCase(),
           destinationPostalCode: '',
+          destinationDetail: contactPhone ? { phone: contactPhone } : null,
           recipientName: input.recipientName?.trim() || null,
           pickupAddress: input.pickupAddress.trim(),
           pickupFrom: new Date(input.pickupFrom),
@@ -161,7 +178,7 @@ export class HumanFulfilmentService {
     });
   }
 
-  async acceptQuote(shipmentId: string, actor: ShipmentActor) {
+  async acceptQuote(shipmentId: string, actor: ShipmentActor, seenMinor: number) {
     await this.shipments.loadFor(shipmentId, actor);
 
     return this.db.transaction(async (tx) => {
@@ -170,12 +187,23 @@ export class HumanFulfilmentService {
       if (s.fulfilmentMethod !== 'hand_delivery') throw AppError.validation('That is not a hand-delivery request');
       if (s.quoteMinor === null) throw new AppError(ErrorCode.CONFLICT, 'No quote yet', 409);
       if (s.status !== 'requested') throw new AppError(ErrorCode.CONFLICT, 'Already accepted', 409);
+      if (s.quoteMinor !== seenMinor) {
+        throw new AppError(
+          ErrorCode.QUOTE_CHANGED,
+          `The quote changed to ${usdAmount(s.quoteMinor)}. Check it and accept again.`,
+          409,
+          { quoteMinor: s.quoteMinor },
+        );
+      }
 
+      await this.profiles.loadShippableItems(s.userId, (s.itemIds as string[]) ?? [], tx as Database);
+      await this.shipments.assertItemsFree(s.userId, (s.itemIds as string[]) ?? [], s.id, tx as Database);
+      await this.ledger.lockWallet(s.userId, tx as Database);
       const balance = await this.ledger.balanceOf(s.userId, tx);
       if (balance.amount < s.quoteMinor) {
         throw new AppError(
-          ErrorCode.CONFLICT,
-          `Short by ${formatMinor(s.quoteMinor - balance.amount)}. Top up the wallet and accept again.`,
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `Short by ${usdAmount(s.quoteMinor - balance.amount)}. Cash in to your wallet and accept again.`,
           409,
         );
       }
@@ -185,7 +213,15 @@ export class HumanFulfilmentService {
         .values({
           userId: s.userId,
           actionType: 'shipping',
-          pricingRuleSnapshot: { whiteGlove: true, quoteMinor: s.quoteMinor, quotedBy: s.quotedBy },
+          pricingRuleSnapshot: {
+            whiteGlove: true,
+            quoteMinor: s.quoteMinor,
+            quotedBy: s.quotedBy,
+            tier: await this.pricing.tierOf(s.userId, tx as Database),
+            discountBps: 0,
+            listMinor: s.quoteMinor,
+            chargedMinor: s.quoteMinor,
+          },
           amount: s.quoteMinor!,
           currency: s.currency ?? DEFAULT_CURRENCY,
           paymentMeans: 'wallet',
@@ -261,6 +297,22 @@ export class HumanFulfilmentService {
     );
   }
 
+  async collectorPickupShows() {
+    const shows = await this.pickupShows();
+    return shows.map((show) => ({
+      id: show.id,
+      name: show.name,
+      venue: show.venue,
+      city: show.city,
+      startsAt: show.startsAt,
+      endsAt: show.endsAt,
+      requestDeadline: show.requestDeadline,
+      feeMinor: show.feeMinor,
+      remaining: show.remaining,
+      open: show.open,
+    }));
+  }
+
   async requestPickup(
     userId: string,
     input: { itemIds: string[]; eventId: string; customerNotes?: string },
@@ -311,10 +363,11 @@ export class HumanFulfilmentService {
 
       await this.ledger.lockWallet(userId, tx as Database);
       const waiver = await this.memberships.waive(tx as Database, userId, 'show_pickup', show.feeMinor);
-      const feeMinor = show.feeMinor - waiver.waivedMinor;
+      const quote = await this.pricing.quoteFor(userId, show.feeMinor - waiver.waivedMinor, tx as Database);
+      const feeMinor = quote.chargedMinor;
       const balance = await this.ledger.balanceOf(userId, tx as Database);
       if (balance.amount < feeMinor) {
-        throw new AppError(ErrorCode.CONFLICT, `Short by ${formatMinor(feeMinor - balance.amount)}.`, 409);
+        throw new AppError(ErrorCode.CONFLICT, `Short by ${usdAmount(feeMinor - balance.amount)}.`, 409);
       }
 
       const [created] = await tx
@@ -333,6 +386,7 @@ export class HumanFulfilmentService {
           currency: DEFAULT_CURRENCY,
           status: 'rates_selected',
           estimatedDeliveryAt: show.startsAt,
+          membershipCover: waiver.periodId ? pickupCover(waiver.tier, waiver.periodId) : null,
         })
         .returning();
       if (!created) throw AppError.validation('Failed to book the pickup');
@@ -343,7 +397,7 @@ export class HumanFulfilmentService {
           .values({
             userId,
             actionType: 'shipping',
-            pricingRuleSnapshot: { showPickup: true, eventId: show.id, showName: show.name },
+            pricingRuleSnapshot: { showPickup: true, eventId: show.id, showName: show.name, ...quote },
             amount: feeMinor,
             currency: DEFAULT_CURRENCY,
             paymentMeans: 'wallet',

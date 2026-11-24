@@ -1,0 +1,39 @@
+services:
+  cloudsql:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.26.0@sha256:86e4f3cc266020e7ee07740df78d7511e2c340c274b56f84d80b7251913af9ad
+    restart: unless-stopped
+    command:
+      - "--private-ip"
+      - "--address=0.0.0.0"
+      - "--port=5432"
+      - "--structured-logs"
+      - "--max-sigterm-delay=30s"
+      - "${CLOUDSQL_INSTANCE:?set CLOUDSQL_INSTANCE in production.env}"
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks: [internal]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    mem_limit: 128m
+    stop_grace_period: 35s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  api:
+    depends_on:
+      cloudsql:
+        condition: service_started
+
+  worker:
+    depends_on:
+      cloudsql:
+        condition: service_started
+
+  migrate:
+    depends_on:
+      cloudsql:
+        condition: service_started

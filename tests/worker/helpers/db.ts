@@ -49,18 +49,22 @@ export async function createItem(pool: Pool, ownerId: string, receivedDaysAgo: n
   return rows[0]!.id;
 }
 
+export const HONOURED_STORED_ITEMS = 60;
+
 export async function createMembership(
   pool: Pool,
   userId: string,
-  opts: { tier?: string; status?: 'active' | 'cancelling' | 'ended'; endsInMinutes: number },
+  opts: { tier?: string; status?: 'active' | 'cancelling' | 'ended'; endsInMinutes: number; storedItems?: number },
 ): Promise<string> {
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO membership (user_id, tier, status, current_period_start, current_period_end)
+    `INSERT INTO membership (user_id, tier, status, current_period_start, current_period_end, honoured_until, honoured_stored_items)
      VALUES ($1, $2, $3,
              now() + make_interval(mins => $4::int) - interval '30 days',
-             now() + make_interval(mins => $4::int))
+             now() + make_interval(mins => $4::int),
+             now() + make_interval(mins => $4::int),
+             $5)
      RETURNING id`,
-    [userId, opts.tier ?? 'folio', opts.status ?? 'active', opts.endsInMinutes],
+    [userId, opts.tier ?? 'bronze', opts.status ?? 'active', opts.endsInMinutes, opts.storedItems ?? HONOURED_STORED_ITEMS],
   );
   return rows[0]!.id;
 }

@@ -13,6 +13,8 @@ const LOCKOUT_MIN = 15;
 
 export type LoginOutcome = 'success' | 'bad_credentials' | 'unverified' | 'refused' | 'mfa_challenged' | 'mfa_failed';
 
+export const FAILED_SIGN_IN_OUTCOMES = ['bad_credentials', 'mfa_failed'] as const satisfies readonly LoginOutcome[];
+
 @Injectable()
 export class LoginAttemptService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}

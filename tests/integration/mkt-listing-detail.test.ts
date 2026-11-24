@@ -58,9 +58,11 @@ describe('MKT a listing, as an anonymous visitor sees it', () => {
       (l) => l.id === listing.id,
     );
     expect(browsed).toBeDefined();
-    for (const field of ['id', 'askingPrice', 'currency', 'itemId', 'serialNumber', 'typeClass', 'conditionGrade', 'description', 'sellerUsername']) {
+    for (const field of ['id', 'askingPrice', 'currency', 'serialNumber', 'typeClass', 'conditionGrade', 'description', 'sellerUsername']) {
       expect(res.body[field], field).toEqual(browsed![field]);
     }
+    expect(res.body).not.toHaveProperty('itemId');
+    expect(browsed).not.toHaveProperty('itemId');
     expect(res.body.sellerUsername).toBe(SEED_USERNAME.collector);
     expect(res.body.askingPrice).toBe(12_300);
     expect(res.body.description).toBe('Public listing page check');

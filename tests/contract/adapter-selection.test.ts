@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   ConsoleEmailAdapter,
   EasyPostShippingAdapter,
@@ -71,6 +71,47 @@ describe('payment', () => {
     expect(adapter).toBeInstanceOf(PayPalPaymentAdapter);
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function payoutSubject(note: string | undefined): Promise<string> {
+    const bodies: string[] = [];
+    vi.stubGlobal('fetch', async (url: string | URL, init?: RequestInit) => {
+      const href = String(url);
+      const body = href.includes('/oauth2/token')
+        ? { access_token: 'tok', expires_in: 3600 }
+        : { batch_header: { payout_batch_id: 'B1', batch_status: 'PENDING' } };
+      if (href.includes('/payouts')) bodies.push(String(init?.body));
+      return { ok: true, status: 200, text: async () => JSON.stringify(body), json: async () => body };
+    });
+    const adapter = createPaymentAdapter({
+      ...base,
+      PAYMENT_PROVIDER: 'paypal',
+      PAYPAL_CLIENT_ID: 'id',
+      PAYPAL_CLIENT_SECRET: 'secret',
+      PAYPAL_WEBHOOK_ID: 'wh',
+      PAYPAL_PAYOUT_NOTE: note,
+    });
+    await adapter.createPayout({
+      userId: 'u',
+      amountMinor: 500,
+      currency: 'USD',
+      idempotencyKey: 'payout-note',
+      destinationToken: 'collector@example.com',
+    });
+    return JSON.parse(bodies[0]!).sender_batch_header.email_subject;
+  }
+
+  it('sends the configured PAYPAL_PAYOUT_NOTE as the payout subject', async () => {
+    expect(await payoutSubject('Your store credit from the shop')).toBe('Your store credit from the shop');
+  });
+
+  it('falls back to the default payout note when none is set', async () => {
+    expect(await payoutSubject(undefined)).toBe('Your Card Embassy cash-out');
+    expect(await payoutSubject('   ')).toBe('Your Card Embassy cash-out');
+  });
+
   it('is the sandbox in development, and refused in production', () => {
     expect(createPaymentAdapter(base)).toBeInstanceOf(SandboxPaymentAdapter);
     expect(() => createPaymentAdapter({ ...base, NODE_ENV: 'production' })).toThrow(/PAYMENT_PROVIDER=sandbox/);
@@ -104,7 +145,7 @@ describe('email', () => {
         SMTP_HOST: 'smtp.example.invalid',
         SMTP_USER: 'u',
         SMTP_PASSWORD: 'p',
-        SMTP_FROM: 'Bault <u@example.invalid>',
+        SMTP_FROM: 'Card Embassy <u@example.invalid>',
       }),
     ).toBeInstanceOf(SmtpEmailAdapter);
     expect(createEmailAdapter(base)).toBeInstanceOf(ConsoleEmailAdapter);

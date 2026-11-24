@@ -21,18 +21,33 @@ describe('PAY amounts that cannot be right', () => {
     expect(negative.status, JSON.stringify(negative.body)).toBe(400);
     expect((negative.body.error.details.violations as { field: string }[]).map((v) => v.field)).toContain('value');
 
-    const overHundred = await rule({ model: 'percentage', value: 10_001 });
+    const onSales = { actionType: 'marketplace_fee', itemClass: 'fixture_bounds_check' };
+    const overHundred = await rule({ ...onSales, model: 'percentage', value: 10_001 });
     expect(overHundred.status, JSON.stringify(overHundred.body)).toBe(400);
 
     expect((await rule({ value: 0 })).status).toBe(201);
-    expect((await rule({ model: 'percentage', value: 10_000 })).status).toBe(201);
+    expect((await rule({ ...onSales, model: 'percentage', value: 10_000 })).status).toBe(201);
+  });
+
+  it('refuses a percentage rule for an action that has no amount to take it of', async () => {
+    const admin = await signIn(SEED.admin);
+    const res = await admin.post('/pricing/rules', {
+      actionType: 'intake',
+      itemClass: 'fixture_bounds_check',
+      description: 'Ten percent of nothing',
+      model: 'percentage',
+      value: 1_000,
+      billingTrigger: 'per_event',
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(400);
+    expect(res.body.error.details.field).toBe('model');
   });
 
   it('has the ledger refuse a movement of zero or less, whoever writes it', async () => {
     for (const amount of [0, -100]) {
       const insert = sql(
         `INSERT INTO ledger_record (user_id, type, amount, direction, currency, reference_type)
-         VALUES ('ledger-bounds-fixture', 'fee', $1, 'debit', 'USD', 'test')`,
+         VALUES ((SELECT id FROM user_account ORDER BY created_at LIMIT 1), 'fee', $1, 'debit', 'USD', 'test')`,
         [amount],
       );
       await expect(insert, `amount ${amount}`).rejects.toMatchObject({ code: '23514' });

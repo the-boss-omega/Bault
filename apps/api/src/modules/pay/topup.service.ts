@@ -12,9 +12,9 @@ import {
 } from '../../shared/observability/error-reporting';
 import { PAYMENT_ADAPTER } from '../../shared/adapters/adapters.module';
 import type { PaymentAdapter } from '@bault/adapters';
-import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
 import { externalPayment } from './pay.schema';
 import { WalletRequestService } from './wallet-request.service';
+import { PayPalCheckoutService, isCheckoutEvent } from './paypal-checkout.service';
 
 @Injectable()
 export class TopupService {
@@ -23,47 +23,10 @@ export class TopupService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(PAYMENT_ADAPTER) private readonly payment: PaymentAdapter,
-    private readonly ledger: LedgerService,
     private readonly walletRequests: WalletRequestService,
+    private readonly checkouts: PayPalCheckoutService,
     @Optional() @Inject(EXCEPTION_REPORTER) private readonly report: ExceptionReporter = reportException,
   ) {}
-
-  async topup(userId: string, amountMinor: number, idempotencyKey: string, currency = DEFAULT_CURRENCY) {
-    const result = await this.payment.createTopup({ userId, amountMinor, currency, idempotencyKey });
-
-    await this.db.transaction(async (tx) => {
-      const [ep] = await tx
-        .insert(externalPayment)
-        .values({
-          userId,
-          provider: 'sandbox',
-          providerRef: result.providerRef,
-          purpose: 'topup',
-          status: result.status,
-          amount: amountMinor,
-          currency,
-        })
-        .returning({ id: externalPayment.id });
-      if (!ep) throw new Error('Failed to create external payment row');
-
-      if (result.status === 'succeeded') {
-        await this.ledger.record(
-          {
-            userId,
-            type: 'credit_topup',
-            amount: amountMinor,
-            direction: 'credit',
-            currency,
-            referenceType: 'external_payment',
-            referenceId: ep.id,
-          },
-          tx,
-        );
-      }
-    });
-
-    return { status: result.status };
-  }
 
   async handleWebhook(delivery: WebhookDelivery): Promise<{ outcome: string }> {
     let event: WebhookEvent;
@@ -95,6 +58,7 @@ export class TopupService {
       .limit(1);
     if (existing) return { outcome: 'duplicate' };
 
+    if (isCheckoutEvent(event.type)) return { outcome: await this.checkouts.applyEvent(event) };
     return { outcome: await this.walletRequests.applyPayoutEvent(event) };
   }
 }

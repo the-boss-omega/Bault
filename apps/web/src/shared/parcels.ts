@@ -64,20 +64,19 @@ export interface ParcelSummary {
   forwardedAt: string | null;
   condition: string | null;
   conditionNotes: string | null;
-  facilityCode: string | null;
   facilityName: string | null;
 }
 
 export interface ParcelQueueRow extends Omit<ParcelSummary, 'declaredContents'> {
   addressedTo: string | null;
   ownerUsername: string | null;
+  facilityCode: string | null;
   declaredContents: string | null;
   facilityRole: string | null;
   itemCount: number;
 }
 
 export interface InboundAddress {
-  facilityId: string;
   code: string;
   name: string;
   role: 'primary' | 'forwarding';
@@ -87,7 +86,6 @@ export interface InboundAddress {
   region: string;
   postalCode: string;
   country: string;
-  phone: string | null;
   salesTaxBps: number;
   forwardingDays: number | null;
 }
@@ -95,7 +93,6 @@ export interface InboundAddress {
 export interface ParcelWorkflow {
   awaitingOpen: number;
   awaitingProcessing: number;
-  unclaimed: number;
   oldestReceivedAt: string | null;
   oldestWaitingHours: number | null;
 }

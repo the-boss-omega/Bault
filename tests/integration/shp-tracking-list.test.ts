@@ -33,7 +33,7 @@ describe('SHP shipment tracking list', () => {
 
     expect(row.recipientName).toBe('Red Ashwood');
     expect(row.username).toBe(SEED_USERNAME.collector);
-    expect(row.customerName).toBeTruthy();
+    expect(row).not.toHaveProperty('customerName');
     expect(row.createdAt).toBeTruthy();
     expect(row.status).toBe('requested');
     expect(row.code).toMatch(/^SHP-/);

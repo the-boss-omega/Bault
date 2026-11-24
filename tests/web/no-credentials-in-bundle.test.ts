@@ -10,6 +10,7 @@ const FORBIDDEN: { needle: string; why: string }[] = [
   { needle: 'hermon@bault.dev', why: "the warehouse operator's address" },
   { needle: 'red@bault.dev', why: "a collector's address" },
   { needle: 'golden@bault.dev', why: "a collector's address" },
+  { needle: 'noam@bault.dev', why: "a collector's address" },
   { needle: 'Demo users', why: 'the demo-account line, which names both' },
 ];
 

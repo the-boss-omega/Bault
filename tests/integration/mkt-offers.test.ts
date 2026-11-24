@@ -1,5 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn } from './helpers/http';
+import { closeDb, sql } from './helpers/db';
+
+afterAll(closeDb);
+
+const userIdOf = async (email: string) =>
+  (await sql<{ id: string }>(`SELECT id FROM user_account WHERE email = $1`, [email]))[0]!.id;
+
+const outboxFor = (eventType: string, aggregateId: string) =>
+  sql<{ payload: Record<string, unknown> }>(
+    `SELECT payload FROM outbox_message WHERE event_type = $1 AND aggregate_id = $2`,
+    [eventType, aggregateId],
+  );
 
 describe('MKT offers', () => {
   it('accepts an offer, executing a purchase at the offer price', async () => {
@@ -15,6 +27,11 @@ describe('MKT offers', () => {
     const res = await seller.post(`/marketplace/offers/${offer.id}/respond`, { action: 'accept' });
     expect(res.status).toBe(201);
     expect(res.body.price).toBe(20000);
+
+    const told = await outboxFor('offer_accepted', offer.id);
+    expect(told).toHaveLength(1);
+    expect(told[0]!.payload.recipientIds).toEqual([await userIdOf(SEED.collector3)]);
+    expect(told[0]!.payload.amount).toBe(20000);
   });
 
   it('accepts an offer submission that will notify the seller (Requirement 6.2)', async () => {
@@ -24,9 +41,15 @@ describe('MKT offers', () => {
     const listing = (await seller.post('/marketplace/listings', { itemId: item.id, askingPrice: 30000 })).body;
 
     const buyer = await signIn(SEED.collector3);
+    await fundWallet(SEED.collector3, 15000);
     const offer = await buyer.post(`/marketplace/listings/${listing.id}/offers`, { amount: 15000 });
     expect(offer.status).toBe(201);
     expect(offer.body.status).toBe('pending');
+
+    const sent = await outboxFor('offer_received', offer.body.id);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.payload.sellerId).toBe(await userIdOf(SEED.collector));
+    expect(sent[0]!.payload.amount).toBe(15000);
   });
 
   it('blocks offering on your own listing', async () => {
@@ -55,6 +78,15 @@ describe('MKT offers', () => {
   const statusOf = async (c: Awaited<ReturnType<typeof signIn>>, offerId: string) =>
     ((await c.get('/marketplace/offers/mine')).body as { id: string; status: string }[]).find((o) => o.id === offerId)?.status;
 
+  it('names the seller on an offer the buyer made, and the buyer on one the seller received', async () => {
+    const { seller, bidder, offerId } = await listedWithOffer('Offers name both sides');
+    type Row = { id: string; direction: string; buyerUsername: string | null; sellerUsername: string | null };
+    const made = ((await bidder.get('/marketplace/offers/mine')).body as Row[]).find((o) => o.id === offerId);
+    expect(made).toMatchObject({ direction: 'outgoing', sellerUsername: 'red', buyerUsername: 'golden' });
+    const received = ((await seller.get('/marketplace/offers/mine')).body as Row[]).find((o) => o.id === offerId);
+    expect(received).toMatchObject({ direction: 'incoming', sellerUsername: 'red', buyerUsername: 'golden' });
+  });
+
   it('closes the other open offers when the listing is bought outright', async () => {
     const { seller, bidder, listingId, offerId } = await listedWithOffer('Offers closed by a purchase');
     const buyer = await signIn(SEED.collector3);
@@ -82,5 +114,36 @@ describe('MKT offers', () => {
     const challenge = (await seller.post(`/marketplace/listings/${listingId}/remove`)).body;
     expect((await seller.post('/marketplace/listings/remove/confirm', { confirmationToken: challenge.confirmationToken })).status).toBe(201);
     expect(await statusOf(bidder, offerId)).toBe('rejected');
+  });
+
+  it('refuses a counter from either side above the asking price', { timeout: 20_000 }, async () => {
+    const { seller, offerId } = await listedWithOffer('Counter above asking');
+    const res = await seller.post(`/marketplace/offers/${offerId}/respond`, { action: 'counter', amount: 90000 });
+    expect(res.status).toBe(400);
+    expect(String(res.body.error.message)).toMatch(/asking price is \$300\.00/i);
+  });
+
+  it('refuses to accept an offer above an asking price lowered after it was made', { timeout: 20_000 }, async () => {
+    const { seller, listingId, offerId } = await listedWithOffer('Repriced under an offer');
+    expect((await seller.patch(`/marketplace/listings/${listingId}`, { askingPrice: 12000 })).status).toBe(200);
+    const res = await seller.post(`/marketplace/offers/${offerId}/respond`, { action: 'accept' });
+    expect(res.status).toBe(409);
+    expect(String(res.body.error.message)).toMatch(/asking price is now \$120\.00/i);
+  });
+
+  it('tells the buyer when the seller turns an offer down, and the seller when the buyer withdraws', { timeout: 20_000 }, async () => {
+    const turnedDown = await listedWithOffer('Offer turned down');
+    expect((await turnedDown.seller.post(`/marketplace/offers/${turnedDown.offerId}/respond`, { action: 'reject' })).status).toBe(201);
+    const toBuyer = await outboxFor('offer_rejected', turnedDown.offerId);
+    expect(toBuyer).toHaveLength(1);
+    expect(toBuyer[0]!.payload.recipientIds).toEqual([await userIdOf(SEED.collector2)]);
+    expect(toBuyer[0]!.payload.rejectedBy).toBe('seller');
+
+    const withdrawn = await listedWithOffer('Offer withdrawn');
+    expect((await withdrawn.bidder.post(`/marketplace/offers/${withdrawn.offerId}/respond`, { action: 'reject' })).status).toBe(201);
+    const toSeller = await outboxFor('offer_rejected', withdrawn.offerId);
+    expect(toSeller).toHaveLength(1);
+    expect(toSeller[0]!.payload.recipientIds).toEqual([await userIdOf(SEED.collector)]);
+    expect(toSeller[0]!.payload.rejectedBy).toBe('buyer');
   });
 });

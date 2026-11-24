@@ -2,8 +2,22 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
-import { Button, EmptyState, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
-import { IconAlert, IconReceipt, IconWallet } from '../../../shared/ui/icons';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  MoneyField,
+  Panel,
+  SkeletonTable,
+  StatusBadge,
+} from '../../../shared/ui/primitives';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
+import { IconAlert, IconWallet } from '../../../shared/ui/icons';
+import {
+  isPayPalApproveUrl,
+  leaveForPayPal,
+  type PayPalReturn,
+} from '../../../shared/paypalCheckout';
 
 interface BankInstructions {
   accountName: string | null;
@@ -21,8 +35,65 @@ interface FundingRoute {
   feeBps: number;
   description: string;
   available: boolean;
+  /** `paypal`: paid on PayPal's page and captured on return. `direct` (or absent): settled in one call. */
+  checkout?: 'paypal' | 'crypto' | 'direct' | null;
   instructions: BankInstructions | { handle: string } | null;
 }
+
+interface PayPalCheckoutStarted {
+  paymentId: string;
+  approveUrl: string | null;
+  status: string;
+  amountMinor: number;
+}
+
+interface PayPalCheckoutCaptured {
+  paymentId: string;
+  status: 'succeeded' | 'pending';
+  amountMinor: number;
+}
+
+interface CryptoCheckoutStarted {
+  paymentId: string;
+  hostedUrl: string | null;
+  status: string;
+  amountMinor: number;
+}
+
+interface CryptoCheckoutState {
+  paymentId: string;
+  status: string;
+  amountMinor: number;
+  message: string;
+}
+
+export interface CryptoReturn {
+  outcome: 'returned' | 'cancelled';
+  paymentId: string;
+}
+
+const CRYPTO_PAYMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function cryptoReturnFrom(outcome: string, paymentId: string): CryptoReturn | null {
+  if ((outcome !== 'returned' && outcome !== 'cancelled') || !CRYPTO_PAYMENT_ID.test(paymentId))
+    return null;
+  return { outcome, paymentId };
+}
+
+export function isCryptoHostedUrl(href: string, appOrigin: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return false;
+  }
+  if (url.protocol === 'https:' && url.hostname === 'commerce.coinbase.com' && url.port === '')
+    return true;
+  return url.origin === appOrigin;
+}
+
+export const CRYPTO_POLL_MS = 5_000;
+const CRYPTO_POLL_ROUNDS = 120;
 
 interface RouteCatalogue {
   limits: { minMinor: number; maxMinor: number };
@@ -34,10 +105,19 @@ export function TopUpPanel({
   onError,
   onStatus,
   onChanged,
+  paypalReturn = null,
+  onPayPalReturnHandled,
+  cryptoReturn = null,
+  onCryptoReturnHandled,
 }: {
   onError: (m: string | null) => void;
   onStatus: (m: string | null) => void;
   onChanged: () => void;
+  /** The collector is back from PayPal's page for this payment. */
+  paypalReturn?: PayPalReturn | null;
+  onPayPalReturnHandled?: () => void;
+  cryptoReturn?: CryptoReturn | null;
+  onCryptoReturnHandled?: () => void;
 }) {
   const { t } = useI18n();
   const [catalogue, setCatalogue] = useState<RouteCatalogue | null>(null);
@@ -46,23 +126,135 @@ export function TopUpPanel({
   const [busy, setBusy] = useState(false);
   const attempt = useRef<{ key: string; route: string; cents: number } | null>(null);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadRound, setLoadRound] = useState(0);
   useEffect(() => {
     void (async () => {
       try {
         const loaded = await api.get<RouteCatalogue>('/finance/funding-routes');
         setCatalogue(loaded);
+        setLoadError(null);
         setRoute((current) =>
           loaded.routes.some((r) => r.key === current && r.available)
             ? current
             : (loaded.routes.find((r) => r.available)?.key ?? current),
         );
       } catch (e) {
-        onError((e as Error).message);
+        setLoadError((e as Error).message);
       }
     })();
-  }, [onError]);
+  }, [loadRound]);
+
+  const finished = useRef<string | null>(null);
+  useEffect(() => {
+    if (!paypalReturn) return;
+    const id = `${paypalReturn.outcome}:${paypalReturn.paymentId}`;
+    if (finished.current === id) return;
+    finished.current = id;
+    const base = `/finance/checkout/paypal/${encodeURIComponent(paypalReturn.paymentId)}`;
+    void (async () => {
+      setBusy(true);
+      try {
+        if (paypalReturn.outcome === 'cancelled') {
+          await api.post(`${base}/cancel`, {});
+          onError(null);
+          onStatus(t('money.paypalCancelled'));
+          return;
+        }
+        onStatus(t('money.paypalCapturing'));
+        const result = await api.post<PayPalCheckoutCaptured>(`${base}/capture`, {});
+        onError(null);
+        onStatus(
+          result.status === 'succeeded'
+            ? t('money.paid', { amount: formatUsd(result.amountMinor) })
+            : t('money.paypalPending'),
+        );
+        onChanged();
+      } catch (e) {
+        onStatus(null);
+        onError((e as Error).message);
+      } finally {
+        setBusy(false);
+        onPayPalReturnHandled?.();
+      }
+    })();
+  }, [paypalReturn, onError, onStatus, onChanged, onPayPalReturnHandled, t]);
+
+  const [watching, setWatching] = useState<string | null>(null);
+  const cryptoFinished = useRef<string | null>(null);
+  useEffect(() => {
+    if (!cryptoReturn) return;
+    const id = `${cryptoReturn.outcome}:${cryptoReturn.paymentId}`;
+    if (cryptoFinished.current === id) return;
+    cryptoFinished.current = id;
+    void (async () => {
+      try {
+        if (cryptoReturn.outcome === 'cancelled') {
+          await api.post(
+            `/finance/checkout/crypto/${encodeURIComponent(cryptoReturn.paymentId)}/cancel`,
+            {},
+          );
+          onError(null);
+          onStatus(t('money.cryptoCancelled'));
+          return;
+        }
+        setWatching(cryptoReturn.paymentId);
+      } catch (e) {
+        onStatus(null);
+        onError((e as Error).message);
+      } finally {
+        onCryptoReturnHandled?.();
+      }
+    })();
+  }, [cryptoReturn, onError, onStatus, onCryptoReturnHandled, t]);
+
+  useEffect(() => {
+    if (!watching) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const look = async (round: number) => {
+      try {
+        const seen = await api.get<CryptoCheckoutState>(
+          `/finance/checkout/crypto/${encodeURIComponent(watching)}`,
+        );
+        if (stopped) return;
+        if (seen.status === 'succeeded') {
+          onError(null);
+          onStatus(t('money.paid', { amount: formatUsd(seen.amountMinor) }));
+          setWatching(null);
+          onChanged();
+          return;
+        }
+        if (seen.status !== 'pending') {
+          onStatus(null);
+          onError(seen.message);
+          setWatching(null);
+          return;
+        }
+        onError(null);
+        if (round >= CRYPTO_POLL_ROUNDS) {
+          onStatus(t('money.cryptoStillWaiting', { amount: formatUsd(seen.amountMinor) }));
+          setWatching(null);
+          return;
+        }
+        onStatus(t('money.cryptoWaiting', { amount: formatUsd(seen.amountMinor) }));
+      } catch (e) {
+        if (stopped) return;
+        onError((e as Error).message);
+      }
+      timer = setTimeout(() => void look(round + 1), CRYPTO_POLL_MS);
+    };
+    void look(0);
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [watching, onError, onStatus, onChanged, t]);
 
   const chosen = catalogue?.routes.find((r) => r.key === route);
+  const viaPayPal = chosen?.checkout === 'paypal';
+  const viaCrypto = chosen?.checkout === 'crypto';
+  const payable = Boolean(chosen?.available && (chosen.instant || viaCrypto));
   const cents = dollarsToCents(amount);
   const withinLimits =
     catalogue !== null &&
@@ -70,14 +262,98 @@ export function TopUpPanel({
     cents >= catalogue.limits.minMinor &&
     cents <= catalogue.limits.maxMinor;
 
-  async function pay() {
-    if (cents === null) return;
+  function attemptKey(amountCents: number): string {
     const current = attempt.current;
     const key =
-      current && current.route === route && current.cents === cents
+      current && current.route === route && current.cents === amountCents
         ? current.key
         : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    attempt.current = { key, route, cents };
+    attempt.current = { key, route, cents: amountCents };
+    return key;
+  }
+
+  async function payWithPayPal() {
+    if (cents === null) return;
+    const key = attemptKey(cents);
+    setBusy(true);
+    try {
+      const started = await api.post<PayPalCheckoutStarted>('/finance/checkout/paypal', {
+        amountMinor: cents,
+        route,
+        idempotencyKey: key,
+      });
+      if (!started.approveUrl) {
+        attempt.current = null;
+        if (started.status === 'succeeded') {
+          onError(null);
+          onStatus(t('money.paid', { amount: formatUsd(started.amountMinor) }));
+          setAmount('');
+          onChanged();
+        } else {
+          onStatus(null);
+          onError(t('money.notTaken'));
+        }
+        return;
+      }
+      if (!isPayPalApproveUrl(started.approveUrl, window.location.origin)) {
+        attempt.current = null;
+        onStatus(null);
+        onError(t('money.paypalNotSafe'));
+        return;
+      }
+      leaveForPayPal(started.approveUrl);
+    } catch (e) {
+      const unknown = e instanceof ApiError && (e.kind === 'unreachable' || e.kind === 'server');
+      if (!unknown) attempt.current = null;
+      onError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function payWithCrypto() {
+    if (cents === null) return;
+    const key = attemptKey(cents);
+    setBusy(true);
+    try {
+      const started = await api.post<CryptoCheckoutStarted>('/finance/checkout/crypto', {
+        amountMinor: cents,
+        idempotencyKey: key,
+      });
+      if (!started.hostedUrl) {
+        attempt.current = null;
+        if (started.status === 'succeeded') {
+          onError(null);
+          onStatus(t('money.paid', { amount: formatUsd(started.amountMinor) }));
+          setAmount('');
+          onChanged();
+        } else if (started.status === 'pending') {
+          setWatching(started.paymentId);
+        } else {
+          onStatus(null);
+          onError(t('money.notTaken'));
+        }
+        return;
+      }
+      if (!isCryptoHostedUrl(started.hostedUrl, window.location.origin)) {
+        attempt.current = null;
+        onStatus(null);
+        onError(t('money.cryptoNotSafe'));
+        return;
+      }
+      leaveForPayPal(started.hostedUrl);
+    } catch (e) {
+      const unknown = e instanceof ApiError && (e.kind === 'unreachable' || e.kind === 'server');
+      if (!unknown) attempt.current = null;
+      onError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pay() {
+    if (cents === null) return;
+    const key = attemptKey(cents);
     setBusy(true);
     try {
       const result = await api.post<{ status: string; amountMinor: number; replayed: boolean }>(
@@ -107,35 +383,65 @@ export function TopUpPanel({
     }
   }
 
+  const instructionLines =
+    chosen?.available && chosen.instructions
+      ? 'handle' in chosen.instructions
+        ? [
+            {
+              label: t('money.paypalHandle'),
+              value: <bdi dir="ltr">{chosen.instructions.handle}</bdi>,
+            },
+          ]
+        : Object.entries(chosen.instructions)
+            .filter(([, v]) => v !== null)
+            .map(([k, v]) => ({
+              label: t(`money.bank.${k}` as MessageKey),
+              value: <bdi dir="ltr">{v}</bdi>,
+            }))
+      : [];
+
   return (
     <Panel title={t('money.topUp')} subtitle={t('money.topUpSubtitle')}>
-      {catalogue === null ? (
-        <p className="hint">{t('grp.loading')}</p>
+      {catalogue === null && loadError ? (
+        <ErrorState
+          title={t('money.loadFailed')}
+          message={loadError}
+          onRetry={() => setLoadRound((n) => n + 1)}
+          retryLabel={t('ui.retry')}
+        />
+      ) : catalogue === null ? (
+        <SkeletonTable rows={3} columns={2} />
       ) : (
-        <div className="stack stack--tight" style={{ maxWidth: 620 }}>
-          <label className="field">
-            <span className="field-label">{t('money.how')}</span>
-            <select value={route} onChange={(e) => setRoute(e.target.value)}>
-              {catalogue.routes.map((r) => (
-                <option key={r.key} value={r.key} disabled={!r.available}>
-                  {t(`money.route.${r.key}` as MessageKey)}
-                  {r.available ? '' : ` — ${t('money.notAvailable')}`}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="request-form">
+          <div className="stack stack--tight request-form-fields">
+            <label className="field">
+              <span className="field-label">{t('money.how')}</span>
+              <select value={route} onChange={(e) => setRoute(e.target.value)}>
+                {catalogue.routes.map((r) => (
+                  <option key={r.key} value={r.key} disabled={!r.available}>
+                    {t(`money.route.${r.key}` as MessageKey)}
+                    {r.available ? '' : ` — ${t('money.notAvailable')}`}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          {chosen && (
-            <p className="field-hint">
-              <StatusBadge tone={chosen.instant ? 'success' : 'warning'} plain>
-                {chosen.instant ? t('money.instant') : t('money.reviewed')}
-              </StatusBadge>{' '}
-              {t(`money.routeDesc.${chosen.key}` as MessageKey)}
-            </p>
-          )}
+            {chosen && (
+              <p className="field-hint">
+                <StatusBadge tone={chosen.instant || viaCrypto ? 'success' : 'warning'} plain>
+                  {chosen.instant
+                    ? t('money.instant')
+                    : viaCrypto
+                      ? t('money.automatic')
+                      : t('money.reviewed')}
+                </StatusBadge>{' '}
+                {t(
+                  `${viaPayPal ? 'money.routeDescPaypal' : 'money.routeDesc'}.${chosen.key}` as MessageKey,
+                )}
+              </p>
+            )}
 
-          {chosen?.instant && chosen.available ? (
-            <>
+            {chosen && payable ? (
               <MoneyField
                 label={t('money.amount')}
                 value={amount}
@@ -144,46 +450,81 @@ export function TopUpPanel({
                   min: formatUsd(catalogue.limits.minMinor),
                   max: formatUsd(catalogue.limits.maxMinor),
                 })}
+                error={
+                  amount.trim() !== '' && !withinLimits
+                    ? t('money.outOfLimits', {
+                        min: formatUsd(catalogue.limits.minMinor),
+                        max: formatUsd(catalogue.limits.maxMinor),
+                      })
+                    : undefined
+                }
               />
-              <div className="row">
-                <Button variant="gold" icon={<IconWallet />} disabled={busy || !withinLimits} onClick={() => void pay()}>
-                  {t('money.payNow')}
-                </Button>
-                <span className="field-hint">{t('money.instantHint')}</span>
+            ) : chosen?.available && chosen.instructions ? (
+              <>
+                <p className="drawer-note drawer-note--hold">
+                  <IconAlert />
+                  <span>{t('money.referenceNote')}</span>
+                </p>
+                <p className="field-hint">{t('money.thenRaise')}</p>
+              </>
+            ) : (
+              <EmptyState
+                title={t('money.routeUnavailable')}
+                text={t('money.routeUnavailableText')}
+                icon={<IconAlert />}
+              />
+            )}
+          </div>
+
+          {chosen && payable ? (
+            <>
+              <aside className="request-slip">
+                <DrawerTag
+                  kicker={t('money.topUp')}
+                  amount={cents !== null && cents > 0 ? formatUsd(cents) : '—'}
+                  lines={[
+                    { label: t('money.how'), value: t(`money.route.${chosen.key}` as MessageKey) },
+                  ]}
+                  status={
+                    <StatusBadge tone="success" plain>
+                      {viaCrypto ? t('money.automatic') : t('money.instant')}
+                    </StatusBadge>
+                  }
+                />
+              </aside>
+              <div className="stack stack--tight request-form-actions">
+                <div className="row">
+                  <Button
+                    variant="primary"
+                    icon={<IconWallet />}
+                    disabled={busy || !withinLimits || (viaCrypto && watching !== null)}
+                    onClick={() =>
+                      void (viaCrypto ? payWithCrypto() : viaPayPal ? payWithPayPal() : pay())
+                    }
+                  >
+                    {viaCrypto
+                      ? t('money.continueToCrypto')
+                      : viaPayPal
+                        ? t('money.continueToPaypal')
+                        : t('money.payNow')}
+                  </Button>
+                  <span className="field-hint">
+                    {viaCrypto
+                      ? t('money.cryptoHint')
+                      : viaPayPal
+                        ? t('money.paypalHint')
+                        : t('money.instantHint')}
+                  </span>
+                </div>
               </div>
             </>
-          ) : chosen?.available && chosen.instructions ? (
-            <>
-              <h3 className="drawer-heading">{t('money.sendTo')}</h3>
-              <dl className="detail-list">
-                {'handle' in chosen.instructions ? (
-                  <div className="detail-row">
-                    <dt className="detail-label">{t('money.paypalHandle')}</dt>
-                    <dd className="detail-value" dir="ltr">
-                      {chosen.instructions.handle}
-                    </dd>
-                  </div>
-                ) : (
-                  Object.entries(chosen.instructions)
-                    .filter(([, v]) => v !== null)
-                    .map(([k, v]) => (
-                      <div className="detail-row" key={k}>
-                        <dt className="detail-label">{t(`money.bank.${k}` as MessageKey)}</dt>
-                        <dd className="detail-value" dir="ltr">
-                          {v}
-                        </dd>
-                      </div>
-                    ))
-                )}
-              </dl>
-              <p className="drawer-note drawer-note--hold">
-                <IconAlert />
-                <span>{t('money.referenceNote')}</span>
-              </p>
-              <p className="field-hint">{t('money.thenRaise')}</p>
-            </>
           ) : (
-            <EmptyState title={t('money.routeUnavailable')} text={t('money.routeUnavailableText')} icon={<IconAlert />} />
+            chosen?.available &&
+            chosen.instructions && (
+              <aside className="request-slip">
+                <DrawerTag kicker={t('money.sendTo')} lines={instructionLines} />
+              </aside>
+            )
           )}
         </div>
       )}
@@ -204,25 +545,59 @@ interface CashOutQuote {
   };
 }
 
-export function CashOutQuotePanel({ amount }: { amount: string }) {
-  const { t } = useI18n();
+export interface CashOutQuoteState {
+  quote: CashOutQuote | null;
+  failed: boolean;
+  retry: () => void;
+}
+
+/** What the server says would land for the amount typed so far, asked for once the typing has paused. */
+export function useCashOutQuote(amount: string): CashOutQuoteState {
   const [quote, setQuote] = useState<CashOutQuote | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [round, setRound] = useState(0);
   const cents = dollarsToCents(amount);
 
   useEffect(() => {
     if (cents === null || cents <= 0) {
       setQuote(null);
+      setFailed(false);
       return;
     }
     const handle = setTimeout(() => {
       void api
         .get<CashOutQuote>(`/finance/cash-out-quote?amountMinor=${cents}`)
-        .then(setQuote)
-        .catch(() => setQuote(null));
+        .then((next) => {
+          setQuote(next);
+          setFailed(false);
+        })
+        .catch(() => {
+          setQuote(null);
+          setFailed(true);
+        });
     }, 250);
     return () => clearTimeout(handle);
-  }, [cents]);
+  }, [cents, round]);
 
+  return { quote, failed, retry: () => setRound((n) => n + 1) };
+}
+
+/** The fee schedule, in a sentence. What the amount typed comes to is on the slip beside the form. */
+export function CashOutQuotePanel({
+  quote,
+  failed = false,
+  onRetry,
+}: {
+  quote: CashOutQuote | null;
+  failed?: boolean;
+  onRetry?: () => void;
+}) {
+  const { t } = useI18n();
+  if (failed) {
+    return (
+      <ErrorState message={t('money.quoteFailed')} onRetry={onRetry} retryLabel={t('ui.retry')} />
+    );
+  }
   return (
     <div className="stack stack--tight">
       <p className="field-hint">
@@ -236,18 +611,6 @@ export function CashOutQuotePanel({ amount }: { amount: string }) {
             })
           : t('money.feeScheduleShort')}
       </p>
-      {quote && quote.amountMinor > 0 && (
-        <p className="drawer-note drawer-note--archive">
-          <IconReceipt />
-          <span>
-            {t('money.youReceive', {
-              gross: formatUsd(quote.amountMinor),
-              fee: formatUsd(quote.feeMinor),
-              net: formatUsd(quote.netMinor),
-            })}
-          </span>
-        </p>
-      )}
     </div>
   );
 }

@@ -1,16 +1,16 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, MaxLength } from 'class-validator';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
-import { EscrowService } from './escrow.service';
+import { EscrowService, collectorDealView } from './escrow.service';
 
 class RaiseDealDto {
   @IsIn(['buyer', 'seller']) raiserRole!: 'buyer' | 'seller';
   @IsOptional() @IsString() counterpartyUsername?: string;
   @IsOptional() @IsString() @MaxLength(140) counterpartyName?: string;
-  @IsOptional() @IsString() @MaxLength(200) counterpartyEmail?: string;
+  @IsOptional() @IsEmail({}, { message: 'Give an email address we can reach them at.' }) @MaxLength(200) counterpartyEmail?: string;
   @IsString() @IsNotEmpty() @MaxLength(500) description!: string;
   @IsInt() @IsPositive() valueMinor!: number;
   @IsIn(['buyer_vault', 'ship_to_buyer']) settlement!: 'buyer_vault' | 'ship_to_buyer';
@@ -68,8 +68,8 @@ export class EscController {
   }
 
   @Post()
-  raise(@CurrentUser() user: AuthUser, @Body() dto: RaiseDealDto) {
-    return this.escrow.raise(user.id, dto);
+  async raise(@CurrentUser() user: AuthUser, @Body() dto: RaiseDealDto) {
+    return collectorDealView(await this.escrow.raise(user.id, dto), user.id);
   }
 
   @Get(':id')
