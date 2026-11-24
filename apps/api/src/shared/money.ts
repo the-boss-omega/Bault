@@ -39,7 +39,10 @@ export function sum(items: Money[], currency: string): Money {
 }
 
 export function formatMinor(minor: number, currencyCode = 'USD'): string {
-  const value = (Math.abs(minor) / 100).toFixed(2);
+  const value = (Math.abs(minor) / 100).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   const sign = minor < 0 ? '-' : '';
   return currencyCode.toUpperCase() === 'USD' ? `${sign}$${value}` : `${sign}${value} ${currencyCode.toUpperCase()}`;
 }
