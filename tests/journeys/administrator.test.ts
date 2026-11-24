@@ -8,6 +8,7 @@ import {
   fund,
   openPage,
   panel,
+  pressAndSettle,
   says,
   shows,
   signInAs,
@@ -95,7 +96,7 @@ async function monthlySummary(page: Page): Promise<{ reversedFees: number; rever
   const month = new Date().toISOString().slice(0, 7);
   const form = panel(page, 'Monthly summary');
   await form.getByRole('textbox', { name: 'Month' }).fill(month);
-  await form.getByRole('button', { name: 'Show summary' }).click();
+  await pressAndSettle(page, form.getByRole('button', { name: 'Show summary' }), '/admin/accounting/summary');
   const summary = form.getByRole('region', { name: 'Monthly summary' });
   await says(summary, 'Card Embassy revenue');
   await says(summary, 'Customer balances held');
