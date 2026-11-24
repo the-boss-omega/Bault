@@ -25,7 +25,6 @@ function escapeHtml(value: string): string {
 }
 
 interface ActionCopy {
-  /** What the message is, in a few capital letters, over its heading. */
   kicker: string;
   heading: string;
   body: string;
@@ -33,13 +32,6 @@ interface ActionCopy {
   footer: string;
 }
 
-/*
- * The messages are written the way the product is: a slip of paper, with the foil along its top edge and on the
- * foot of the one button. Everything is inline (a mail client keeps what a style attribute says, and little else),
- * laid out in tables (Outlook lays out nothing else), and set in the fonts the reader's own device has: no web font
- * is loaded, so none is waited for, and none is missing. The hues are the foil of theme.css and the inks of its paper,
- * written as the hex a mail client reads (the lint's colour maths made them from the oklch the stylesheet has).
- */
 const PAGE = '#e9e6dd';
 const PAPER = '#f3efe6';
 const BRIGHT = '#fffdf8';
@@ -56,7 +48,6 @@ function actionText(copy: ActionCopy, link: string): string {
   return [copy.kicker, copy.heading, '', copy.body, '', link, '', copy.footer].join('\n');
 }
 
-/** A strip of the five foil hues, `height` px thick: a row of cells, because a gradient is not something a mail client promises. */
 function foil(height: number): string {
   const cells = FOIL.map(
     (hue) =>
@@ -65,7 +56,6 @@ function foil(height: number): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tr>${cells}</tr></table>`;
 }
 
-/** The one button: ink on the paper, its foot a strip of foil. A cell with a colour of its own, so that a client that drops styles still draws it. */
 function button(label: string, href: string): string {
   return [
     `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" style="border-collapse:separate">`,
@@ -83,7 +73,6 @@ function actionSection(copy: ActionCopy, link: string): string {
     `<h1 style="margin:0 0 14px;font:600 26px/1.25 ${SERIF};color:${INK}">${escapeHtml(copy.heading)}</h1>`,
     `<p style="margin:0 0 24px;font:400 15px/1.6 ${SANS};color:${INK_2}">${escapeHtml(copy.body)}</p>`,
     button(copy.action, href),
-    // The link a button hides, for the client that does not draw the button: its own line.
     `<p style="clear:both;margin:0;padding:20px 0 0;font:12px/1.6 ${MONO};color:${INK_3};text-align:left;word-break:break-all">${href}</p>`,
     `<p style="margin:14px 0 0;font:400 13px/1.55 ${SANS};color:${INK_3}">${escapeHtml(copy.footer)}</p>`,
     '</div>',
@@ -93,7 +82,6 @@ function actionSection(copy: ActionCopy, link: string): string {
 function frame(section: string, preheader: string): string {
   return [
     `<div style="margin:0;padding:0;background:${PAGE}">`,
-    // What an inbox shows after the subject.
     `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:${PAGE};opacity:0">${escapeHtml(preheader)}</div>`,
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${PAGE}"><tr><td align="center" style="padding:28px 12px">`,
     `<table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;background:${PAPER};border:1px solid ${RULE};border-radius:4px;border-collapse:separate">`,
@@ -114,7 +102,6 @@ interface CodeCopy {
   footer: string;
 }
 
-/** A code to type, not a link to follow: the digits on a card of their own, large, in the reader's monospace. */
 function codeEmail(copy: CodeCopy, code: string): RenderedEmail {
   const html = [
     '<div lang="en" dir="ltr" style="text-align:left">',
@@ -219,6 +206,8 @@ export interface SmtpConfig {
   from: string;
 }
 
+export const SMTP_TIMEOUTS_MS = { connection: 15_000, greeting: 15_000, socket: 60_000 } as const;
+
 export class SmtpEmailAdapter implements EmailAdapter {
   private readonly transport: Transporter;
 
@@ -228,6 +217,9 @@ export class SmtpEmailAdapter implements EmailAdapter {
       port: config.port,
       secure: config.secure,
       requireTLS: config.requireTls,
+      connectionTimeout: SMTP_TIMEOUTS_MS.connection,
+      greetingTimeout: SMTP_TIMEOUTS_MS.greeting,
+      socketTimeout: SMTP_TIMEOUTS_MS.socket,
       auth: { user: config.user, pass: config.password },
     });
   }

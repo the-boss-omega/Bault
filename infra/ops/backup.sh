@@ -17,9 +17,11 @@ PLAIN_TMP=""
 SCRATCH_DB=""
 SCRATCH_ADMIN_URL=""
 DUMPING=0
+PARTIAL=()
 cleanup() {
   local status=$?
   if [ "$DUMPING" -eq 1 ] && [ "$status" -ne 0 ]; then
+    [ ${#PARTIAL[@]} -eq 0 ] || rm -f "${PARTIAL[@]}"
     mkdir -p "$BACKUP_DIR" 2> /dev/null || true
     printf '%s backup.sh dump failed (exit %s) on %s; see /var/log/bault/backup.log\n' \
       "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$status" "$(hostname)" > "$FAILED_MARKER" 2> /dev/null || true
@@ -33,7 +35,9 @@ trap cleanup EXIT
 
 url_with_db() {
   local url="$1" db="$2"
-  [[ "$url" =~ ^(postgres(ql)?://[^/?]+)(/[^?]*)?(\?.*)?$ ]] || die "not a postgres:// URL: ${url%%@*}@…"
+  local scheme="${url%%://*}"
+  [ "$scheme" != "$url" ] || scheme="(none)"
+  [[ "$url" =~ ^(postgres(ql)?://[^/?]+)(/[^?]*)?(\?.*)?$ ]] || die "not a postgres:// URL: its scheme is ${scheme}"
   printf '%s/%s%s' "${BASH_REMATCH[1]}" "$db" "${BASH_REMATCH[4]}"
 }
 
@@ -104,6 +108,7 @@ cmd_dump() {
   file="${BACKUP_DIR}/bault-${stamp}.dump"
 
   echo "==> dumping to ${file}"
+  PARTIAL=("$file")
   pg_dump --dbname="$DIRECT_DATABASE_URL" \
           --format=custom \
           --compress=9 \
@@ -117,10 +122,12 @@ cmd_dump() {
     local args=() r
     for r in "${recipients[@]}"; do args+=(--recipient "$r"); done
     echo "==> encrypting for ${#recipients[@]} recipient(s)"
+    PARTIAL=("$file" "${file}.age")
     age "${args[@]}" --output "${file}.age" "$file"
     rm -f "$file"
     file="${file}.age"
   fi
+  PARTIAL=()
 
   write_checksum "$file"
   echo "==> ${file} ($(du -h "$file" | cut -f1)), checksum written"
@@ -286,7 +293,7 @@ cmd_restore() {
   [ "$confirm" = "$target_db" ] || die "confirmation did not match; nothing was done"
 
   pg_restore --dbname="$target" --clean --if-exists --no-owner --no-privileges \
-             --exit-on-error "$PLAIN"
+             --single-transaction --exit-on-error "$PLAIN"
   echo "==> restored. Next: run the migrations (as bault_owner) and infra/production/roles.sql,"
   echo "    because --no-owner/--no-privileges restored the tables without their grants."
 }

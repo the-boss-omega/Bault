@@ -51,4 +51,21 @@ describe('when the database drops idle connections', () => {
       await worker.end();
     }
   });
+
+  it("the worker survives a connection ended while a job holds it, and the job's next query fails instead", async () => {
+    const { createPool } = await import('../../apps/worker/src/db');
+    const { loadEnv } = await import('@bault/config');
+    const worker = createPool(loadEnv().DIRECT_DATABASE_URL);
+    const client = await worker.connect();
+    try {
+      const { rows } = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+      await client.query('BEGIN');
+      await pool.query('SELECT pg_terminate_backend($1)', [rows[0]!.pid]);
+      await new Promise((r) => setTimeout(r, 300));
+      await expect(client.query('SELECT 1')).rejects.toThrow();
+    } finally {
+      client.release(true);
+      await worker.end();
+    }
+  });
 });

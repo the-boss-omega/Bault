@@ -125,6 +125,19 @@ describe('a provider failure reported from any process', () => {
   });
 });
 
+describe('a Coinbase Commerce failure', () => {
+  it('keeps the provider, path and status, and loses the reply', () => {
+    const coinbase =
+      'Coinbase Commerce /charges failed (400): {"error":{"type":"invalid_request","message":"redirect_url https://app.example/#/wallet/cash-in?payment=pay-7f3a is invalid"}}';
+    const out = scrubErrorEvent({
+      message: coinbase,
+      exception: { values: [{ value: coinbase }] },
+    } as Event & Record<string, unknown>) as Record<string, unknown>;
+    expect(leaks(out as Event, 'invalid_request', 'pay-7f3a', 'redirect_url')).toEqual([]);
+    expect(JSON.stringify(out)).toContain('Coinbase Commerce /charges failed (400)');
+  });
+});
+
 describe('a crash on a credential route', () => {
   it('drops the body of a sign-in', () => {
     const out = scrubErrorEvent(
