@@ -9,7 +9,7 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { userAccount } from '../acc/acc.schema';
 import { supportMessage, supportTicket } from './sup.schema';
 
-export type TicketCategory = 'parcel' | 'shipment' | 'item' | 'billing' | 'account' | 'other';
+export type TicketCategory = 'parcel' | 'shipment' | 'item' | 'billing' | 'account' | 'private_sale' | 'other';
 export type TicketStatus = 'open' | 'awaiting_customer' | 'resolved';
 
 export interface OpenTicketInput {
@@ -58,8 +58,9 @@ export class SupportService {
     return this.hasStaffRole(actor) && actor.status === 'active';
   }
 
-  private async loadFor(ticketId: string, actor: TicketActor) {
-    const [row] = await this.db.select().from(supportTicket).where(eq(supportTicket.id, ticketId)).limit(1);
+  private async loadFor(ticketId: string, actor: TicketActor, tx?: Database) {
+    const query = (tx ?? this.db).select().from(supportTicket).where(eq(supportTicket.id, ticketId));
+    const [row] = await (tx ? query.for('update') : query).limit(1);
     if (!row) throw AppError.notFound('Ticket not found');
     if (!this.staff(actor) && row.userId !== actor.id) {
       if (this.hasStaffRole(actor)) {
@@ -180,10 +181,10 @@ export class SupportService {
     if (!body) throw AppError.validation('A reply cannot be empty');
     if (body.length > MAX_BODY) throw AppError.validation('Message is too long');
 
-    const ticket = await this.loadFor(ticketId, actor);
     const fromStaff = this.staff(actor);
 
     return this.db.transaction(async (tx) => {
+      const ticket = await this.loadFor(ticketId, actor, tx as Database);
       const now = new Date();
       await tx.insert(supportMessage).values({
         ticketId,
@@ -200,7 +201,7 @@ export class SupportService {
           lastMessageAt: now,
           resolvedAt: null,
           resolvedBy: null,
-          assignedTo: fromStaff ? (ticket.assignedTo ?? actor.id) : ticket.assignedTo,
+          ...(fromStaff ? { assignedTo: sql`coalesce(${supportTicket.assignedTo}, ${actor.id})` } : {}),
           updatedAt: now,
         })
         .where(eq(supportTicket.id, ticketId));
