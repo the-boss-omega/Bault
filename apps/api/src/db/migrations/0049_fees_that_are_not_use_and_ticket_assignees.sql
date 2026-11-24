@@ -39,3 +39,15 @@ RETURNS TABLE ("actions" integer, "spent_minor" bigint) AS $$
 $$ LANGUAGE sql STABLE;
 --> statement-breakpoint
 SELECT "recompute_usage_tier"("id", 'migration') FROM "user_account";
+--> statement-breakpoint
+UPDATE "support_ticket" t
+   SET "assigned_to" = NULL
+ WHERE t."assigned_to" IS NOT NULL
+   AND (t."assigned_to" !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        OR NOT EXISTS (SELECT 1 FROM "user_account" u WHERE u."id"::text = lower(t."assigned_to")));
+--> statement-breakpoint
+ALTER TABLE "support_ticket"
+  ALTER COLUMN "assigned_to" SET DATA TYPE uuid USING "assigned_to"::uuid;
+--> statement-breakpoint
+ALTER TABLE "support_ticket" ADD CONSTRAINT "support_ticket_assigned_to_user_account_id_fk"
+  FOREIGN KEY ("assigned_to") REFERENCES "public"."user_account"("id") ON DELETE RESTRICT;
