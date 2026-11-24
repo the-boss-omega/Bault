@@ -5,7 +5,7 @@ import { formatDate, formatUsd } from '../../../shared/money';
 import type { PickupShow, WhiteGloveTerms } from '../../../shared/escrow';
 import type { ShipmentSummary } from '../../../shared/shipments';
 import type { InboundAddress } from '../../../shared/parcels';
-import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, EmptyState, ErrorState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconCalendar, IconShield } from '../../../shared/ui/icons';
 import { countryName, useShippingCountries, type ShippingCountry } from '../../../shared/countries';
 import type { Address } from '../profile/AddressFields';
@@ -43,6 +43,8 @@ export function ShowPickupPanel({
 }) {
   const { t, locale } = useI18n();
   const [shows, setShows] = useState<PickupShow[] | null>(null);
+  const [showsError, setShowsError] = useState<string | null>(null);
+  const [showsRound, setShowsRound] = useState(0);
   const [eventId, setEventId] = useState('');
   const claimed = useClaimedItems(reloadToken);
   const { picked, toggle, clear, chosen } = usePicked(items, claimed);
@@ -54,14 +56,14 @@ export function ShowPickupPanel({
       try {
         const list = await api.get<PickupShow[]>('/shipping/pickup/shows');
         setShows(list);
+        setShowsError(null);
         const first = list.find((s) => s.open);
-        if (first) setEventId(first.id);
+        if (first) setEventId((cur) => cur || first.id);
       } catch (e) {
-        onError((e as Error).message);
-        setShows([]);
+        setShowsError((e as Error).message);
       }
     })();
-  }, [onError]);
+  }, [showsRound]);
 
   const show = (shows ?? []).find((s) => s.id === eventId);
 
@@ -73,7 +75,7 @@ export function ShowPickupPanel({
         eventId,
         customerNotes: notes.trim() || undefined,
       });
-      onStatus(t('ff.pickupBooked', { id: created.code ?? created.id, show: show?.name ?? '' }));
+      onStatus(t('ship.pickup.booked', { id: created.code ?? created.id, show: show?.name ?? '' }));
       onError(null);
       clear();
       onCreated();
@@ -86,7 +88,14 @@ export function ShowPickupPanel({
 
   return (
     <Panel title={t('ff.pickup.title')} subtitle={t('ff.pickup.subtitle')}>
-      {shows === null ? (
+      {showsError ? (
+        <ErrorState
+          title={t('ship.pickup.failed')}
+          message={showsError}
+          onRetry={() => setShowsRound((n) => n + 1)}
+          retryLabel={t('ui.retry')}
+        />
+      ) : shows === null ? (
         <p className="hint">{t('grp.loading')}</p>
       ) : shows.length === 0 ? (
         <EmptyState title={t('ff.pickup.noShows')} text={t('ff.pickup.noShowsText')} icon={<IconCalendar />} />
@@ -136,7 +145,9 @@ export function ShowPickupPanel({
             >
               {t('ff.pickup.book')}
             </Button>
-            <span className="field-hint">{t('ff.pickup.bringId')}</span>
+            <span className="field-hint">
+              {chosen.length === 0 ? t('ship.pickup.pickFirst') : t('ff.pickup.bringId')}
+            </span>
           </div>
         </div>
       )}
@@ -309,7 +320,7 @@ export function WhiteGlovePanel({
         customerNotes: notes.trim() || undefined,
       });
       onStatus(
-        t('ff.wg.requested', {
+        t('ship.wg.requested', {
           id: created.code ?? created.id,
           hours: terms?.quoteWithinHours ?? 48,
         }),
@@ -438,7 +449,9 @@ export function WhiteGlovePanel({
           <Button variant="primary" disabled={busy || chosen.length === 0} onClick={() => void request()}>
             {t('ff.wg.ask')}
           </Button>
-          <span className="field-hint">{t('ff.wg.nothingCharged')}</span>
+          <span className="field-hint">
+            {chosen.length === 0 ? t('ship.wg.pickFirst') : t('ff.wg.nothingCharged')}
+          </span>
         </div>
       </div>
     </Panel>
@@ -497,7 +510,7 @@ export function WhiteGloveQuotes({
                       void api
                         .post(`/shipping/white-glove/${r.id}/accept`, { quoteMinor: r.quoteMinor })
                         .then(() => {
-                          onStatus(t('ff.wg.accepted', { amount: formatUsd(r.quoteMinor!) }));
+                          onStatus(t('ship.wg.accepted', { amount: formatUsd(r.quoteMinor!) }));
                           onError(null);
                           onChanged();
                         })

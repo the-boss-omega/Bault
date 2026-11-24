@@ -57,6 +57,7 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
   const [items, setItems] = useState<AdminItem[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [parkedCount, setParkedCount] = useState<number | null>(null);
 
   const section: SectionKey = (TABS as readonly string[]).includes(route.tab ?? '')
@@ -64,6 +65,9 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
     : 'yield';
 
   const load = useCallback(async () => {
+    setLoadError(null);
+    setUsers(null);
+    setItems(null);
     try {
       const [u, i] = await Promise.all([
         api.get<AdminUser[]>('/admin/users'),
@@ -71,17 +75,28 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
       ]);
       setUsers(u);
       setItems(i);
-      setError(null);
     } catch (e) {
-      setError((e as Error).message);
-      setUsers([]);
-      setItems([]);
+      setLoadError((e as Error).message);
     }
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setMessage(null);
+    setError(null);
+  }, [section]);
+
+  const say = useCallback((m: string) => {
+    setError(null);
+    setMessage(m);
+  }, []);
+  const fail = useCallback((m: string) => {
+    setMessage(null);
+    setError(m);
+  }, []);
 
   useEffect(() => {
     api
@@ -103,9 +118,7 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
       <ContextTabs label={t('admin.title')} tabs={tabs} active={section} onSelect={goTab} />
 
       {message && <SuccessNote>{message}</SuccessNote>}
-      {error && (
-        <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />
-      )}
+      {error && <ErrorState message={error} />}
 
       {section === 'yield' && (
         <TabPanel tab="yield">
@@ -117,41 +130,39 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
         <TabPanel tab="users">
           <UsersSection
             users={users}
+            loadError={loadError}
+            onRetry={() => void load()}
             currentUserId={currentUserId}
             onChanged={(saved) =>
               setUsers((list) => list?.map((u) => (u.id === saved.id ? saved : u)) ?? list)
             }
-            onSaved={setMessage}
-            onError={setError}
+            onSaved={say}
+            onError={fail}
           />
         </TabPanel>
       )}
 
       {section === 'outbox' && (
         <TabPanel tab="outbox">
-          <OutboxSection onMsg={setMessage} onError={setError} onCount={setParkedCount} />
+          <OutboxSection onMsg={say} onError={fail} onCount={setParkedCount} />
         </TabPanel>
       )}
 
       {section === 'house' && (
         <TabPanel tab="house">
-          <HouseStoreSection onMsg={setMessage} onError={setError} />
+          <HouseStoreSection onMsg={say} onError={fail} />
         </TabPanel>
       )}
 
       {section === 'requests' && (
         <TabPanel tab="requests">
-          <WalletRequestsSection
-            currentUserId={currentUserId}
-            onMsg={setMessage}
-            onError={setError}
-          />
+          <WalletRequestsSection currentUserId={currentUserId} onMsg={say} onError={fail} />
         </TabPanel>
       )}
 
       {section === 'accounting' && (
         <TabPanel tab="accounting">
-          <AccountingSection onError={setError} />
+          <AccountingSection onError={fail} />
         </TabPanel>
       )}
 
@@ -159,43 +170,45 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
         <TabPanel tab="items">
           <ItemsSection
             items={items}
+            loadError={loadError}
+            onRetry={() => void load()}
             users={users ?? []}
             onChanged={(saved) =>
               setItems((list) => list?.map((i) => (i.id === saved.id ? saved : i)) ?? list)
             }
-            onSaved={setMessage}
-            onError={setError}
+            onSaved={say}
+            onError={fail}
           />
         </TabPanel>
       )}
 
       {section === 'pricing' && (
         <TabPanel tab="pricing">
-          <PricingSection onMsg={setMessage} onError={setError} />
+          <PricingSection onMsg={say} onError={fail} />
         </TabPanel>
       )}
 
       {section === 'disputes' && (
         <TabPanel tab="disputes">
-          <DisputesSection onMsg={setMessage} onError={setError} />
+          <DisputesSection onMsg={say} onError={fail} />
         </TabPanel>
       )}
 
       {section === 'signins' && (
         <TabPanel tab="signins">
-          <SignInsSection onError={setError} />
+          <SignInsSection onError={fail} />
         </TabPanel>
       )}
 
       {section === 'storage' && (
         <TabPanel tab="storage">
-          <StorageFeesSection onError={setError} />
+          <StorageFeesSection onError={fail} />
         </TabPanel>
       )}
 
       {section === 'facilities' && (
         <TabPanel tab="facilities">
-          <FacilitiesSection onMsg={setMessage} onError={setError} />
+          <FacilitiesSection onMsg={say} onError={fail} />
         </TabPanel>
       )}
     </>

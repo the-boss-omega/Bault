@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { formatDate, formatUsd } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { useNavigation, useRoute } from '../../../shared/routing';
+import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
   PARCEL_TONE,
   addressLines,
@@ -30,8 +30,8 @@ import {
 import { Barcode } from '../../../shared/Barcode';
 import { CountUp } from '../../../shared/ui/CountUp';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
-import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import { IconCheck, IconInbox, IconLocation, IconPlus } from '../../../shared/ui/icons';
+import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { IconCheck, IconInbox, IconLocation, IconPlus, IconSearch, IconVault } from '../../../shared/ui/icons';
 
 const TABS = ['addresses', 'parcels', 'processing'] as const;
 type InboundTab = (typeof TABS)[number];
@@ -43,7 +43,9 @@ export function InboundPage() {
 
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [parcelsError, setParcelsError] = useState<string | null>(null);
   const [parcels, setParcels] = useState<ParcelSummary[] | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   const tab: InboundTab = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as InboundTab)
@@ -52,10 +54,10 @@ export function InboundPage() {
   const loadParcels = useCallback(async () => {
     try {
       setParcels(await api.get<ParcelSummary[]>('/me/parcels'));
-      setError(null);
+      setParcelsError(null);
     } catch (e) {
-      setError((e as Error).message);
-      setParcels([]);
+      setParcelsError((e as Error).message);
+      setParcels((prev) => prev ?? []);
     }
   }, []);
 
@@ -65,16 +67,33 @@ export function InboundPage() {
 
   const tabs = TABS.map((key) => ({ key, label: t(`inbound.tab.${key}` as MessageKey) }));
 
+  const retry = () => {
+    setError(null);
+    setParcelsError(null);
+    setAttempt((n) => n + 1);
+    void loadParcels();
+  };
+
   return (
     <>
-      <ContextTabs label={t('inbound.title')} tabs={tabs} active={tab} onSelect={goTab} />
+      <ContextTabs
+        label={t('inbound.title')}
+        tabs={tabs}
+        active={tab}
+        onSelect={(next) => {
+          setStatus(null);
+          goTab(next);
+        }}
+      />
 
       {status && <SuccessNote>{status}</SuccessNote>}
-      {error && <ErrorState message={error} onRetry={() => void loadParcels()} retryLabel={t('ui.retry')} />}
+      {(error ?? parcelsError) && (
+        <ErrorState message={error ?? parcelsError ?? ''} onRetry={retry} retryLabel={t('ui.retry')} />
+      )}
 
       {tab === 'addresses' && (
         <TabPanel tab="addresses">
-          <AddressesTab onError={setError} />
+          <AddressesTab key={attempt} onError={setError} />
         </TabPanel>
       )}
 
@@ -96,7 +115,7 @@ export function InboundPage() {
 
       {tab === 'processing' && (
         <TabPanel tab="processing">
-          <ProcessingTab onError={setError} />
+          <ProcessingTab key={attempt} onError={setError} />
         </TabPanel>
       )}
     </>
@@ -250,16 +269,62 @@ function ParcelsTab({
   onError: (m: string) => void;
 }) {
   const { t, locale } = useI18n();
+  const [q, setQ] = useState('');
+  const [registering, setRegistering] = useState(false);
   const selected = useMemo(
-    () => (parcels ?? []).find((p) => p.id === openId) ?? null,
+    () => (parcels ?? []).find((p) => p.id === openId || p.code === openId) ?? null,
     [parcels, openId],
   );
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const list = [...(parcels ?? [])].sort((a, b) => lastStamp(b) - lastStamp(a));
+    if (!needle) return list;
+    return list.filter((p) =>
+      [p.code, p.trackingNumber, p.carrier, p.declaredContents, p.facilityName, parcelStatusLabel(t, p.status)]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(needle)),
+    );
+  }, [parcels, q, t]);
+  const hasParcels = (parcels ?? []).length > 0;
+  const formOpen = registering || (parcels !== null && !hasParcels);
 
   return (
     <>
-      <RegisterParcelForm onRegistered={onChanged} onError={onError} />
+      {formOpen ? (
+        <RegisterParcelForm
+          onRegistered={async (message) => {
+            setRegistering(false);
+            await onChanged(message);
+          }}
+          onError={onError}
+          onCancel={hasParcels ? () => setRegistering(false) : undefined}
+        />
+      ) : (
+        parcels !== null && (
+          <div className="row">
+            <Button variant="primary" icon={<IconPlus />} onClick={() => setRegistering(true)}>
+              {t('inbound.register.title')}
+            </Button>
+            <span className="field-hint">{t('inbound.register.optional')}</span>
+          </div>
+        )
+      )}
 
       <Panel title={t('inbound.parcels.title')} subtitle={t('inbound.parcels.subtitle')} flush>
+        {hasParcels && (
+          <div className="vault-command">
+            <div className="vault-search">
+              <IconSearch />
+              <input
+                type="search"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={t('inbound.parcels.searchPlaceholder')}
+                aria-label={t('inbound.parcels.search')}
+              />
+            </div>
+          </div>
+        )}
         {parcels === null ? (
           <SkeletonTable rows={4} columns={5} />
         ) : parcels.length === 0 ? (
@@ -267,10 +332,26 @@ function ParcelsTab({
             title={t('inbound.parcels.empty')}
             text={t('inbound.parcels.emptyText')}
             icon={<IconInbox />}
+            action={
+              <Button size="sm" onClick={() => navigate({ section: 'inbound', tab: 'addresses' })}>
+                {t('inbound.parcels.seeAddresses')}
+              </Button>
+            }
+          />
+        ) : shown.length === 0 ? (
+          <EmptyState
+            title={t('inbound.parcels.noMatch')}
+            text={t('inbound.parcels.noMatchText')}
+            icon={<IconSearch />}
+            action={
+              <Button size="sm" onClick={() => setQ('')}>
+                {t('vault.clearSearch')}
+              </Button>
+            }
           />
         ) : (
           <ul className="labels" aria-label={t('inbound.parcels.title')}>
-            {parcels.map((p) => {
+            {shown.map((p) => {
               const stamps: Record<(typeof PARCEL_STOPS)[number], string | null> = {
                 expected: p.expectedAt,
                 received: p.receivedAt,
@@ -281,7 +362,7 @@ function ParcelsTab({
               return (
                 <li
                   key={p.id}
-                  className={'label-card' + (p.id === openId ? ' is-selected' : '')}
+                  className={'label-card' + (p.id === selected?.id ? ' is-selected' : '')}
                   onClick={() => onOpen(p.id)}
                 >
                   <div className="label-main">
@@ -334,7 +415,7 @@ function ParcelsTab({
                           onOpen(p.id);
                         }}
                       >
-                        {t('ss.tracking.details')}
+                        {t('inbound.parcels.details')}
                       </Button>
                     </div>
                   </div>
@@ -367,12 +448,19 @@ function ParcelsTab({
   );
 }
 
+function lastStamp(p: ParcelSummary): number {
+  const at = p.processedAt ?? p.openedAt ?? p.receivedAt ?? p.expectedAt;
+  return at ? new Date(at).getTime() : 0;
+}
+
 export function RegisterParcelForm({
   onRegistered,
   onError,
+  onCancel,
 }: {
   onRegistered: (message: string) => Promise<void>;
   onError: (m: string) => void;
+  onCancel?: () => void;
 }) {
   const { t } = useI18n();
   const [addresses, setAddresses] = useState<InboundAddress[]>([]);
@@ -382,6 +470,8 @@ export function RegisterParcelForm({
   const [declaredContents, setDeclaredContents] = useState('');
   const [internationalOrigin, setInternationalOrigin] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -398,6 +488,8 @@ export function RegisterParcelForm({
 
   async function submit() {
     setBusy(true);
+    setSubmitError(null);
+    setTrackingError(null);
     try {
       const created = await api.post<{ code: string }>('/me/parcels', {
         facilityCode,
@@ -412,7 +504,9 @@ export function RegisterParcelForm({
       setInternationalOrigin(false);
       await onRegistered(t('inbound.register.done', { code: created.code }));
     } catch (e) {
-      onError((e as Error).message);
+      const failure = e as Error & { status?: number };
+      if (failure.status === 409) setTrackingError(failure.message);
+      else setSubmitError(failure.message);
     } finally {
       setBusy(false);
     }
@@ -439,10 +533,23 @@ export function RegisterParcelForm({
             </label>
             <label className="field">
               <span className="field-label">{t('inbound.register.carrier')}</span>
-              <input value={carrier} onChange={(e) => setCarrier(e.target.value)} dir="auto" />
+              <input value={carrier} onChange={(e) => setCarrier(e.target.value)} dir="auto" maxLength={60} />
             </label>
-            <Field label={t('inbound.register.tracking')} hint={t('inbound.register.trackingHint')}>
-              <input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} dir="ltr" />
+            <Field
+              label={t('inbound.register.tracking')}
+              hint={t('inbound.register.trackingHint')}
+              error={trackingError ?? undefined}
+            >
+              <input
+                value={trackingNumber}
+                onChange={(e) => {
+                  setTrackingNumber(e.target.value);
+                  setTrackingError(null);
+                }}
+                dir="ltr"
+                maxLength={120}
+                aria-invalid={trackingError ? true : undefined}
+              />
             </Field>
             <label className="field">
               <span className="field-label">{t('inbound.register.contents')}</span>
@@ -450,6 +557,7 @@ export function RegisterParcelForm({
                 value={declaredContents}
                 onChange={(e) => setDeclaredContents(e.target.value)}
                 dir="auto"
+                maxLength={500}
               />
             </label>
           </div>
@@ -465,9 +573,9 @@ export function RegisterParcelForm({
           {internationalOrigin && (
             <p className="field-hint">{t('inbound.register.internationalHint')}</p>
           )}
+          {submitError && <ErrorState message={submitError} />}
         </div>
 
-        {/* The label the parcel will have once it is registered: what is in it, where it is going, and its number as a barcode. */}
         <aside className="request-slip">
           <DrawerTag
             kicker={t('inbound.register.title')}
@@ -498,6 +606,11 @@ export function RegisterParcelForm({
           >
             {t('inbound.register.submit')}
           </Button>
+          {onCancel && (
+            <Button variant="ghost" onClick={onCancel}>
+              {t('ui.cancel')}
+            </Button>
+          )}
         </div>
       </div>
     </Panel>
@@ -520,6 +633,7 @@ function ParcelDrawer({
   onError: (m: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   async function cancel() {
     setBusy(true);
@@ -531,10 +645,12 @@ function ParcelDrawer({
       onError((e as Error).message);
     } finally {
       setBusy(false);
+      setConfirming(false);
     }
   }
 
   return (
+    <>
     <DetailDrawer
       title={parcel.code}
       subtitle={parcelStatusLabel(t, parcel.status)}
@@ -542,8 +658,13 @@ function ParcelDrawer({
       footer={
         <>
           {parcel.status === 'expected' && (
-            <Button variant="danger" disabled={busy} onClick={() => void cancel()}>
+            <Button variant="danger" disabled={busy} onClick={() => setConfirming(true)}>
               {t('inbound.parcel.cancel')}
+            </Button>
+          )}
+          {parcel.status === 'processed' && (
+            <Button variant="primary" icon={<IconVault />} onClick={() => navigate({ section: 'vault', tab: 'active' })}>
+              {t('inbound.parcel.toVault')}
             </Button>
           )}
           <Button variant="ghost" onClick={onClose}>
@@ -600,7 +721,21 @@ function ParcelDrawer({
           </DetailRow>
         )}
       </dl>
+      <p className="field-hint">{t(`inbound.parcel.next.${parcel.status}` as MessageKey)}</p>
     </DetailDrawer>
+    {confirming && (
+      <ConfirmationModal
+        title={t('inbound.parcel.cancelTitle')}
+        body={<p>{t('inbound.parcel.cancelBody', { code: parcel.code })}</p>}
+        confirmLabel={t('inbound.parcel.cancel')}
+        cancelLabel={t('inbound.parcel.keep')}
+        tone="danger"
+        busy={busy}
+        onConfirm={() => void cancel()}
+        onCancel={() => setConfirming(false)}
+      />
+    )}
+    </>
   );
 }
 
@@ -612,9 +747,9 @@ function ProcessingTab({ onError }: { onError: (m: string) => void }) {
     try {
       setWorkflow(await api.get<ParcelWorkflow>('/parcels/workflow/status'));
     } catch (e) {
-      onError((e as Error).message);
+      onError(t('inbound.workflow.failed', { reason: (e as Error).message }));
     }
-  }, [onError]);
+  }, [onError, t]);
 
   useEffect(() => {
     void load();
@@ -638,7 +773,6 @@ function ProcessingTab({ onError }: { onError: (m: string) => void }) {
   return (
     <>
       <section className="queue-board">
-        {/* The two places a parcel waits, along the line it travels; a place with parcels in it is lit. */}
         <ol className="queue" aria-label={t('inbound.tab.processing')}>
           {stations.map((station) => (
             <li className="queue-stop" key={station.key} data-waiting={station.count ? 'true' : 'false'}>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../shared/api';
 import { CashOutQuotePanel, useCashOutQuote } from './MoneyPanels';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
@@ -13,9 +13,14 @@ import {
   type WalletRequest,
   type WalletRequestType,
 } from '../../../shared/walletRequests';
-import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
+import { Button, ErrorState, Field } from '../../../shared/ui/primitives';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { IconArrowDown, IconUpload } from '../../../shared/ui/icons';
+
+export interface SubmittedRequest {
+  code: string;
+  amountMinor: number;
+}
 
 export function WalletRequestForm({
   type,
@@ -26,7 +31,7 @@ export function WalletRequestForm({
   type: WalletRequestType;
   availableMinor: number;
   existingRequests: readonly WalletRequest[];
-  onSubmitted: () => Promise<void> | void;
+  onSubmitted: (created: SubmittedRequest) => Promise<void> | void;
 }) {
   const { t } = useI18n();
   const [amount, setAmount] = useState('');
@@ -34,16 +39,20 @@ export function WalletRequestForm({
   const [destinationAccount, setDestinationAccount] = useState('');
   const [beneficiaryName, setBeneficiaryName] = useState('');
   const [reference, setReference] = useState('');
-  const [documentKey, setDocumentKey] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const form = useRef<HTMLDivElement>(null);
 
   const cents = dollarsToCents(amount);
   const limits = WALLET_REQUEST_LIMITS[type];
-  const quote = useCashOutQuote(type === 'cash_out' ? amount : '');
+  const {
+    quote,
+    failed: quoteFailed,
+    retry: retryQuote,
+  } = useCashOutQuote(type === 'cash_out' ? amount : '');
 
   const problems = useMemo(
     () =>
@@ -57,7 +66,16 @@ export function WalletRequestForm({
         notes,
         availableMinor: type === 'cash_out' ? availableMinor : undefined,
       }),
-    [type, cents, fundingSource, destinationAccount, beneficiaryName, reference, notes, availableMinor],
+    [
+      type,
+      cents,
+      fundingSource,
+      destinationAccount,
+      beneficiaryName,
+      reference,
+      notes,
+      availableMinor,
+    ],
   );
 
   const duplicate = useMemo(
@@ -69,9 +87,18 @@ export function WalletRequestForm({
   const showProblem = (field: string) =>
     submitted || (field === 'amount' && amount.length > 0) ? problemFor(field) : undefined;
 
+  useEffect(() => {
+    if (attempts === 0) return;
+    form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [attempts]);
+
   async function submit() {
     setSubmitted(true);
-    if (problems.length > 0 || cents === null || duplicate) return;
+    if (problems.length > 0 || cents === null) {
+      setAttempts((n) => n + 1);
+      return;
+    }
+    if (duplicate) return;
     setBusy(true);
     setError(null);
     try {
@@ -81,18 +108,18 @@ export function WalletRequestForm({
         currency: 'USD',
         ...(type === 'cash_in'
           ? { fundingSource }
-          : { destinationAccount: destinationAccount.trim(), beneficiaryName: beneficiaryName.trim() }),
+          : {
+              destinationAccount: destinationAccount.trim(),
+              beneficiaryName: beneficiaryName.trim(),
+            }),
         ...(reference.trim() ? { reference: reference.trim() } : {}),
-        ...(documentKey.trim() ? { documentKey: documentKey.trim() } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       });
-      setDone(t('wallet.request.submitted', { code: created.code }));
       setAmount('');
       setReference('');
-      setDocumentKey('');
       setNotes('');
       setSubmitted(false);
-      await onSubmitted();
+      await onSubmitted({ code: created.code, amountMinor: cents });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -101,6 +128,18 @@ export function WalletRequestForm({
   }
 
   const amountProblem = showProblem('amount');
+  const limitText = t('money.limits', {
+    min: formatUsd(limits.minMinor),
+    max: formatUsd(limits.maxMinor),
+  });
+  const amountMessage = amountProblem
+    ? t(amountProblem.messageKey, {
+        ...amountProblem.vars,
+        min: formatUsd(limits.minMinor),
+        max: formatUsd(limits.maxMinor),
+        available: formatUsd(availableMinor),
+      })
+    : null;
 
   // The slip is the request as it will be read, written while it is typed: what is not yet typed is a dash.
   const typed = (value: string, ltr = false) =>
@@ -113,7 +152,10 @@ export function WalletRequestForm({
           { label: t('wallet.request.reference'), value: typed(reference) },
         ]
       : [
-          { label: t('wallet.request.fundingSource'), value: t(`wallet.request.funding.${fundingSource}` as MessageKey) },
+          {
+            label: t('wallet.request.fundingSource'),
+            value: t(`wallet.request.funding.${fundingSource}` as MessageKey),
+          },
           { label: t('wallet.request.reference'), value: typed(reference) },
         ];
   const slipNote =
@@ -125,10 +167,10 @@ export function WalletRequestForm({
             net: formatUsd(quote.netMinor),
           })
         : t('money.feeScheduleShort')
-      : `$${(limits.minMinor / 100).toFixed(2)} – $${(limits.maxMinor / 100).toFixed(2)}`;
+      : limitText;
 
   return (
-    <div className="request-form">
+    <div className="request-form" ref={form}>
       <div className="stack stack--tight request-form-fields">
         <p className="infobox">{t('wallet.request.noBalanceChange')}</p>
 
@@ -149,25 +191,27 @@ export function WalletRequestForm({
               onChange={(e) => {
                 setAmount(e.target.value);
                 setError(null);
-                setDone(null);
               }}
             />
           </div>
           <p className={amountProblem ? 'field-error' : 'field-hint'} id={`wr-amount-hint-${type}`}>
-            {amountProblem
-              ? t(amountProblem.messageKey, amountProblem.vars)
-              : type === 'cash_out'
+            {amountMessage ??
+              (type === 'cash_out'
                 ? t('wallet.request.availableNote', { amount: formatUsd(availableMinor) })
-                : `$${(limits.minMinor / 100).toFixed(2)} – $${(limits.maxMinor / 100).toFixed(2)}`}
+                : limitText)}
           </p>
         </div>
 
-        {type === 'cash_out' && <CashOutQuotePanel quote={quote} />}
+        {type === 'cash_out' && (
+          <CashOutQuotePanel quote={quote} failed={quoteFailed} onRetry={retryQuote} />
+        )}
 
         {type === 'cash_in' ? (
           <Field
             label={t('wallet.request.fundingSource')}
-            error={showProblem('fundingSource') ? t('wallet.request.error.fundingRequired') : undefined}
+            error={
+              showProblem('fundingSource') ? t('wallet.request.error.fundingRequired') : undefined
+            }
           >
             <select value={fundingSource} onChange={(e) => setFundingSource(e.target.value)}>
               {FUNDING_SOURCES.map((source) => (
@@ -182,7 +226,11 @@ export function WalletRequestForm({
             <Field
               label={t('wallet.request.destination')}
               hint={t('wallet.request.destinationHint')}
-              error={showProblem('destinationAccount') ? t('wallet.request.error.destinationRequired') : undefined}
+              error={
+                showProblem('destinationAccount')
+                  ? t('wallet.request.error.destinationRequired')
+                  : undefined
+              }
             >
               <input
                 dir="ltr"
@@ -196,7 +244,9 @@ export function WalletRequestForm({
             <Field
               label={t('wallet.request.beneficiary')}
               error={
-                showProblem('beneficiaryName') ? t('wallet.request.error.beneficiaryRequired') : undefined
+                showProblem('beneficiaryName')
+                  ? t('wallet.request.error.beneficiaryRequired')
+                  : undefined
               }
             >
               <input
@@ -216,10 +266,6 @@ export function WalletRequestForm({
           />
         </Field>
 
-        <Field label={t('wallet.request.document')} hint={t('wallet.request.documentHint')}>
-          <input dir="ltr" value={documentKey} onChange={(e) => setDocumentKey(e.target.value)} />
-        </Field>
-
         <Field
           label={t('wallet.request.notes')}
           error={showProblem('notes') ? t('wallet.request.error.notesTooLong') : undefined}
@@ -231,7 +277,6 @@ export function WalletRequestForm({
             onChange={(e) => setNotes(e.target.value)}
           />
         </Field>
-
       </div>
 
       <aside className="request-slip">
@@ -244,9 +289,10 @@ export function WalletRequestForm({
       </aside>
 
       <div className="stack stack--tight request-form-actions">
-        {duplicate && <ErrorState message={t('wallet.request.error.duplicate', { code: duplicate.code })} />}
+        {duplicate && (
+          <ErrorState message={t('wallet.request.error.duplicate', { code: duplicate.code })} />
+        )}
         {error && <ErrorState message={error} />}
-        {done && <SuccessNote>{done}</SuccessNote>}
 
         <Button
           variant="primary"

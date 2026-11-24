@@ -8,12 +8,15 @@ import { BILLING_PORT, type BillingPort, type ChargeOutcome } from '../../shared
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { WalletService } from '../pay/wallet.service';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
-import { ledgerRecord } from '../pay/pay.schema';
+import { charge, ledgerRecord } from '../pay/pay.schema';
 import { MembershipService } from '../mem/membership.service';
 import { serviceRequest } from './dis.schema';
 import { userAccount } from '../acc/acc.schema';
 import { item } from '../cst/cst.schema';
 import type { AuthUser } from '../sec/auth-context';
+import { CustodyService } from '../cst/custody.service';
+import { usdAmount } from '../shp/shipping-options';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
 
 type ServiceType =
   | 'batch_split'
@@ -32,6 +35,8 @@ type ServiceType =
 type Billed = Exclude<ChargeOutcome, { kind: 'free' }>;
 
 const OPEN_STATUSES = ['requested', 'in_progress'] as const;
+
+export const CUSTOM_QUOTE_ACTION = 'custom';
 
 const SERVICE_LABEL: Record<ServiceType, string> = {
   batch_split: 'A lot split',
@@ -114,6 +119,7 @@ export class ServiceRequestService {
     private readonly wallet: WalletService,
     private readonly ledger: LedgerService,
     private readonly memberships: MembershipService,
+    private readonly custody: CustodyService,
   ) {}
 
   async create(
@@ -127,12 +133,15 @@ export class ServiceRequestService {
       feeActionType?: string;
       free?: boolean;
       allowDuplicate?: boolean;
+      commits?: string;
     },
   ) {
     await this.wallet.assertNotBlocked(input.requesterId);
     if (!input.allowDuplicate) {
       await this.assertNotAlreadyOpen(tx, input.type, input.requesterId, input.itemId);
     }
+    if (input.commits && input.itemId) await assertItemsUncommitted(tx, [input.itemId], input.commits);
+    if (!input.free) await this.ledger.lockWallet(input.requesterId, tx);
     const outcome = input.free
       ? null
       : await this.billing.charge(tx, {
@@ -141,6 +150,17 @@ export class ServiceRequestService {
           itemId: input.itemId,
           feeActionType: input.feeActionType,
         });
+    if (outcome?.kind === 'charged') {
+      const balance = await this.ledger.balanceOf(input.requesterId, tx);
+      if (balance.amount < 0) {
+        throw new AppError(
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `${SERVICE_LABEL[input.type]} costs ${usdAmount(outcome.amountMinor)}, and the wallet holds ${usdAmount(balance.amount + outcome.amountMinor)}. Cash in to your wallet first, then ask again.`,
+          409,
+          { shortfallMinor: -balance.amount },
+        );
+      }
+    }
     const billed = outcome && outcome.kind !== 'free' ? { billed: outcome } : {};
     const [row] = await tx
       .insert(serviceRequest)
@@ -221,6 +241,7 @@ export class ServiceRequestService {
         typeFields: serviceRequest.typeFields,
         createdAt: serviceRequest.createdAt,
         requesterEmail: userAccount.email,
+        requesterUsername: userAccount.username,
         itemDescription: item.description,
       })
       .from(serviceRequest)
@@ -234,13 +255,26 @@ export class ServiceRequestService {
     return this.transition(requestId, 'requested', 'in_progress', 'Only a pending request can be accepted');
   }
 
-  async deny(requestId: string) {
+  async deny(actorId: string, requestId: string) {
     return this.db.transaction(async (tx) => {
       const cur = await this.get(requestId, tx as Database);
       if (!(OPEN_STATUSES as readonly string[]).includes(cur.status)) {
         throw new AppError(ErrorCode.CONFLICT, `That request is already ${cur.status}.`, 409);
       }
-      return this.refundAndCancel(tx as Database, cur, { deniedAt: new Date().toISOString() });
+      const fields = (cur.typeFields as Record<string, unknown>) ?? {};
+      const extra: Record<string, unknown> = {};
+      if (cur.type === 'third_party_grading') {
+        if (fields.approvalState === 'pending') extra.approvalState = 'refused';
+        if (cur.itemId) {
+          const [it] = await tx.select().from(item).where(eq(item.id, cur.itemId)).for('update').limit(1);
+          if (it?.lifecycleState === 'at_grader') {
+            await this.custody.changeState(tx as Database, cur.itemId, 'stored', actorId, 'grading cancelled while at the grader');
+            await this.custody.setHold(tx as Database, cur.itemId, true, actorId);
+            extra.returnedUngraded = true;
+          }
+        }
+      }
+      return this.refundAndCancel(tx as Database, cur, { ...extra, deniedAt: new Date().toISOString() });
     });
   }
 
@@ -266,6 +300,10 @@ export class ServiceRequestService {
         },
         tx,
       );
+      await tx
+        .update(charge)
+        .set({ status: 'refunded', updatedAt: new Date() })
+        .where(and(eq(charge.id, billed.chargeId), eq(charge.status, 'settled')));
       refundedMinor = billed.amountMinor;
     } else if (billed?.kind === 'covered') {
       await this.memberships.restoreCounted(tx, billed.periodId, billed.allowance);
@@ -284,6 +322,7 @@ export class ServiceRequestService {
         tx,
       );
       refundedMinor += paidMinor;
+      await this.markQuoteRefunded(tx, req.id);
     }
     return this.setStatus(tx, req.id, 'cancelled', {
       ...mergeFields,
@@ -318,7 +357,27 @@ export class ServiceRequestService {
           eq(ledgerRecord.referenceId, requestId),
         ),
       );
-    return Math.max(0, Number(row?.net ?? '0'));
+    const [quoted] = await tx
+      .select({ total: sql<string>`coalesce(sum(${charge.amount}), 0)::text` })
+      .from(charge)
+      .where(
+        and(
+          eq(charge.userId, userId),
+          eq(charge.referenceId, requestId),
+          eq(charge.actionType, CUSTOM_QUOTE_ACTION),
+          inArray(charge.status, ['settled', 'refunded']),
+        ),
+      );
+    return Math.max(0, Number(row?.net ?? '0') + Number(quoted?.total ?? '0'));
+  }
+
+  async markQuoteRefunded(tx: Database, requestId: string): Promise<void> {
+    await tx
+      .update(charge)
+      .set({ status: 'refunded', updatedAt: new Date() })
+      .where(
+        and(eq(charge.referenceId, requestId), eq(charge.actionType, CUSTOM_QUOTE_ACTION), eq(charge.status, 'settled')),
+      );
   }
 
   assertAccepted(req: { status: string }): void {

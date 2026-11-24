@@ -1294,6 +1294,21 @@ time,
   margin: calc(-1 * var(--sp-1));
 }
 
+.ctx-tabs[data-more-end='true'] {
+  -webkit-mask-image: linear-gradient(to right, currentColor calc(100% - 3rem), transparent);
+  mask-image: linear-gradient(to right, currentColor calc(100% - 3rem), transparent);
+}
+
+.ctx-tabs[data-more-start='true'] {
+  -webkit-mask-image: linear-gradient(to right, transparent, currentColor 3rem);
+  mask-image: linear-gradient(to right, transparent, currentColor 3rem);
+}
+
+.ctx-tabs[data-more-start='true'][data-more-end='true'] {
+  -webkit-mask-image: linear-gradient(to right, transparent, currentColor 3rem, currentColor calc(100% - 3rem), transparent);
+  mask-image: linear-gradient(to right, transparent, currentColor 3rem, currentColor calc(100% - 3rem), transparent);
+}
+
 .ctx-tabs::-webkit-scrollbar {
   display: none;
 }
@@ -1531,6 +1546,10 @@ input[type='search'] {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--sp-4);
+}
+
+.form-grid > * {
+  min-width: 0;
 }
 
 .check {
@@ -2491,6 +2510,23 @@ input[type='search'] {
   margin-block-start: var(--sp-3);
 }
 
+.drawer-body .empty,
+.drawer .empty {
+  gap: var(--sp-2);
+  padding: var(--sp-6) var(--sp-2);
+}
+
+.drawer-body .empty-title,
+.drawer .empty-title {
+  font-size: var(--fs-md);
+}
+
+.drawer-body .empty-icon,
+.drawer .empty-icon {
+  inline-size: 48px;
+  block-size: 72px;
+}
+
 .errorbox {
   display: flex;
   align-items: flex-start;
@@ -2988,6 +3024,27 @@ input[type='search'] {
   color: var(--brass);
 }
 
+.tier-price {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--sp-2);
+}
+
+.tier-price-label {
+  font-size: 0.75em;
+  color: var(--brass);
+}
+
+.tier-price-list {
+  font-size: 0.8em;
+  color: var(--muted-foreground);
+}
+
+.tier-table th[scope='row'] .pill {
+  margin-inline-start: var(--sp-2);
+}
+
 .mem-uncovered li {
   padding-inline-start: var(--sp-4);
   border-inline-start: 2px solid var(--line-strong);
@@ -3013,6 +3070,24 @@ input[type='search'] {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-3);
+}
+
+.time-window .field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+}
+
+.time-window .field-row > .field,
+.time-window .field-row input {
+  min-inline-size: 0;
+  inline-size: 100%;
+}
+
+@media (max-width: 360px) {
+  .time-window .field-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .check-list {
@@ -3562,6 +3637,32 @@ input[type='search'] {
   border-block-start: 1px solid var(--border);
 }
 
+.label-sheet-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.label-sheet-steps {
+  padding-inline-start: var(--sp-6);
+  margin: 0;
+}
+
+.label-sheet-printers {
+  margin: 0;
+}
+
+.label-sheet-printers dt {
+  font-weight: 600;
+}
+
+.label-sheet-printers dd {
+  margin: 0 0 var(--sp-2);
+}
+
 .visually-hidden {
   position: absolute;
   inline-size: 1px;
@@ -4050,6 +4151,45 @@ input[type='search'] {
   color: var(--text-2);
 }
 
+.legal-prose {
+  font-size: var(--fs-base);
+  line-height: 1.6;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.legal-prose p,
+.legal-prose ul,
+.legal-prose dl {
+  margin: 0 0 var(--sp-3);
+}
+
+.legal-prose ul {
+  padding-inline-start: var(--sp-5);
+}
+
+.legal-prose dl > div {
+  display: grid;
+  grid-template-columns: minmax(8em, 12em) minmax(0, 1fr);
+  gap: var(--sp-1) var(--sp-4);
+  padding-block: var(--sp-1);
+}
+
+.legal-prose dt {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.legal-prose dd {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .legal-prose dl > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 900px) {
   .legal-body {
     grid-template-columns: minmax(0, 1fr);
@@ -4130,7 +4270,9 @@ input[type='search'] {
     break-inside: avoid;
   }
 
-  .legal-pre {
+  .legal-pre,
+  .legal-prose,
+  .legal-prose dt {
     /* design-lint-allow: print. Ink on paper is black, whatever the reader had
        their screen set to. */
     color: #000;

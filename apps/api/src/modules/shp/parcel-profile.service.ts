@@ -18,6 +18,7 @@ import {
 import type { Destination, ParcelProfile } from './carriers';
 import { regionRequired } from './regions';
 import { checkBox, chooseBox, shippingBox, type BoxProblem, type ShippingBox } from './boxes';
+import { itemStateWords } from '../../shared/item-state-words';
 
 export interface CustomsLine {
   itemId: string;
@@ -70,7 +71,7 @@ export class ParcelProfileService {
       if (it.ownerId !== userId) throw AppError.forbidden(`Item ${it.serialNumber} is not yours`);
       if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, `Item ${it.serialNumber} is on hold`, 409);
       if (it.lifecycleState !== 'stored') {
-        throw new AppError(ErrorCode.CONFLICT, `Item ${it.serialNumber} is ${it.lifecycleState}, not stored`, 409);
+        throw new AppError(ErrorCode.CONFLICT, `Item ${it.serialNumber} is ${itemStateWords(it.lifecycleState)}, so it cannot be shipped.`, 409);
       }
     }
     return rows;

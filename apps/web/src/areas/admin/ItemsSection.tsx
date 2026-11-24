@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { api } from '../../shared/api';
 import { Barcode, BarcodePrintButton } from '../../shared/Barcode';
 import { CardPhotoButton, CardPhotoThumb } from '../../shared/CardPhoto';
 import { useI18n } from '../../shared/i18n';
 import { itemClassOption } from '../../shared/itemClasses';
+import { fullName } from '../../shared/names';
 import { STATE_META, stateLabel } from '../../shared/itemTimeline';
 import { useNavigation, useRoute } from '../../shared/routing';
 import {
   Button,
   EmptyState,
   ErrorState,
+  Field,
   Panel,
   SkeletonTable,
   StatusBadge,
@@ -20,6 +22,9 @@ import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { Code } from '../../shared/ui/Serial';
 import { IconBox } from '../../shared/ui/icons';
 import type { AdminUser } from './UsersSection';
+import { LoadFailure, NoMatch, RollTools, matchesQuery } from './RollTools';
+
+type ItemSort = 'newest' | 'name' | 'owner' | 'state';
 
 export interface AdminItem {
   id: string;
@@ -56,12 +61,16 @@ const nameOf = (description: string, typeClass: string) =>
  */
 export function ItemsSection({
   items,
+  loadError = null,
+  onRetry,
   users,
   onChanged,
   onSaved,
   onError,
 }: {
   items: AdminItem[] | null;
+  loadError?: string | null;
+  onRetry?: () => void;
   users: AdminUser[];
   onChanged: (item: AdminItem) => void;
   onSaved: (message: string) => void;
@@ -72,6 +81,48 @@ export function ItemsSection({
   const { openRecord, closeRecord } = useNavigation(route);
   const openId = route.params.item ?? null;
   const open = items?.find((i) => i.id === openId) ?? null;
+  const [query, setQuery] = useState('');
+  const [stateFilter, setStateFilter] = useState('all');
+  const [holdOnly, setHoldOnly] = useState(false);
+  const [sort, setSort] = useState<ItemSort>('newest');
+
+  const presentStates = useMemo(
+    () => [...new Set((items ?? []).map((i) => i.lifecycleState))].sort(),
+    [items],
+  );
+
+  const shown = useMemo(() => {
+    const list = (items ?? []).filter(
+      (i) =>
+        (stateFilter === 'all' || i.lifecycleState === stateFilter) &&
+        (!holdOnly || i.holdFlag) &&
+        matchesQuery(
+          query,
+          i.description,
+          i.serialNumber,
+          i.barcode,
+          i.ownerEmail,
+          i.conditionGrade,
+        ),
+    );
+    const byName = (a: AdminItem, b: AdminItem) =>
+      nameOf(a.description, a.typeClass).localeCompare(nameOf(b.description, b.typeClass)) ||
+      a.serialNumber.localeCompare(b.serialNumber);
+    if (sort === 'newest') return list;
+    return list.sort((a, b) =>
+      sort === 'owner'
+        ? (a.ownerEmail ?? '').localeCompare(b.ownerEmail ?? '') || byName(a, b)
+        : sort === 'state'
+          ? a.lifecycleState.localeCompare(b.lifecycleState) || byName(a, b)
+          : byName(a, b),
+    );
+  }, [items, query, stateFilter, holdOnly, sort]);
+
+  const clear = () => {
+    setQuery('');
+    setStateFilter('all');
+    setHoldOnly(false);
+  };
 
   return (
     <>
@@ -80,71 +131,121 @@ export function ItemsSection({
         subtitle={t('admin.items.subtitle')}
         flush
       >
-        {items === null ? (
+        {loadError ? (
+          <LoadFailure message={loadError} onRetry={() => onRetry?.()} />
+        ) : items === null ? (
           <SkeletonTable rows={5} columns={4} />
         ) : items.length === 0 ? (
           <EmptyState title={t('admin.items.empty')} icon={<IconBox />} />
         ) : (
-          <div className="dt-wrap dt-wrap--stack">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">{t('admin.items.col.description')}</th>
-                  <th scope="col">{t('admin.items.col.owner')}</th>
-                  <th scope="col">{t('admin.items.col.lifecycle')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => {
-                  const meta = STATE_META[item.lifecycleState];
-                  return (
-                    <tr
-                      key={item.id}
-                      className={'is-clickable' + (item.id === openId ? ' is-selected' : '')}
-                      onClick={() => openRecord('item', item.id)}
-                    >
-                      <td data-label={t('admin.items.col.description')} className="dt-primary">
-                        <div className="roll-account-text">
-                          <button
-                            type="button"
-                            className="register-link"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openRecord('item', item.id);
-                            }}
-                          >
-                            {nameOf(item.description, item.typeClass)}
-                          </button>
-                          <span className="dt-sub">
-                            <Code value={item.barcode} />
-                            {item.conditionGrade && (
-                              <>
-                                {' · '}
-                                <span dir="auto">{item.conditionGrade}</span>
-                              </>
-                            )}
-                          </span>
-                        </div>
-                      </td>
-                      <td data-label={t('admin.items.col.owner')}>
-                        <span dir="ltr">{item.ownerEmail ?? '—'}</span>
-                      </td>
-                      <td data-label={t('admin.items.col.lifecycle')}>
-                        <div className="row roll-status">
-                          <StatusBadge tone={meta?.tone ?? 'neutral'}>
-                            {stateLabel(t, item.lifecycleState)}
-                          </StatusBadge>
-                          {item.holdFlag && (
-                            <StatusBadge tone="error">{t('admin.items.col.hold')}</StatusBadge>
-                          )}
-                        </div>
-                      </td>
+          <>
+            <div className="panel-body">
+              <RollTools
+                label={t('admin.items.tools')}
+                query={query}
+                onQuery={setQuery}
+                placeholder={t('admin.items.search')}
+                shown={shown.length}
+                total={items.length}
+                sort={{
+                  value: sort,
+                  onChange: setSort,
+                  options: [
+                    { key: 'newest', label: t('admin.items.sort.newest') },
+                    { key: 'name', label: t('admin.items.sort.name') },
+                    { key: 'owner', label: t('admin.items.sort.owner') },
+                    { key: 'state', label: t('admin.items.sort.state') },
+                  ],
+                }}
+              >
+                <Field label={t('admin.items.filterState')} className="field--compact">
+                  <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)}>
+                    <option value="all">{t('admin.requests.filterAll')}</option>
+                    {presentStates.map((s) => (
+                      <option key={s} value={s}>
+                        {stateLabel(t, s)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={holdOnly}
+                    onChange={(e) => setHoldOnly(e.target.checked)}
+                  />
+                  {t('admin.items.holdOnly')}
+                </label>
+              </RollTools>
+            </div>
+            {shown.length === 0 ? (
+              <NoMatch query={query} onClear={clear} />
+            ) : (
+              <div className="dt-wrap dt-wrap--stack">
+                <table className="data-table">
+                  <caption className="sr-only">
+                    {t('admin.items.heading', { count: shown.length })}
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t('admin.items.col.description')}</th>
+                      <th scope="col">{t('admin.items.col.owner')}</th>
+                      <th scope="col">{t('admin.items.col.lifecycle')}</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {shown.map((item) => {
+                      const meta = STATE_META[item.lifecycleState];
+                      return (
+                        <tr
+                          key={item.id}
+                          className={'is-clickable' + (item.id === openId ? ' is-selected' : '')}
+                          onClick={() => openRecord('item', item.id)}
+                        >
+                          <td data-label={t('admin.items.col.description')} className="dt-primary">
+                            <div className="roll-account-text">
+                              <button
+                                type="button"
+                                className="register-link"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openRecord('item', item.id);
+                                }}
+                              >
+                                {nameOf(item.description, item.typeClass)}
+                              </button>
+                              <span className="dt-sub">
+                                <Code value={item.barcode} />
+                                {item.conditionGrade && (
+                                  <>
+                                    {' · '}
+                                    <span dir="auto">{item.conditionGrade}</span>
+                                  </>
+                                )}
+                              </span>
+                            </div>
+                          </td>
+                          <td data-label={t('admin.items.col.owner')}>
+                            <span dir="ltr">{item.ownerEmail ?? '—'}</span>
+                          </td>
+                          <td data-label={t('admin.items.col.lifecycle')}>
+                            <div className="row roll-status">
+                              <StatusBadge tone={meta?.tone ?? 'neutral'}>
+                                {stateLabel(t, item.lifecycleState)}
+                              </StatusBadge>
+                              {item.holdFlag && (
+                                <StatusBadge tone="error">{t('admin.items.col.hold')}</StatusBadge>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </Panel>
 
@@ -344,11 +445,15 @@ function ItemDrawer({
               aria-label={t('admin.items.col.owner')}
               onChange={(e) => setOwnerId(e.target.value)}
             >
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.email}
-                </option>
-              ))}
+              {[...users]
+                .sort((a, b) => a.email.localeCompare(b.email))
+                .map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {fullName(u.firstName, u.lastName)
+                      ? `${u.email} (${fullName(u.firstName, u.lastName)})`
+                      : u.email}
+                  </option>
+                ))}
             </select>
           </label>
           <label className="field">

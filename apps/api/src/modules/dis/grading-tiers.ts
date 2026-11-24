@@ -1,4 +1,4 @@
-import { formatMinor } from '../../shared/money';
+import { usdAmount } from '../shp/shipping-options';
 
 export interface GradingTier {
   key: string;
@@ -66,10 +66,6 @@ export function gradingTier(key: string): GradingTier | undefined {
   return BY_KEY.get(key);
 }
 
-export function isKnownTier(key: string): boolean {
-  return BY_KEY.has(key);
-}
-
 export function tierFeeAction(key: string): string {
   return `grading_fee:${key}`;
 }
@@ -88,13 +84,13 @@ export function checkTier(tier: GradingTier, declaredMinor: number): TierProblem
   if (declaredMinor > tier.maxDeclaredMinor) {
     problems.push({
       field: 'declaredMinor',
-      message: `${tier.label} covers declared values up to ${formatMinor(tier.maxDeclaredMinor)}. Choose a higher tier.`,
+      message: `${tier.label} covers declared values up to ${usdAmount(tier.maxDeclaredMinor)}. Choose a higher tier.`,
     });
   }
   if (tier.requiresApproval && declaredMinor < WALKTHROUGH_THRESHOLD_MINOR) {
     problems.push({
       field: 'tier',
-      message: `${tier.label} is for cards declared above ${formatMinor(WALKTHROUGH_THRESHOLD_MINOR)}. A lower tier costs less and covers this.`,
+      message: `${tier.label} is for cards declared at or above ${usdAmount(WALKTHROUGH_THRESHOLD_MINOR)}. A lower tier costs less and covers this.`,
     });
   }
   return problems;

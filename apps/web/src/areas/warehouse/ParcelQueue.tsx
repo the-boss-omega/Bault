@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../shared/api';
 import { useI18n, type TranslateFn } from '../../shared/i18n';
 import { formatDate } from '../../shared/money';
@@ -22,6 +22,11 @@ import {
 } from '../../shared/ui/primitives';
 import { IconBox, IconInbox, IconShipping } from '../../shared/ui/icons';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
+import { LabelSheetButton } from './LabelSheet';
+import { ListSearch, NoMatch, matchesQuery } from './ListTools';
+
+type ParcelSort = 'oldest' | 'newest' | 'status';
+const STATUS_ORDER = ['unclaimed', 'received', 'opened', 'expected'];
 
 export function ParcelQueue({
   onChanged,
@@ -34,16 +39,33 @@ export function ParcelQueue({
   const [rows, setRows] = useState<ParcelQueueRow[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState<ParcelSort>('oldest');
 
   const load = useCallback(async () => {
     try {
       setRows(await api.get<ParcelQueueRow[]>('/parcels'));
-      setError(null);
+      setLoadError(null);
     } catch (e) {
-      setError((e as Error).message);
-      setRows([]);
+      setLoadError((e as Error).message);
+      setRows((prev) => prev ?? []);
     }
   }, []);
+
+  const shown = useMemo(() => {
+    const list = (rows ?? []).filter((r) =>
+      matchesQuery(q, r.code, r.trackingNumber, r.addressedTo, r.ownerUsername, r.facilityName),
+    );
+    const when = (r: ParcelQueueRow) => (r.receivedAt ? Date.parse(r.receivedAt) : Number.MAX_SAFE_INTEGER);
+    return [...list].sort((a, b) => {
+      if (sort === 'status') {
+        const d = STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
+        if (d !== 0) return d;
+      }
+      return sort === 'newest' ? when(b) - when(a) : when(a) - when(b);
+    });
+  }, [rows, q, sort]);
 
   useEffect(() => {
     void load();
@@ -58,26 +80,63 @@ export function ParcelQueue({
         await load();
         await onChanged?.();
       } catch (e) {
+        setMessage(null);
         setError((e as Error).message);
+        throw e;
       }
     },
     [load, onChanged],
   );
 
   return (
-    <Panel title={t('parcelQueue.title')} subtitle={t('parcelQueue.subtitle')} flush>
+    <Panel id="parcel-queue" title={t('parcelQueue.title')} subtitle={t('parcelQueue.subtitle')} flush>
         {(message || error) && (
           <div style={{ padding: 'var(--sp-4) var(--sp-6) 0' }}>
             {error ? <ErrorState message={error} /> : message ? <SuccessNote>{message}</SuccessNote> : null}
           </div>
         )}
+        {loadError && (
+          <div style={{ padding: 'var(--sp-4) var(--sp-6) 0' }}>
+            <ErrorState
+              title={t('warehouse.parcels.loadFailed')}
+              message={loadError}
+              onRetry={() => void load()}
+              retryLabel={t('ui.retry')}
+            />
+          </div>
+        )}
+        {rows !== null && rows.length > 0 && (
+          <ListSearch
+            value={q}
+            onChange={setQ}
+            label={t('warehouse.parcels.search')}
+            placeholder={t('warehouse.parcels.searchPlaceholder')}
+            shown={shown.length}
+            total={rows.length}
+          >
+            <select
+              className="vault-sort"
+              value={sort}
+              aria-label={t('warehouse.list.sort')}
+              onChange={(e) => setSort(e.target.value as ParcelSort)}
+            >
+              <option value="oldest">{t('warehouse.parcels.sort.oldest')}</option>
+              <option value="newest">{t('warehouse.parcels.sort.newest')}</option>
+              <option value="status">{t('warehouse.parcels.sort.status')}</option>
+            </select>
+          </ListSearch>
+        )}
 
         {rows === null ? (
           <SkeletonTable rows={4} columns={6} />
         ) : rows.length === 0 ? (
-          <EmptyState title={t('parcelQueue.empty')} text={t('parcelQueue.emptyText')} icon={<IconInbox />} />
+          loadError ? null : (
+            <EmptyState title={t('parcelQueue.empty')} text={t('parcelQueue.emptyText')} icon={<IconInbox />} />
+          )
+        ) : shown.length === 0 ? (
+          <NoMatch onClear={() => setQ('')} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
@@ -93,17 +152,20 @@ export function ParcelQueue({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {shown.map((row) => (
                   <tr key={row.id} className={row.status === 'unclaimed' ? 'is-alert' : undefined}>
-                    <td>
+                    <td data-label={t('parcelQueue.col.parcel')} className="dt-primary">
                       <Code value={row.code} />
                       {row.trackingNumber && (
                         <span className="dt-sub">
                           <Code value={row.trackingNumber} />
                         </span>
                       )}
+                      <span className="dt-sub">
+                        <LabelSheetButton targets={{ kind: 'parcel', id: row.id, code: row.code }} />
+                      </span>
                     </td>
-                    <td>
+                    <td data-label={t('parcelQueue.col.owner')}>
                       {row.ownerUsername ? (
                         <Code value={`@${row.ownerUsername}`} />
                       ) : (
@@ -113,19 +175,21 @@ export function ParcelQueue({
                         </span>
                       )}
                     </td>
-                    <td>
+                    <td data-label={t('parcelQueue.col.where')}>
                       {row.facilityName ?? '—'}
                       {row.facilityRole === 'forwarding' && !row.forwardedAt && (
                         <span className="dt-sub">{t('parcelQueue.needsForwarding')}</span>
                       )}
                     </td>
-                    <td className="td-tight">
+                    <td data-label={t('parcelQueue.col.received')} className="td-tight">
                       <span className="date">
                         {row.receivedAt ? formatDate(row.receivedAt, locale) : '—'}
                       </span>
                     </td>
-                    <td className="td-end num">{row.itemCount.toLocaleString()}</td>
-                    <td>
+                    <td data-label={t('parcelQueue.col.units')} className="td-end num">
+                      {row.itemCount.toLocaleString('en-US')}
+                    </td>
+                    <td data-label={t('parcelQueue.col.status')}>
                       <StatusBadge tone={PARCEL_TONE[row.status] ?? 'neutral'}>
                         {parcelStatusLabel(t, row.status)}
                       </StatusBadge>
@@ -133,7 +197,7 @@ export function ParcelQueue({
                         <span className="dt-sub">{t('parcelQueue.international')}</span>
                       )}
                     </td>
-                    <td>
+                    <td data-label={t('parcelQueue.col.actions')}>
                       <ParcelActions row={row} onAct={act} onBookContents={onBookContents} t={t} />
                     </td>
                   </tr>
@@ -178,7 +242,11 @@ function ParcelActions({
               size="sm"
               variant="secondary"
               icon={<IconShipping />}
-              onClick={() => void onAct(() => api.post(`/parcels/${row.id}/forward`), t('parcelQueue.forwarded'))}
+              onClick={() =>
+                void onAct(() => api.post(`/parcels/${row.id}/forward`), t('parcelQueue.forwarded')).catch(
+                  () => undefined,
+                )
+              }
             >
               {t('parcelQueue.action.forward')}
             </Button>
@@ -187,11 +255,23 @@ function ParcelActions({
       );
     }
     const ok = isValidUsername(normalizeUsername(claimUsername));
+    const typed = claimUsername.trim() !== '';
     return (
       <div className="fulfill-form">
         <div className="field-row">
-          <Field label={t('parcelQueue.receive.label')}>
-            <input value={claimUsername} onChange={(e) => setClaimUsername(e.target.value)} dir="ltr" />
+          <Field
+            label={t('warehouse.parcels.claimOwner')}
+            hint={t('warehouse.parcels.claimHint', { label: row.addressedTo || t('parcelQueue.noLabel') })}
+            error={typed && !ok ? t('warehouse.intake.ownerUsernameInvalid') : undefined}
+          >
+            <input
+              value={claimUsername}
+              onChange={(e) => setClaimUsername(e.target.value)}
+              aria-invalid={typed && !ok}
+              autoComplete="off"
+              spellCheck={false}
+              dir="ltr"
+            />
           </Field>
         </div>
         <div className="actions">
@@ -206,7 +286,10 @@ function ParcelActions({
                     ownerUsername: normalizeUsername(claimUsername),
                   }),
                 t('parcelQueue.claimed'),
-              ).then(() => setClaiming(false))
+              ).then(
+                () => setClaiming(false),
+                () => undefined,
+              )
             }
           >
             {t('parcelQueue.action.attribute')}
@@ -231,7 +314,11 @@ function ParcelActions({
             size="sm"
             variant="primary"
             icon={<IconShipping />}
-            onClick={() => void onAct(() => api.post(`/parcels/${row.id}/forward`), t('parcelQueue.forwarded'))}
+            onClick={() =>
+              void onAct(() => api.post(`/parcels/${row.id}/forward`), t('parcelQueue.forwarded')).catch(
+                () => undefined,
+              )
+            }
           >
             {t('parcelQueue.action.forward')}
           </Button>
@@ -286,8 +373,11 @@ function ParcelActions({
                     conditionNotes: conditionNotes.trim(),
                     photoKeys: photoKeys(conditionPhotos),
                   }),
-                t('parcelQueue.opened'),
-              ).then(() => setOpening(false))
+                t('warehouse.parcels.openedNext', { code: row.code }),
+              ).then(
+                () => setOpening(false),
+                () => undefined,
+              )
             }
           >
             {t('parcelQueue.action.open')}
@@ -295,7 +385,7 @@ function ParcelActions({
           <Button size="sm" variant="ghost" onClick={() => setOpening(false)}>
             {t('ui.cancel')}
           </Button>
-          {!complete && <span className="field-hint">{t('warehouse.required')}</span>}
+          {!complete && <span className="field-hint">{t('warehouse.parcels.openNeedsNotes')}</span>}
         </div>
       </div>
     );

@@ -78,6 +78,9 @@ describe('the balance is always the sum of the ledger', () => {
     const requested = await walletAndLedger(collector);
     expect(requested.balance).toBe(requested.derived);
 
+    const cancelled = await collector.post(`/finance/wallet-requests/${withdrawal.body.requestId}/cancel`, {});
+    expect(cancelled.status).toBe(201);
+
     const end = await walletAndLedger(collector);
     expect(end.balance).toBe(end.derived);
   });

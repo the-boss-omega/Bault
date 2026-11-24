@@ -385,6 +385,7 @@ describe('packing a shipment from its pick list', () => {
     await user.type(scan, 'SN-ONE-0001{Enter}');
     await user.type(scan, 'SN-TWO-0002{Enter}');
     await user.type(screen.getByLabelText('Notes'), 'Rigid mailer.');
+    await user.type(screen.getByLabelText('Package weight (grams)'), '120');
     await user.click(screen.getByRole('button', { name: 'Complete' }));
     await waitFor(() => expect(outcomeOf(docket)).toHaveTextContent('Dispatched'));
     expect(outcomeOf(docket)).toHaveTextContent('SHP-PACK0001 · SBX-1');
@@ -422,6 +423,7 @@ describe('sending a shipment twice', () => {
     await user.type(screen.getByLabelText('Shipment ID'), 'shp-1{Enter}');
     await user.type(await screen.findByLabelText(/scan each item/i), 'SN-ONE-0001{Enter}');
     await user.type(screen.getByLabelText('Notes'), 'Rigid mailer.');
+    await user.type(screen.getByLabelText('Package weight (grams)'), '120');
 
     const send = screen.getByRole('button', { name: 'Complete' });
     await user.click(send);
@@ -471,7 +473,7 @@ describe('receiving an arrival', () => {
     await user.click(screen.getByRole('button', { name: 'Receive parcel' }));
     const outcome = outcomeOf(docketOf(container));
     await waitFor(() => expect(outcome).toHaveTextContent('Received'));
-    expect(outcome).toHaveTextContent('PKG-NEW00001 · unclaimed');
+    expect(outcome).toHaveTextContent('PKG-NEW00001 · Unclaimed');
     expect(screen.getByLabelText('Username on the parcel')).toHaveValue('');
   });
 

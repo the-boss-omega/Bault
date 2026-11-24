@@ -129,7 +129,7 @@ const ENTRIES: Draft[] = [
         '**A processing fee per parcel**, for receiving, opening and cataloguing it.',
         '**An intake fee per item**, which depends on what the item is — a single card and a sealed case are not the same work.',
       ),
-      p('Both are charged to your wallet. A membership may include a number of each per month.'),
+      p('Both are charged to your wallet, at the price for your tier (see "What are Bronze, Silver and Gold?").'),
     ],
   },
   {
@@ -180,7 +180,7 @@ const ENTRIES: Draft[] = [
       p('Storage is not billed by the day. The included period, the length of each period after it, and the share of the intake fee charged per period are pricing rules, shown on [[Prices|#/faq/prices]].'),
       p('Oversized items are on shorter, steeper terms, because shelf space is what a vault runs out of. Whether an item counts as oversized is decided from its type when it is booked in and does not change afterwards.'),
       p('Open any item in [[your vault|#/vault/active]] to see its own terms, what storage has cost it so far and when the next charge falls. Each charge appears on your ledger and records the terms it was billed under.'),
-      p('A membership includes storage for a number of items; see "What does a membership include?".'),
+      p('Storage is charged at the price for your tier, so a Silver or Gold account pays less for each period; see "What are Bronze, Silver and Gold?".'),
     ],
   },
   {
@@ -241,7 +241,7 @@ const ENTRIES: Draft[] = [
       'Ask for a cash-out under Wallet. A person reviews and completes it. The fee is 6% (at least $0.99) up to $100, and $5 plus 1% above that; the form quotes it before you ask.',
     blocks: [
       p('Open [[Wallet > Cash out|#/wallet/cash-out]]. The quote shows the fee and what lands in your account before you submit, using the same calculation that charges it.'),
-      p('The fee is its own entry on your ledger, next to the amount paid out, so both numbers are visible. A membership may waive it.'),
+      p('The fee is its own entry on your ledger, next to the amount paid out, so both numbers are visible. It is a fixed schedule, the same for every tier.'),
       p('Your balance has to cover the amount and the fee when the request is completed, not only when it is submitted.'),
     ],
   },
@@ -370,9 +370,9 @@ const ENTRIES: Draft[] = [
     category: 'services',
     availability: 'adapted',
     baultNote:
-      'Choose a tier and state what the item is worth. Items go to the grader in batches; while away the item shows as "At the grader" and cannot be sold, swapped or shipped.',
+      'Choose a grading service and state what the item is worth. Items go to the grader in batches; while away the item shows as "At the grader" and cannot be sold, swapped or shipped.',
     blocks: [
-      p('A tier is a turnaround and a ceiling on declared value. The value you state decides which tiers you can use, and the top tier is refused for an item below its threshold. Each tier’s price is on [[Prices|#/faq/prices]].'),
+      p('Each grading service is a turnaround and a ceiling on declared value, and is not the same thing as your account’s Bronze, Silver or Gold tier. The value you state decides which services you can use, and the fastest one is refused for an item below its threshold. Each service’s price is on [[Prices|#/faq/prices]], at the price for your tier.'),
       p('When the grade comes back it is written onto the item with its certificate number, and the item goes back on the shelf.'),
     ],
   },
@@ -398,7 +398,7 @@ const ENTRIES: Draft[] = [
       'List an item with a price. Buyers can buy it outright or make an offer you accept, reject or counter. On a sale Card Embassy takes a commission from the seller.',
     blocks: [
       p('Listings and offers are under [[Marketplace|#/marketplace/browse]]. A listing shows the item’s condition grade and photographs.'),
-      p('A sale moves the money and the ownership in one step: the buyer is debited, you are credited the price less the commission, and the item is yours or theirs — never half of each. The commission rate is on [[Prices|#/faq/prices]]; a membership may waive it on part of your sales.'),
+      p('A sale moves the money and the ownership in one step: the buyer is debited, you are credited the price less the commission, and the item is yours or theirs — never half of each. The commission rate is on [[Prices|#/faq/prices]], and a Silver or Gold seller pays less of it.'),
     ],
   },
   {
@@ -433,20 +433,22 @@ const ENTRIES: Draft[] = [
       'For a private deal of at least $500: the buyer’s money is held, the item is sent to Card Embassy and inspected, and only then is the money released to the seller. The fee is 1% of the agreed value, at least $25, paid by whoever raised the deal.',
     blocks: [
       p('Raise a deal under [[Escrow|#/escrow]]. The other side can be a Card Embassy account or somebody outside Card Embassy, named by their name and email.'),
-      p('When the deal settles the item goes into the buyer’s vault, or is shipped to a buyer who has none. If the deal is called off, held money goes back to the buyer’s wallet. A membership may waive the fee.'),
+      p('When the deal settles the item goes into the buyer’s vault, or is shipped to a buyer who has none. If the deal is called off, held money goes back to the buyer’s wallet. The escrow fee is a fixed schedule, the same for every tier.'),
     ],
   },
 
   {
-    id: 'memberships',
-    question: 'What does a membership include?',
+    id: 'tiers',
+    question: 'What are Bronze, Silver and Gold?',
     category: 'account',
     availability: 'adapted',
     baultNote:
-      'A monthly fee covers a fixed allowance of services — intakes, parcel processing, storage for a number of items, insured shipments and more, depending on the tier. Allowances do not roll over, and there is no overage rate.',
+      'They are price levels, not subscriptions. There is nothing to buy or cancel: your account is Bronze, Silver or Gold from how much you used Card Embassy in the last 90 days, and a higher tier pays less for every priced action.',
     blocks: [
-      p('The tiers, what each includes and the monthly price are under [[Membership|#/membership]].'),
-      p('When an allowance runs out, the service is charged at its ordinary price, and only when you ask for it. A membership renews each month at the price in force at renewal. A move to a cheaper tier takes effect at the end of the current month.'),
+      p('Every account starts at Bronze and pays the list price. Ten charges or $500.00 spent in the last 90 days make it Silver, which takes 10% off; thirty charges or $2,000.00 make it Gold, which takes 20% off. A charge counts once it is settled, and a charge that was refunded does not count.'),
+      p('Your tier is worked out again straight after each charge and every night, so it rises the moment you reach the next level and falls back when older charges pass 90 days. A change of tier never alters a price you were already charged.'),
+      p('Every price you are shown is already the price for your tier, marked with the tier and with the Bronze price struck through beside it. Fixed fee schedules, such as the cash-out fee, the escrow fee and the chargeback fee, are the same for every tier. Your tier, the counts behind it and what reaches the next one are under [[Your tier|#/tier]].'),
+      p('Memberships are no longer sold. A paid membership keeps its allowances until the end of the period that was paid for, and then the account simply keeps its tier.'),
     ],
   },
   {

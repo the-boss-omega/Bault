@@ -299,7 +299,7 @@ describe('removing commons acts only on what is on screen (F056)', () => {
       </I18nProvider>,
     );
 
-    await user.click(screen.getByRole('button', { name: /Remove 1 items/ }));
+    await user.click(screen.getByRole('button', { name: /Remove 1 item\b/ }));
     await user.click(screen.getByRole('button', { name: /Remove them/ }));
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
@@ -310,7 +310,7 @@ describe('removing commons acts only on what is on screen (F056)', () => {
     const user = userEvent.setup();
     renderIn(<RemoveCommonsPanel items={ALL} windowDays={30} onDone={() => {}} onError={() => {}} />);
     await user.click(screen.getByRole('checkbox', { name: /Common Gamma/ }));
-    await user.click(screen.getByRole('button', { name: /Remove 1 items/ }));
+    await user.click(screen.getByRole('button', { name: /Remove 1 item\b/ }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/SN-C/)).toBeInTheDocument();
     expect(within(dialog).queryByText(/SN-A/)).not.toBeInTheDocument();
@@ -700,7 +700,6 @@ describe('cancelling a shipment says what it will cost', () => {
         t={(k: string) => k}
         onClose={() => {}}
         onChanged={() => {}}
-        onError={() => {}}
         onStatus={() => {}}
       />,
     );
@@ -735,7 +734,6 @@ describe('a collector’s own hand delivery', () => {
         t={(k: string) => k}
         onClose={() => {}}
         onChanged={() => {}}
-        onError={() => {}}
         onStatus={() => {}}
       />,
     );

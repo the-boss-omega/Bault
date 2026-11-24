@@ -14,6 +14,7 @@ import * as moneyTerms from '../../apps/api/src/modules/pay/money-terms';
 import * as escrowTerms from '../../apps/api/src/modules/esc/escrow-terms';
 import * as shippingOptions from '../../apps/api/src/modules/shp/shipping-options';
 import { PASSWORD_MIN } from '../../apps/web/src/shared/names';
+import { TIER_RULES, TIER_WINDOW_DAYS } from '../../apps/api/src/modules/mem/tiers';
 
 const ROOT = join(__dirname, '..', '..');
 
@@ -118,12 +119,14 @@ describe('FAQ: Card Embassy’s own answers', () => {
       s.SIGNATURE_REQUIRED_ABOVE_MINOR,
       s.INSURANCE_MINIMUM_PREMIUM_MINOR,
       ...s.SHIPMENT_ADD_ONS.map((a) => a.requiresInsuranceMinor),
+      ...TIER_RULES.map((r) => r.minSpentMinor),
     ]);
     const allowedBps = new Set<number>([
       m.CASHOUT_SMALL_BPS,
       m.CASHOUT_LARGE_BPS,
       e.ESCROW_FEE_BPS,
       s.INSURANCE_PREMIUM_BPS,
+      ...TIER_RULES.map((r) => r.discountBps),
     ]);
 
     const dollars = [...ALL_FAQ_TEXT.matchAll(/\$([\d,]+)(?:\.(\d{2}))?/g)];
@@ -143,7 +146,7 @@ describe('FAQ: Card Embassy’s own answers', () => {
     const emailHours = Number(
       /EMAIL_TTL_MS = (\d+) \* 60 \* 60 \* 1000/.exec(source('apps/api/src/modules/acc/verification.service.ts'))![1],
     );
-    const days = new Set([cullDays, shippingOptions.PAYMENT_WINDOW_DAYS]);
+    const days = new Set([cullDays, shippingOptions.PAYMENT_WINDOW_DAYS, TIER_WINDOW_DAYS]);
     for (const [raw, n] of ALL_FAQ_TEXT.matchAll(/(\d+)[- ]days?\b/g)) {
       expect(days.has(Number(n)), `${raw}`).toBe(true);
     }

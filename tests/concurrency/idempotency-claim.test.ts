@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, fundWallet, signIn, type Client } from '../integration/helpers/http';
+import { SEED, atTier, fundWallet, signIn, type Client } from '../integration/helpers/http';
 
 type Res = Awaited<ReturnType<Client['post']>>;
 const ok = (r: Res) => r.status >= 200 && r.status < 300;
@@ -27,6 +27,7 @@ describe('concurrency: one idempotency key', () => {
       const key = `race-${Date.now()}-${round}-${Math.floor(Math.random() * 1e6)}`;
 
       const before = await balanceOf(buyer);
+      const price = await atTier(buyer, PRICE);
       const results = await Promise.all(
         [0, 1, 2].map(() =>
           buyer.post(`/marketplace/house/listings/${productId}/purchase`, undefined, { 'Idempotency-Key': key }),
@@ -35,7 +36,7 @@ describe('concurrency: one idempotency key', () => {
 
       const shelf = (await buyer.get('/marketplace/house/listings')).body as Array<{ id: string; stock: number }>;
       expect(shelf.find((l) => l.id === productId)?.stock ?? 0, `round ${round}`).toBe(2);
-      expect(await balanceOf(buyer), `round ${round}`).toBe(before - PRICE);
+      expect(await balanceOf(buyer), `round ${round}`).toBe(before - price);
 
       const orders = new Set(results.filter(ok).map((r) => r.body.orderCode as string));
       expect(orders.size, `round ${round}`).toBe(1);

@@ -3,6 +3,17 @@ import { and, desc, isNull, lte, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { pricingRule } from './prc.schema';
+import { billableActions } from './billable-actions';
+
+const AT_LIST_PRICE = new Set(
+  billableActions()
+    .filter((a) => a.resolution === 'code_constant' || a.actionType.startsWith('white_glove:'))
+    .map((a) => a.actionType),
+);
+
+export function tierDiscounted(actionType: string): boolean {
+  return !AT_LIST_PRICE.has(actionType);
+}
 
 export const PRICE_GROUPS = [
   'intake',
@@ -81,6 +92,7 @@ export class PriceListService {
           billingTrigger: r.billingTrigger,
           parameters: r.parameters,
           effectiveFrom: r.effectiveFrom,
+          tierDiscounted: tierDiscounted(r.actionType),
         })),
     })).filter((g) => g.entries.length > 0);
 

@@ -4,7 +4,7 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
-import { money } from '../../shared/money';
+import { formatMinor, money } from '../../shared/money';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { IdempotencyService } from '../../shared/idempotency/idempotency.service';
 import { CustodyService } from '../cst/custody.service';
@@ -41,7 +41,7 @@ export class PurchaseService {
     listingId: string,
     idempotencyKey: string,
     priceOverride?: number,
-    inSale?: (tx: Database) => Promise<void>,
+    inSale?: (tx: Database, sold: { itemDescription: string }) => Promise<void>,
   ): Promise<PurchaseResult> {
     const endpoint = `purchase:${listingId}`;
 
@@ -54,7 +54,7 @@ export class PurchaseService {
       const [l] = await tx.select().from(listing).where(eq(listing.id, listingId)).for('update').limit(1);
       if (!l) throw AppError.notFound('Listing not found');
       if (l.status !== 'active') {
-        throw new AppError(ErrorCode.ITEM_NO_LONGER_AVAILABLE, 'Listing is no longer available', 409);
+        throw new AppError(ErrorCode.ITEM_NO_LONGER_AVAILABLE, 'This listing is no longer for sale.', 409);
       }
       if (l.sellerId === buyerId) {
         throw new AppError(ErrorCode.SELF_DEALING_FORBIDDEN, 'You cannot buy your own listing', 403);
@@ -64,12 +64,19 @@ export class PurchaseService {
       if (!it) throw AppError.notFound('Item not found');
       if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
 
+      if (priceOverride !== undefined && priceOverride > l.askingPrice) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          `The asking price is now ${formatMinor(l.askingPrice)}, below this offer of ${formatMinor(priceOverride)}. It can be bought outright for the asking price instead.`,
+          409,
+        );
+      }
       const price = priceOverride ?? l.askingPrice;
       const currency = l.currency;
 
       const { amount: fee, snapshot } = await this.pricing.price(
         'marketplace_fee',
-        { base: money(price, currency) },
+        { base: money(price, currency), userId: l.sellerId },
         tx,
       );
 
@@ -77,7 +84,11 @@ export class PurchaseService {
 
       const buyerBalance = await this.ledger.balanceOf(buyerId, tx);
       if (buyerBalance.amount < price) {
-        throw new AppError(ErrorCode.INSUFFICIENT_BALANCE, 'Insufficient wallet balance', 409);
+        throw new AppError(
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `Your balance is ${formatMinor(buyerBalance.amount)} and this costs ${formatMinor(price)}. Add money first, then buy it.`,
+          409,
+        );
       }
 
       const waiver = await this.memberships.waive(tx as Database, l.sellerId, 'marketplace_fee', fee.amount, price);
@@ -105,7 +116,7 @@ export class PurchaseService {
       await this.custody.changeState(tx, l.itemId, 'stored', buyerId, 'sold');
 
       await tx.update(listing).set({ status: 'sold', updatedAt: new Date() }).where(eq(listing.id, listingId));
-      if (inSale) await inSale(tx as Database);
+      if (inSale) await inSale(tx as Database, { itemDescription: it.description });
       await closeOpenOffers(tx as Database, listingId);
 
       const [txn] = await tx

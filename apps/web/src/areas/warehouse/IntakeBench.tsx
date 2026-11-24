@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../shared/api';
 import { useI18n } from '../../shared/i18n';
 import { ITEM_CLASSES, itemClassOption } from '../../shared/itemClasses';
 import { isValidUsername, normalizeUsername } from '../../shared/names';
 import type { ParcelQueueRow } from '../../shared/parcels';
-import { BarcodeLabel, BarcodePrintAllButton } from '../../shared/Barcode';
+import { Barcode } from '../../shared/Barcode';
 import { Docket, type BenchOutcome } from '../../shared/ui/Docket';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
-import { Button, Field, IconButton, ScanField } from '../../shared/ui/primitives';
+import { Button, ErrorState, Field, IconButton, ScanField, SuccessNote } from '../../shared/ui/primitives';
 import { IconBox, IconClose, IconPlus } from '../../shared/ui/icons';
 import { code as bdiCode, quiet, stamped } from './Benches';
+import { LabelSheet } from './LabelSheet';
+import { OcrReview } from './OcrReview';
 
 export interface StowSuggestion {
   id: string;
@@ -19,6 +21,17 @@ export interface StowSuggestion {
   itemCount: number;
   facilityCode: string | null;
 }
+
+type StowMode = 'auto' | 'scan' | 'later';
+
+export const LATER_REASONS = [
+  { key: 'shelfFull', labelKey: 'warehouse.intake.laterReason.shelfFull' },
+  { key: 'oversized', labelKey: 'warehouse.intake.laterReason.oversized' },
+  { key: 'grading', labelKey: 'warehouse.intake.laterReason.grading' },
+  { key: 'other', labelKey: 'warehouse.intake.laterReason.other' },
+] as const;
+
+type LaterReason = (typeof LATER_REASONS)[number]['key'];
 
 interface UnitDraft {
   key: string;
@@ -54,8 +67,10 @@ export function IntakeBench({
 
   const [ownerUsername, setOwnerUsername] = useState('');
   const [parcelId, setParcelId] = useState(initialParcelId);
-  const [stowMode, setStowMode] = useState<'auto' | 'scan'>('auto');
+  const [stowMode, setStowMode] = useState<StowMode>('auto');
   const [scanBin, setScanBin] = useState('');
+  const [laterReason, setLaterReason] = useState<LaterReason>('shelfFull');
+  const [laterOther, setLaterOther] = useState('');
 
   const [units, setUnits] = useState<UnitDraft[]>([blankUnit()]);
   const [isLot, setIsLot] = useState(false);
@@ -69,14 +84,23 @@ export function IntakeBench({
   const [openParcels, setOpenParcels] = useState<ParcelQueueRow[]>([]);
   const [emptyReason, setEmptyReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const attempt = useRef<{ key: string; body: string } | null>(null);
   const [closing, setClosing] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [closedNote, setClosedNote] = useState<string | null>(null);
+  const [parcelsError, setParcelsError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<BenchOutcome | null>(null);
+  const [toRead, setToRead] = useState<string[]>([]);
 
   const loadParcels = useCallback(async () => {
     try {
       const queue = await api.get<ParcelQueueRow[]>('/parcels');
       setOpenParcels(queue.filter((p) => p.status === 'opened' && p.ownerUsername));
-    } catch {}
+      setParcelsError(null);
+    } catch (e) {
+      setParcelsError((e as Error).message);
+    }
   }, []);
 
   useEffect(() => {
@@ -142,11 +166,27 @@ export function IntakeBench({
 
   const normalizedOwner = normalizeUsername(ownerUsername);
   const ownerOk = isValidUsername(normalizedOwner);
-  const stowReady = stowMode === 'scan' ? scanBin.trim() !== '' : suggestion !== null;
+  const laterText =
+    laterReason === 'other'
+      ? laterOther.trim()
+      : t(LATER_REASONS.find((r) => r.key === laterReason)!.labelKey);
+  const stowReady =
+    stowMode === 'scan'
+      ? scanBin.trim() !== ''
+      : stowMode === 'later'
+        ? laterText !== ''
+        : suggestion !== null;
   const filled = units.filter(
     (u) => u.description.trim() || u.serialNumber.trim() || u.photos.length > 0,
   );
   const ready = ownerOk && stowReady && filled.length > 0 && !busy;
+  const missing = [
+    ...(!ownerOk ? [t('warehouse.intake.missingOwner')] : []),
+    ...(filled.length === 0 ? [t('warehouse.intake.missingUnit')] : []),
+    ...(!stowReady
+      ? [t(stowMode === 'later' ? 'warehouse.intake.missingReason' : 'warehouse.intake.missingShelf')]
+      : []),
+  ];
 
   const patch = (key: string, next: Partial<UnitDraft>) =>
     setUnits((prev) => prev.map((u) => (u.key === key ? { ...u, ...next } : u)));
@@ -158,6 +198,7 @@ export function IntakeBench({
         ownerUsername: normalizedOwner,
         binId: stowMode === 'scan' ? scanBin.trim() : undefined,
         autoStow: stowMode === 'auto',
+        ...(stowMode === 'later' ? { placement: 'later' as const, placementReason: laterText } : {}),
         parcelId: parcelId || undefined,
       };
       const payload = filled.map((u) => ({
@@ -171,18 +212,24 @@ export function IntakeBench({
         lotSize: single && isLot && lotAllowed ? lotSize : undefined,
       }));
 
-      const created = await api.post<{ id: string; barcode: string }[]>('/intake/items/batch', {
-        units: payload,
-      });
+      const body = JSON.stringify(payload);
+      if (attempt.current?.body !== body) attempt.current = { key: crypto.randomUUID(), body };
+      const created = await api.post<{ id: string; barcode: string }[]>(
+        '/intake/items/batch',
+        { units: payload },
+        { 'Idempotency-Key': attempt.current.key },
+      );
+      attempt.current = null;
       setLabels(
         created.map((made, index) => ({ ...made, description: filled[index]?.description })),
       );
-      onLog(t('intake.bulkDone', { count: created.length }));
+      setToRead(created.filter((_, index) => (filled[index]?.photos.length ?? 0) > 0).map((made) => made.id));
+      onLog(created.length === 1 ? t('intake.bulkDoneOne') : t('intake.bulkDone', { count: created.length }));
       setOutcome({
         tone: 'success',
         label: t('bench.bookedIn'),
         detail: stamped(
-          `${created.length.toLocaleString()} → ${stowMode === 'scan' ? scanBin.trim() : (suggestion?.serialNumber ?? '')}`,
+          `${created.length.toLocaleString()} → ${shelfName}`,
           locale,
         ),
       });
@@ -202,11 +249,14 @@ export function IntakeBench({
   async function closeParcel() {
     if (!parcel) return;
     setClosing(true);
+    setCloseError(null);
     try {
       await api.post(`/parcels/${parcel.id}/process`, {
         emptyReason: emptyReason.trim() || undefined,
       });
       onLog(t('warehouse.intake.parcelClosed', { code: parcel.code }));
+      setClosedNote(t('warehouse.intake.parcelClosedNext', { code: parcel.code }));
+      setConfirmClose(false);
       setParcelId('');
       setEmptyReason('');
       onParcelClosed();
@@ -214,13 +264,19 @@ export function IntakeBench({
       await onDone();
     } catch (e) {
       onLog(t('warehouse.log.intakeError', { message: (e as Error).message }));
+      setCloseError((e as Error).message);
     } finally {
       setClosing(false);
     }
   }
 
   // The intake as it will be recorded: whose, from which box, onto which shelf, and a line for each unit that has been described.
-  const shelfName = stowMode === 'scan' ? scanBin.trim() : (suggestion?.serialNumber ?? '');
+  const shelfName =
+    stowMode === 'scan'
+      ? scanBin.trim()
+      : stowMode === 'later'
+        ? t('warehouse.intake.shelfLater')
+        : (suggestion?.serialNumber ?? '');
   const unitLines = filled.map((u, index) => {
     const option = itemClassOption(u.typeClass);
     const kind = option ? t(option.labelKey) : u.typeClass;
@@ -236,11 +292,27 @@ export function IntakeBench({
 
   return (
     <div className="stack stack--tight">
+      {parcelsError && (
+        <ErrorState
+          title={t('warehouse.intake.parcelsFailed')}
+          message={parcelsError}
+          onRetry={() => void loadParcels()}
+          retryLabel={t('ui.retry')}
+        />
+      )}
+      {closedNote && !parcel && <SuccessNote>{closedNote}</SuccessNote>}
       <div className="request-form request-form--bench">
         <div className="stack stack--tight request-form-fields">
           <div className="form-grid">
             <Field label={t('warehouse.intake.parcel')} hint={t('warehouse.intake.parcelHint')}>
-              <select value={parcelId} onChange={(e) => setParcelId(e.target.value)}>
+              <select
+                value={parcelId}
+                onChange={(e) => {
+                  setParcelId(e.target.value);
+                  setConfirmClose(false);
+                  setCloseError(null);
+                }}
+              >
                 <option value="">{t('warehouse.intake.noParcel')}</option>
                 {openParcels.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -273,12 +345,39 @@ export function IntakeBench({
             <Field label={t('warehouse.intake.stowMode')} hint={t('warehouse.intake.stowHint')}>
               <select
                 value={stowMode}
-                onChange={(e) => setStowMode(e.target.value as 'auto' | 'scan')}
+                onChange={(e) => setStowMode(e.target.value as StowMode)}
               >
                 <option value="auto">{t('warehouse.intake.stow.auto')}</option>
                 <option value="scan">{t('warehouse.intake.stow.scan')}</option>
+                <option value="later">{t('warehouse.intake.stow.later')}</option>
               </select>
             </Field>
+
+            {stowMode === 'later' && (
+              <Field label={t('warehouse.intake.laterReason')} hint={t('warehouse.intake.laterHint')}>
+                <select
+                  value={laterReason}
+                  onChange={(e) => setLaterReason(e.target.value as LaterReason)}
+                >
+                  {LATER_REASONS.map((r) => (
+                    <option key={r.key} value={r.key}>
+                      {t(r.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
+            {stowMode === 'later' && laterReason === 'other' && (
+              <Field label={t('warehouse.intake.laterOther')}>
+                <input
+                  value={laterOther}
+                  onChange={(e) => setLaterOther(e.target.value)}
+                  maxLength={200}
+                  dir="auto"
+                />
+              </Field>
+            )}
 
             {stowMode === 'scan' && (
               <ScanField
@@ -286,6 +385,9 @@ export function IntakeBench({
                 hint={t('warehouse.intake.stowScanHint')}
                 value={scanBin}
                 onChange={setScanBin}
+                onScan={() => {
+                  if (ready) void submit();
+                }}
                 placeholder="BIN-XXXXXXXX"
               />
             )}
@@ -380,17 +482,19 @@ export function IntakeBench({
                     />
                   </Field>
 
-                  <Field
+                  <ScanField
+                    id={`intake-serial-${unit.key}`}
                     label={t('warehouse.intake.serialNumber')}
                     hint={t('warehouse.intake.serialNumberHint')}
-                  >
-                    <input
-                      value={unit.serialNumber}
-                      onChange={(e) => patch(unit.key, { serialNumber: e.target.value })}
-                      placeholder={t('warehouse.intake.serialNumberPlaceholder')}
-                      dir="ltr"
-                    />
-                  </Field>
+                    value={unit.serialNumber}
+                    onChange={(value) => patch(unit.key, { serialNumber: value })}
+                    onScan={() => {
+                      const next = units[index + 1];
+                      if (next) document.getElementById(`intake-serial-${next.key}`)?.focus();
+                      else if (ready) void submit();
+                    }}
+                    placeholder={t('warehouse.intake.serialNumberPlaceholder')}
+                  />
                 </div>
 
                 {lotAllowed && (
@@ -455,7 +559,15 @@ export function IntakeBench({
               label: t('warehouse.intake.parcel'),
               value: parcel ? bdiCode(parcel.code) : t('warehouse.intake.noParcel'),
             },
-            { label: t('bench.shelf'), value: shelfName ? bdiCode(shelfName) : quiet },
+            {
+              label: t('bench.shelf'),
+              value:
+                stowMode === 'later'
+                  ? `${shelfName} · ${laterText || '—'}`
+                  : shelfName
+                    ? bdiCode(shelfName)
+                    : quiet,
+            },
             ...(isLot && single && lotAllowed
               ? [{ label: t('bench.lot'), value: lotSize.toLocaleString() }]
               : []),
@@ -484,6 +596,9 @@ export function IntakeBench({
               ? t('warehouse.intake.submitMany', { count: filled.length })
               : t('warehouse.intake.submit')}
           </Button>
+          {!ready && !busy && missing.length > 0 && (
+            <span className="field-hint">{t('warehouse.missing', { list: missing.join('; ') })}</span>
+          )}
         </div>
       </div>
 
@@ -500,17 +615,36 @@ export function IntakeBench({
               <input value={emptyReason} onChange={(e) => setEmptyReason(e.target.value)} />
             </Field>
           )}
-          <div className="row">
-            <span className="spacer" />
-            <Button
-              variant="secondary"
-              icon={<IconBox />}
-              disabled={closing || (parcel.itemCount === 0 && emptyReason.trim() === '')}
-              onClick={() => void closeParcel()}
-            >
-              {t('warehouse.intake.closeParcel')}
-            </Button>
-          </div>
+          {closeError && <ErrorState message={closeError} />}
+          {confirmClose ? (
+            <div className="row" role="group" aria-label={t('warehouse.intake.closeParcel')}>
+              <span className="field-hint">
+                {t('warehouse.intake.closeConfirm', { code: parcel.code, count: parcel.itemCount })}
+              </span>
+              <span className="spacer" />
+              <Button variant="primary" icon={<IconBox />} loading={closing} onClick={() => void closeParcel()}>
+                {t('warehouse.intake.closeYes')}
+              </Button>
+              <Button variant="ghost" disabled={closing} onClick={() => setConfirmClose(false)}>
+                {t('warehouse.intake.closeKeep')}
+              </Button>
+            </div>
+          ) : (
+            <div className="row">
+              <span className="spacer" />
+              <Button
+                variant="secondary"
+                icon={<IconBox />}
+                disabled={closing || (parcel.itemCount === 0 && emptyReason.trim() === '')}
+                onClick={() => {
+                  setClosedNote(null);
+                  setConfirmClose(true);
+                }}
+              >
+                {t('warehouse.intake.closeParcel')}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -523,24 +657,26 @@ export function IntakeBench({
               </h3>
               <p className="hint">{t('warehouse.intake.labelsHint')}</p>
             </div>
-            <span className="spacer" />
-            <BarcodePrintAllButton
-              labels={labels.map((l) => ({
-                value: l.barcode,
-                caption: l.description || l.barcode,
-              }))}
-            />
           </div>
+
+          <LabelSheet
+            showCodes={false}
+            targets={{ kind: 'items', items: labels.map((l) => ({ id: l.id, code: l.barcode })) }}
+          />
 
           <ul className="card-grid">
             {labels.map((l) => (
               <li key={l.id} className="card">
-                <BarcodeLabel value={l.barcode} caption={l.description || l.barcode} />
+                <Barcode value={l.barcode} />
+                {l.description && <span className="hint" dir="auto">{l.description}</span>}
               </li>
             ))}
           </ul>
         </div>
       )}
+      {toRead.map((itemId) => (
+        <OcrReview key={itemId} subject="item" id={itemId} />
+      ))}
     </div>
   );
 }

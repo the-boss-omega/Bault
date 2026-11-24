@@ -16,7 +16,7 @@ import { Amount } from '../../../shared/ui/Serial';
 import { FAQ, type FaqAvailability, type FaqBlock, type FaqEntry } from './faqContent';
 import { IntakePolicyPanel } from './IntakePolicyPanel';
 import { LEGAL_DOCUMENTS } from './legalContent';
-import { DraftBanner } from './LegalDocumentView';
+import { DraftBanner, LegalBody } from './LegalDocumentView';
 import { ContactPanel, GuidesPanel, ShowsPanel } from './HelpPanels';
 import { PriceListPanel } from './PriceListPanel';
 
@@ -40,7 +40,7 @@ const AVAILABILITY_NOTE: Record<FaqAvailability, MessageKey> = {
   unavailable: 'faq.note.unavailableTitle',
 };
 
-const TABS = ['ask', 'guides', 'faq', 'policy', 'prices', 'shows', 'contact', 'legal'] as const;
+const TABS = ['faq', 'guides', 'policy', 'prices', 'shows', 'contact', 'legal', 'ask'] as const;
 type HelpTab = (typeof TABS)[number];
 
 export function FaqLegalPage() {
@@ -50,7 +50,7 @@ export function FaqLegalPage() {
 
   const tab: HelpTab = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as HelpTab)
-    : 'ask';
+    : 'faq';
 
   const tabs = TABS.map((key) => ({ key, label: t(`faq.tab.${key}` as MessageKey) }));
 
@@ -173,7 +173,6 @@ function AskPanel() {
         )}
       </div>
 
-      {/* The question is written on a slip of its own, and the slip says what an answer is worth before it is sent. */}
       <form className="ask-composer" onSubmit={submit}>
         <label className="ask-composer-label" htmlFor="ask-question">
           {t('faq.ask.inputLabel')}
@@ -526,7 +525,6 @@ function LegalPanel() {
         <div className="legal-body">
           <nav className="legal-toc" aria-label={t('legal.tocLabel')}>
             <h3 className="legal-toc-title">{t('legal.toc')}</h3>
-            {/* The headings are the document's, and carry their own numbers. */}
             <ol>
               {doc.sections.map((section) => (
                 <li key={section.id}>
@@ -543,7 +541,7 @@ function LegalPanel() {
               sections.map((section) => (
                 <section key={section.id} id={`legal-${section.id}`} className="legal-section">
                   <h3>{section.heading}</h3>
-                  <pre className="legal-pre">{section.body}</pre>
+                  <LegalBody body={section.body} preformatted={doc.preformatted} />
                 </section>
               ))
             )}
@@ -591,7 +589,6 @@ function CurrentFiguresPanel() {
     };
   }, []);
 
-  // A figure on its own is an Amount, set as every amount is.
   const rows: Array<[string, ReactNode]> = terms
     ? [
         [t('legal.figures.graceDays'), t('legal.figures.days', { days: terms.debt.graceDays })],

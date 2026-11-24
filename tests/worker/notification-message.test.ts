@@ -52,6 +52,41 @@ describe('the sentence a collector reads for each event', () => {
     noIds(toSeller);
   });
 
+  it('tells a buyer their offer was accepted, and either side that an offer is off the table', () => {
+    const accepted = notificationMessage('offer_accepted', {
+      listingId: LISTING,
+      amount: 20_000,
+      itemDescription: 'Rayquaza ex #97/97',
+      recipientIds: [PERSON],
+    });
+    expect(accepted).toBe('The seller accepted your offer of $200.00 on Rayquaza ex #97/97. It is paid for and in your vault.');
+    noIds(accepted);
+    expect(notificationMessage('offer_rejected', { amount: 15_000, rejectedBy: 'seller', proposedBy: 'buyer' })).toBe(
+      'The seller turned down your offer of $150.00 on the card. You can make a new offer.',
+    );
+    expect(notificationMessage('offer_rejected', { amount: 15_000, rejectedBy: 'buyer', proposedBy: 'buyer' })).toBe(
+      'The buyer withdrew their offer of $150.00 on the card. Your listing stays up.',
+    );
+    expect(notificationMessage('offer_rejected', { rejectedBy: 'buyer', proposedBy: 'seller', itemDescription: 'A slab' })).toBe(
+      'The buyer turned down your counter-offer on A slab. Your listing stays up.',
+    );
+  });
+
+  it('tells the other side when a swap or a gift is called off', () => {
+    expect(notificationMessage('swap_rejected', { kind: 'swap', rejectedBy: 'responder', recipientIds: [PERSON] })).toBe(
+      'Your swap proposal was turned down. Your cards stay in your vault.',
+    );
+    expect(notificationMessage('swap_rejected', { kind: 'gift', rejectedBy: 'proposer' })).toBe(
+      'A gift that was waiting for you was withdrawn by the collector who offered it.',
+    );
+  });
+
+  it('tells the other side when a deal is called off before it is funded', () => {
+    const cancelled = notificationMessage('escrow_cancelled', { dealCode: 'ESC-7K2M9QRS', reason: 'Changed my mind.' });
+    expect(cancelled).toBe('Deal ESC-7K2M9QRS was called off before any money was held. The reason given: Changed my mind.');
+    noIds(cancelled);
+  });
+
   it('writes a buyout quote and each custom request step as a sentence', () => {
     expect(
       notificationMessage('buyout_quoted', { requestCode: 'SR-7K2M9QRS', amount: 12_000 }),
@@ -116,6 +151,25 @@ describe('the sentence a collector reads for each event', () => {
         amountMinor: 5_000,
       }),
     ).toBe('Cash-out request WR-AAAA1111 could not be paid, so the $50.00 is back in your wallet.');
+    expect(
+      notificationMessage('wallet_request_completed', {
+        ...base,
+        type: 'cash_out',
+        amountMinor: 5_000,
+        feeMinor: 300,
+        netMinor: 4_700,
+      }),
+    ).toBe(
+      'Cash-out request WR-AAAA1111 has been paid: $50.00 has left your wallet, and $47.00 is on its way to your account after the $3.00 cash-out fee.',
+    );
+    expect(
+      notificationMessage('wallet_request_payout_failed', {
+        ...base,
+        type: 'cash_out',
+        amountMinor: 5_000,
+        afterPaid: true,
+      }),
+    ).toBe('Cash-out request WR-AAAA1111 was returned after it was sent, so the $50.00 is back in your wallet.');
     for (const event of [
       'wallet_request_submitted',
       'wallet_request_cancelled',
@@ -141,6 +195,10 @@ describe('the sentence a collector reads for each event', () => {
     });
     expect(card).toMatch(/^A payment of \$50\.00 into your wallet was reversed/);
     expect(card).not.toMatch(/friendly fraud|cardholder/);
+    expect(card).not.toMatch(/paying bank/);
+    const paypal = notificationMessage('payment_reversed', { amountMinor: 5_000, feeMinor: 0, kind: 'paypal' });
+    expect(paypal).toMatch(/^A PayPal payment of \$50\.00 into your wallet was reversed through PayPal,/);
+    expect(paypal).not.toMatch(/paying bank/);
   });
 
   it('names PayPal only when the collector paid with PayPal', () => {

@@ -1,4 +1,5 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useRef, type CSSProperties, type ReactNode } from 'react';
+import { navigate } from '../../../shared/routing';
 import { useMotionReady } from '../../../shared/ui/useLandingMotion';
 import { CardSlab } from '../../../shared/CardPhoto';
 import { Serial } from '../../../shared/ui/Serial';
@@ -102,19 +103,25 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
 
 export type AuthMode = 'signIn' | 'signUp' | 'forgot';
 
+const AUTH_SECTION: Record<AuthMode, string> = { signIn: 'signin', signUp: 'signup', forgot: 'forgot' };
+
 export function AuthPage({
   onSignedIn,
   initialMode = 'signIn',
+  notice = null,
 }: {
   onSignedIn: (user: SessionUser) => void;
   initialMode?: AuthMode;
+  notice?: string | null;
 }) {
-  const [mode, setMode] = useState<AuthMode>(initialMode);
+  const mode = initialMode;
+  const setMode = (next: AuthMode) => navigate({ section: AUTH_SECTION[next] });
 
   return (
     <AuthShell>
       {mode === 'signIn' && (
         <SignInPage
+          notice={notice}
           onSignedIn={onSignedIn}
           onGoToSignUp={() => setMode('signUp')}
           onGoToForgotPassword={() => setMode('forgot')}

@@ -35,6 +35,7 @@ const CONSTRAINED: ReadonlyArray<readonly [table: string, column: string, refere
   ['membership', 'user_id', 'user_account'],
   ['membership_period', 'membership_id', 'membership'],
   ['membership_period', 'user_id', 'user_account'],
+  ['usage_tier_change', 'user_id', 'user_account'],
 
   ['batch', 'owner_id', 'user_account'],
   ['item', 'owner_id', 'user_account'],
@@ -62,6 +63,9 @@ const CONSTRAINED: ReadonlyArray<readonly [table: string, column: string, refere
   ['parcel_event', 'facility_id', 'facility'],
   ['parcel_photo', 'parcel_id', 'parcel'],
   ['parcel_photo', 'uploaded_by', 'user_account'],
+  ['ocr_suggestion', 'parcel_id', 'parcel'],
+  ['ocr_suggestion', 'item_id', 'item'],
+  ['ocr_suggestion', 'consumed_by', 'user_account'],
   ['arrival_disposal', 'owner_id', 'user_account'],
   ['arrival_disposal', 'actor_id', 'user_account'],
 
@@ -101,6 +105,7 @@ const CONSTRAINED: ReadonlyArray<readonly [table: string, column: string, refere
   ['escrow_event', 'actor_id', 'user_account'],
   ['support_ticket', 'user_id', 'user_account'],
   ['support_ticket', 'resolved_by', 'user_account'],
+  ['support_ticket', 'assigned_to', 'user_account'],
   ['support_message', 'ticket_id', 'support_ticket'],
   ['support_message', 'author_id', 'user_account'],
 

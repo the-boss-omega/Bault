@@ -14,7 +14,6 @@ import {
   walletRequestEvent,
 } from '../modules/pay/pay.schema';
 import { pricingRule } from '../modules/prc/prc.schema';
-import { MEMBERSHIP_TIERS } from '../modules/mem/tiers';
 import { serviceRequest } from '../modules/dis/dis.schema';
 import { shipment } from '../modules/shp/shp.schema';
 import { dispute } from '../modules/adm/adm.schema';
@@ -30,6 +29,7 @@ import { supportTicket, supportMessage } from '../modules/sup/sup.schema';
 import { escrowDeal, escrowEvent } from '../modules/esc/escrow.schema';
 import { ID_PREFIX, prefixedId } from '../shared/ids';
 import { makeBinBarcode, makeBinSerial } from '../modules/inv/labels';
+import { TIER_RULES } from '../modules/mem/tiers';
 
 function one<T>(rows: T[]): T {
   const r = rows[0];
@@ -74,11 +74,11 @@ async function main(): Promise<void> {
     outbox_message, audit_record, idempotency_key, confirmation_token,
     notification, notification_preference, dispute,
     storage_fee_run, shipping_address,
-    facility, parcel, parcel_event, parcel_photo, arrival_disposal,
+    facility, parcel, parcel_event, parcel_photo, ocr_suggestion, arrival_disposal,
     support_ticket, support_message, media_upload,
     consignment_event, grading_submission, shipment_group,
     escrow_deal, escrow_event,
-    membership, membership_period,
+    membership, membership_period, usage_tier_change, usage_tier_rule,
     storage_cover, worker_heartbeat
     RESTART IDENTITY`);
 
@@ -88,6 +88,13 @@ async function main(): Promise<void> {
         TRUNCATE TABLE pgboss.job, pgboss.archive;
       END IF;
     END $$;`);
+
+  for (const rule of TIER_RULES) {
+    await pool.query(
+      `INSERT INTO usage_tier_rule (tier, min_actions, min_spent_minor, discount_bps) VALUES ($1, $2, $3, $4)`,
+      [rule.key, rule.minActions, rule.minSpentMinor, rule.discountBps],
+    );
+  }
 
   const mkUser = async (
     email: string,
@@ -376,20 +383,6 @@ async function main(): Promise<void> {
       description: 'Collect your cards in person at a show Card Embassy is attending',
       billingTrigger: 'per_event' as const,
     },
-    ...MEMBERSHIP_TIERS.map((t) => ({
-      actionType: t.feeActionType,
-      model: 'fixed' as const,
-      value: t.listPriceMinor,
-      description: `${t.key[0]!.toUpperCase()}${t.key.slice(1)} membership — storage for ${t.storedItems} items, ${t.perCycle.intake} intakes a month`,
-      billingTrigger: 'monthly' as const,
-      parameters: {
-        storedItems: t.storedItems,
-        insuredShipments: t.insuredShipments,
-        insuredValueCapMinor: t.insuredValueCapMinor,
-        postageCreditMinor: t.postageCreditMinor,
-        commissionWaivedOnMinor: t.commissionWaivedOnMinor,
-      },
-    })),
     {
       actionType: 'parcel_processing',
       model: 'fixed' as const,

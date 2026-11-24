@@ -175,3 +175,87 @@ describe('a new ticket, written on a stub as it is composed', () => {
     for (const field of typed) expect(field).toHaveAttribute('dir', 'auto');
   });
 });
+
+describe('who wrote each message in a thread', () => {
+  const thread = {
+    ticket: TICKETS[1]!,
+    messages: [
+      { id: 'm1', authorRole: 'customer', body: 'My parcel is late.', createdAt: '2026-10-27T09:00:00.000Z', authorUsername: 'red' },
+      { id: 'm2', authorRole: 'staff', body: 'Looking into it.', createdAt: '2026-10-27T10:00:00.000Z', authorUsername: 'hermon' },
+    ],
+  };
+
+  it('names the customer and the operator on the staff side, never "You" for the customer', async () => {
+    const { ThreadDrawer } = await import('../../apps/web/src/areas/customer/support/SupportPage');
+    get.mockImplementation(async () => thread);
+    render(
+      <I18nProvider>
+        <ThreadDrawer ticketId="t2" staff onClose={() => {}} onChanged={() => {}} />
+      </I18nProvider>,
+    );
+    expect(await screen.findByText('red')).toBeInTheDocument();
+    expect(screen.getByText('Support, hermon')).toBeInTheDocument();
+    expect(screen.queryByText('You')).toBeNull();
+  });
+
+  it('keeps "You" and "Support" for the customer', async () => {
+    const { ThreadDrawer } = await import('../../apps/web/src/areas/customer/support/SupportPage');
+    get.mockImplementation(async () => ({
+      ...thread,
+      messages: [
+        { ...thread.messages[0], fromStaff: false },
+        { id: 'm2', authorRole: 'staff', fromStaff: true, body: 'Looking into it.', createdAt: '2026-10-27T10:00:00.000Z' },
+      ],
+    }));
+    render(
+      <I18nProvider>
+        <ThreadDrawer ticketId="t2" staff={false} onClose={() => {}} onChanged={() => {}} />
+      </I18nProvider>,
+    );
+    expect(await screen.findByText('You')).toBeInTheDocument();
+    expect(screen.getByText('Support')).toBeInTheDocument();
+  });
+});
+
+describe('Escape on a drawer with something typed in it', () => {
+  it('asks before it throws the reply away, and keeps it on Keep editing', async () => {
+    const { ThreadDrawer } = await import('../../apps/web/src/areas/customer/support/SupportPage');
+    get.mockImplementation(async () => ({ ticket: TICKETS[1]!, messages: [] }));
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <I18nProvider>
+        <ThreadDrawer ticketId="t2" staff={false} onClose={onClose} onChanged={() => {}} />
+      </I18nProvider>,
+    );
+    const reply = await screen.findByRole('textbox');
+    await user.type(reply, 'It is still not here');
+    await user.keyboard('{Escape}');
+    const ask = await screen.findByRole('dialog', { name: 'Discard what you typed?' });
+    expect(onClose).not.toHaveBeenCalled();
+    await user.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Discard what you typed?' })).toBeNull());
+    expect(screen.getByRole('textbox')).toHaveValue('It is still not here');
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    await user.click(within(await screen.findByRole('dialog', { name: 'Discard what you typed?' })).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('still closes at once when nothing is typed', async () => {
+    const { ThreadDrawer } = await import('../../apps/web/src/areas/customer/support/SupportPage');
+    get.mockImplementation(async () => ({ ticket: TICKETS[1]!, messages: [] }));
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <I18nProvider>
+        <ThreadDrawer ticketId="t2" staff={false} onClose={onClose} onChanged={() => {}} />
+      </I18nProvider>,
+    );
+    await screen.findByRole('textbox');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(screen.queryByRole('dialog', { name: 'Discard what you typed?' })).toBeNull();
+  });
+});

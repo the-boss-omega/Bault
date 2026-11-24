@@ -18,6 +18,15 @@ export const shipmentStatus = pgEnum('shipment_status', [
   'cancelled',
 ]);
 
+export const OPEN_SHIPMENT_STATUSES = [
+  'requested',
+  'awaiting_payment',
+  'rates_selected',
+  'picking',
+  'packed',
+  'labeled',
+] as const;
+
 export const shipment = pgTable('shipment', {
   id: pkId(),
   code: text('code'),

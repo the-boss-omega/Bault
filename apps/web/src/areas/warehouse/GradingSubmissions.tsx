@@ -43,15 +43,16 @@ export function GradingSubmissions() {
   const [body, setBody] = useState('PSA');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setSubmissions(await api.get<Submission[]>('/services/grading/submissions'));
-      setError(null);
+      setLoadError(null);
     } catch (e) {
-      setError((e as Error).message);
-      setSubmissions([]);
+      setLoadError((e as Error).message);
+      setSubmissions((prev) => prev ?? []);
     }
   }, []);
 
@@ -72,6 +73,14 @@ export function GradingSubmissions() {
 
   return (
     <Panel title={t('grade.subs.title')} subtitle={t('grade.subs.subtitle')}>
+      {loadError && (
+        <ErrorState
+          title={t('queue.grading.loadFailed')}
+          message={loadError}
+          onRetry={() => void load()}
+          retryLabel={t('ui.retry')}
+        />
+      )}
       {error ? <ErrorState message={error} /> : message ? <SuccessNote>{message}</SuccessNote> : null}
 
       <div className="field-row">
@@ -98,9 +107,9 @@ export function GradingSubmissions() {
       {submissions === null ? (
         <SkeletonTable rows={3} columns={5} />
       ) : submissions.length === 0 ? (
-        <EmptyState title={t('grade.subs.empty')} text={t('grade.subs.emptyText')} icon={<IconBox />} />
+        loadError ? null : <EmptyState title={t('grade.subs.empty')} text={t('grade.subs.emptyText')} icon={<IconBox />} />
       ) : (
-        <div className="dt-wrap">
+        <div className="dt-wrap dt-wrap--stack">
           <table className="data-table">
             <thead>
               <tr>
@@ -114,13 +123,13 @@ export function GradingSubmissions() {
             <tbody>
               {submissions.map((s) => (
                 <tr key={s.id}>
-                  <td>
+                  <td data-label={t('grade.subs.col.code')} className="dt-primary">
                     <code dir="ltr">{s.code}</code>
                   </td>
-                  <td>
+                  <td data-label={t('grade.subs.col.body')}>
                     <bdi dir="ltr">{s.gradingBody}</bdi>
                   </td>
-                  <td>
+                  <td data-label={t('grade.subs.col.status')}>
                     <StatusBadge tone={SUBMISSION_TONE[s.status] ?? 'neutral'}>
                       {submissionStatusLabel(t, s.status)}
                     </StatusBadge>
@@ -131,8 +140,10 @@ export function GradingSubmissions() {
                       </span>
                     )}
                   </td>
-                  <td>{s.trackingNumber ? <code>{s.trackingNumber}</code> : '—'}</td>
-                  <td>
+                  <td data-label={t('grade.subs.col.tracking')}>
+                    {s.trackingNumber ? <code dir="ltr">{s.trackingNumber}</code> : '—'}
+                  </td>
+                  <td data-label={t('grade.subs.col.actions')}>
                     {s.status === 'open' && (
                       <Button size="sm" onClick={() => setOpenId(openId === s.id ? null : s.id)}>
                         {openId === s.id ? t('ui.close') : t('grade.subs.manage')}
@@ -232,7 +243,11 @@ function OpenSubmission({
         `/services/grading/submissions/${submission!.id}/ship`,
         { trackingNumber: tracking.trim(), externalReference: reference.trim(), notes: notes.trim() },
       );
-      onDone(t('grade.subs.shipped', { count: result.itemCount }));
+      onDone(
+        result.itemCount === 1
+          ? t('grade.subs.shippedOne')
+          : t('grade.subs.shipped', { count: result.itemCount }),
+      );
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -303,6 +318,9 @@ function OpenSubmission({
         >
           {t('grade.subs.ship')}
         </Button>
+        {!busy && (tracking.trim() === '' || notes.trim() === '') && (
+          <span className="field-hint">{t('queue.grading.shipNeeds')}</span>
+        )}
       </div>
     </div>
   );

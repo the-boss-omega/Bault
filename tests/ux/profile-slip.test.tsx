@@ -161,8 +161,8 @@ describe('the addresses, a label for each place', () => {
     expect(within(label).getByText('Default')).toBeInTheDocument();
     // The buttons are the page's, under the label, not on it.
     expect(within(label).queryByRole('button')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit address Home' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete address Home' })).toBeInTheDocument();
   });
 
   it('marks a label that is missing what carriers need, so it can be fixed before it is used', async () => {
@@ -251,7 +251,7 @@ describe('the addresses, a label for each place', () => {
     patch.mockResolvedValue({});
     await profile('addresses');
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('button', { name: 'Edit address Home' }));
 
     const item = document.querySelector('.tag-item.is-editing') as HTMLElement;
     expect(item).not.toBeNull();

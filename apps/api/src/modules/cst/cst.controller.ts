@@ -46,8 +46,17 @@ export class CstController {
   ) {
     const target = await this.stow.resolveItem(itemId);
     const destination = await this.stow.resolveBin(dto.binId);
+    if (!destination.active) {
+      throw AppError.validation(`Bin ${destination.barcode} is out of service — move this somewhere else`);
+    }
     await this.relocate.relocate(target.id, destination.id, user.id);
     return { status: 'relocated', itemId: target.id, binId: destination.id };
+  }
+
+  @Roles('warehouse_operator', 'admin')
+  @Get('to-shelve')
+  toShelve() {
+    return this.stow.listToShelve();
   }
 
   @Roles('warehouse_operator', 'admin')
@@ -68,14 +77,40 @@ export class CstController {
 
   @Roles('warehouse_operator', 'admin')
   @Get('items/:itemId/history')
-  history(@Param('itemId') itemId: string) {
-    return this.inventory.history(itemId);
+  async history(@Param('itemId') itemId: string) {
+    const target = await this.stow.resolveItem(itemId);
+    return this.inventory.history(target.id);
   }
 
   @Roles('warehouse_operator', 'admin')
   @Get('items/:itemId/timeline')
-  timeline(@Param('itemId') itemId: string) {
-    return this.inventory.itemTimeline(itemId);
+  async timeline(@Param('itemId') itemId: string) {
+    const target = await this.stow.resolveItem(itemId);
+    return this.inventory.itemTimeline(target.id);
+  }
+
+  @Roles('warehouse_operator', 'admin')
+  @Get('items/:itemId/label.pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'inline; filename="label.pdf"')
+  async itemLabel(@Param('itemId') itemId: string, @Res({ passthrough: true }) res: Response) {
+    const pdf = await this.inventory.itemLabelsPdf([itemId]);
+    res.setHeader('Content-Length', pdf.length);
+    return res.end(pdf);
+  }
+
+  @Roles('warehouse_operator', 'admin')
+  @Get('labels.pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'inline; filename="labels.pdf"')
+  async itemLabels(
+    @Query('ids') ids: string | string[] | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const list = (Array.isArray(ids) ? ids : [ids ?? '']).flatMap((s) => String(s).split(','));
+    const pdf = await this.inventory.itemLabelsPdf(list);
+    res.setHeader('Content-Length', pdf.length);
+    return res.end(pdf);
   }
 
   @Roles('warehouse_operator', 'admin')

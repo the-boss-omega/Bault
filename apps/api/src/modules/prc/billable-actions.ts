@@ -2,7 +2,6 @@ import { GRADING_TIERS, tierFeeAction } from '../dis/grading-tiers';
 import { CONSIGNMENT_CHANNELS, channelFeeAction } from '../dis/consignment-channels';
 import { SHIPMENT_ADD_ONS, addOnFeeAction } from '../shp/shipping-options';
 import { PICKUP_FEE_ACTION, whiteGloveFeeAction } from '../shp/fulfilment';
-import { MEMBERSHIP_TIERS } from '../mem/tiers';
 import { ESCROW_FEE_ACTION } from '../esc/escrow-terms';
 import { CASHOUT_FEE_ACTION, CHARGEBACK_FEE_ACTION } from '../pay/money-terms';
 
@@ -39,7 +38,7 @@ export function billableActions(): BillableAction[] {
     action('parcel_processing', 'required', 'inv/parcel.service.ts', 'Receiving, opening and cataloguing a parcel.'),
     action('parcel_forwarding', 'required', 'inv/parcel.service.ts', 'Forwarding a parcel from a receiving-only address.'),
 
-    action('storage', 'required', 'worker jobs/storage-fee.ts, adm/adm.service.ts', 'Storage after the included period. Without it the daily sweep bills nothing.'),
+    action('storage', 'required', 'worker jobs/storage-fee.ts', 'Storage after the included period. Without it the daily sweep bills nothing.'),
     action('storage_oversized', 'fallback_rule', 'worker jobs/storage-fee.ts', 'Storage terms for oversized items.', 'storage'),
 
     action('service', 'required', 'dis/service.service.ts, mkt/trade.service.ts', 'The flat fee for a service request, and each side of a swap.'),
@@ -65,6 +64,8 @@ export function billableActions(): BillableAction[] {
       'the agreed value',
     ),
 
+    action('custom', 'code_constant', 'dis/custom-request.service.ts', 'A custom request. The charge is the quote an operator writes and the collector accepts; no rule prices it.'),
+
     action('shipping', 'required', 'shp/shipment.service.ts', 'Handling added on top of the carrier rate. Every carrier quote needs it.'),
     action('shipping_rush', 'free_if_unpriced', 'shp/shipment.service.ts', 'Same-day picking and packing.'),
     ...SHIPMENT_ADD_ONS.map((addOn) =>
@@ -77,10 +78,6 @@ export function billableActions(): BillableAction[] {
     action('shipping_restocking_fee', 'code_constant', 'shp/shipment-edit.service.ts (RESTOCKING_FEE_MINOR)', 'Cancelling a shipment after its service was paid for.'),
     action('shipping_insurance_premium', 'code_constant', 'shp/shipping-options.ts (INSURANCE_PREMIUM_BPS)', 'Insurance premium on an outbound parcel.'),
     action('direct_ship_flat', 'code_constant', 'shp/carriers.ts (flatCostMinor)', 'Shipping straight from a receiving-only address.'),
-
-    ...MEMBERSHIP_TIERS.map((tier) =>
-      action(tier.feeActionType, 'required', 'mem/membership.service.ts, worker jobs/membership-renewal.ts', `The ${tier.key} membership. Joining falls back to the catalogue price, but renewal refuses without a rule and the member lapses.`),
-    ),
 
     ofAmount(
       action(CASHOUT_FEE_ACTION, 'code_constant', 'pay/wallet-request.service.ts (money-terms.ts)', 'Cash-out fee. Charged from the schedule in money-terms.ts; a rule is only shown on the price list.'),

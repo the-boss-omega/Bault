@@ -2,11 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../shared/api';
 import { dollarsToCents, formatDate, formatUsd } from '../../shared/money';
 import { useI18n, type MessageKey } from '../../shared/i18n';
-import type { MembershipTier, TierCatalogue } from '../../shared/membership';
-import { Button, EmptyState, Panel, SkeletonTable } from '../../shared/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Panel,
+  SkeletonTable,
+  SuccessNote,
+} from '../../shared/ui/primitives';
+import { LoadFailure } from './RollTools';
 import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { Code } from '../../shared/ui/Serial';
 import { IconPlus, IconReceipt } from '../../shared/ui/icons';
+import { pricingActionName } from '../../shared/pricingActions';
 import { PricingCoveragePanel, type PricingCoverage } from './PricingCoveragePanel';
 
 interface PricingRule {
@@ -30,28 +38,10 @@ const BILLING_LABEL: Record<string, MessageKey> = {
   monthly: 'admin.pricing.billing.monthly',
 };
 
-const ACTION_LABEL: Record<string, MessageKey> = {
-  intake: 'admin.pricing.action.intake',
-  storage: 'admin.pricing.action.storage',
-  service: 'admin.pricing.action.service',
-  shipping: 'admin.pricing.action.shipping',
-  marketplace_fee: 'admin.pricing.action.marketplaceFee',
-};
-
 const MODEL_LABEL: Record<string, MessageKey> = {
   fixed: 'admin.pricing.model.fixed',
   percentage: 'admin.pricing.model.percentage',
 };
-
-function tierRuleParameters(tier: MembershipTier) {
-  return {
-    storedItems: tier.storedItems,
-    insuredShipments: tier.insuredShipments,
-    insuredValueCapMinor: tier.insuredValueCapMinor,
-    postageCreditMinor: tier.postageCreditMinor,
-    commissionWaivedOnMinor: tier.commissionWaivedOnMinor,
-  };
-}
 
 function percentToBasisPoints(input: string): number | null {
   const cleaned = input.trim().replace(/[%\s]/g, '');
@@ -76,7 +66,6 @@ export function PricingSection({
   const { t, locale } = useI18n();
   const [rules, setRules] = useState<PricingRule[] | null>(null);
   const [coverage, setCoverage] = useState<PricingCoverage | null>(null);
-  const [tiers, setTiers] = useState<MembershipTier[] | null>(null);
   const [actionType, setActionType] = useState('intake');
   const [itemClass, setItemClass] = useState('');
   const [description, setDescription] = useState('');
@@ -84,35 +73,39 @@ export function PricingSection({
   const [amount, setAmount] = useState('');
   const [billingTrigger, setBillingTrigger] = useState('per_event');
   const [coverageKey, setCoverageKey] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       setRules(await api.get<PricingRule[]>('/pricing/rules'));
     } catch (e) {
-      onError((e as Error).message);
-      setRules([]);
+      setLoadError((e as Error).message);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    api
-      .get<TierCatalogue>('/membership/tiers')
-      .then((c) => setTiers(c.tiers))
-      .catch((e: Error) => onError(e.message));
-  }, [onError]);
-
   const value = model === 'fixed' ? dollarsToCents(amount) : percentToBasisPoints(amount);
   const catalogue = coverage?.actions ?? [];
   const selected = catalogue.find((a) => a.actionType === actionType) ?? null;
-  const tier = tiers?.find((x) => x.feeActionType === actionType) ?? null;
-  const ready = selected !== null && tiers !== null;
+  const ready = selected !== null;
+
+  const amountError =
+    value === null && (amount.trim() !== '' || tried)
+      ? t(model === 'fixed' ? 'admin.pricing.amountInvalid' : 'admin.pricing.percentInvalid')
+      : null;
 
   async function create() {
-    if (value === null || !ready) return;
+    setTried(true);
+    if (value === null || !ready || description.trim() === '' || busy) return;
+    setBusy(true);
+    setNotice(null);
     try {
       await api.post('/pricing/rules', {
         actionType,
@@ -121,9 +114,11 @@ export function PricingSection({
         model,
         value,
         billingTrigger,
-        ...(tier ? { parameters: tierRuleParameters(tier) } : {}),
       });
-      onMsg(t('admin.pricing.created'));
+      const text = t('admin.pricing.created');
+      onMsg(text);
+      setNotice({ ok: true, text });
+      setTried(false);
       setAmount('');
       setItemClass('');
       setDescription('');
@@ -131,17 +126,15 @@ export function PricingSection({
       setCoverageKey((k) => k + 1);
       await load();
     } catch (e) {
+      setNotice({ ok: false, text: (e as Error).message });
       onError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
-  const actionText = (type: string) => {
-    const key = ACTION_LABEL[type];
-    return key ? t(key) : type;
-  };
-  // An action the product has no word for is its code, as the coverage table above shows it.
-  const actionLabel = (type: string) =>
-    ACTION_LABEL[type] ? actionText(type) : <Code value={type} />;
+  const actionText = (type: string) => pricingActionName(t, type) ?? type;
+  const actionLabel = (type: string) => pricingActionName(t, type) ?? <Code value={type} />;
   const billingKey = BILLING_LABEL[billingTrigger];
 
   return (
@@ -229,9 +222,16 @@ export function PricingSection({
                     inputMode="decimal"
                     dir="ltr"
                     value={amount}
+                    aria-invalid={amountError !== null}
+                    aria-describedby={amountError ? 'rule-value-error' : undefined}
                     onChange={(e) => setAmount(e.target.value)}
                   />
                 </div>
+                {amountError && (
+                  <span className="field-error" id="rule-value-error" role="alert">
+                    {amountError}
+                  </span>
+                )}
               </div>
               <label className="field">
                 <span className="field-label">{t('admin.pricing.col.billing')}</span>
@@ -249,11 +249,6 @@ export function PricingSection({
             </div>
 
             <p className="field-hint">{t('admin.pricing.billingHint')}</p>
-            {tier && (
-              <p className="field-hint">
-                {t('admin.pricing.tierHint', { count: tier.storedItems })}
-              </p>
-            )}
             {selected?.resolution === 'code_constant' && (
               <p className="field-hint">{t('admin.pricing.publishedHint')}</p>
             )}
@@ -294,16 +289,28 @@ export function PricingSection({
               variant="primary"
               icon={<IconPlus />}
               disabled={value === null || description.trim() === '' || !ready}
-              onClick={create}
+              loading={busy}
+              onClick={() => void create()}
             >
               {t('admin.pricing.addRule')}
             </Button>
+            {(value === null || description.trim() === '') && !busy && (
+              <span className="hint">{t('admin.pricing.missing')}</span>
+            )}
           </div>
+          {notice &&
+            (notice.ok ? (
+              <SuccessNote>{notice.text}</SuccessNote>
+            ) : (
+              <ErrorState message={notice.text} />
+            ))}
         </div>
       </Panel>
 
       <Panel title={t('admin.pricing.heading', { count: rules?.length ?? 0 })}>
-        {rules === null ? (
+        {loadError ? (
+          <LoadFailure message={loadError} onRetry={() => void load()} />
+        ) : rules === null ? (
           <SkeletonTable rows={4} columns={6} />
         ) : rules.length === 0 ? (
           <EmptyState title={t('admin.pricing.empty')} icon={<IconReceipt />} />
@@ -377,7 +384,7 @@ function RateCard({
     <div className="ledger-sheet rate-card">
       <div className="rate-columns">
         {groups.map((group) => {
-          const labelKey = ACTION_LABEL[group.type];
+          const name = pricingActionName(t, group.type);
           const id = `rate-${group.type.replace(/[^a-z0-9]+/gi, '-')}`;
           return (
             <section
@@ -387,7 +394,7 @@ function RateCard({
               data-action={group.type}
             >
               <h3 className="rate-group-title" id={id}>
-                {labelKey ? t(labelKey) : <Code value={group.type} />}
+                {name ?? <Code value={group.type} />}
               </h3>
               <ul className="rate-lines">
                 {group.rules.map(({ rule, state }) => {

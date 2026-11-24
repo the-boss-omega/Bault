@@ -1,3 +1,69 @@
+export type TierKey = 'bronze' | 'silver' | 'gold';
+
+export const TIER_KEYS: readonly TierKey[] = ['bronze', 'silver', 'gold'];
+
+export const TIER_WINDOW_DAYS = 90;
+
+export interface TierRule {
+  key: TierKey;
+  minActions: number;
+  minSpentMinor: number;
+  discountBps: number;
+}
+
+export const TIER_RULES: readonly TierRule[] = [
+  { key: 'bronze', minActions: 0, minSpentMinor: 0, discountBps: 0 },
+  { key: 'silver', minActions: 10, minSpentMinor: 50_000, discountBps: 1_000 },
+  { key: 'gold', minActions: 30, minSpentMinor: 200_000, discountBps: 2_000 },
+];
+
+export interface TierUsage {
+  actions: number;
+  spentMinor: number;
+}
+
+export function isTierKey(value: unknown): value is TierKey {
+  return typeof value === 'string' && (TIER_KEYS as readonly string[]).includes(value);
+}
+
+export function tierRule(key: string | null | undefined): TierRule {
+  return TIER_RULES.find((r) => r.key === key) ?? TIER_RULES[0]!;
+}
+
+export function tierFor(usage: TierUsage): TierKey {
+  let reached: TierKey = 'bronze';
+  for (const rule of TIER_RULES) {
+    if (usage.actions >= rule.minActions || usage.spentMinor >= rule.minSpentMinor) reached = rule.key;
+  }
+  return reached;
+}
+
+export interface NextTier {
+  tier: TierKey;
+  minActions: number;
+  minSpentMinor: number;
+  actionsToGo: number;
+  spentToGoMinor: number;
+}
+
+export function nextTier(current: string, usage: TierUsage): NextTier | null {
+  const at = TIER_RULES.findIndex((r) => r.key === current);
+  const next = TIER_RULES[at + 1];
+  if (!next) return null;
+  return {
+    tier: next.key,
+    minActions: next.minActions,
+    minSpentMinor: next.minSpentMinor,
+    actionsToGo: Math.max(0, next.minActions - usage.actions),
+    spentToGoMinor: Math.max(0, next.minSpentMinor - usage.spentMinor),
+  };
+}
+
+export function discountedMinor(listMinor: number, discountBps: number): number {
+  if (listMinor <= 0 || discountBps <= 0) return listMinor;
+  return listMinor - Math.round((listMinor * discountBps) / 10_000);
+}
+
 export const UNLIMITED = -1;
 
 export const ALLOWANCE_ALIASES: Readonly<Record<string, string>> = {
@@ -8,53 +74,34 @@ export function allowanceFor(billedAs: string): string {
   return ALLOWANCE_ALIASES[billedAs] ?? billedAs;
 }
 
-export type TierKey = 'bronze' | 'silver' | 'gold';
-
-export const TIER_KEYS: readonly TierKey[] = ['bronze', 'silver', 'gold'];
-
-export interface MembershipTier {
+export interface HonouredAllowance {
   key: TierKey;
-  feeActionType: string;
-  listPriceMinor: number;
-
   perCycle: Record<string, number>;
-
-  storedItems: number;
-
   insuredShipments: number;
   insuredValueCapMinor: number;
-
   postageCreditMinor: number;
-
   commissionWaivedOnMinor: number;
-
   escrowValueCapMinor: number;
-
-  perks: readonly string[];
+  rushIncluded: boolean;
 }
 
-export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
+export const HONOURED_ALLOWANCES: readonly HonouredAllowance[] = [
   {
     key: 'bronze',
-    feeActionType: 'membership:bronze',
-    listPriceMinor: 3_900,
     perCycle: {
       intake: 4,
       parcel_processing: 2,
       'service_fee:deslab': 2,
     },
-    storedItems: 60,
     insuredShipments: 1,
     insuredValueCapMinor: 50_000,
     postageCreditMinor: 1_000,
     commissionWaivedOnMinor: 0,
     escrowValueCapMinor: 0,
-    perks: ['storage_clock_stops', 'handling_included'],
+    rushIncluded: false,
   },
   {
     key: 'silver',
-    feeActionType: 'membership:silver',
-    listPriceMinor: 19_900,
     perCycle: {
       intake: 10,
       parcel_processing: 5,
@@ -63,18 +110,15 @@ export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
       'service_fee:condition_inspection': 2,
       'service_fee:video_review': 2,
     },
-    storedItems: 200,
     insuredShipments: 3,
     insuredValueCapMinor: 100_000,
     postageCreditMinor: 3_000,
     commissionWaivedOnMinor: 100_000,
     escrowValueCapMinor: 0,
-    perks: ['storage_clock_stops', 'handling_included', 'oversized_storage', 'rush_included', 'priority_queue'],
+    rushIncluded: true,
   },
   {
     key: 'gold',
-    feeActionType: 'membership:gold',
-    listPriceMinor: 69_900,
     perCycle: {
       intake: 25,
       parcel_processing: UNLIMITED,
@@ -88,73 +132,27 @@ export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
       cash_out_fee: 2,
       show_pickup: 2,
     },
-    storedItems: 750,
     insuredShipments: 6,
     insuredValueCapMinor: 250_000,
     postageCreditMinor: 10_000,
     commissionWaivedOnMinor: 300_000,
     escrowValueCapMinor: 500_000,
-    perks: [
-      'storage_clock_stops',
-      'handling_included',
-      'oversized_storage',
-      'rush_included',
-      'priority_queue',
-      'named_contact',
-    ],
+    rushIncluded: true,
   },
 ];
 
-const BY_KEY = new Map(MEMBERSHIP_TIERS.map((t) => [t.key, t]));
-
-export function membershipTier(key: string | null | undefined): MembershipTier | undefined {
-  return key ? BY_KEY.get(key as TierKey) : undefined;
+export function honouredAllowance(key: string | null | undefined): HonouredAllowance | undefined {
+  return key ? HONOURED_ALLOWANCES.find((a) => a.key === key) : undefined;
 }
 
-export function isTierKey(value: string): value is TierKey {
-  return BY_KEY.has(value as TierKey);
-}
-
-export function tierRank(key: string | null | undefined): number {
-  return key ? TIER_KEYS.indexOf(key as TierKey) : -1;
-}
-
-export const UNCOVERED = [
-  'carrier_postage_above_credit',
-  'grading_fees',
-  'white_glove',
-  'insurance_above_cap',
-  'consignment_commission',
-  'chargeback_fee',
-  'restocking_fee',
-] as const;
-
-export function remaining(tier: MembershipTier, action: string, used: number): number {
-  const allowed = tier.perCycle[action];
+export function remaining(allowance: HonouredAllowance, action: string, used: number): number {
+  const allowed = allowance.perCycle[action];
   if (allowed === undefined) return 0;
   if (allowed === UNLIMITED) return UNLIMITED;
   return Math.max(0, allowed - used);
 }
 
-export function covers(tier: MembershipTier, action: string, used: number): boolean {
-  const left = remaining(tier, action, used);
+export function covers(allowance: HonouredAllowance, action: string, used: number): boolean {
+  const left = remaining(allowance, action, used);
   return left === UNLIMITED || left > 0;
-}
-
-export function fullUseCostMinor(
-  tier: MembershipTier,
-  unitPrices: Record<string, number>,
-  fairUse: Record<string, number> = {},
-  storageUnitMinorPerItemPerCycle = 17,
-): number {
-  let total = 0;
-  for (const [action, allowed] of Object.entries(tier.perCycle)) {
-    const count = allowed === UNLIMITED ? (fairUse[action] ?? 10) : allowed;
-    total += count * (unitPrices[action] ?? 0);
-  }
-  total += tier.storedItems * storageUnitMinorPerItemPerCycle;
-  total += tier.insuredShipments * Math.max(200, Math.ceil((tier.insuredValueCapMinor * 150) / 10_000));
-  total += tier.postageCreditMinor;
-  total += Math.ceil((tier.commissionWaivedOnMinor * 500) / 10_000);
-  return total;
 }

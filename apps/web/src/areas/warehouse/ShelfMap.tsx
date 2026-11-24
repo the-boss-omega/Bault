@@ -17,24 +17,17 @@ export interface ShelfCount {
 
 const MAX_PIPS = 12;
 
-/**
- * The floor, as the report sees it: every shelf, grouped into the zone it is in,
- * each as a slot that shows its barcode, how many items are on it and one mark
- * for each. An empty shelf is dashed, a shelf out of service is hatched, and an
- * oversized shelf is twice as wide. Items that are on no shelf stand on a tray of
- * their own. The counts are the shelf report's; the table of the same figures is
- * on the Inventory tab. A shelf opens, where the screen says what to do with it
- * (`onOpen`), to what is on it.
- */
 export function ShelfMap({
   bins,
   counts,
   onOpen,
+  onOpenTray,
   t,
 }: {
   bins: readonly ShelfBin[];
   counts: readonly ShelfCount[];
   onOpen?: (bin: ShelfBin) => void;
+  onOpenTray?: () => void;
   t: TranslateFn;
 }) {
   const { zones, unshelved } = useMemo(() => {
@@ -64,7 +57,7 @@ export function ShelfMap({
               <span className="shelf-zone-name">
                 {t('warehouse.bins.colZone')} <b>{zone}</b>
               </span>
-              <span className="shelf-zone-total">{total.toLocaleString()}</span>
+              <span className="shelf-zone-total">{total.toLocaleString('en-US')}</span>
             </header>
             <ul className="shelf-rack">
               {slots.map(({ bin, count }) => {
@@ -74,7 +67,7 @@ export function ShelfMap({
                     <span className="shelf-bin">
                       <bdi dir="ltr">{bin.barcode}</bdi>
                     </span>
-                    <span className="shelf-count">{count.toLocaleString()}</span>
+                    <span className="shelf-count">{count.toLocaleString('en-US')}</span>
                     <Pips count={count} />
                     <span className="shelf-note">
                       {t(bin.oversized ? 'warehouse.bins.kind.oversized' : 'warehouse.bins.kind.standard')}
@@ -123,13 +116,26 @@ export function ShelfMap({
         <section className="shelf-zone shelf-zone--tray" aria-label={t('warehouse.status.unshelved')}>
           <header className="shelf-zone-head">
             <span className="shelf-zone-name">{t('warehouse.status.unshelved')}</span>
-            <span className="shelf-zone-total">{unshelved.toLocaleString()}</span>
+            <span className="shelf-zone-total">{unshelved.toLocaleString('en-US')}</span>
           </header>
           <ul className="shelf-rack">
             <li className="shelf-cell">
-              <div className="shelf-slot" data-state="tray">
-                <Pips count={unshelved} />
-              </div>
+              {onOpenTray ? (
+                <button
+                  type="button"
+                  className="shelf-slot"
+                  data-state="tray"
+                  title={t('warehouse.shelf.openTray')}
+                  aria-label={t('warehouse.shelf.openTrayCount', { count: unshelved })}
+                  onClick={onOpenTray}
+                >
+                  <Pips count={unshelved} />
+                </button>
+              ) : (
+                <div className="shelf-slot" data-state="tray">
+                  <Pips count={unshelved} />
+                </div>
+              )}
             </li>
           </ul>
         </section>
@@ -138,7 +144,6 @@ export function ShelfMap({
   );
 }
 
-/** One mark per item, a card on its edge, up to a dozen; the count beside them says the rest. */
 function Pips({ count }: { count: number }) {
   const shown = Math.min(count, MAX_PIPS);
   return (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../shared/api';
 import { formatUsd } from '../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../shared/i18n';
@@ -13,6 +13,7 @@ import {
   type StatusTone,
 } from '../../shared/ui/primitives';
 import { IconChevronRight, IconRefresh } from '../../shared/ui/icons';
+import { LoadFailure } from './RollTools';
 
 export interface PricingCoverage {
   ready: boolean;
@@ -106,16 +107,21 @@ export function PricingCoveragePanel({
 }) {
   const { t } = useI18n();
   const [coverage, setCoverage] = useState<PricingCoverage | null>(null);
+  const coverageRef = useRef<PricingCoverage | null>(null);
+  coverageRef.current = coverage;
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const next = await api.get<PricingCoverage>('/admin/pricing/coverage');
       setCoverage(next);
       onLoaded?.(next);
     } catch (e) {
-      onError((e as Error).message);
+      if (coverageRef.current === null) setLoadError((e as Error).message);
+      else onError((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -149,7 +155,9 @@ export function PricingCoveragePanel({
         </Button>
       }
     >
-      {coverage === null ? (
+      {loadError ? (
+        <LoadFailure message={loadError} onRetry={() => void load()} />
+      ) : coverage === null ? (
         <SkeletonTable rows={4} columns={4} />
       ) : (
         <div className="coverage">

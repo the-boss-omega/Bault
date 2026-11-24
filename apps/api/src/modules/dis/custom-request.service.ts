@@ -4,12 +4,14 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
-import { formatMinor } from '../../shared/money';
+import { usdAmount } from '../shp/shipping-options';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { WalletService } from '../pay/wallet.service';
 import { item } from '../cst/cst.schema';
-import { ServiceRequestService } from './service.service';
+import { CUSTOM_QUOTE_ACTION, ServiceRequestService } from './service.service';
+import { charge } from '../pay/pay.schema';
+import { PricingService } from '../prc/pricing.service';
 
 export interface CustomRequestInput {
   itemId?: string;
@@ -43,6 +45,7 @@ export class CustomRequestService {
     private readonly wallet: WalletService,
     private readonly ledger: LedgerService,
     private readonly outbox: OutboxService,
+    private readonly pricing: PricingService,
   ) {}
 
   async ask(requesterId: string, input: CustomRequestInput) {
@@ -140,6 +143,7 @@ export class CustomRequestService {
           },
           tx,
         );
+        await this.requests.markQuoteRefunded(tx as Database, req.id);
       }
 
       const updated = await this.requests.setStatus(tx, requestId, 'cancelled', {
@@ -175,24 +179,49 @@ export class CustomRequestService {
       }
 
       await this.wallet.assertNotBlocked(requesterId, tx);
+      await this.ledger.lockWallet(requesterId, tx as Database);
       const balance = await this.ledger.balanceOf(requesterId, tx);
       if (balance.amount < priceMinor) {
         throw new AppError(
           ErrorCode.INSUFFICIENT_BALANCE,
-          `This quote is ${formatMinor(priceMinor)} and your balance is ${formatMinor(balance.amount)}. Cash in first, then accept.`,
+          `This quote is ${usdAmount(priceMinor)} and your balance is ${usdAmount(balance.amount)}. Cash in first, then accept.`,
           409,
         );
       }
 
+      const [c] = await tx
+        .insert(charge)
+        .values({
+          userId: requesterId,
+          actionType: CUSTOM_QUOTE_ACTION,
+          pricingRuleSnapshot: {
+            customQuote: true,
+            priceMinor,
+            scope: fields.scope ?? null,
+            quotedBy: fields.quotedBy ?? null,
+            quotedAt: fields.quotedAt ?? null,
+            tier: await this.pricing.tierOf(requesterId, tx as Database),
+            discountBps: 0,
+            listMinor: priceMinor,
+            chargedMinor: priceMinor,
+          },
+          amount: priceMinor,
+          currency: DEFAULT_CURRENCY,
+          paymentMeans: 'wallet',
+          status: 'settled',
+          referenceId: req.id,
+        })
+        .returning({ id: charge.id });
+      if (!c) throw AppError.validation('Failed to charge for the quote.');
       await this.ledger.record(
         {
           userId: requesterId,
-          type: 'fee',
+          type: 'service_charge',
           amount: priceMinor,
           direction: 'debit',
           currency: DEFAULT_CURRENCY,
-          referenceType: 'service_request',
-          referenceId: req.id,
+          referenceType: 'charge',
+          referenceId: c.id,
         },
         tx,
       );

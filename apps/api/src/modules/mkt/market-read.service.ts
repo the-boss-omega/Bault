@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -16,20 +17,14 @@ export class MarketReadService {
     const username = normalizeUsername(rawUsername ?? '');
     if (!username) throw AppError.validation('A username is required');
     const [row] = await this.db
-      .select({
-        id: userAccount.id,
-        username: userAccount.username,
-        firstName: userAccount.firstName,
-        lastName: userAccount.lastName,
-        status: userAccount.status,
-      })
+      .select({ id: userAccount.id, username: userAccount.username, status: userAccount.status })
       .from(userAccount)
       .where(eq(userAccount.username, username))
       .limit(1);
     if (!row) throw AppError.notFound(`No collector with username ${username}`);
     if (row.id === callerId) throw AppError.validation('That is your own account');
     if (row.status !== 'active') throw AppError.validation('That collector cannot trade right now');
-    return { id: row.id, username: row.username, firstName: row.firstName, lastName: row.lastName };
+    return { id: row.id, username: row.username };
   }
 
   async collectorProfile(rawUsername: string, callerId: string) {
@@ -110,6 +105,7 @@ export class MarketReadService {
   }
 
   async myOffers(userId: string) {
+    const sellerAccount = alias(userAccount, 'seller_account');
     const rows = await this.db
       .select({
         id: offer.id,
@@ -129,11 +125,13 @@ export class MarketReadService {
         typeClass: item.typeClass,
         description: item.description,
         buyerUsername: userAccount.username,
+        sellerUsername: sellerAccount.username,
       })
       .from(offer)
       .innerJoin(listing, eq(listing.id, offer.listingId))
       .innerJoin(item, sql`${item.id}::text = ${listing.itemId}`)
       .leftJoin(userAccount, eq(userAccount.id, offer.buyerId))
+      .leftJoin(sellerAccount, eq(sellerAccount.id, listing.sellerId))
       .where(or(eq(offer.buyerId, userId), eq(listing.sellerId, userId)))
       .orderBy(desc(offer.createdAt));
 
@@ -148,11 +146,12 @@ export class MarketReadService {
     });
   }
 
-  async mySwaps(userId: string) {
+  async mySwaps(userId: string, swapId?: string) {
+    const mine = or(eq(swapProposal.proposerId, userId), eq(swapProposal.responderId, userId));
     const rows = await this.db
       .select()
       .from(swapProposal)
-      .where(or(eq(swapProposal.proposerId, userId), eq(swapProposal.responderId, userId)))
+      .where(swapId ? and(mine, eq(swapProposal.id, swapId)) : mine)
       .orderBy(desc(swapProposal.createdAt));
 
     const ids = [
@@ -189,7 +188,7 @@ export class MarketReadService {
         : [];
     const itemById = new Map(items.map((i) => [i.id, i]));
     const resolve = (list: unknown) =>
-      ((list as string[]) ?? []).map((id) => itemById.get(id) ?? { id, description: id });
+      ((list as string[]) ?? []).map((id) => itemById.get(id) ?? { id, description: 'A card that is no longer in the vault' });
 
     return rows.map((r) => {
       const requested = (r.requestedItemIds as string[]) ?? [];

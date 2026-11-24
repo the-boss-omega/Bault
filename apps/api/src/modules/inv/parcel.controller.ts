@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
@@ -6,6 +7,7 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsISO8601,
   IsOptional,
   IsString,
   MaxLength,
@@ -26,7 +28,7 @@ class RegisterParcelDto {
   @IsOptional() @IsString() @MaxLength(120) trackingNumber?: string;
   @IsOptional() @IsString() @MaxLength(500) declaredContents?: string;
   @IsOptional() @IsBoolean() internationalOrigin?: boolean;
-  @IsOptional() @IsString() expectedAt?: string;
+  @IsOptional() @IsISO8601() expectedAt?: string;
 }
 
 const MAX_PHOTOS = 6;
@@ -79,7 +81,9 @@ export class ParcelController {
 
   @Get('me/inbound-addresses')
   inboundAddresses(@CurrentUser() user: AuthUser) {
-    return this.facilities.inboundAddressesFor(user.id);
+    return this.facilities.inboundAddressesFor(user.id, {
+      staff: user.role === 'warehouse_operator' || user.role === 'admin',
+    });
   }
 
   @Get('me/parcels')
@@ -127,11 +131,20 @@ export class ParcelController {
     return this.parcels.receiveMany(user.id, dto.parcels);
   }
 
+  @Roles('warehouse_operator', 'admin')
+  @Get('parcels/:id/label.pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'inline; filename="label.pdf"')
+  async label(@Param('id') id: string, @Res({ passthrough: true }) res: Response) {
+    const pdf = await this.parcels.labelPdf(id);
+    res.setHeader('Content-Length', pdf.length);
+    return res.end(pdf);
+  }
+
   @Get('parcels/:id/photos')
   async photos(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     const staff = user.role === 'warehouse_operator' || user.role === 'admin';
-    await this.parcels.detailFor(user.id, id, staff);
-    return this.parcels.photos(id);
+    return this.parcels.photosFor(user.id, id, staff);
   }
 
   @Roles('warehouse_operator', 'admin')

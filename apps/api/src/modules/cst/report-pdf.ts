@@ -11,8 +11,11 @@ interface ReportDoc {
   total: number;
 }
 
-function escapeText(s: string): string {
+export function escapeText(s: string): string {
   return s
+    .replace(/[\u2013\u2014\u00b7\u2022]/g, '-')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
     .replace(/[\\()]/g, (c) => `\\${c}`)
     .replace(/[^\x20-\x7e]/g, '?');
 }
@@ -64,28 +67,46 @@ export function renderReportPdf(doc: ReportDoc): Buffer {
     chunks.push(doc.rows.slice(i, i + ROWS_PER_PAGE));
   }
   const pageCount = chunks.length;
+  return assemblePdf(
+    chunks.map((rows, p) => ({
+      width: PAGE_W,
+      height: PAGE_H,
+      content: buildPageContent(doc, rows, p, pageCount),
+    })),
+    ['Helvetica', 'Helvetica-Bold'],
+  );
+}
 
+export interface PdfPage {
+  width: number;
+  height: number;
+  content: string;
+}
+
+export function assemblePdf(pages: readonly PdfPage[], fonts: readonly string[]): Buffer {
   const objects: string[] = [];
   const kidIds: number[] = [];
-  const contentAndPageStart = 5;
-  for (let p = 0; p < pageCount; p += 1) {
+  const firstFont = 3;
+  const contentAndPageStart = firstFont + fonts.length;
+  for (let p = 0; p < pages.length; p += 1) {
     kidIds.push(contentAndPageStart + p * 2 + 1);
   }
 
   objects[1] = `<< /Type /Catalog /Pages 2 0 R >>`;
-  objects[2] = `<< /Type /Pages /Kids [${kidIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageCount} >>`;
-  objects[3] = `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>`;
-  objects[4] = `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>`;
+  objects[2] = `<< /Type /Pages /Kids [${kidIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`;
+  fonts.forEach((name, i) => {
+    objects[firstFont + i] = `<< /Type /Font /Subtype /Type1 /BaseFont /${name} >>`;
+  });
+  const fontRefs = fonts.map((_, i) => `/F${i + 1} ${firstFont + i} 0 R`).join(' ');
 
-  for (let p = 0; p < pageCount; p += 1) {
+  pages.forEach((page, p) => {
     const contentId = contentAndPageStart + p * 2;
     const pageId = contentId + 1;
-    const content = buildPageContent(doc, chunks[p] ?? [], p, pageCount);
-    objects[contentId] = `<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}\nendstream`;
+    objects[contentId] = `<< /Length ${Buffer.byteLength(page.content, 'latin1')} >>\nstream\n${page.content}\nendstream`;
     objects[pageId] =
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] ` +
-      `/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`;
-  }
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.width} ${page.height}] ` +
+      `/Resources << /Font << ${fontRefs} >> >> /Contents ${contentId} 0 R >>`;
+  });
 
   let pdf = '%PDF-1.4\n';
   const offsets: number[] = [];

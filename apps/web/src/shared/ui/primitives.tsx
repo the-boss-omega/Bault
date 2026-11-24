@@ -505,6 +505,12 @@ export function ContextTabs({
       list.style.setProperty('--tab-w', `${t.width}px`);
       list.dataset.ready = 'true';
     };
+    const edges = () => {
+      if (!live) return;
+      const max = list.scrollWidth - list.clientWidth;
+      list.dataset.moreStart = String(max > 1 && list.scrollLeft > 1);
+      list.dataset.moreEnd = String(max > 1 && list.scrollLeft < max - 1);
+    };
     const reveal = () => {
       const tab = list.querySelector<HTMLElement>('[aria-selected="true"]');
       if (!live || !tab) return;
@@ -516,15 +522,25 @@ export function ContextTabs({
     };
     place();
     reveal();
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
+    edges();
+    list.addEventListener('scroll', edges, { passive: true });
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            place();
+            edges();
+          });
     observer?.observe(list);
     list.querySelectorAll('[role="tab"]').forEach((el) => observer?.observe(el));
     void document.fonts?.ready.then(() => {
       place();
       reveal();
+      edges();
     });
     return () => {
       live = false;
+      list.removeEventListener('scroll', edges);
       observer?.disconnect();
     };
   }, [active, count, labels]);

@@ -29,7 +29,6 @@ jobs:
     env:
       DATABASE_URL: postgres://bault:bault@localhost:5432/bault
       DIRECT_DATABASE_URL: postgres://bault:bault@localhost:5432/bault
-      SESSION_COOKIE_SECRET: ci-test-secret-value-1234567890
       PAYMENT_PROVIDER: sandbox
       NODE_ENV: test
       STORAGE_PROVIDER: s3
@@ -41,6 +40,7 @@ jobs:
       API_PORT: 3000
       AUTH_RATE_LIMIT_PER_MINUTE: 5000
       RATE_LIMIT_PER_MINUTE: 20000
+      CORS_ORIGINS: http://localhost:4180
       MINIO_VERSION: v0.0.0-20250907161309-07c3a429bfed
 
     steps:
@@ -160,6 +160,21 @@ jobs:
           pnpm --filter @bault/api db:seed
           pnpm test:worker
 
+      - name: Browser journeys (collector, operator, administrator)
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:journeys
+        env:
+          JOURNEY_FAILURES: ${{ runner.temp }}/journey-failures
+
+      - name: Keep what the journeys saw when one fails
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: journey-failures
+          path: ${{ runner.temp }}/journey-failures
+          if-no-files-found: ignore
+
       - name: Stop the API
         if: always()
         run: kill "$(cat /tmp/api.pid)" || true
@@ -234,9 +249,9 @@ jobs:
             SELECT count(*) FROM pg_operator
              WHERE oprname IN ('=', '<>')
                AND (oprleft, oprright) IN (('uuid'::regtype, 'text'::regtype), ('text'::regtype, 'uuid'::regtype));")"
-          echo "guard triggers: ${triggers} (expected 11), uuid/text operators: ${operators} (expected 4)"
+          echo "guard triggers: ${triggers} (expected 12), uuid/text operators: ${operators} (expected 4)"
           psql "$DIRECT_DATABASE_URL" -c "SELECT tgrelid::regclass AS table, tgname FROM pg_trigger WHERE NOT tgisinternal ORDER BY 1, 2;"
-          [ "$triggers" = "11" ] && [ "$operators" = "4" ]
+          [ "$triggers" = "12" ] && [ "$operators" = "4" ]
 
       - name: The migration wrote one platform custodian, and a second run adds none
         run: |

@@ -866,8 +866,6 @@ like.
   fees (a statement), the accounts and items (rolls opened in a drawer), the wallet requests (a desk) and the
   Bault store (the product as buyers see it). Every form that makes a request or a record has its slip
   (section 8), the doors are slips with a stub, and the warehouse's benches have their docket.
-- `docs/design/type-specimen.html` is the first edition's IBM Plex specimen, kept as a record; it no
-  longer renders as it did.
 
 ---
 
