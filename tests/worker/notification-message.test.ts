@@ -81,6 +81,12 @@ describe('the sentence a collector reads for each event', () => {
     );
   });
 
+  it('tells the other side when a deal is called off before it is funded', () => {
+    const cancelled = notificationMessage('escrow_cancelled', { dealCode: 'ESC-7K2M9QRS', reason: 'Changed my mind.' });
+    expect(cancelled).toBe('Deal ESC-7K2M9QRS was called off before any money was held. The reason given: Changed my mind.');
+    noIds(cancelled);
+  });
+
   it('writes a buyout quote and each custom request step as a sentence', () => {
     expect(
       notificationMessage('buyout_quoted', { requestCode: 'SR-7K2M9QRS', amount: 12_000 }),

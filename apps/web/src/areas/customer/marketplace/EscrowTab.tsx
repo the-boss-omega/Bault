@@ -500,6 +500,7 @@ function DealDrawer({
   const { deal, events } = detail;
   const iAmBuyer = deal.myRole === 'buyer';
   const iAmSeller = deal.myRole === 'seller';
+  const fundMinor = deal.valueMinor + (deal.raiserRole === 'buyer' ? deal.feeMinor : 0);
   const mismatch = deal.inspectionMatches === 'no';
   const myRelease = iAmBuyer ? deal.buyerReleasedAt : deal.sellerReleasedAt;
 
@@ -589,7 +590,7 @@ function DealDrawer({
             disabled={busy}
             onClick={() => setConfirming('fund')}
           >
-            {t('esc.fund', { amount: formatUsd(deal.valueMinor) })}
+            {t('esc.fund', { amount: formatUsd(fundMinor) })}
           </Button>
           <span className="field-hint">{t('esc.fundHint')}</span>
         </div>
@@ -669,7 +670,7 @@ function DealDrawer({
                 : confirming === 'release'
                   ? 'escrow.confirm.releaseBody'
                   : 'escrow.confirm.returnBody',
-              { amount: formatUsd(deal.valueMinor), code: deal.code },
+              { amount: formatUsd(confirming === 'release' ? deal.valueMinor : fundMinor), code: deal.code },
             )}
           </p>
         }

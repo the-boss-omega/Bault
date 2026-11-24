@@ -79,6 +79,7 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
   { key: 'escrow_inspected', category: 'marketplace', label: 'A deal card has been inspected', emailByDefault: true },
   { key: 'escrow_settled', category: 'marketplace', label: 'A deal settles', emailByDefault: true },
   { key: 'escrow_returned', category: 'marketplace', label: 'A deal is returned', emailByDefault: true },
+  { key: 'escrow_cancelled', category: 'marketplace', label: 'A deal is called off before it is funded', emailByDefault: true },
 
   { key: 'white_glove_requested', category: 'shipping', label: 'We have your hand-delivery request', emailByDefault: false },
   { key: 'white_glove_quoted', category: 'shipping', label: 'Your hand delivery is quoted', emailByDefault: true },

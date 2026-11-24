@@ -481,6 +481,7 @@ const en = {
   'notifications.event.escrow_inspected': 'Deal item inspected',
   'notifications.event.escrow_settled': 'Deal settled',
   'notifications.event.escrow_returned': 'Deal returned',
+  'notifications.event.escrow_cancelled': 'Deal called off',
   'notifications.event.white_glove_requested': 'Hand delivery requested',
   'notifications.event.white_glove_quoted': 'Hand delivery quoted',
   'notifications.event.show_pickup_booked': 'Show pickup booked',

@@ -198,6 +198,171 @@ describe('ESC escrow and human fulfilment', () => {
     expect(res.status).toBe(409);
   });
 
+  async function freshCollector(label: string, cashInMinor: number) {
+    const admin = await signIn(SEED.admin);
+    const account = await activeAccount(label);
+    const client = await passwordOnly(account);
+    const cashIn = async (amountMinor: number) => {
+      const req = await client.post('/finance/wallet-requests', {
+        type: 'cash_in',
+        amountMinor,
+        currency: 'USD',
+        fundingSource: 'bank_transfer',
+        reference: `${label}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+      });
+      expect(req.status).toBe(201);
+      expect((await admin.post(`/admin/wallet-requests/${req.body.id}/approve`, {})).status).toBe(201);
+      expect((await admin.post(`/admin/wallet-requests/${req.body.id}/complete`, {})).status).toBe(201);
+    };
+    if (cashInMinor > 0) await cashIn(cashInMinor);
+    return { account, client, cashIn };
+  }
+
+  it('holds the fee with the value when the buyer raises the deal, and never leaves them negative', async () => {
+    const operator = await signIn(SEED.operator);
+    const seller = await signIn(SEED.collector);
+    const VALUE = 600_000;
+    const { account, client: buyer, cashIn } = await freshCollector('esc-buyer-raiser', VALUE);
+    expect(await balanceOf(buyer)).toBe(VALUE);
+
+    const deal = (
+      await buyer.post('/escrow', {
+        raiserRole: 'buyer',
+        counterpartyUsername: 'red',
+        description: 'A slab the buyer asked to escrow',
+        valueMinor: VALUE,
+        settlement: 'buyer_vault',
+      })
+    ).body;
+    const FEE = deal.feeMinor as number;
+    expect(FEE).toBeGreaterThan(0);
+    expect((await seller.post(`/escrow/${deal.id}/agree`, {})).status).toBe(201);
+
+    const short = await buyer.post(`/escrow/${deal.id}/fund`, {});
+    expect(short.status).toBe(409);
+    expect(short.body.error.code).toBe('insufficient_balance');
+    expect(await balanceOf(buyer)).toBe(VALUE);
+
+    await cashIn(FEE);
+    const funded = await buyer.post(`/escrow/${deal.id}/fund`, {});
+    expect(funded.status).toBe(201);
+    expect(funded.body.heldMinor).toBe(VALUE + FEE);
+    expect(await balanceOf(buyer)).toBe(0);
+    expect((await buyer.get('/escrow/held')).body.heldMinor).toBe(VALUE + FEE);
+
+    const card = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab' });
+    expect((await operator.post(`/escrow/${deal.id}/receive-item`, { itemId: card.id })).status).toBe(201);
+    expect((await operator.post(`/escrow/${deal.id}/inspect`, { matches: true, notes: 'As described.' })).status).toBe(201);
+    expect((await buyer.post(`/escrow/${deal.id}/release`, {})).status).toBe(201);
+    const sellerBefore = await balanceOf(seller);
+    const settled = await seller.post(`/escrow/${deal.id}/release`, {});
+    expect(settled.status).toBe(201);
+    expect(settled.body.status).toBe('settled');
+    const charged = settled.body.feeMinor as number;
+
+    expect(await balanceOf(buyer)).toBe(FEE - charged);
+    expect(await balanceOf(buyer)).toBeGreaterThanOrEqual(0);
+    expect(await balanceOf(seller)).toBe(sellerBefore + VALUE);
+    expect((await buyer.get('/escrow/held')).body.heldMinor).toBe(0);
+    const charges = await sql<{ user_id: string; amount: string }>(
+      `SELECT user_id, amount::text FROM charge WHERE reference_id = $1`,
+      [deal.id],
+    );
+    expect(charges.map((c) => [c.user_id, Number(c.amount)])).toEqual(charged > 0 ? [[account.id, charged]] : []);
+  });
+
+  it('gives a buyer who raised a deal the fee back with the value when it is returned', async () => {
+    const seller = await signIn(SEED.collector);
+    const VALUE = 500_000;
+    const { client: buyer } = await freshCollector('esc-buyer-return', VALUE + 5_000);
+    const deal = (
+      await buyer.post('/escrow', {
+        raiserRole: 'buyer',
+        counterpartyUsername: 'red',
+        description: 'A slab that never arrives',
+        valueMinor: VALUE,
+        settlement: 'buyer_vault',
+      })
+    ).body;
+    await seller.post(`/escrow/${deal.id}/agree`, {});
+    expect((await buyer.post(`/escrow/${deal.id}/fund`, {})).status).toBe(201);
+    expect(await balanceOf(buyer)).toBe(VALUE + 5_000 - VALUE - deal.feeMinor);
+    const returned = await buyer.post(`/escrow/${deal.id}/return`, { reason: 'The seller never sent it.' });
+    expect(returned.status).toBe(201);
+    expect(returned.body.refundedMinor).toBe(VALUE + deal.feeMinor);
+    expect(await balanceOf(buyer)).toBe(VALUE + 5_000);
+  });
+
+  it('refuses a second release from the same side', async () => {
+    const operator = await signIn(SEED.operator);
+    const seller = await signIn(SEED.collector);
+    const buyer = await signIn(SEED.collector2);
+    await fundWallet(SEED.collector2, 510_000);
+    const deal = (
+      await seller.post('/escrow', {
+        raiserRole: 'seller',
+        counterpartyUsername: 'golden',
+        description: 'A slab released twice',
+        valueMinor: 500_000,
+        settlement: 'buyer_vault',
+      })
+    ).body;
+    await buyer.post(`/escrow/${deal.id}/agree`, {});
+    expect((await buyer.post(`/escrow/${deal.id}/fund`, {})).status).toBe(201);
+    const card = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab' });
+    await operator.post(`/escrow/${deal.id}/receive-item`, { itemId: card.id });
+    await operator.post(`/escrow/${deal.id}/inspect`, { matches: true, notes: 'Fine.' });
+    expect((await buyer.post(`/escrow/${deal.id}/release`, {})).status).toBe(201);
+    const again = await buyer.post(`/escrow/${deal.id}/release`, {});
+    expect(again.status).toBe(409);
+    expect(String(again.body.error.message)).toMatch(/already released/i);
+    const events = (await operator.get(`/escrow/${deal.id}`)).body.events as { eventType: string }[];
+    expect(events.filter((e) => e.eventType === 'released_by_buyer')).toHaveLength(1);
+  });
+
+  it('refuses a deal with a collector who cannot trade, a value too large to hold, or an address that is not one', async () => {
+    const { account } = await freshCollector('esc-suspended', 0);
+    await sql(`UPDATE user_account SET status = 'suspended' WHERE id = $1`, [account.id]);
+    const red = await signIn(SEED.collector);
+    const base = { raiserRole: 'seller', description: 'A slab', valueMinor: 500_000, settlement: 'ship_to_buyer' };
+
+    const suspended = await red.post('/escrow', { ...base, counterpartyUsername: account.username });
+    expect(suspended.status).toBe(400);
+    expect(String(suspended.body.error.message)).toMatch(/cannot trade right now/i);
+
+    const staff = await red.post('/escrow', { ...base, counterpartyUsername: 'hermon' });
+    expect(staff.status).toBe(400);
+
+    const huge = await red.post('/escrow', { ...base, counterpartyUsername: 'golden', valueMinor: 3_000_000_000 });
+    expect(huge.status).toBe(400);
+
+    const notAnEmail = await red.post('/escrow', { ...base, counterpartyName: 'A Stranger', counterpartyEmail: 'not an address' });
+    expect(notAnEmail.status).toBe(400);
+    expect(JSON.stringify(notAnEmail.body)).toMatch(/email address we can reach them at/i);
+  });
+
+  it('tells the other side when a deal is called off', async () => {
+    const seller = await signIn(SEED.collector);
+    const deal = (
+      await seller.post('/escrow', {
+        raiserRole: 'seller',
+        counterpartyUsername: 'golden',
+        description: 'A slab the seller thinks better of',
+        valueMinor: 500_000,
+        settlement: 'ship_to_buyer',
+      })
+    ).body;
+    expect((await seller.post(`/escrow/${deal.id}/cancel`, { reason: 'Changed my mind.' })).status).toBe(201);
+    const [golden] = await sql<{ id: string }>(`SELECT id FROM user_account WHERE email = $1`, [SEED.collector2]);
+    const rows = await sql<{ payload: Record<string, unknown> }>(
+      `SELECT payload FROM outbox_message WHERE event_type = 'escrow_cancelled' AND aggregate_id = $1`,
+      [deal.id],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.payload.recipientIds).toEqual([golden!.id]);
+    expect(rows[0]!.payload.dealCode).toBe(deal.code);
+  });
+
   it('records an external party by attestation rather than inventing a ledger row', async () => {
     const operator = await signIn(SEED.operator);
     const seller = await signIn(SEED.collector);

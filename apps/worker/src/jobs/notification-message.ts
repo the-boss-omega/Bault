@@ -266,6 +266,8 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     }
     case 'escrow_returned':
       return `${cap(named(p, 'deal', 'dealCode', 'your deal'))} was returned — ${str(p, 'reason') ?? 'see the deal for the reason'}. Any held funds have gone back to the buyer.`;
+    case 'escrow_cancelled':
+      return `${cap(named(p, 'deal', 'dealCode', 'a deal'))} was called off before any money was held. ${str(p, 'reason') ? `The reason given: ${str(p, 'reason')}` : 'See the deal for the reason.'}`;
     case 'white_glove_requested': {
       const hours = num(p, 'quoteWithinHours');
       return hours != null

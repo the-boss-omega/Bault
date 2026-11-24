@@ -43,6 +43,7 @@ export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
   escrow_inspected: 'notifications.event.escrow_inspected',
   escrow_settled: 'notifications.event.escrow_settled',
   escrow_returned: 'notifications.event.escrow_returned',
+  escrow_cancelled: 'notifications.event.escrow_cancelled',
   white_glove_requested: 'notifications.event.white_glove_requested',
   white_glove_quoted: 'notifications.event.white_glove_quoted',
   show_pickup_booked: 'notifications.event.show_pickup_booked',
