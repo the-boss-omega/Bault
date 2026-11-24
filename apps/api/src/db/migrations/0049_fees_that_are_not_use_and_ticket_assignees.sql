@@ -50,4 +50,6 @@ ALTER TABLE "support_ticket"
   ALTER COLUMN "assigned_to" SET DATA TYPE uuid USING "assigned_to"::uuid;
 --> statement-breakpoint
 ALTER TABLE "support_ticket" ADD CONSTRAINT "support_ticket_assigned_to_user_account_id_fk"
-  FOREIGN KEY ("assigned_to") REFERENCES "public"."user_account"("id") ON DELETE RESTRICT;
+  FOREIGN KEY ("assigned_to") REFERENCES "public"."user_account"("id") ON DELETE RESTRICT NOT VALID;
+--> statement-breakpoint
+ALTER TABLE "support_ticket" VALIDATE CONSTRAINT "support_ticket_assigned_to_user_account_id_fk";
