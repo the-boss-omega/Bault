@@ -66,7 +66,7 @@ export function IntakePolicyPanel() {
         {policy.acceptedClasses.length === 0 ? (
           <EmptyState title={t('policy.accepted.empty')} text="" icon={<IconBox />} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
@@ -118,7 +118,7 @@ export function IntakePolicyPanel() {
             <li key={c.key}>
               <span>
                 <strong>{categoryName(c)}</strong>{' '}
-                <span className="hint ltr-run" lang="en">
+                <span className="hint ltr-run">
                   {c.reason}
                 </span>
               </span>
@@ -134,7 +134,7 @@ export function IntakePolicyPanel() {
               <li key={c.key}>
                 <span>
                   <strong>{categoryName(c)}</strong>{' '}
-                  <span className="hint ltr-run" lang="en">
+                  <span className="hint ltr-run">
                     {c.reason}
                   </span>
                 </span>
@@ -147,7 +147,7 @@ export function IntakePolicyPanel() {
       <Panel title={t('policy.rules.title')}>
         <div className="stack">
           {policy.rules.map((r) => (
-            <div key={r.id} lang="en" className="ltr-run">
+            <div key={r.id} className="ltr-run">
               <h3 className="panel-title" style={{ fontSize: 15, marginBottom: 4 }}>
                 {r.heading}
               </h3>

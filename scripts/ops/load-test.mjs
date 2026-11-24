@@ -10,7 +10,7 @@ export const MIX = [
   { name: 'browse listings', weight: 30, path: () => '/marketplace/listings?limit=24' },
   { name: 'listing detail', weight: 20, needs: 'listing', path: (ctx) => `/marketplace/listings/${pick(ctx.listings)}` },
   { name: 'price list', weight: 10, path: () => '/pricing/list' },
-  { name: 'membership tiers', weight: 5, path: () => '/membership/tiers' },
+  { name: 'usage tiers', weight: 5, path: () => '/tiers' },
   { name: 'vault items', weight: 15, signedIn: true, path: () => '/vault/items' },
   { name: 'wallet', weight: 15, signedIn: true, path: () => '/finance/wallet' },
   { name: 'ledger', weight: 5, signedIn: true, path: () => '/finance/ledger' },
@@ -41,8 +41,8 @@ export function percentile(sorted, p) {
   return sorted[Math.min(sorted.length, Math.max(1, rank)) - 1];
 }
 
-export function summarize(samples) {
-  const by = new Map();
+export function summarize(samples, names = []) {
+  const by = new Map(names.map((name) => [name, []]));
   for (const s of samples) {
     if (!by.has(s.name)) by.set(s.name, []);
     by.get(s.name).push(s);
@@ -191,7 +191,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   await signIns;
   await Promise.all([...inFlight]);
 
-  const summary = summarize(samples);
+  const summary = summarize(samples, [...MIX.map((m) => m.name), 'sign in', 'sign out']);
   say('');
   say('request                          count  errors   p50 ms   p95 ms   p99 ms');
   for (const r of [...summary.rows, summary.overall]) {

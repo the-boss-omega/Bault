@@ -4,12 +4,11 @@ import { useT } from '../../../shared/i18n';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
 import type { SessionUser } from './AuthPage';
 import { DEMO_USERS } from './demoUsers';
-import { SecondFactorForm } from './SecondFactorForm';
+import { AuthCard } from './AuthCard';
+import { SecondFactorForm, type SecondFactorChallenge } from './SecondFactorForm';
 
-interface MfaChallenge {
+interface MfaChallenge extends SecondFactorChallenge {
   status: 'mfa_required';
-  challengeToken: string;
-  expiresAt: string;
 }
 
 function isChallenge(body: SessionUser | MfaChallenge): body is MfaChallenge {
@@ -20,7 +19,9 @@ export function SignInPage({
   onSignedIn,
   onGoToSignUp,
   onGoToForgotPassword,
+  notice = null,
 }: {
+  notice?: string | null;
   onSignedIn: (user: SessionUser) => void;
   onGoToSignUp: () => void;
   onGoToForgotPassword: () => void;
@@ -71,7 +72,7 @@ export function SignInPage({
   if (challenge) {
     return (
       <SecondFactorForm
-        challengeToken={challenge.challengeToken}
+        challenge={challenge}
         onSignedIn={onSignedIn}
         onRestart={(reason) => {
           setChallenge(null);
@@ -82,10 +83,36 @@ export function SignInPage({
   }
 
   return (
-    <form className="auth-card" onSubmit={login}>
-      <h2>{t('auth.signInTitle')}</h2>
+    <AuthCard
+      kicker={t('auth.kicker.signIn')}
+      title={t('auth.signInTitle')}
+      onSubmit={login}
+      stub={
+        <>
+          <p className="auth-switch">
+            <Button variant="link" onClick={onGoToForgotPassword}>
+              {t('auth.forgotLink')}
+            </Button>
+          </p>
 
-      <Field label={t('auth.identifier')} hint={t('auth.identifierHint')} htmlFor="signin-identifier">
+          <p className="auth-switch">
+            {t('auth.noAccount')}{' '}
+            <Button variant="link" onClick={onGoToSignUp}>
+              {t('auth.signUp')}
+            </Button>
+          </p>
+
+          {import.meta.env.DEV && <p className="auth-demo">{DEMO_USERS}</p>}
+        </>
+      }
+    >
+      {notice && !error && <SuccessNote tone="warning">{notice}</SuccessNote>}
+
+      <Field
+        label={t('auth.identifier')}
+        hint={t('auth.identifierHint')}
+        htmlFor="signin-identifier"
+      >
         <input
           id="signin-identifier"
           value={identifier}
@@ -118,24 +145,9 @@ export function SignInPage({
           </Button>
         ))}
 
-      <Button variant="gold" type="submit" block loading={busy}>
+      <Button variant="primary" type="submit" block loading={busy}>
         {t('auth.signIn')}
       </Button>
-
-      <p className="auth-switch">
-        <button className="btn--link" type="button" onClick={onGoToForgotPassword}>
-          {t('auth.forgotLink')}
-        </button>
-      </p>
-
-      <p className="auth-switch">
-        {t('auth.noAccount')}{' '}
-        <button className="btn--link" type="button" onClick={onGoToSignUp}>
-          {t('auth.signUp')}
-        </button>
-      </p>
-
-      {import.meta.env.DEV && <p className="auth-demo">{DEMO_USERS}</p>}
-    </form>
+    </AuthCard>
   );
 }

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { billableActions, coverage } from '../../apps/api/src/modules/prc/billable-actions';
-import { MEMBERSHIP_TIERS } from '../../apps/api/src/modules/mem/tiers';
 
 const get = vi.fn();
 const post = vi.fn();
@@ -30,18 +29,10 @@ function renderIn(ui: React.ReactElement) {
 
 const UNPRICED = JSON.parse(JSON.stringify(coverage(billableActions(), []))) as ReturnType<typeof coverage>;
 
-const TIERS = {
-  tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
-  uncovered: [],
-  cycleDays: 30,
-  currency: 'USD',
-};
-
 function consoleApi(overrides: Record<string, unknown> = {}) {
   get.mockImplementation(async (path: string) => {
     if (path in overrides) return overrides[path];
     if (path === '/admin/pricing/coverage') return UNPRICED;
-    if (path === '/membership/tiers') return TIERS;
     return [];
   });
 }
@@ -75,8 +66,9 @@ describe('the pricing form', () => {
 
     const missing = UNPRICED.actions.filter((a) => a.status === 'missing').map((a) => a.actionType);
     expect(missing).toEqual(
-      expect.arrayContaining(['parcel_processing', 'parcel_forwarding', 'membership:folio', 'membership:trust']),
+      expect.arrayContaining(['parcel_processing', 'parcel_forwarding']),
     );
+    expect(missing.some((a) => a.startsWith('membership:'))).toBe(false);
 
     let offered: string[] = [];
     await waitFor(() => {
@@ -85,6 +77,23 @@ describe('the pricing form', () => {
       expect(offered).toEqual(expect.arrayContaining(missing));
     });
     expect(new Set(offered)).toEqual(new Set(UNPRICED.actions.map((a) => a.actionType)));
+  });
+
+  it('offers a percentage only for an action priced on an amount', async () => {
+    const user = userEvent.setup();
+    consoleApi();
+    window.location.hash = '#/admin/pricing';
+    renderIn(<AdminConsole currentUserId="me" />);
+
+    const select = await actionPicker();
+    const models = () =>
+      [...(screen.getByRole('combobox', { name: /^model/i }) as HTMLSelectElement).options].map((o) => o.value);
+
+    await user.selectOptions(select, 'intake');
+    expect(models()).toEqual(['fixed']);
+
+    await user.selectOptions(select, 'marketplace_fee');
+    expect(models()).toEqual(['fixed', 'percentage']);
   });
 
   it('prices parcel forwarding from the screen', async () => {
@@ -101,31 +110,6 @@ describe('the pricing form', () => {
         expect.objectContaining({ actionType: 'parcel_forwarding', model: 'fixed', value: 400 }),
       ),
     );
-  });
-
-  it("a membership price carries the tier's allowances, which the storage sweep reads off the rule", async () => {
-    const user = userEvent.setup();
-    consoleApi();
-    post.mockResolvedValue({});
-    window.location.hash = '#/admin/pricing';
-    renderIn(<AdminConsole currentUserId="me" />);
-
-    const folio = MEMBERSHIP_TIERS.find((t) => t.key === 'folio')!;
-    await addRule(user, folio.feeActionType, '39.00');
-    await waitFor(() => expect(post).toHaveBeenCalled());
-    const [path, body] = post.mock.calls[0]!;
-    expect(path).toBe('/pricing/rules');
-    expect(body).toMatchObject({
-      actionType: 'membership:folio',
-      value: 3900,
-      parameters: {
-        storedItems: folio.storedItems,
-        insuredShipments: folio.insuredShipments,
-        insuredValueCapMinor: folio.insuredValueCapMinor,
-        postageCreditMinor: folio.postageCreditMinor,
-        commissionWaivedOnMinor: folio.commissionWaivedOnMinor,
-      },
-    });
   });
 
   it('sends no parameters for an action whose rule carries none', async () => {
@@ -155,12 +139,17 @@ const DEBTOR = {
   mfaEnabled: false,
 };
 
-describe('saving a user row', () => {
-  it('sends only the name when only the name changed, not the status the row was showing', async () => {
+describe('saving an account', () => {
+  /** An account is opened to be changed: by its name in the roll, or by a link that names it. */
+  const openAccount = (id: string) => {
+    window.location.hash = `#/admin/users?user=${id}`;
+  };
+
+  it('sends only the name when only the name changed, not the status the account was showing', async () => {
     const user = userEvent.setup();
     consoleApi({ '/admin/users': [DEBTOR] });
     patch.mockResolvedValue({ ...DEBTOR, firstName: 'Dana' });
-    window.location.hash = '#/admin/users';
+    openAccount('u1');
     renderIn(<AdminConsole currentUserId="me" />);
 
     const first = await screen.findByRole('textbox', { name: 'First name' });
@@ -176,7 +165,7 @@ describe('saving a user row', () => {
     const user = userEvent.setup();
     consoleApi({ '/admin/users': [DEBTOR] });
     patch.mockResolvedValue({ ...DEBTOR, status: 'active' });
-    window.location.hash = '#/admin/users';
+    openAccount('u1');
     renderIn(<AdminConsole currentUserId="me" />);
 
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Status' }), 'active');
@@ -190,7 +179,7 @@ describe('saving a user row', () => {
     const user = userEvent.setup();
     consoleApi({ '/admin/users': [DEBTOR] });
     patch.mockResolvedValue({ ...DEBTOR, autoSuspended: false });
-    window.location.hash = '#/admin/users';
+    openAccount('u1');
     renderIn(<AdminConsole currentUserId="me" />);
 
     expect(await screen.findByText(/suspended by the debt sweep/i)).toBeInTheDocument();
@@ -217,10 +206,11 @@ describe('saving a user row', () => {
     };
     consoleApi({ '/admin/users': [flagged] });
     patch.mockResolvedValue({ ...flagged, nameReviewRequired: false });
-    window.location.hash = '#/admin/users';
+    openAccount('u5');
     renderIn(<AdminConsole currentUserId="me" />);
 
-    expect(await screen.findByText(/needs review/i)).toBeInTheDocument();
+    // It is said in the roll, and again where the name is.
+    expect((await screen.findAllByText(/needs review/i)).length).toBeGreaterThanOrEqual(2);
     const save = screen.getByRole('button', { name: 'Save' });
     expect(save).toBeEnabled();
     await user.click(save);
@@ -230,13 +220,12 @@ describe('saving a user row', () => {
     await waitFor(() => expect(screen.queryByText(/needs review/i)).not.toBeInTheDocument());
   });
 
-  it('keeps Save disabled on a row that is not flagged and has nothing changed', async () => {
+  it('keeps Save disabled on an account that is not flagged and has nothing changed', async () => {
     consoleApi({ '/admin/users': [{ ...DEBTOR, id: 'u6', status: 'active', autoSuspended: false }] });
-    window.location.hash = '#/admin/users';
+    openAccount('u6');
     renderIn(<AdminConsole currentUserId="me" />);
 
-    await screen.findByText('debtor@bault.dev');
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
   it("offers it only for the sweep's suspension, not an administrator's or an active account", async () => {
@@ -246,12 +235,14 @@ describe('saving a user row', () => {
         { ...DEBTOR, id: 'u4', email: 'fine@bault.dev', username: 'fine', status: 'active', autoSuspended: false },
       ],
     });
-    window.location.hash = '#/admin/users';
-    renderIn(<AdminConsole currentUserId="me" />);
-
-    await screen.findByText('held@bault.dev');
-    expect(screen.queryByText(/suspended by the debt sweep/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /keep .* suspended/i })).not.toBeInTheDocument();
+    for (const id of ['u3', 'u4']) {
+      openAccount(id);
+      const { unmount } = renderIn(<AdminConsole currentUserId="me" />);
+      await screen.findByRole('button', { name: 'Save' });
+      expect(screen.queryByText(/suspended by the debt sweep/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /keep .* suspended/i })).not.toBeInTheDocument();
+      unmount();
+    }
   });
 });
 
@@ -270,12 +261,17 @@ const LISTED_CARD = {
 };
 const BUYER = { ...DEBTOR, id: 'u2', email: 'buyer@bault.dev', username: 'buyer', status: 'active', autoSuspended: false };
 
-describe('saving an item row', () => {
-  it('sends only the new owner, not the `listed` state the row was showing', async () => {
+describe('saving an item', () => {
+  /** An item is opened to be corrected: by its name in the roll, or by a link that names it. */
+  const openItem = (id: string) => {
+    window.location.hash = `#/admin/items?item=${id}`;
+  };
+
+  it('sends only the new owner, not the `listed` state the item was showing', async () => {
     const user = userEvent.setup();
     consoleApi({ '/admin/users': [DEBTOR, BUYER], '/admin/items': [LISTED_CARD] });
     patch.mockResolvedValue({});
-    window.location.hash = '#/admin/items';
+    openItem('i1');
     renderIn(<AdminConsole currentUserId="me" />);
 
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Owner' }), 'u2');
@@ -289,7 +285,7 @@ describe('saving an item row', () => {
     const user = userEvent.setup();
     consoleApi({ '/admin/users': [DEBTOR, BUYER], '/admin/items': [LISTED_CARD] });
     patch.mockResolvedValue({});
-    window.location.hash = '#/admin/items';
+    openItem('i1');
     renderIn(<AdminConsole currentUserId="me" />);
 
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Lifecycle' }), 'on-hold');

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { hasMessage, useI18n, type MessageKey } from './shared/i18n';
-import { ApiError, api, apiErrorKey } from './shared/api';
+import { ApiError, api, apiErrorKey, onSessionEnded } from './shared/api';
 import { loadProfile, resetProfileRequest } from './shared/session';
 import {
   navigate,
@@ -12,9 +12,10 @@ import {
 import { useMediaQuery, useNotificationFeed } from './shared/hooks';
 import { eventLabel, renderContent } from './shared/notifications';
 import { NavigationRail, type NavDestination } from './shared/ui/NavigationRail';
+import { useScrollableRegions } from './shared/ui/useScrollableRegions';
 import {
   AccountPill,
-  LanguageSwitcher,
+  MobileBar,
   NotificationBell,
   PageHeader,
   ThemeToggle,
@@ -22,7 +23,7 @@ import {
   type Crumb,
 } from './shared/ui/PageHeader';
 import { fullName, initialsFrom } from './shared/names';
-import { ErrorState, IconButton } from './shared/ui/primitives';
+import { ErrorState } from './shared/ui/primitives';
 import {
   IconAsk,
   IconBell,
@@ -30,9 +31,10 @@ import {
   IconLegal,
   IconManagement,
   IconMarketplace,
-  IconMenu,
   IconShield,
   IconShippingServices,
+  IconEscrow,
+  IconStore,
   IconVault,
   IconWallet,
   IconWarehouse,
@@ -41,7 +43,7 @@ import { AuthPage, AuthShell, type AuthMode, type SessionUser } from './areas/cu
 import { mustEnrolSecondFactor } from './shared/twoFactor';
 import { ForcedEnrollmentPage } from './areas/customer/auth/ForcedEnrollmentPage';
 import { LandingPage } from './areas/customer/marketing/LandingPage';
-import { MembershipPage } from './areas/customer/membership/MembershipPage';
+import { TierPage } from './areas/customer/tier/TierPage';
 import { VerifyEmailPage } from './areas/customer/auth/VerifyEmailPage';
 import { ResetPasswordPage } from './areas/customer/auth/ResetPasswordPage';
 import { VaultPage } from './areas/customer/vault/VaultPage';
@@ -49,6 +51,8 @@ import { InboundPage } from './areas/customer/inbound/InboundPage';
 import { SupportPage } from './areas/customer/support/SupportPage';
 import { WalletPage } from './areas/customer/finance/WalletPage';
 import { MarketplacePage } from './areas/customer/marketplace/MarketplacePage';
+import { StorePage } from './areas/customer/marketplace/StorePage';
+import { EscrowPage } from './areas/customer/marketplace/EscrowPage';
 import { ShippingServicesPage } from './areas/customer/shipping/ShippingServicesPage';
 import { FaqLegalPage } from './areas/customer/help/FaqLegalPage';
 import { NotificationsPage } from './areas/customer/notifications/NotificationsPage';
@@ -75,8 +79,10 @@ const SECTIONS: readonly SectionSpec[] = [
   { key: 'vault', labelKey: 'tab.vault', titleKey: 'vault.title', icon: <IconVault /> },
   { key: 'inbound', labelKey: 'tab.inbound', titleKey: 'inbound.title', icon: <IconInbox /> },
   { key: 'wallet', labelKey: 'tab.wallet', titleKey: 'wallet.title', icon: <IconWallet /> },
-  { key: 'membership', labelKey: 'tab.membership', titleKey: 'membership.title', icon: <IconShield /> },
+  { key: 'tier', labelKey: 'tab.tier', titleKey: 'tier.title', icon: <IconShield /> },
   { key: 'marketplace', labelKey: 'tab.marketplace', titleKey: 'market.title', icon: <IconMarketplace /> },
+  { key: 'store', labelKey: 'tab.store', titleKey: 'store.title', icon: <IconStore /> },
+  { key: 'escrow', labelKey: 'tab.escrow', titleKey: 'escrow.title', icon: <IconEscrow /> },
   {
     key: 'shipping-services',
     labelKey: 'tab.shippingServices',
@@ -152,7 +158,9 @@ const LANDING_ROUTES = ['', 'welcome'];
 export default function App() {
   const { t } = useI18n();
   const route = useRoute();
+  useScrollableRegions();
   const [boot, setBoot] = useState<BootState>({ status: 'loading' });
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
 
   const loadSession = useCallback(async () => {
     const me = await loadProfile();
@@ -180,6 +188,18 @@ export default function App() {
     void probeSession();
   }, [probeSession]);
 
+  useEffect(() => {
+    if (boot.status !== 'ready') return;
+    onSessionEnded(() => {
+      onSessionEnded(null);
+      resetProfileRequest();
+      setSessionNotice(t('error.sessionEnded'));
+      setBoot({ status: 'anonymous' });
+      navigate({ section: 'signin' }, { replace: true });
+    });
+    return () => onSessionEnded(null);
+  }, [boot.status, t]);
+
   if ((TOKEN_ROUTES as readonly string[]).includes(route.section)) {
     const token = route.params.token ?? null;
     return (
@@ -201,7 +221,7 @@ export default function App() {
     return (
       <div className="boot">
         <span className="rail-mark" aria-hidden="true">
-          B
+          C
         </span>
         <p className="hint">{t('app.loading')}</p>
       </div>
@@ -212,7 +232,7 @@ export default function App() {
     return (
       <div className="boot">
         <span className="rail-mark" aria-hidden="true">
-          B
+          C
         </span>
         <div className="boot-error">
           <ErrorState
@@ -235,7 +255,9 @@ export default function App() {
     return (
       <AuthPage
         initialMode={AUTH_ROUTES[route.section] ?? 'signIn'}
+        notice={sessionNotice}
         onSignedIn={(u) => {
+          setSessionNotice(null);
           setBoot({ status: 'ready', user: u });
           navigate(
             {
@@ -288,11 +310,11 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
   const route = useRoute();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [railOpen, setRailOpen] = useState(false);
-  const notifications = useNotificationFeed();
+  const suspended = user.status === 'suspended';
+  const notifications = useNotificationFeed(!suspended);
 
   const isStaff = user.role === 'warehouse_operator' || user.role === 'admin';
   const isAdmin = user.role === 'admin';
-  const suspended = user.status === 'suspended';
 
   const allowed = useMemo(
     () =>
@@ -339,9 +361,9 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
   const tabKey = route.tab ? `${TAB_PREFIX[section] ?? ''}${route.tab}` : '';
 
   useEffect(() => {
-    document.title = `${pageTitle} · Bault`;
+    document.title = `${pageTitle} · Card Embassy`;
     return () => {
-      document.title = 'Bault';
+      document.title = 'Card Embassy';
     };
   }, [pageTitle]);
 
@@ -381,17 +403,7 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
       />
 
       <div className="workspace">
-        {isMobile && (
-          <div className="mobile-bar">
-            <IconButton label={t('nav.openMenu')} bare onClick={() => setRailOpen(true)} style={{ color: '#fff' }}>
-              <IconMenu />
-            </IconButton>
-            <span className="rail-mark" aria-hidden="true">
-              B
-            </span>
-            <span className="mobile-bar-title">{pageTitle}</span>
-          </div>
-        )}
+        {isMobile && <MobileBar title={pageTitle} onOpenMenu={() => setRailOpen(true)} />}
 
         <div className="workspace-inner">
           <PageHeader
@@ -406,18 +418,19 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
                 />
                 <span className="ph-controls">
                   <ThemeToggle />
-                  <LanguageSwitcher />
-                  <NotificationBell
-                    items={notifications.items}
-                    unseen={notifications.unseen}
-                    onOpen={() => {
-                      void notifications.reload();
-                      notifications.markSeen();
-                    }}
-                    onViewAll={() => goto('notifications')}
-                    renderTitle={(n) => eventLabel(t, n.eventType)}
-                    renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
-                  />
+                  {!suspended && (
+                    <NotificationBell
+                      items={notifications.items}
+                      unseen={notifications.unseen}
+                      onOpen={() => {
+                        void notifications.reload();
+                        notifications.markSeen();
+                      }}
+                      onViewAll={() => goto('notifications')}
+                      renderTitle={(n) => eventLabel(t, n.eventType)}
+                      renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
+                    />
+                  )}
                 </span>
                 <UserMenu
                   initials={initialsFrom(user.firstName, user.lastName, user.email)}
@@ -436,8 +449,10 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
             {section === 'inbound' && <InboundPage />}
             {section === 'support' && <SupportPage suspended={suspended} />}
             {section === 'wallet' && <WalletPage />}
-            {section === 'membership' && <MembershipPage />}
+            {section === 'tier' && <TierPage />}
             {section === 'marketplace' && <MarketplacePage />}
+            {section === 'store' && <StorePage />}
+            {section === 'escrow' && <EscrowPage />}
             {section === 'shipping-services' && <ShippingServicesPage />}
             {section === 'faq' && <FaqLegalPage />}
             {section === 'notifications' && (

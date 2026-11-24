@@ -57,7 +57,13 @@ describe('ACC signing out, whatever the account status', () => {
       const tokenHash = createHash('sha256').update(cookie.slice(cookie.indexOf('=') + 1)).digest('hex');
 
       await sql(`UPDATE user_account SET status = $2 WHERE email = $1`, [email, status]);
-      expect((await client.get('/vault/items')).status).toBe(403);
+      const blocked = await client.get('/vault/items');
+      expect(blocked.status).toBe(403);
+      expect(blocked.body.error.message).toBe(
+        status === 'suspended'
+          ? 'Your account is suspended. You can still open a support ticket.'
+          : 'This account is closed.',
+      );
 
       const out = await client.post('/auth/logout');
       expect(out.status).toBe(204);
@@ -68,4 +74,13 @@ describe('ACC signing out, whatever the account status', () => {
       expect(session?.revoked).toBe(true);
     });
   }
+});
+
+describe('ACC a page for staff, asked for by a collector', () => {
+  it('says in plain words that it is for staff', async () => {
+    const collector = await signIn(SEED.collector);
+    const res = await collector.get('/support/queue');
+    expect(res.status).toBe(403);
+    expect(res.body.error.message).toBe('This page is for Card Embassy staff.');
+  });
 });

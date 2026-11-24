@@ -1,155 +1,157 @@
 ## 2.10 Infrastructure, CI and tests
 
-How the code becomes images, runs locally and in production, is backed up, checked by CI and tested. Read the Dockerfiles, the local stack, `infra/production`, `infra/ops`, the workflows, the operations scripts, then the tests. Budget: 26 minutes.
+This section covers how the code becomes images, runs locally and in production, is backed up, is checked by CI and is tested. Read the Dockerfiles, then the local stack, `infra/production`, `infra/ops`, the workflows, the operations scripts and last the tests. The section takes about 38 minutes.
 
-#### `apps/api/Dockerfile`, `apps/worker/Dockerfile` · 2 min · T17.1
-Multi-stage builds from the repo root on `node:22-slim`, pinned by digest: build the packages and the app, reinstall with `--prod`, run as UID 10001 with an exec-form `CMD` so SIGTERM reaches Node. The API image carries the migrations, so `node dist/db/migrate.js` runs from the release itself, and its `HEALTHCHECK` calls `/api/v1/healthz`. The worker has no port; `/api/v1/readyz/worker` reads its `worker_heartbeat` instead.
+#### `apps/api/Dockerfile`, `apps/worker/Dockerfile`
 
-**Watch:** all three Dockerfiles share the digest; change them together.
+About 2 minutes. It builds on T17.1.
 
-#### `apps/web/Dockerfile`, `apps/web/nginx.conf`, `apps/web/nginx-security-headers.conf`, `apps/web/nginx-storage-origin.envsh` · 2 min · T7.9, T17.1, T17.3
-The built SPA, served by a pinned `nginx:1.27-alpine` on port 8080. `NGINX_ENVSUBST_FILTER` lets only `API_UPSTREAM` and `STORAGE_PUBLIC_ORIGIN` into the templates.
-- `nginx.conf` — hashed bundles cached a year, card images a day, `index.html` never; API calls proxied with `X-Forwarded-For` appended; unknown paths fall back to the SPA.
-- The headers file — the CSP (`'self'` plus the storage origin for images, `frame-ancestors 'none'`), nosniff, `DENY`, a referrer policy, camera for the intake bench. No HSTS.
-- The `.envsh` — derives the storage origin from `STORAGE_ENDPOINT` and refuses to start on anything but `scheme://host[:port]`, so no value can inject a CSP directive.
+These files build the API and worker images. Both are multi-stage builds from the repo root on `node:22-slim`, pinned by digest. The build stage builds the packages and the app, then reinstalls with `--prod` to drop development dependencies. The runtime stage runs as UID 10001, not as root. Its `CMD` is in exec form, with no shell in between, so SIGTERM reaches Node. The API image carries the migrations, so `node dist/db/migrate.js` runs from the release itself, and so does `node dist/db/create-admin.js`, which creates the first administrator. Its `HEALTHCHECK` calls `/api/v1/healthz`. Its build leaves out `seed.ts`, so a production image cannot run the seed, which empties every table. The worker image has no port and no health check, and `/api/v1/readyz/worker` reads its `worker_heartbeat` rows instead. All three Dockerfiles share the Node digest, so change them together.
 
-**Watch:** a location that sets its own `add_header` loses the inherited ones, so every location includes the headers file; `tests/web/nginx-headers.test.ts` checks it.
+#### `apps/web/Dockerfile`, `apps/web/nginx.conf`, `apps/web/nginx-security-headers.conf`, `apps/web/nginx-storage-origin.envsh`, `apps/web/nginx-error-reports-origin.envsh`
 
-#### `infra/docker-compose.yml`, `infra/minio/Dockerfile`, `infra/postgres/dev-settings.sql`, `infra/pgbouncer/pgbouncer.ini` · 1.5 min · T3.5, T5.7
-Local dependencies only: Postgres 16 on 5432, PgBouncer in transaction mode on 6432, MinIO (built from source, as no community image exists) on 9000. `dev-settings.sql` sets the 30-second `statement_timeout` on the database, because the API cannot send it through PgBouncer. The PgBouncer files are references nothing loads.
+About 2 minutes. It builds on T7.9, T17.1 and T17.3.
 
-**Watch:** ports bind on every interface with known passwords, and PgBouncer floats on `latest`. On a database not made by compose, run `dev-settings.sql` by hand and restart PgBouncer.
+These files build the web image, which serves the built app from a pinned `nginx:1.27-alpine` on port 8080. `NGINX_ENVSUBST_FILTER` lets only `API_UPSTREAM`, `STORAGE_PUBLIC_ORIGIN` and `ERROR_REPORTS_ORIGIN` into the config templates. The build takes `VITE_SENTRY_DSN` and `VITE_RELEASE` as build arguments, which Vite bakes into the bundle, and keeps the DSN in the image as `WEB_SENTRY_DSN`. At start `nginx-error-reports-origin.envsh` turns that DSN into its `https://` origin for the CSP's `connect-src`, leaves it empty without a DSN, and refuses to start on a DSN that is not of that form, so the page can reach its own origin and the one error-report host and nothing else. `nginx.conf` caches the hashed bundles for a year, card images for a day and `index.html` never. It proxies API calls, appends the client to `X-Forwarded-For` and accepts bodies up to 25 MB. It hides the API's own security headers, so each header goes out once. An unknown path falls back to the app's `index.html`.
 
-#### `infra/production/compose.yml` · 2 min · T17.1, T17.3, T17.7
-`caddy`, `web`, `api`, `worker`, and `migrate` (a profile, run once per release); Postgres is managed elsewhere. The `x-node` block sets a read-only root, `cap_drop: [ALL]`, capped logs and the database CA mount. `api`, `worker` and `migrate` read `production.env`, then their own role file. `web` restarts whenever `api` is recreated. The subnet is fixed at 172.30.89.0/24, the `TRUST_PROXY` value.
+The headers file holds the CSP, the browser's list of allowed sources. It allows `'self'` plus the storage origin for images and media, and it sets `frame-ancestors 'none'`. A cash-in by PayPal leaves the app for PayPal's page and comes back, so no PayPal script or frame is allowed, and the test pins that. It also sends nosniff, `DENY` for framing, a referrer policy, and a permissions policy that allows the camera for the intake bench. It sends no HSTS, because Caddy sends that. A location that sets its own `add_header` loses the inherited ones, so every location includes the headers file, and `tests/web/nginx-headers.test.ts` checks it. The `.envsh` script derives the storage origin from `STORAGE_ENDPOINT` when `STORAGE_PUBLIC_ORIGIN` is empty. It refuses to start on anything but an http or https scheme, a host and an optional port, so no value can inject a CSP directive.
 
-**Watch:** only `caddy` may publish ports. Docker bypasses ufw, so any other `ports:` is open to the internet.
+#### `infra/docker-compose.yml`, `infra/minio/Dockerfile`, `infra/postgres/dev-settings.sql`, `infra/pgbouncer/pgbouncer.ini`
 
-#### `infra/production/Caddyfile` · 1 min · T7.9, T17.3
-TLS for `BAULT_DOMAIN`, the redirect to HTTPS, and HSTS, sent from here only. It overwrites `X-Forwarded-For` with the client it saw; behind Cloudflare, `BAULT_TRUSTED_PROXIES` enables `CF-Connecting-IP`.
+About 1.5 minutes. It builds on T3.5 and T5.7.
 
-**Watch:** the client address passes Caddy, nginx, then the API's `TRUST_PROXY`; break one link and every visitor shares one address.
+These files run the local database, pooler and storage, but not the apps. Postgres 16 listens on 5432, PgBouncer in transaction mode on 6432, and MinIO on 9000 with its console on 9001. MinIO and `mc` are built from source, because MinIO no longer publishes community images. `dev-settings.sql` sets the 30-second `statement_timeout` on the database itself, because the API cannot send that setting through PgBouncer. `pgbouncer.ini` is a reference that nothing loads. The ports bind on every interface with known passwords, so anyone on the same network can reach them. PgBouncer floats on the `latest` image. Compose runs `dev-settings.sql` only when it first creates the database. On any other database, run it by hand, then restart PgBouncer so that its pooled connections pick up the timeout.
 
-#### `infra/production/roles.sql` · 2 min · T5.7, T17.3
-Three roles: `bault_owner` (schema, migrations, dumps), `bault_app` (API), `bault_worker`.
-- Per-role `statement_timeout` 30 s and `idle_in_transaction_session_timeout` 10 s.
-- UPDATE and DELETE revoked on every history table (the list, plus any table with a `trg_append_only_` trigger); DELETE revoked on `item`.
-- The `pgboss` schema belongs to `bault_worker`, which holds CREATE on the database only until pg-boss has installed itself.
-- A final check fails the transaction if history is still writable.
+#### `infra/production/compose.yml`
 
-**Watch:** re-run it after every migration (a new history table starts writable) and after the worker's first start.
+About 2 minutes. It builds on T17.1, T17.3 and T17.7.
 
-#### `infra/production/bootstrap.sh` · 1 min · T17.2
-Prepares Ubuntu 24.04: Docker, ufw, age, rclone, the Postgres client, a `deploy` user, `/etc/bault` at mode 700, ports 80 and 443 open, SSH by key and from `ADMIN_IP` only.
+This file runs the production stack on one server. The services are `caddy`, `web`, `api`, `worker` and `migrate`. `migrate` runs once per release, through a compose profile. Postgres is managed elsewhere. The `x-node` block sets a read-only root, `no-new-privileges`, `cap_drop: [ALL]`, capped logs and a read-only mount of the database CA. `api`, `worker` and `migrate` read `production.env` first, then their own role file. `caddy` waits for a healthy `web`. `web` restarts whenever `api` is recreated, because nginx looks up the API's address only once. The subnet is fixed at `172.30.89.0/24`, which is the value of `TRUST_PROXY`. Only `caddy` may publish ports. Docker bypasses the ufw firewall, so any other `ports:` entry would be open to the internet.
 
-**Watch:** because SSH admits one address, GitHub-hosted runners cannot deploy.
+#### `infra/production/Caddyfile`
 
-#### `infra/production/deploy.sh` · 2 min · T17.2
-`deploy.sh <tag>`: pull, back up (`backup.sh dump`), migrate, `roles.sql`, `compose up --wait`, probe `/api/v1/readyz` through Caddy, wait for `/api/v1/readyz/worker` to show a dispatch by the new worker, then `roles.sql` again. It records `CURRENT_TAG` and `PREVIOUS_TAG` and prints the rollback either way.
+About 1 minute. It builds on T7.9 and T17.3.
 
-**Watch:** migrations run while the old release still serves, and rollback does not undo them: every migration must suit the previous code.
+Caddy is the public front door. It provides TLS for `BAULT_DOMAIN`, the redirect to HTTPS and HSTS, the header that keeps browsers on HTTPS. HSTS comes from here only, and `tests/integration/hsts-one-source.test.ts` checks that the API never sends it. Caddy overwrites `X-Forwarded-For` with the client address it saw, so a visitor cannot forge it. Behind Cloudflare, `BAULT_TRUSTED_PROXIES` lets Caddy take the address from `CF-Connecting-IP`. The client address passes Caddy, then nginx, then the API's `TRUST_PROXY`. If one link breaks, every visitor shares one address, so the per-address rate limit and the sign-in log see one visitor.
 
-#### `infra/production/README.md` and the `*.env.example` files · 1.5 min · T4.5, T17.2
-The runbook, followed in order: bootstrap, check out the tag, fill `/etc/bault`, roles, deploy, nightly backup, then the staging check. `production.env.example` holds every production value (live PayPal, `PAYOUT_MODE=manual`, EasyPost, SMTP, S3); `api.env.example`, `worker.env.example` and `migrate.env.example` hold each role's database URLs.
+#### `infra/production/roles.sql`
 
-**Watch:** no step creates the first administrator, or the `platform@bault.dev` account that `HouseStoreService`, `AccountingService` and `ServiceRequestService` look up by address. The seed is the only code that creates them, and it must never run in production.
+About 2 minutes. It builds on T5.7 and T17.3.
 
-#### `infra/production/prices.json`, `scripts/ops/prices.mjs`, `scripts/ops/session.mjs` · 2 min · T8.5, T12.1, T7.6
-`pnpm prices:load --url <site>` puts every price on a fresh database. The file lists each rule as `"fixed": "$5.00"` or `"percent": "5%"`, with its trigger, its description (customers read it) and, for both storage rules, the terms the sweep reads.
-- `parsePriceFile` refuses a duplicate, a missing description, storage without its terms, and parameters on a membership: `withTierParameters` takes those from `GET /membership/tiers`, as the console does.
-- `plan` sorts each rule into load, same or differs against the rules in force (newest `effectiveFrom` per action and class); `gaps` names the actions coverage lists that the file lacks, and file actions the API does not know.
-- A run creates only what is missing; `--update` replaces what differs, `--dry-run` and `--check` write nothing, and `--check` exits 1 unless the server matches. `signInAdmin` asks for the password and the authenticator code, or reads them from the environment, and keeps the session cookie in memory only.
-- `tests/config/prices-file.test.ts` runs the file through `coverage` itself, so a new billable action without a price fails CI, and checks that the three code-constant fees publish exactly their constants.
+This file creates the roles the apps log in as and sets their rights. It runs as `bault_owner`, which owns the schema, the migrations and the dumps, and it refuses to run before the migrations. It creates `bault_app` for the API and `bault_worker` for the worker. Each gets a 30-second `statement_timeout` and a 10-second `idle_in_transaction_session_timeout`. UPDATE and DELETE are revoked on every history table, which means the tables the file names plus any table with a `trg_append_only_` trigger. DELETE is also revoked on `item`. The `pgboss` schema belongs to `bault_worker`, which holds CREATE on the database only until pg-boss has installed itself. A final check fails the whole transaction if history is still writable or an application role can create objects. Re-run the file after every migration, because a new history table starts writable. Re-run it after the worker's first start too, to take back CREATE.
 
-**Watch:** the file ships with the seed's numbers and `"reviewed": false`, and the loader refuses it until somebody has decided the prices; staging may pass `--allow-unreviewed`.
+#### `infra/production/bootstrap.sh`
 
-#### `scripts/ops/load-test.mjs`, `scripts/ops/security-check.mjs` · 1.5 min · T17.7, T7.9, T7.6
-The Day 6 checks, run from outside.
-- `ops:load-test` sends `MIX` (public listings, the price list, a collector's vault and wallet) at a steady `--rps`, plus a few sign-ins a minute, and fails past `--max-p95` or `--max-error-rate`. It refuses anything but `--target staging`.
-- `ops:security-check` tests the HTTPS redirect, the certificate, that TLS 1.0 and 1.1 are refused, the SSL Labs grade, `gradeHeaders` on the page, a script and the API, `docsVerdict` on the docs paths, the open ports (nmap, or a connect scan of `COMMON_PORTS`), and `adminNeedsCode`: an administrator's password alone must open no session.
+About 1 minute. It builds on T17.2.
 
-**Watch:** the API limits each address to `RATE_LIMIT_PER_MINUTE`, so a load test from one machine measures the limiter unless staging raises it for the run.
+This script prepares a fresh Ubuntu server, and the runbook names 24.04. It installs Docker, ufw, age, rclone and the Postgres client. It creates a `deploy` user and `/etc/bault` at mode 700. The firewall opens ports 80 and 443 and admits SSH only from `ADMIN_IP`. SSH accepts keys only and forwards nothing, so no agent, X11, TCP or socket forwarding. A server that is broken into therefore cannot reach back into the laptop of the person connected to it. Because SSH admits one address, GitHub-hosted runners cannot deploy.
 
-#### `infra/ops/backup.sh`, `infra/ops/crontab.example`, `infra/ops/RESTORE.md` · 2 min · T17.4
-- `dump` — `pg_dump` as the owner, checked, encrypted with age (only the public key on the host), checksummed, uploaded off the host; an unencrypted upload is refused.
-- `verify` — restores into a scratch database and fails on orphaned rows or a missing guard trigger.
-- `restore` — needs an explicit target and the database name typed back.
-- The crontab runs at 01:17 UTC, before the 02:00 and 03:00 money jobs. `RESTORE.md` is the monthly drill, for provider PITR and for the dump.
+#### `infra/production/deploy.sh`
 
-**Watch:** a nightly dump alone can lose a day; turn on PITR at the provider.
+About 2 minutes. It builds on T17.2.
 
-#### `.github/workflows/ci.yml` · 2 min · T17.6, T18.2
-- `verify` — Postgres and MinIO, lint, typecheck, web build, the five suites that need nothing, migrate, start the built API, then each database suite after a fresh seed.
-- `audit` — `pnpm audit` on production dependencies.
-- `migrate-image` — migrates an empty database with the API image and counts the guard triggers.
-- `secret-scan` — gitleaks over the history.
+This script releases one tag to the server. `deploy.sh <tag>` pulls the images and takes a backup with `backup.sh dump`. It then migrates, runs `roles.sql` and starts the stack with `compose up --wait`. It probes `/api/v1/readyz` through Caddy, then waits until `/api/v1/readyz/worker` shows an outbox dispatch by the new worker, which proves the new worker runs jobs. Last, it runs `roles.sql` again, now that the worker has started. On success it records `CURRENT_TAG` and `PREVIOUS_TAG`, and it prints the rollback steps either way. It warns when the checkout is not at the tag, because the compose file, the Caddyfile and `roles.sql` come from the checkout. It holds `.deploy.lock` in the checkout while it runs, so the watchdog restarts nothing in the middle of a deploy. Migrations run while the old release still serves, and a rollback does not undo them, so every migration must also suit the previous release's code.
 
-**Watch:** CI never runs design-lint or Prettier, builds the web or worker image, or starts a worker.
+Three settings let `deploy.sh` run on Google Cloud, and they are empty everywhere else. `BAULT_COMPOSE_EXTRA` adds compose files. `BAULT_DB_SIDECAR` names a service that starts first, and the script waits until `pg_isready` answers through it. `HOST_DIRECT_DATABASE_URL`, in `migrate.env`, is the owner's URL as seen from the host. It is for when the containers use a name the host cannot resolve.
 
-#### `.github/workflows/release.yml`, `.github/workflows/deploy.yml`, `.github/dependabot.yml` · 1.5 min · T17.2, T17.6
-`release.yml`, on a `v*` tag, waits for green CI on that commit, then pushes the three images to GHCR, never as `latest`. `deploy.yml` is a manual run that checks the tag, SSH reachability and the images, then runs `deploy.sh`. Dependabot updates npm, the images and the pinned actions weekly.
+#### `infra/production/README.md`, `infra/production/production.env.example`, `infra/production/api.env.example`, `infra/production/worker.env.example`, `infra/production/migrate.env.example`
 
-**Watch:** the MinIO version in `infra/minio/Dockerfile` and `ci.yml` is updated by hand.
+About 1.5 minutes. It builds on T4.5 and T17.2.
 
-#### `scripts/test.mjs` · 1.5 min · T18.2
-`pnpm test` runs `SUITES` in order: the five that need nothing, then `integration`, `core`, `concurrency`, `property` and `worker`, each after `db:seed`. It stops at the first failure, reseeds at the end unless `--no-reset`, and refuses `NODE_ENV=production`.
+These files are the production runbook and the templates for its settings. The README is followed in order. Its steps bootstrap the server, check out the tag, fill `/etc/bault`, run the roles once, deploy and set up the nightly backup. Then they load the prices, check staging and run the checks before launch. Later sections say how to connect safely, how to replace a server that may have been broken into instead of repairing it, and how to admit web traffic only from Cloudflare once a domain sits behind it. `production.env.example` holds every production value, such as live PayPal, `PAYOUT_MODE=manual`, EasyPost, SMTP and S3. `api.env.example`, `worker.env.example` and `migrate.env.example` hold each role's database URLs. Migration `0038` creates the `platform@bault.dev` house account, which `HouseStoreService`, `AccountingService` and `ServiceRequestService` look up by address. Section 5 ends with the one-time step that creates the first administrator, `dist/db/create-admin.js` run through the `migrate` service with the password piped in. The seed must never run in production, because it empties every table.
 
-**Watch:** it starts no API. The database suites need one running at `API_URL`, and two files start a second one from the build, so build first.
+#### `infra/production/prices.json`, `scripts/ops/prices.mjs`, `scripts/ops/session.mjs`
 
-#### `scripts/staging-check.mjs`, `scripts/staging-check/run.mjs` · 1.5 min · T17.2, T18.2
-`pnpm staging:check` walks the launch plan's staging journeys and provider checks through the public API, as your admin and three `chk…` collectors it creates.
-- `runStagingCheck` — the checks in `CHECKS` order. Each waits for the ones named in `DEPENDS`, and records pass, fail, skip or by hand. With `providers: 'sandbox'`, the checks only live PayPal and EasyPost can answer are skipped, and it sends the payout webhook itself.
-- `assertStagingTarget` — refuses without `--target staging`, refuses the production host, and refuses a PayPal receiver outside `.example.com`. The command then has the host typed back before it starts.
-- `tests/integration/staging-check.test.ts` runs it against the CI API, writing `verification_token` rows in place of the emailed links.
+About 2 minutes. It builds on T8.5, T12.1 and T7.6.
 
-**Watch:** it uses only the routes the web app uses. When a change alters one, that test fails with the check's own reason, so update the check in the same pull request.
+These files load the price list onto a server. `pnpm prices:load --url <site>` puts every price on a fresh database. The file lists each rule as a fixed amount such as `$5.00` or a percentage such as `5%`. Each rule has its billing trigger and a description, which customers read. Both storage rules carry the terms that the storage sweep reads. `parsePriceFile` refuses a duplicate, a missing description, a storage rule without its terms, and any `membership:` rule, since memberships are no longer sold.
 
-#### `scripts/design-screens.mjs` · 1 min · T16.4, T16.5
-`pnpm design:screens` captures every screen of a local, seeded Bault for a design review: each persona (`PERSONAS`), every section and tab, both languages, 390 and 1440 px, the three item sheets, and the verify and reset e-mails. It serves the production build with `vite preview` on 4173, the port the API takes writes from in development, and writes a contact sheet to the gitignored design-screens folder, flagged screens first (`inspect`: ids, cents, enum names, English words on a Hebrew page, sideways scrolling, console errors, failed calls).
+`plan` compares each rule with the rules in force and sorts it into load, same or differs. The rule in force is the newest `effectiveFrom` for each action and class. `gaps` lists the actions the API charges for that the file lacks, and the file's actions that the API does not know. A load refuses to run while either list has entries. A run creates only what is missing, and `--update` also replaces what differs with a new rule. `--dry-run` and `--check` write nothing, and `--check` exits 1 unless the server matches the file. `signInAdmin` asks for the password and the authenticator code, or reads them from the environment. It keeps the session cookie in memory only.
 
-**Watch:** it signs in with the seed's password and enrols two-factor on the staff accounts, keeping their secrets in `.totp.json`, so `assertLocal` refuses any other machine. Start the API with `MFA_REQUIRED_ROLES=admin,warehouse_operator` to see the enrolment production shows.
+`tests/config/prices-file.test.ts` runs the file through `coverage` itself, so a new billable action without a price fails CI. It also checks that the three fees charged from code constants publish exactly those constants. The file ships with the seed's numbers and `"reviewed": false`. The loader refuses to write from it until somebody has decided the prices and set that to true. Staging may pass `--allow-unreviewed`.
 
-#### `tests/` and `tests3/`: the ten suites · 3 min · T15.3, T18.1
-`tests3/` drives each flow from the wrong side.
+#### `scripts/ops/load-test.mjs`, `scripts/ops/security-check.mjs`
 
-| Suite | Folder | Needs | Proves |
-|---|---|---|---|
-| `web` | `tests/web` | nothing | SPA units; nginx headers; no credentials in the bundle |
-| `config` | `tests/config` | nothing | env refusals; no PgBouncer-breaking startup parameter; the seed refuses production |
-| `ux` | `tests/ux` | nothing | rendered screens, customer and staff |
-| `contract` | `tests/contract` | nothing | adapter selection; PayPal, EasyPost, SMTP and storage behaviour |
-| `core-contract` | `tests3/contract` | nothing | TOTP vectors, provider errors, webhook refusal, scrubbing, write origins |
-| `integration` | `tests/integration` | API, seed | every module's flows, files named by module code (`acc-`, `pay-`…) |
-| `core` | `tests3/integration` | API, seed | authorization, CSRF, sign-in guessing, uploads, 4xx never 5xx |
-| `concurrency` | `tests/concurrency` | API, seed | double sale, double spend, stale ownership, capacity |
-| `property` | `tests/property` | API, seed | balance equals the ledger sum |
-| `worker` | `tests/worker` | seed, some the API | every job, rerun and run twice at once; heartbeat; SIGTERM |
+About 1.5 minutes. It builds on T17.7, T7.9 and T7.6.
 
-**Watch:** `tests/README.md` lists only four of the ten suites.
+These are the launch plan's Day 6 checks, run from outside. `ops:load-test` sends `MIX`, a weighted mix of reads of public listings, the price list, the tiers and a collector's vault, wallet and ledger. It runs at a steady `--rps`, plus a few sign-ins a minute. Its report has a row for every request in the mix, with a count of zero where a short run never drew that request, so a reader and the integration test can count on the rows. It fails when the 95th percentile passes `--max-p95` or the error rate passes `--max-error-rate`. It refuses to run without `--target staging`. The API limits each address to `RATE_LIMIT_PER_MINUTE` requests, so a load test from one machine measures the rate limiter, unless staging raises the limit for the run. Section 6.8 of `docs/HANDOVER.md` records a 3-minute run of the mix against a local stack in a shared container, per request, as a floor to compare staging with.
 
-#### `tests/integration/helpers/http.ts`, `tests/integration/helpers/db.ts`, `tests/integration/helpers/mfa.ts`, `tests/worker/helpers/db.ts` · 2 min · T15.2, T18.3, T18.4
-- `http.ts` — `Client`, `signIn`, `fixtureEmail`, `intakeFor`, and `fundWallet`: a cash-in request an admin approves and completes, the only way money enters.
-- `db.ts` — `sql` for facts HTTP cannot show; `holdRowLock` and `waitForLockWaiters` queue competing requests behind a held row, then release them.
-- `mfa.ts` — `activeAccount`, `enrol`, `codeAt`, on the API's own `totp`.
-- Worker helpers — plain-SQL fixtures, and `warm`, so two jobs truly race.
+`ops:security-check` tests the redirect to HTTPS, the certificate, the refusal of TLS 1.0 and 1.1, and the SSL Labs grade. It runs `gradeHeaders` on the page, a script and the API. `docsVerdict` checks that the API documentation is not public. It scans the open ports with nmap, or, without nmap, with a connect scan of `COMMON_PORTS`. Last, `adminNeedsCode` checks that an administrator's password alone opens no session.
 
-**Watch:** enrol only fresh fixtures in two-factor; an enrolled seeded account blocks later suites.
+#### `infra/gcp/provision.sh`, `infra/gcp/configure.sh`, `infra/gcp/compose.gcp.yml`, `infra/gcp/claim-database.sql`, `infra/gcp/README.md`
 
-#### `apps/api/src/db/seed.ts`: the seeded accounts · 1 min · T18.3
-The suites sign in as these; every password is `11111111`.
+About 3 minutes. It builds on T17.2, T17.3 and T5.7.
 
-| Account | Role | In tests |
-|---|---|---|
-| `eldar@bault.dev` | admin | `SEED.admin` |
-| `hermon@bault.dev` | warehouse operator | `SEED.operator` |
-| `red@bault.dev`, `golden@bault.dev` | user | `SEED.collector`, `SEED.collector2` |
-| `veteran@bault.dev` | migrated user | `SEED.collector3` |
-| `platform@bault.dev` | admin | not signed in as; the API's house account |
-| `dana@bault.dev` | suspended user | not used; shows the helpdesk-only state |
+These files set Bault up on Google Cloud. `provision.sh` creates the Google Cloud side of T17.2 from your own `gcloud` login. It makes a network with an SSH rule that admits only `ADMIN_IP`. Given Google's IAP range as `ADMIN_IP`, port 22 never faces the internet, and the README shows how to connect through the tunnel. It makes Cloud SQL with a private IP only, `ENCRYPTED_ONLY` connections, point-in-time recovery and `--edition=ENTERPRISE`. It makes two buckets. The backups bucket lives in a second project with a 30-day retention policy, so no backup can be deleted sooner. It makes two service accounts and the VM. The server's account may connect to Cloud SQL and add objects to the backups bucket, and nothing else. The images account may put and get objects in its bucket, through the S3 API with an HMAC key. A new organisation forbids such keys by default, through the constraint `iam.disableServiceAccountKeyCreation`, so the script checks the production project before it creates anything and stops with the command that lifts the constraint there. IAM takes a minute or two to see a role or an account it has just made, so `settled` tries again, every 10 seconds for three minutes, a binding that IAM refuses as missing. The script skips whatever already exists, and `--dry-run` prints every command without running it. It writes the settings to a local file at mode 600, and its output masks the secrets.
 
-**Watch:** accounts that tests create use `FIXTURE_EMAIL_DOMAIN`, hidden by `AdmService.listUsers`.
+The backups need no key. Ubuntu's rclone 1.60 sends an ACL with every upload through the S3 API, and a bucket with uniform bucket-level access refuses it, so the backup section defines rclone's remote with rclone's own Cloud Storage backend. That backend signs in as the server through the metadata server, and `BUCKET_POLICY_ONLY` keeps the ACL out.
 
-#### Also in this area
-- `.dockerignore` — keeps `.env`, docs and tests out of images.
-- `tests/ux/setup.ts` — jest-dom and browser stubs.
-- `infra/pgbouncer/userlist.txt` — reference only.
+`compose.gcp.yml` adds `cloudsql`, the Cloud SQL Auth Proxy, pinned by digest. The api, the worker and migrate reach the database through it as `cloudsql`, and the host reaches it on `127.0.0.1`, both on port 5432. `claim-database.sql` makes `bault_owner` the owner of the database that Cloud SQL created, so `roles.sql` can grant rights on it. Cloud SQL has no superuser, so anything new in a migration or in `roles.sql` that needs one breaks on Google Cloud first, and the CI job `cloud-sql-privileges` catches it.
+
+`configure.sh` runs on the server as `deploy`, from the release checkout. It turns the file `provision.sh` wrote and the templates in `infra/production` into the five files under `/etc/bault`, at mode 600, and copies the system CA bundle to `db-ca.crt`, which compose mounts although the proxy needs none. It generates `MFA_ENCRYPTION_KEY`, and asks only for what nobody else knows, the host name, PayPal, EasyPost, SMTP, the bank details, the support details, the Sentry DSN, crypto cash-in and the age public key. The bank details, the `SUPPORT_*` settings and `SENTRY_DSN` may be left empty, are asked on the first run, and are asked again with `--change bank`, `--change support` or `--change sentry`. Crypto cash-in is asked as yes or no on the first run, defaulting to no, and again with `--change crypto`. No leaves `CRYPTO_CHECKOUT_ENABLED=false` with `CRYPTO_PROVIDER=sandbox`, which production loads because the sandbox is never built there, except that a provider already set to `coinbase_commerce` with both keys stays, so a charge already open is still credited when Coinbase confirms it. Yes prints the webhook address `https://<domain>/api/v1/webhooks/crypto` and the four `charge:` events to subscribe it to, asks for `COINBASE_COMMERCE_API_KEY` and `COINBASE_COMMERCE_WEBHOOK_SECRET` hidden, and writes `CRYPTO_PROVIDER=coinbase_commerce` and `CRYPTO_CHECKOUT_ENABLED=true`. It reads secrets without echo, and nothing it prints holds one. It sets the providers production accepts, so it never writes `sandbox`, `console` or `loopback` for payments, shipping, storage, email or the proxy, and it quotes a value that compose or the shell would otherwise change. Run again, it keeps every value already set and asks only for one that is missing or named with `--change`. It writes the Cloud Storage remote into `backup.env` itself and removes every other `RCLONE_CONFIG_BACKUP_` key, so the S3 settings and key of an older setup go even when the provision file is long deleted. It ends with a check of every value production needs, and deletes the provision file only when told yes. `tests/config/gcp-deploy-kit.test.ts` feeds it answers and passes what it wrote to `loadEnv`, so the files it writes are ones the API accepts in production. The same file runs `provision.sh` against a stub `gcloud`, which refuses the new role twice, enforces the key constraint or refuses the key, and it checks that the fixture of the provision file has the keys the script writes.
+
+#### `infra/ops/backup.sh`, `infra/ops/watchdog.sh`, `infra/ops/crontab.example`, `infra/ops/RESTORE.md`
+
+About 3 minutes. It builds on T17.4.
+
+These files run the nightly backup and describe the restore. `backup.sh dump` runs `pg_dump` as the owner and checks that the dump reads back. It encrypts the dump with age, with only the public key on the host, so whoever takes the host cannot read the backups. It writes a checksum and uploads both files off the host. It refuses to upload a dump that is not encrypted. `verify` restores a dump into a scratch database and fails on orphaned rows or a missing guard trigger. A failed `dump` leaves `BACKUP-FAILED` in `BACKUP_DIR`, one line with the time, the exit status and the host, and a good one removes it. `restore` needs an explicit target and the database name typed back. After a restore, run the migrations and `roles.sql`, because the dump carries no grants. The crontab runs the dump at `01:17` UTC, before the money jobs at `02:00` and `03:00` touch the day's state. `RESTORE.md` is the monthly drill, for the provider's point-in-time recovery and for the dump. A nightly dump alone can lose a day, so turn on point-in-time recovery at the provider.
+
+`watchdog.sh` runs from the same crontab every two minutes. Compose's `restart: unless-stopped` restarts a container that exits, never one that hangs. So the watchdog restarts `api` or `web` when Docker reports them unhealthy, and `worker` when the API answers but `/api/v1/readyz/worker` reports no outbox dispatch for five minutes. It asks the API from inside the API's container, so neither Caddy nor TLS stands in the way. It leaves alone a container younger than ten minutes, waits 15 minutes between two restarts of one service, and stops after three in six hours, writing that a person is needed. It skips its run while `deploy.sh` holds `.deploy.lock`, and it logs only what it does. It also reads `BACKUP_DIR` from `/etc/bault/backup.env` and logs `backup: the nightly backup FAILED` once for each new `BACKUP-FAILED` marker, and once more when the marker is gone. The crontab's `MAILTO` is a `CHANGE_ME` placeholder, since the host sends no mail unless a relay is set up. `tests/config/gcp-deploy-kit.test.ts` runs `backup.sh dump` against a stub `pg_dump` and the watchdog against a marker.
+
+#### `.github/workflows/ci.yml`
+
+About 2 minutes. It builds on T17.6 and T18.2.
+
+This workflow checks every push and pull request in five jobs. `verify` starts Postgres and MinIO, then runs lint, typecheck, the web build and the five suites that need no database. It applies `dev-settings.sql`, migrates, starts the built API with `CORS_ORIGINS=http://localhost:4180`, and runs each database suite after a fresh seed, the browser journeys last. When a journey fails, the step after it uploads what the page showed as the `journey-failures` artifact. `audit` runs `pnpm audit` on the production dependencies. `migrate-image` migrates an empty database with the API image, then expects 11 guard triggers and 4 uuid and text operators. It expects one platform custodian, and still one after `0038` is applied a second time by hand. It runs the first-administrator command from the image twice, with a password made up on the spot, and the second run must be refused. `cloud-sql-privileges` checks that Bault runs without a superuser. It migrates with the same image as a `bault_owner` that has CREATEROLE and CREATEDB but no superuser, the way `infra/gcp/cloudsql-emulate.sql` copies Cloud SQL. It then runs `roles.sql` twice, and the app and worker roles must show the 30-second timeout and no right to update history. `secret-scan` runs gitleaks over the whole history. CI never runs design-lint or Prettier, never builds the web or worker image, and never starts a worker process. So a broken web or worker Dockerfile shows up only at release.
+
+#### `.github/workflows/release.yml`, `.github/workflows/deploy.yml`, `.github/dependabot.yml`
+
+About 1.5 minutes. It builds on T17.2 and T17.6.
+
+These files publish releases and keep dependencies current. `release.yml` runs on a `v*` tag. It waits for green CI on that commit, then pushes the three images to GHCR under the tag and the commit SHA, never as `latest`. It passes the tag as `VITE_RELEASE` and the repository variable `VITE_SENTRY_DSN` to the builds, which only the web image reads. `deploy.yml` is a manual run. It checks the tag, that the host's SSH port answers, and that the images exist, then runs `deploy.sh` over SSH. Dependabot proposes updates to npm packages, the images and the pinned actions every week. `MINIO_VERSION` in `infra/minio/Dockerfile` and `ci.yml` is updated by hand, as is `MC_VERSION`.
+
+#### `scripts/test.mjs`
+
+About 1.5 minutes. It builds on T18.2.
+
+`pnpm test` runs every suite in `SUITES`, in order. The five suites that need no database come first. Then come `integration`, `core`, `concurrency`, `property` and `worker`, each after a fresh `db:seed`. It stops at the first failure. It reseeds at the end unless `--no-reset` is given or `BAULT_TEST_NO_RESET=1` is set. It refuses `NODE_ENV=production` unless `ALLOW_DESTRUCTIVE_SEED` holds the exact confirmation, because the seed empties every table. It starts no API, so the database suites need one already running at `API_URL`. Two files, `acc-two-factor-required.test.ts` and `pay-payout-manual.test.ts`, start a second API from the build, so build the API first. The browser journeys are not in `SUITES`, because they also need the web build and an API started with `CORS_ORIGINS=http://localhost:4180`; run them with `pnpm test:journeys`.
+
+#### `scripts/staging-check.mjs`, `scripts/staging-check/run.mjs`
+
+About 1.5 minutes. It builds on T17.2 and T18.2.
+
+These scripts test a staging server end to end before launch. `pnpm staging:check` runs the launch plan's staging journeys and provider checks through the public API. It acts as your admin and as three `chk…` collectors it creates. `runStagingCheck` runs the checks in `CHECKS` order, and each one records pass, fail, skip or by hand. A check runs only when every check that `DEPENDS` names for it has passed, and otherwise it is skipped. With `providers: 'sandbox'`, the checks that only live PayPal and EasyPost can answer are skipped, and the run sends the payout webhook itself.
+
+`assertStagingTarget` refuses to run without `--target staging` and without the production host named. It refuses the production host itself, and a PayPal receiver outside `.example.com`, where sandbox accounts live. The command then has the host typed back before it starts. `tests/integration/staging-check.test.ts` runs the check against the CI API. It writes `verification_token` rows in place of the e-mailed links. The check uses only the routes the web app uses. When a change alters one, that test fails with the check's own reason, so update the check in the same pull request.
+
+#### `scripts/design-screens.mjs`
+
+About 1 minute. It builds on T16.4 and T16.5.
+
+`pnpm design:screens` takes a screenshot of every screen of a local, seeded Bault for a design review. It covers each persona in `PERSONAS`, every section and tab, widths of 390 and 1440 pixels, the item drawer in each of the three vault scopes, and the verify and reset e-mails. It serves the production build with `vite preview` on 4173, a port the API also accepts writes from in development. It writes a contact sheet to the gitignored `design-screens` folder, with flagged screens first. `inspect` flags ids, cents, enum names, a kicker that repeats its heading, an oversized icon and sideways scrolling. Listeners on the page add console errors and failed calls. The script signs in with the seed's password and enrols two-factor on the staff accounts, keeping their secrets in `.totp.json`, so `assertLocal` refuses any machine but this one. Start the API with `MFA_REQUIRED_ROLES=admin,warehouse_operator` to see the enrolment that production shows.
+
+#### `tests/`, `tests3/`
+
+About 3 minutes. It builds on T15.3 and T18.1.
+
+These folders hold the eleven test suites, which `vitest.workspace.ts` defines. The suites in `tests3` are adversarial, and they drive each flow the way a misuser would. Five suites need nothing running. `web` in `tests/web` holds the SPA's pure units, the nginx header checks and the check that the bundle carries no credentials. `config` in `tests/config` covers the env refusals, the rule that no startup parameter may break PgBouncer, and the seed's refusal of production. One of its cases is not database free: `tests/config/ops-checks.test.ts` migrates and seeds the database `DATABASE_URL` names and runs `scripts/remove-test-users.mjs` with `--apply` against it, so `pnpm test:config` needs Postgres, which CI has from its first step. `ux` in `tests/ux` renders customer and staff screens. `contract` in `tests/contract` covers adapter selection and the payment, EasyPost, SMTP and storage adapters. `core-contract` in `tests3/contract` covers the PayPal adapter, the TOTP vectors, provider errors, webhook refusal, scrubbing and write origins.
+
+Five suites need the API and the seed. `integration` in `tests/integration` covers every module's flows, in files named by module code, such as `acc-` for the accounts module and `pay-` for the payments module. `core` in `tests3/integration` covers authorization, CSRF, sign-in guessing and uploads, and checks that bad input gets a 4xx answer and never a 5xx. `concurrency` in `tests/concurrency` covers double sale, double spend, stale ownership and capacity, two operators booking one parcel in with the shelf left for later, two confirmations of one OCR reading, and a charge settling while the nightly tier recompute runs. `property` in `tests/property` uses fast-check. It checks that a balance always equals its ledger sum, that `usage_tier_counts` and `recompute_usage_tier` follow random 90-day charge histories, with the thresholds exact and nothing from day 91 or refunded counted, and that a price at any tier is the list price less the tier's basis points, rounded half up, both in `PricingService` and in the charge rows the API writes. `worker` in `tests/worker` needs the seed, and some of its files need the API. It runs every job, reruns it and runs it twice at once, and it covers the heartbeat and SIGTERM. `journeys` in `tests/journeys` drives the built web app in Chromium through `playwright-core`, one journey per role, and asserts the words on each screen. `helpers/web.ts` serves `apps/web/dist` on port 4180 and passes `/api` to the API, which is why the API must name that origin in `CORS_ORIGINS`. The collector journey signs up, follows the confirmation link, adds an address, registers a parcel that the operator receives, books in without a shelf and stows, lists it, has another collector buy it, cashes out, and an administrator approves and completes the cash-out. The operator journey starts a second API with OCR on through `tests/integration/helpers/ocr-api.ts`, runs the worker's `readRequestedPhotos` with the sandbox reader on the photos it takes, confirms both readings, fetches the label PDF, stows from To shelve and dispatches a shipment. The administrator journey approves a cash-out, records a recalled cash-in, reads the monthly summary before and after, adds a video review price and reads it, and the tier page, as a Silver collector. Recording a chargeback has no screen, so that step calls the API from the administrator's signed-in page. `tests/README.md` lists five of the eleven suites.
+
+#### `tests/integration/helpers/http.ts`, `tests/integration/helpers/db.ts`, `tests/integration/helpers/mfa.ts`, `tests/worker/helpers/db.ts`
+
+About 2 minutes. It builds on T15.2, T18.3 and T18.4.
+
+These are the tools that the database tests share. `http.ts` gives `Client`, `signIn`, `fixtureEmail`, `intakeFor` and `fundWallet`. `fundWallet` files a cash-in that the seeded admin approves and completes, so test money enters through the reviewed path. `db.ts` gives `sql` for facts that HTTP cannot show. Its `holdRowLock` holds a row lock, and `waitForLockWaiters` waits until competing requests queue behind it, so the test chooses when they meet the row. `openTransaction` stands in for another session that holds locks while the API works, and `inTransaction` runs a worker job the way the dispatch does. `mfa.ts` gives `activeAccount`, `enrol` and `codeAt`, built on the API's own `totp`. For emailed codes it gives `enrolByEmail`, `emailChallenge` and `deliverCodes`, which runs the worker's own `sendMfaEmailCode` on an account's waiting code mails and returns what would have been sent, because no worker runs beside the suite. `ageCodeRequests` moves an account's code requests back in time, so a test can ask again without waiting a minute. The worker helpers build fixtures in plain SQL. `warm` opens pool connections first, so that two jobs really run at the same moment. Enrol only fresh fixtures in two-factor, because an enrolled seeded account breaks later suites, which sign in with a password alone.
+
+#### `apps/api/src/db/seed.ts`
+
+About 1 minute. It builds on T18.3.
+
+The seed fills a development database with known accounts, all with the password `11111111`, and the suites sign in as them. `eldar@bault.dev` is the admin, which tests call `SEED.admin`. `hermon@bault.dev` is the warehouse operator, `SEED.operator`. `red@bault.dev` and `golden@bault.dev` are collectors, `SEED.collector` and `SEED.collector2`. `veteran@bault.dev` is a migrated collector whose name awaits review, `SEED.collector3`. `platform@bault.dev` is the API's house account, the closed plain account that migration `0038` writes, and `bootstrap.test.ts` checks that nobody can sign in as it. `dana@bault.dev` is a suspended collector that no test uses, and it shows the helpdesk-only state. Accounts that tests create use `FIXTURE_EMAIL_DOMAIN`, and `AdmService.listUsers` hides them from the admin's user list.
+
+#### `.dockerignore`, `tests/ux/setup.ts`, `infra/pgbouncer/userlist.txt`
+
+These small files need no separate time.
+
+`.dockerignore` keeps `.env` files, docs and tests out of every build context, and so out of the images. `tests/ux/setup.ts` loads jest-dom, stubs the browser functions that jsdom lacks and sets English before each test. `infra/pgbouncer/userlist.txt` is a placeholder kept for reference only.

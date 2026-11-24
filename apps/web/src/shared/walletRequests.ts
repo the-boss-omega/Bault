@@ -55,7 +55,6 @@ export const MAX_REFERENCE_LENGTH = 120;
 export interface WalletRequest {
   id: string;
   code: string;
-  userId: string;
   type: WalletRequestType;
   status: WalletRequestStatus;
   amount: number;
@@ -64,22 +63,38 @@ export interface WalletRequest {
   destinationAccount: string | null;
   beneficiaryName: string | null;
   reference: string | null;
-  documentKey: string | null;
   notes: string | null;
-  settledLedgerId: string | null;
-  payoutReference?: string | null;
-  reviewedBy: string | null;
-  reviewedAt: string | null;
   rejectionReason: string | null;
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface WalletRequestEvent {
+  fromStatus: string | null;
+  toStatus: string;
+  reason: string | null;
+  occurredAt: string;
+  byStaff: boolean;
+}
+
+export interface WalletRequestDetail extends WalletRequest {
+  history: WalletRequestEvent[];
+}
+
+export interface StaffWalletRequest extends WalletRequest {
+  userId: string;
+  documentKey: string | null;
+  settledLedgerId: string | null;
+  payoutReference?: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
   username?: string | null;
   customerName?: string | null;
   email?: string | null;
 }
 
-export interface WalletRequestEvent {
+export interface StaffWalletRequestEvent {
   id: string;
   requestId: string;
   actorId: string | null;
@@ -98,8 +113,8 @@ export interface WalletRequestPayout {
   externalRef: string | null;
 }
 
-export interface WalletRequestDetail extends WalletRequest {
-  history: WalletRequestEvent[];
+export interface StaffWalletRequestDetail extends StaffWalletRequest {
+  history: StaffWalletRequestEvent[];
   payout?: WalletRequestPayout | null;
 }
 
@@ -232,8 +247,6 @@ export function matchesRequestSearch(request: WalletRequest, needle: string): bo
     request.reference ?? '',
     request.beneficiaryName ?? '',
     request.destinationAccount ?? '',
-    request.username ?? '',
-    request.customerName ?? '',
     (request.amount / 100).toFixed(2),
   ]
     .join(' ')

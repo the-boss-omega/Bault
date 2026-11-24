@@ -20,6 +20,8 @@ import {
   tierFeeAction,
 } from './grading-tiers';
 import { PricingService } from '../prc/pricing.service';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
+import { itemStateWords } from '../../shared/item-state-words';
 
 export interface GradingFulfillment {
   grade: string;
@@ -68,7 +70,7 @@ export class GradingService {
       const [it] = await tx.select().from(item).where(eq(item.id, itemId)).for('update').limit(1);
       if (!it || it.ownerId !== ownerId) throw AppError.forbidden('Not your item');
       if (it.lifecycleState !== 'stored') {
-        throw new AppError(ErrorCode.CONFLICT, `Item must be stored (it is ${it.lifecycleState})`, 409);
+        throw new AppError(ErrorCode.CONFLICT, `This card is ${itemStateWords(it.lifecycleState)}. It has to be in the vault first.`, 409);
       }
       if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
 
@@ -76,6 +78,7 @@ export class GradingService {
         type: 'third_party_grading',
         requesterId: ownerId,
         itemId,
+        commits: 'sent for grading',
         feeActionType: tierFeeAction(tier.key),
         typeFields: {
           tier: tier.key,
@@ -95,6 +98,10 @@ export class GradingService {
     return this.db.transaction(async (tx) => {
       const req = await this.requests.get(requestId, tx);
       if (req.type !== 'third_party_grading') throw AppError.validation('Not a grading request');
+      if (req.status !== 'requested' && req.status !== 'in_progress') {
+        throw new AppError(ErrorCode.CONFLICT, `That request is already ${req.status}.`, 409);
+      }
+      if (req.itemId) await this.custody.lockExpecting(tx, req.itemId, { ownerId: req.requesterId, allowHold: true });
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
       if (fields.approvalRequired !== true) {
         throw AppError.validation('This request does not need approval');
@@ -102,12 +109,14 @@ export class GradingService {
       if (fields.approvalState !== 'pending') {
         throw new AppError(ErrorCode.CONFLICT, 'This request has already been decided', 409);
       }
-      return this.requests.setStatus(tx, requestId, approve ? req.status as 'in_progress' : 'cancelled', {
+      const decision = {
         approvalState: approve ? 'approved' : 'refused',
         approvalBy: adminId,
         approvalReason: reason.trim(),
         approvalAt: new Date().toISOString(),
-      });
+      };
+      if (!approve) return this.requests.refundAndCancel(tx, req, decision);
+      return this.requests.setStatus(tx, requestId, req.status as 'in_progress', decision);
     });
   }
 
@@ -220,6 +229,8 @@ export class GradingService {
       const now = new Date();
       for (const req of members) {
         if (!req.itemId) continue;
+        await this.custody.lockExpecting(tx, req.itemId, { ownerId: req.requesterId });
+        await assertItemsUncommitted(tx, [req.itemId], 'sent to the grader', { serviceRequestId: req.id });
         await this.custody.changeState(tx, req.itemId, 'at_grader', operatorId, `sent to ${sub.gradingBody}`);
         await this.outbox.emit(tx, {
           aggregateType: 'service_request',
@@ -257,8 +268,11 @@ export class GradingService {
       this.requests.assertAccepted(req);
       if (req.type !== 'third_party_grading') throw AppError.validation('Not a grading request');
       if (!req.itemId) throw AppError.validation('Request has no item');
-      const [it] = await tx.select().from(item).where(eq(item.id, req.itemId)).for('update').limit(1);
-      if (!it) throw AppError.notFound('Item not found');
+      const it = await this.custody.lockExpecting(tx, req.itemId, {
+        ownerId: req.requesterId,
+        fromStates: ['at_grader', 'stored'],
+        allowHold: true,
+      });
 
       await tx
         .update(item)

@@ -4,7 +4,7 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { item, itemChangeHistory } from '../cst/cst.schema';
-import { isKnownItemClass } from './item-classes';
+import { isKnownItemClass, itemClass } from './item-classes';
 
 const CORRECTABLE = new Set(['description', 'conditionGrade', 'typeClass']);
 
@@ -28,7 +28,12 @@ export class CorrectionService {
         if (patch.field === 'typeClass' && !isKnownItemClass(patch.value)) {
           throw AppError.validation(`Unknown item class "${patch.value}"`);
         }
-        const oldValue = (current as Record<string, unknown>)[patch.field];
+        if (patch.field === 'typeClass' && current.isLot && !itemClass(patch.value)!.lotEligible) {
+          throw AppError.validation(`${itemClass(patch.value)!.label} cannot be held as a lot, and this item is a lot`);
+        }
+        const values = current as Record<string, unknown>;
+        const oldValue = values[patch.field];
+        values[patch.field] = patch.value;
         await tx
           .update(item)
           .set({ [patch.field]: patch.value, updatedAt: new Date() } as Record<string, unknown>)

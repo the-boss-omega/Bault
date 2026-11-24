@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../shared/api';
 import { useI18n } from '../../shared/i18n';
 import { formatUsd } from '../../shared/money';
@@ -12,6 +12,9 @@ import {
 } from '../../shared/ui/primitives';
 import { IconAlert, IconBox, IconLocation } from '../../shared/ui/icons';
 import { YieldChart } from './YieldChart';
+import { NoMatch, RollTools, matchesQuery } from './RollTools';
+
+type ShelfSort = 'yieldLow' | 'yieldHigh' | 'revenue' | 'items' | 'shelf';
 
 interface ShelfRow {
   binId: string;
@@ -83,6 +86,26 @@ export function ShelfYieldPanel() {
   const [zones, setZones] = useState<ZoneRow[] | null>(null);
   const [customers, setCustomers] = useState<CustomerRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<ShelfSort>('yieldLow');
+
+  const shelves = useMemo(() => {
+    const list = (data?.shelves ?? []).filter(
+      (s) => s.itemCount > 0 && matchesQuery(query, s.serialNumber, s.zone, s.facilityCode),
+    );
+    const per = (s: ShelfRow) => s.revenuePerSlotMonthMinor ?? 0;
+    return list.sort((a, b) =>
+      sort === 'yieldHigh'
+        ? per(b) - per(a)
+        : sort === 'revenue'
+          ? b.revenueMinor - a.revenueMinor
+          : sort === 'items'
+            ? b.itemCount - a.itemCount
+            : sort === 'shelf'
+              ? a.serialNumber.localeCompare(b.serialNumber)
+              : per(a) - per(b),
+    );
+  }, [data, query, sort]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -111,7 +134,10 @@ export function ShelfYieldPanel() {
 
   const occupied = (data?.shelves ?? []).filter((s) => s.itemCount > 0);
   const bestShelf = Math.max(0, ...occupied.map((s) => s.revenuePerSlotMonthMinor ?? 0));
-  const bestCustomer = Math.max(0, ...(customers ?? []).map((c) => c.revenuePerSlotMonthMinor ?? 0));
+  const bestCustomer = Math.max(
+    0,
+    ...(customers ?? []).map((c) => c.revenuePerSlotMonthMinor ?? 0),
+  );
 
   return (
     <>
@@ -139,7 +165,7 @@ export function ShelfYieldPanel() {
         />
         <MetricCard
           label={t('yield.metric.slotDays')}
-          value={data ? data.totals.slotDays.toLocaleString() : '—'}
+          value={data ? data.totals.slotDays.toLocaleString('en-US') : '—'}
           icon={<IconBox />}
           tone="violet"
           footer={t('yield.metric.slotDaysNote')}
@@ -156,67 +182,94 @@ export function ShelfYieldPanel() {
             icon={<IconLocation />}
           />
         ) : (
-          <div className="dt-wrap dt-wrap--stack">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">{t('yield.col.shelf')}</th>
-                  <th scope="col">{t('yield.col.zone')}</th>
-                  <th scope="col" className="td-end">
-                    {t('yield.col.items')}
-                  </th>
-                  <th scope="col" className="td-end">
-                    {t('yield.col.revenue')}
-                  </th>
-                  <th scope="col">{t('yield.col.perSlotMonth')}</th>
-                  <th scope="col">{t('yield.col.flag')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {occupied.map((s) => (
-                  <tr key={s.binId}>
-                    <td data-label={t('yield.col.shelf')}>
-                      <span className="dt-primary mono" dir="ltr">
-                        {s.serialNumber}
-                      </span>
-                    </td>
-                    <td data-label={t('yield.col.zone')}>
-                      {s.zone}
-                      {s.facilityCode && <span className="dt-sub">{s.facilityCode}</span>}
-                    </td>
-                    <td data-label={t('yield.col.items')} className="td-end num">
-                      {s.itemCount}
-                    </td>
-                    <td data-label={t('yield.col.revenue')} className="td-end num">
-                      {formatUsd(s.revenueMinor)}
-                    </td>
-                    <td data-label={t('yield.col.perSlotMonth')}>
-                      <YieldCell value={s.revenuePerSlotMonthMinor} best={bestShelf} />
-                    </td>
-                    <td data-label={t('yield.col.flag')}>
-                      {s.deadItemCount > 0 ? (
-                        <StatusBadge tone="warning">
-                          {t('yield.flag.dead', { count: s.deadItemCount })}
-                        </StatusBadge>
-                      ) : s.oldestItemDays !== null && s.oldestItemDays > 180 ? (
-                        <StatusBadge tone="neutral">
-                          {t('yield.flag.idle', { days: s.oldestItemDays })}
-                        </StatusBadge>
-                      ) : (
-                        <StatusBadge tone="success">{t('yield.flag.earning')}</StatusBadge>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="panel-body">
+              <RollTools
+                label={t('admin.yield.tools')}
+                query={query}
+                onQuery={setQuery}
+                placeholder={t('admin.yield.search')}
+                shown={shelves.length}
+                total={occupied.length}
+                sort={{
+                  value: sort,
+                  onChange: setSort,
+                  options: [
+                    { key: 'yieldLow', label: t('admin.yield.sort.yieldLow') },
+                    { key: 'yieldHigh', label: t('admin.yield.sort.yieldHigh') },
+                    { key: 'revenue', label: t('admin.yield.sort.revenue') },
+                    { key: 'items', label: t('admin.yield.sort.items') },
+                    { key: 'shelf', label: t('admin.yield.sort.shelf') },
+                  ],
+                }}
+              />
+            </div>
+            {shelves.length === 0 ? (
+              <NoMatch query={query} onClear={() => setQuery('')} />
+            ) : (
+              <div className="dt-wrap dt-wrap--stack">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">{t('yield.col.shelf')}</th>
+                      <th scope="col">{t('yield.col.zone')}</th>
+                      <th scope="col" className="td-end">
+                        {t('yield.col.items')}
+                      </th>
+                      <th scope="col" className="td-end">
+                        {t('yield.col.revenue')}
+                      </th>
+                      <th scope="col">{t('yield.col.perSlotMonth')}</th>
+                      <th scope="col">{t('yield.col.flag')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shelves.map((s) => (
+                      <tr key={s.binId}>
+                        <td data-label={t('yield.col.shelf')}>
+                          <span className="dt-primary mono" dir="ltr">
+                            {s.serialNumber}
+                          </span>
+                        </td>
+                        <td data-label={t('yield.col.zone')}>
+                          {s.zone}
+                          {s.facilityCode && <span className="dt-sub">{s.facilityCode}</span>}
+                        </td>
+                        <td data-label={t('yield.col.items')} className="td-end num">
+                          {s.itemCount}
+                        </td>
+                        <td data-label={t('yield.col.revenue')} className="td-end num">
+                          {formatUsd(s.revenueMinor)}
+                        </td>
+                        <td data-label={t('yield.col.perSlotMonth')}>
+                          <YieldCell value={s.revenuePerSlotMonthMinor} best={bestShelf} />
+                        </td>
+                        <td data-label={t('yield.col.flag')}>
+                          {s.deadItemCount > 0 ? (
+                            <StatusBadge tone="warning">
+                              {t('yield.flag.dead', { count: s.deadItemCount })}
+                            </StatusBadge>
+                          ) : s.oldestItemDays !== null && s.oldestItemDays > 180 ? (
+                            <StatusBadge tone="neutral">
+                              {t('yield.flag.idle', { days: s.oldestItemDays })}
+                            </StatusBadge>
+                          ) : (
+                            <StatusBadge tone="success">{t('yield.flag.earning')}</StatusBadge>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </Panel>
 
       <Panel title={t('yield.zones.title')} subtitle={t('yield.zones.subtitle')} flush>
         {zones !== null && zones.length > 0 && (
-          <div className="panel-note">
+          <div className="chart-wrap">
             <YieldChart
               title={t('yield.chart.title')}
               subtitle={t('yield.chart.subtitle')}
@@ -330,9 +383,7 @@ export function ShelfYieldPanel() {
             </table>
           </div>
         )}
-        <p className="panel-note">
-          {t('yield.customers.footnote')}
-        </p>
+        <p className="panel-note">{t('yield.customers.footnote')}</p>
       </Panel>
     </>
   );

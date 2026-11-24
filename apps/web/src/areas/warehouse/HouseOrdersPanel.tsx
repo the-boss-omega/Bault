@@ -4,9 +4,18 @@ import { BarcodeLabel, BarcodePrintAllButton } from '../../shared/Barcode';
 import { CardPhotoThumb } from '../../shared/CardPhoto';
 import { formatDate } from '../../shared/money';
 import { useI18n } from '../../shared/i18n';
+import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
 import { Serial } from '../../shared/ui/Serial';
-import { Button, EmptyState, Field, Panel } from '../../shared/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Panel,
+  ScanField,
+  SkeletonTable,
+  StatusBadge,
+} from '../../shared/ui/primitives';
 import { IconBox } from '../../shared/ui/icons';
 
 interface HouseOrderRow {
@@ -25,17 +34,19 @@ interface HouseOrderRow {
 
 export function HouseOrdersPanel({ onLog }: { onLog: (line: string) => void }) {
   const { t, locale } = useI18n();
-  const [orders, setOrders] = useState<HouseOrderRow[]>([]);
+  const [orders, setOrders] = useState<HouseOrderRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setOrders(await api.get<HouseOrderRow[]>('/marketplace/house/orders/queue'));
-      setError(null);
+      setLoadError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setLoadError((e as Error).message);
     }
   }, []);
+  const list = orders ?? [];
 
   useEffect(() => {
     void load();
@@ -43,21 +54,33 @@ export function HouseOrdersPanel({ onLog }: { onLog: (line: string) => void }) {
 
   return (
     <Panel
-      title={t('house.queue.title', { count: orders.length })}
+      id="house-orders"
+      title={t('house.queue.title', { count: list.length })}
       subtitle={t('house.queue.subtitle')}
       tools={
         <BarcodePrintAllButton
-          labels={orders.map((o) => ({ value: o.barcode, caption: o.description || o.barcode }))}
-          className="btn btn--secondary btn--sm"
+          labels={list.map((o) => ({ value: o.barcode, caption: o.description || o.barcode }))}
+          variant="secondary"
+          size="sm"
         />
       }
     >
-      {error && <p className="field-error">{error}</p>}
-      {orders.length === 0 ? (
-        <EmptyState title={t('house.queue.empty')} icon={<IconBox />} />
+      {loadError && (
+        <ErrorState
+          title={t('warehouse.houseOrders.loadFailed')}
+          message={loadError}
+          onRetry={() => void load()}
+          retryLabel={t('ui.retry')}
+        />
+      )}
+      {error && <ErrorState message={error} />}
+      {orders === null ? (
+        loadError ? null : <SkeletonTable rows={2} columns={3} />
+      ) : list.length === 0 ? (
+        <EmptyState title={t('house.queue.empty')} text={t('warehouse.houseOrders.emptyText')} icon={<IconBox />} />
       ) : (
-        <ul className="parcel-rows">
-          {orders.map((o) => (
+        <ul className="tag-grid">
+          {list.map((o) => (
             <HouseOrderRowView
               key={o.id}
               order={o}
@@ -101,7 +124,9 @@ function HouseOrderRowView({
           : { autoStow: true, photoKeys: photoKeys(photos) },
       );
       onError(null);
-      await onStowed(t('house.queue.stowed', { serial: res.serialNumber, bin: res.binBarcode ?? '—' }));
+      await onStowed(
+        t('house.queue.stowed', { serial: res.serialNumber, bin: res.binBarcode ?? '—' }),
+      );
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -110,46 +135,56 @@ function HouseOrderRowView({
   }
 
   return (
-    <li className="parcel-row">
-      <div className="row">
-        <div style={{ width: 72 }}>
-          <CardPhotoThumb serialNumber={order.photoRef ?? ''} title={order.description} />
-        </div>
-        <div className="stack stack--tight" style={{ flex: '1 1 260px' }}>
-          <strong>
-            <Serial value={order.serialNumber} />
-          </strong>
-          <span>{order.description}</span>
-          <span className="field-hint">
-            {t('house.queue.meta', {
-              buyer: order.buyerUsername ?? '—',
-              product: order.listingCode,
-              order: order.code,
-              when,
-            })}
-          </span>
-        </div>
-        <BarcodeLabel value={order.barcode} caption={order.description || order.barcode} />
-      </div>
-
-      <div className="form-grid">
-        <Field label={t('warehouse.intake.stowScan')} hint={t('house.queue.binHint')}>
-          <input value={bin} onChange={(e) => setBin(e.target.value)} placeholder="BIN-XXXXXXXX" dir="ltr" />
-        </Field>
-      </div>
-
-      <PhotoInput
-        purpose="item_intake"
-        value={photos}
-        onChange={setPhotos}
-        label={t('warehouse.intake.photos')}
-        hint={t('house.queue.photosHint')}
+    <li className="tag-item tag-item--order">
+      {/* A sale is a tag: its number, the card sold, who bought it and from which listing; under it, the label to stick on it and where it goes. */}
+      <DrawerTag
+        item
+        art={<CardPhotoThumb serialNumber={order.photoRef ?? ''} title={order.description} />}
+        kicker={order.code}
+        title={<bdi dir="auto">{order.description}</bdi>}
+        lines={[
+          { label: t('bench.serial'), value: <Serial value={order.serialNumber} /> },
+          {
+            label: t('bench.buyer'),
+            value: order.buyerUsername ? <bdi dir="ltr">@{order.buyerUsername}</bdi> : '—',
+          },
+          { label: t('bench.listing'), value: <bdi dir="ltr">{order.listingCode}</bdi> },
+          { label: t('bench.placed'), value: when },
+        ]}
+        status={<StatusBadge tone="warning">{t('bench.kicker.storeSale')}</StatusBadge>}
       />
 
-      <div className="row row--end">
-        <Button variant="gold" icon={<IconBox />} loading={busy} disabled={busy} onClick={() => void stow()}>
-          {t('house.queue.stow')}
-        </Button>
+      <div className="stack stack--tight tag-bench">
+        <BarcodeLabel value={order.barcode} caption={order.description || order.barcode} />
+
+        <ScanField
+          label={t('warehouse.intake.stowScan')}
+          hint={t('house.queue.binHint')}
+          value={bin}
+          onChange={setBin}
+          onScan={() => void stow()}
+          placeholder="BIN-XXXXXXXX"
+        />
+
+        <PhotoInput
+          purpose="item_intake"
+          value={photos}
+          onChange={setPhotos}
+          label={t('warehouse.intake.photos')}
+          hint={t('house.queue.photosHint')}
+        />
+
+        <div className="row">
+          <Button
+            variant="primary"
+            icon={<IconBox />}
+            loading={busy}
+            disabled={busy}
+            onClick={() => void stow()}
+          >
+            {t('house.queue.stow')}
+          </Button>
+        </div>
       </div>
     </li>
   );

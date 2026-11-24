@@ -12,6 +12,7 @@ export interface LegalDocument {
   downloadPath: string | null;
   draft?: boolean;
   version?: string;
+  preformatted?: boolean;
   sections: LegalSection[];
 }
 
@@ -33,7 +34,7 @@ const TERMS_OF_SERVICE: LegalDocument = {
   id: 'terms-of-service',
   title: 'Terms of Service',
   provenance: 'legal.provenance.draft',
-  lastUpdated: '2026-10-15',
+  lastUpdated: '2026-11-16',
   downloadPath: null,
   draft: true,
   version: TERMS_VERSION,
@@ -41,17 +42,17 @@ const TERMS_OF_SERVICE: LegalDocument = {
     section(
       'about',
       '1. About these terms',
-      `These terms are an agreement between you and ${COUNSEL('the legal name, registered address and company number of the entity that operates Bault')} ("Bault", "we").`,
-      `You accept them by ticking the box on the sign-up form. Bault records against your account which version you accepted (this one is ${TERMS_VERSION}) and when. An account cannot be created without accepting them.`,
+      `These terms are an agreement between you and ${COUNSEL('the legal name, registered address and company number of the entity that operates Card Embassy')} ("Card Embassy", "we").`,
+      `You accept them by ticking the box on the sign-up form. Card Embassy records against your account which version you accepted (this one is ${TERMS_VERSION}) and when. An account cannot be created without accepting them.`,
       'They work together with the Account Use & Balance Policy, the Privacy Policy and the Cookie notice, all shown under FAQ & Legal > Legal Terms.',
       COUNSEL('who may open an account — minimum age, countries served, whether business customers are accepted'),
     ),
     section(
       'service',
-      '2. What Bault does',
-      'Bault receives collectibles sent to its addresses, inspects and photographs them, stores them in its vault, and keeps the record of who owns each one. From your account you can sell items on the marketplace, swap or give them to another collector, consign them, ask Bault to buy them, order services on them, and have them shipped.',
-      'You keep ownership of what you send. Bault holds it on your behalf and is not the owner of anything in your vault. The custody record of each item — who owned it, where it sat, what state it was in, and when each changed — cannot be edited by anyone, Bault staff included; a correction is made by adding a new record.',
-      COUNSEL('the legal nature of the custody (bailment or otherwise), Bault’s duty of care, and how items in the vault are insured, if at all'),
+      '2. What Card Embassy does',
+      'Card Embassy receives collectibles sent to its addresses, inspects and photographs them, stores them in its vault, and keeps the record of who owns each one. From your account you can sell items on the marketplace, swap or give them to another collector, consign them, ask Card Embassy to buy them, order services on them, and have them shipped.',
+      'You keep ownership of what you send. Card Embassy holds it on your behalf and is not the owner of anything in your vault. The custody record of each item — who owned it, where it sat, what state it was in, and when each changed — cannot be edited by anyone, Card Embassy staff included; a correction is made by adding a new record.',
+      COUNSEL('the legal nature of the custody (bailment or otherwise), Card Embassy’s duty of care, and how items in the vault are insured, if at all'),
     ),
     section(
       'account',
@@ -63,7 +64,8 @@ const TERMS_OF_SERVICE: LegalDocument = {
     section(
       'fees',
       '4. Fees and prices',
-      'Bault charges fees for receiving parcels, booking items in, storing them after an included period, services, shipping, marketplace sales, consignment, escrow, cash-outs and memberships. Every fee is charged to your Bault wallet.',
+      'Card Embassy charges fees for receiving parcels, booking items in, storing them after an included period, services, shipping, marketplace sales, consignment, escrow and cash-outs. Every fee is charged to your Card Embassy wallet.',
+      'Every account has a usage tier, Bronze, Silver or Gold, worked out from its settled charges over a recent period, as the FAQ describes. A tier is a price level and not a subscription: nothing is charged for it, and it cannot be bought. Prices that are pricing rules are reduced for Silver and Gold accounts by the discount shown on the price list, and the tier and discount applied are recorded with each charge, so a later change of tier never alters what you were already billed.',
       'Prices that are pricing rules are published on the price list (FAQ & Legal > Prices). Fixed fees — the cash-out fee schedule, the chargeback handling fee, the shipping restocking fee, the escrow fee — are shown under "Current figures" above these documents. The rule in force at the moment of a charge is recorded with that charge, so a later price change never alters what you were already billed.',
       'A fee already charged is not refunded because you changed your mind about the service it paid for. Where a service was not delivered, tell us through Support and it will be corrected with a compensating credit.',
       COUNSEL('whether prices include or exclude sales tax or VAT, and the tax treatment of each fee — to be decided with the accountant before launch'),
@@ -75,37 +77,37 @@ const TERMS_OF_SERVICE: LegalDocument = {
       'Your balance may go negative: a fee is not refused because you are short. While it is negative, new shipment requests and new service requests are refused.',
       'If the balance stays negative for longer than the grace period, interest is charged every day on the whole debt, including interest already charged, until the debt clears. Each day’s interest is an entry on your ledger. If the balance falls below the suspension threshold, your account is suspended automatically; that suspension lifts by itself once the balance is back above the threshold. The grace period, the daily interest rate and the threshold are shown under "Current figures".',
       'A suspended account can sign in and use Support and its Profile, and nothing else.',
-      COUNSEL('whether charging interest on a consumer debt is permitted, and at what rate, in each jurisdiction Bault serves; any required disclosure of an annual rate'),
+      COUNSEL('whether charging interest on a consumer debt is permitted, and at what rate, in each jurisdiction Card Embassy serves; any required disclosure of an annual rate'),
     ),
     section(
       'money-in-out',
       '6. Adding and withdrawing money',
       'A bank transfer or a PayPal Friends & Family payment is a cash-in request. Submitting it moves nothing; a person checks that the money arrived and completes the request, and only then is your wallet credited. Put your username in the payment reference.',
-      'A card or PayPal Goods & Services payment, where it is offered, credits your wallet when the provider confirms it. If you or your bank later reverse such a payment, the amount is taken back off your balance and a handling fee is charged unless the provider charged Bault none. Both are entries on your ledger.',
-      'A cash-out is a request reviewed by a person. The fee is quoted before you submit it, is charged as its own ledger entry, and your balance must cover the amount and the fee when the request is completed. Payouts are made through PayPal.',
+      'A card or PayPal Goods & Services payment, where it is offered, credits your wallet when the provider confirms it. If you or your bank later reverse such a payment, the amount is taken back off your balance and a handling fee is charged unless the provider charged Card Embassy none. Both are entries on your ledger.',
+      'A cash-out is a request reviewed by a person. The fee is quoted before you submit it, is charged as its own ledger entry, and your balance must cover the amount and the fee when the request is completed. Payouts are made through PayPal. If PayPal returns, reverses or refunds a payout after it was paid, the whole amount is credited back to your wallet, the cash-out fee included.',
       'The smallest and largest cash-in and cash-out are shown on the forms.',
     ),
     section(
       'marketplace',
       '7. Selling, buying, swapping and escrow',
-      'A marketplace purchase is final once it executes: the buyer is debited, the seller is credited the price less Bault’s commission, and ownership changes, all at once. A purchase is not reversed; if what you bought is not what its record said, open a support ticket.',
+      'A marketplace purchase is final once it executes: the buyer is debited, the seller is credited the price less Card Embassy’s commission, and ownership changes, all at once. A purchase is not reversed; if what you bought is not what its record said, open a support ticket.',
       'A swap needs both sides to accept, and then every item in it changes owner at once. A swap charges the flat service fee to each side; a gift charges only the giver.',
-      'Escrow is for a private deal: the buyer’s money is held, the item is received and inspected by Bault, and the money is released to the seller only after that. The fee is paid by whoever raised the deal.',
-      COUNSEL('Bault’s role and liability as a marketplace operator and as an escrow agent; whether escrow requires a licence in any jurisdiction served'),
+      'Escrow is for a private deal: the buyer’s money is held, the item is received and inspected by Card Embassy, and the money is released to the seller only after that. The fee is paid by whoever raised the deal.',
+      COUNSEL('Card Embassy’s role and liability as a marketplace operator and as an escrow agent; whether escrow requires a licence in any jurisdiction served'),
     ),
     section(
       'shipping',
       '8. Shipping, insurance and customs',
-      'Shipping is priced from the carrier’s rate plus Bault’s handling fee and any insurance, add-on or rush packing you choose. A shipment you cannot pay for is held for payment for a limited period and then cancelled; cancelling a shipment after its service was paid for costs a restocking fee.',
+      'Shipping is priced from the carrier’s rate plus Card Embassy’s handling fee and any insurance, add-on or rush packing you choose. A shipment you cannot pay for is held for payment for a limited period and then cancelled; cancelling a carrier shipment after its service was paid for costs a restocking fee. There is no restocking fee when the carrier refused the label, or for a show pickup or a hand delivery cancelled before the warehouse starts on it: before the show’s booking deadline, or before the delivery’s pickup window opens.',
       'Insurance is capped per parcel, and a parcel insured above a set value must be signed for; both figures are shown when you ship and under "Current figures".',
-      'For an international shipment you declare the customs value of the contents. Bault does not change, reduce or omit it. Duty and tax at the destination are paid by the recipient.',
-      'Items sent to Bault from outside the United States are imported by you. Customs clearance, duty, tax and carrier or broker charges are yours.',
+      'For an international shipment you declare the customs value of the contents. Card Embassy does not change, reduce or omit it. Duty and tax at the destination are paid by the recipient.',
+      'Items sent to Card Embassy from outside the United States are imported by you. Customs clearance, duty, tax and carrier or broker charges are yours.',
       COUNSEL('liability for loss or damage in transit and the claims process'),
     ),
     section(
       'intake',
-      '9. What Bault accepts',
-      'The item types Bault accepts and the categories it refuses are published under FAQ & Legal > What we accept, built from the same list intake enforces. An item Bault cannot store is not placed in your vault; a record is written saying what it was, what was done with it and why, and you are notified. Those records cannot be edited.',
+      '9. What Card Embassy accepts',
+      'The item types Card Embassy accepts and the categories it refuses are published under FAQ & Legal > What we accept, built from the same list intake enforces. An item Card Embassy cannot store is not placed in your vault; a record is written saying what it was, what was done with it and why, and you are notified. Those records cannot be edited.',
       COUNSEL('liability for refused and disposed items, and for unclaimed parcels'),
     ),
     section(
@@ -113,7 +115,7 @@ const TERMS_OF_SERVICE: LegalDocument = {
       '10. Suspension and closure',
       'An administrator may suspend an account. A suspension by an administrator stays until an administrator lifts it.',
       'There is no self-service closure. Ask through Support. A closed account cannot sign in or act. Closing an account deletes neither its items nor its records.',
-      COUNSEL('the grounds on which Bault may suspend or close an account, notice periods, and how a closed or suspended customer retrieves their items and balance'),
+      COUNSEL('the grounds on which Card Embassy may suspend or close an account, notice periods, and how a closed or suspended customer retrieves their items and balance'),
     ),
     section(
       'liability',
@@ -125,12 +127,12 @@ const TERMS_OF_SERVICE: LegalDocument = {
       'changes',
       '12. Changes to these terms',
       'Each published version of these terms has its own version string, shown at the top. The version accepted at sign-up is recorded on the account.',
-      COUNSEL('how existing customers are told about a new version, and whether and how they must accept it before continuing to use Bault — the product does not yet ask an existing account to accept a new version'),
+      COUNSEL('how existing customers are told about a new version, and whether and how they must accept it before continuing to use Card Embassy — the product does not yet ask an existing account to accept a new version'),
     ),
     section(
       'contact',
       '13. Contact',
-      'Open a ticket under Support. Bault’s published email, phone and opening hours are under FAQ & Legal > Contact.',
+      'Open a ticket under Support. Card Embassy’s published email, phone and opening hours are under FAQ & Legal > Contact.',
     ),
   ],
 };
@@ -139,7 +141,7 @@ const PRIVACY_POLICY: LegalDocument = {
   id: 'privacy-policy',
   title: 'Privacy Policy',
   provenance: 'legal.provenance.draft',
-  lastUpdated: '2026-10-15',
+  lastUpdated: '2026-11-16',
   downloadPath: null,
   draft: true,
   version: TERMS_VERSION,
@@ -152,29 +154,29 @@ const PRIVACY_POLICY: LegalDocument = {
     ),
     section(
       'what',
-      '2. What Bault keeps',
+      '2. What Card Embassy keeps',
       'Your account: your email address, username, first and last name, a hash of your password (the password itself is never stored), the account status, and the version of these terms you accepted and when.',
       'Addresses: the delivery addresses you save — recipient, street, city, country and postal code.',
       'Signing in: every sign-in attempt, successful or not, with the identifier typed, the outcome, the IP address and the browser’s user-agent string; and for every session, the IP address, user agent and expiry. Passwords are never recorded in any form.',
       'Money: every entry on your ledger; payments made through a provider, by the provider’s reference (never a card number); cash-in and cash-out requests, including the destination account and beneficiary name you give for a cash-out and any document you attach; and the history of each request.',
       'Your items and parcels: the items in your vault, their photographs and condition records, their custody history, the parcels addressed to you including photographs of them, and records of anything refused at intake.',
       'Shipping: shipments, their destinations and recipients, and the customs declarations you make.',
-      'Other activity: listings, offers, purchases, swaps, escrow deals, service requests, memberships, support tickets and their messages, notifications and your notification preferences, and an audit record of each change you or staff make (who, what, when).',
-      'People you name: for an escrow deal with somebody outside Bault, the name and email address you give for them.',
+      'Other activity: listings, offers, purchases, swaps, escrow deals, service requests, your usage tier and its history, support tickets and their messages, notifications and your notification preferences, and an audit record of each change you or staff make (who, what, when).',
+      'People you name: for an escrow deal with somebody outside Card Embassy, the name and email address you give for them.',
     ),
     section(
       'why',
       '3. Why',
-      'To provide the service: to match parcels to you, keep your items and their records, charge and pay out, ship, and answer you. To keep accounts secure: the sign-in history exists so that a sign-in you did not make can be seen. To keep records Bault is required to keep.',
+      'To provide the service: to match parcels to you, keep your items and their records, charge and pay out, ship, and answer you. To keep accounts secure: the sign-in history exists so that a sign-in you did not make can be seen. To keep records Card Embassy is required to keep.',
       COUNSEL('the lawful basis for each use, in each jurisdiction served'),
     ),
     section(
       'who-else',
       '4. Who else receives it',
-      'Bault uses these providers to run the service. Each receives only what its part needs:',
-      '  PayPal              payments into your wallet where offered, and cash-out\n                      payouts: amounts, references and the payout destination.\n  EasyPost            shipping rates and labels: sender and recipient names,\n                      addresses, phone or email where given, parcel weight and\n                      size, and for international parcels the contents and\n                      declared values. The carrier that delivers the parcel\n                      receives the label.\n  Email provider      the messages Bault sends you — confirmation and password\n                      reset links, and notifications you chose to receive by\n                      email — with your email address.\n  Object storage      photographs of items and parcels, and documents attached\n  (S3-compatible)     to wallet requests.',
+      'Card Embassy uses these providers to run the service. Each receives only what its part needs:',
+      '  PayPal              payments into your wallet where offered, and cash-out\n                      payouts: amounts, references and the payout destination.\n  EasyPost            shipping rates and labels: sender and recipient names,\n                      addresses, phone or email where given, parcel weight and\n                      size, and for international parcels the contents and\n                      declared values. The carrier that delivers the parcel\n                      receives the label.\n  Email provider      the messages Card Embassy sends you — confirmation and password\n                      reset links, and notifications you chose to receive by\n                      email — with your email address.\n  Object storage      photographs of items and parcels, and documents attached\n  (S3-compatible)     to wallet requests.',
       COUNSEL('name the email provider, the object-storage provider and the hosting provider of the database and servers; whether each is a processor under a written agreement; and where each stores data'),
-      'Other customers see your username where a transaction needs it — a swap, a shared parcel, an escrow deal. Bault does not sell your data and does not use advertising or analytics services.',
+      'Other customers see your username where a transaction needs it — a swap, a shared parcel, an escrow deal. Card Embassy does not sell your data and does not use advertising or analytics services.',
     ),
     section(
       'retention',
@@ -210,35 +212,35 @@ const COOKIE_NOTICE: LegalDocument = {
   id: 'cookie-notice',
   title: 'Cookie notice',
   provenance: 'legal.provenance.draft',
-  lastUpdated: '2026-10-15',
+  lastUpdated: '2026-11-16',
   downloadPath: null,
   draft: true,
   version: TERMS_VERSION,
   sections: [
     section(
       'cookie',
-      '1. The one cookie Bault sets',
-      'Bault sets exactly one cookie: the session cookie that keeps you signed in. Without it you cannot sign in, so it cannot be turned off.',
-      '  Name        session (unless the operator has configured another name)\n  Purpose     identifies your signed-in session\n  Lifetime    7 days, or until you sign out\n  Access      httpOnly — scripts on the page cannot read it\n  Sent to     Bault only, never to another site (SameSite=Lax);\n              over HTTPS only, in production',
-      'Bault stores only a hash of the cookie’s value, with the IP address and browser of the session (see the Privacy Policy). Signing out ends the session on the server as well as in your browser.',
+      '1. The one cookie Card Embassy sets',
+      'Card Embassy sets exactly one cookie: the session cookie that keeps you signed in. Without it you cannot sign in, so it cannot be turned off.',
+      '  Name        session (unless the operator has configured another name)\n  Purpose     identifies your signed-in session\n  Lifetime    7 days, or until you sign out\n  Access      httpOnly — scripts on the page cannot read it\n  Sent to     Card Embassy only, never to another site (SameSite=Lax);\n              over HTTPS only, in production',
+      'Card Embassy stores only a hash of the cookie’s value, with the IP address and browser of the session (see the Privacy Policy). Signing out ends the session on the server as well as in your browser.',
     ),
     section(
       'storage',
       '2. Preferences kept in your browser',
-      'A few preferences are kept in your browser’s local storage, not in cookies. They never leave your device on their own and are not sent to Bault with your requests:',
-      '  bault.locale                 the language you chose\n  bault.theme                  light or dark appearance\n  bault.tab                    the last section you had open\n  bault.notificationsSeenAt    when you last looked at your notifications',
+      'A few preferences are kept in your browser’s local storage, not in cookies. They never leave your device on their own and are not sent to Card Embassy with your requests:',
+      '  bault.theme                  light or dark appearance\n  bault.tab                    the last section you had open\n  bault.notificationsSeenAt    when you last looked at your notifications',
       'Clearing your browser’s site data removes them; the app then uses its defaults.',
     ),
     section(
       'none-else',
       '3. Nothing else',
-      'Bault uses no analytics, advertising or tracking cookies, and loads no scripts or fonts from other sites: its fonts are served by Bault itself.',
+      'Card Embassy uses no analytics, advertising or tracking cookies, and loads no scripts or fonts from other sites: its fonts are served by Card Embassy itself.',
       'If a payment takes you to PayPal’s own pages, PayPal’s cookie policy applies there.',
     ),
     section(
       'consent',
       '4. Consent',
-      'Because the only cookie is the one needed to sign in, Bault does not show a cookie banner.',
+      'Because the only cookie is the one needed to sign in, Card Embassy does not show a cookie banner.',
       COUNSEL('confirm that the session cookie and the local-storage preferences above need no consent in each jurisdiction served'),
     ),
   ],
@@ -252,13 +254,13 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
     "id": "account-use-policy",
     "title": "Account Use & Balance Policy",
     "provenance": "legal.provenance.bault",
-    "lastUpdated": "2026-10-15",
+    "lastUpdated": "2026-11-16",
     "downloadPath": null,
     "sections": [
       {
         "id": "one-account-one-person",
         "heading": "1. One account, one person",
-        "body": "A Bault account belongs to one person. Sharing an account — handing your\nsign-in credentials to somebody else, or signing in on behalf of another\nperson — is not permitted.\n\nThis is not an arbitrary rule. Bault is a custody platform: every item in the\nvault has exactly one owner at every moment, and every movement of an item or\nof money is recorded against the account that performed it. A shared account\nmakes that record untrue, and the record is the only thing standing between a\ncollector and a disputed item.\n\nYou are responsible for everything done through your account, including\nanything done by somebody you gave access to. If you believe someone else has\nyour credentials, change your password immediately from Profile > Security."
+        "body": "A Card Embassy account belongs to one person. Sharing an account — handing your\nsign-in credentials to somebody else, or signing in on behalf of another\nperson — is not permitted.\n\nThis is not an arbitrary rule. Card Embassy is a custody platform: every item in the\nvault has exactly one owner at every moment, and every movement of an item or\nof money is recorded against the account that performed it. A shared account\nmakes that record untrue, and the record is the only thing standing between a\ncollector and a disputed item.\n\nYou are responsible for everything done through your account, including\nanything done by somebody you gave access to. If you believe someone else has\nyour credentials, change your password immediately from Profile > Security."
       },
       {
         "id": "username",
@@ -273,7 +275,7 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
       {
         "id": "funded-balance",
         "heading": "4. A funded balance is required",
-        "body": "Fees are charged to your Bault wallet: a per-package fee when a parcel is\nreceived and unpacked, an intake fee per item, storage as described in section 5,\na fee for each service you request, and shipping when you send items out. The\nexact amounts come from Bault's pricing rules, and the rule in force at the\nmoment of a charge is recorded with that charge, so a later price change never\nalters what you were billed.\n\nYour balance is allowed to go negative — a fee is not refused because you are\nshort. But while it is negative, new shipment requests and new service requests\nare refused until the balance is positive again."
+        "body": "Fees are charged to your Card Embassy wallet: a per-package fee when a parcel is\nreceived and unpacked, an intake fee per item, storage as described in section 5,\na fee for each service you request, and shipping when you send items out. The\nexact amounts come from Card Embassy's pricing rules, and the rule in force at the\nmoment of a charge is recorded with that charge, so a later price change never\nalters what you were billed.\n\nYour balance is allowed to go negative — a fee is not refused because you are\nshort. But while it is negative, new shipment requests and new service requests\nare refused until the balance is positive again."
       },
       {
         "id": "storage-charges",
@@ -283,17 +285,17 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
       {
         "id": "debt",
         "heading": "6. Negative balances, interest and suspension",
-        "body": "A negative balance escalates in two steps.\n\n  Grace period    A debt costs nothing for a grace period.\n  Interest        After that, interest accrues daily on the outstanding\n                  debt, added as an ordinary entry on your ledger where you\n                  can see it. It compounds until the debt clears.\n  Suspension      If your balance falls below the suspension threshold, your\n                  account is suspended automatically until the debt clears.\n\nA suspended account cannot add funds itself, because cash-in is one of the actions suspension closes. You CAN still sign in and open a support ticket, which is the way to ask us to settle the balance and lift the suspension — it is the only part of Bault that stays open to you. The\nsuspension lifts automatically once the balance is back above the threshold —\nfor example when an administrator credits the account, or when one of your\nlistings sells. Support is reached from the Support section in the app, and stays open to you while you are suspended.\n\nThe grace period, the daily rate and the threshold are configuration. Their\ncurrent values are shown under \"Current figures\" at the top of this page, read\nfrom the same settings the daily sweeps apply."
+        "body": "A negative balance escalates in two steps.\n\n  Grace period    A debt costs nothing for a grace period.\n  Interest        After that, interest accrues daily on the outstanding\n                  debt, added as an ordinary entry on your ledger where you\n                  can see it. It compounds until the debt clears.\n  Suspension      If your balance falls below the suspension threshold, your\n                  account is suspended automatically until the debt clears.\n\nA suspended account cannot add funds itself, because cash-in is one of the actions suspension closes. You CAN still sign in and open a support ticket, which is the way to ask us to settle the balance and lift the suspension — it is the only part of Card Embassy that stays open to you. The\nsuspension lifts automatically once the balance is back above the threshold —\nfor example when an administrator credits the account, or when one of your\nlistings sells. Support is reached from the Support section in the app, and stays open to you while you are suspended.\n\nThe grace period, the daily rate and the threshold are configuration. Their\ncurrent values are shown under \"Current figures\" at the top of this page, read\nfrom the same settings the daily sweeps apply."
       },
       {
         "id": "inbound-parcels",
-        "heading": "7. Parcels sent to a Bault address",
-        "body": "You are given one or more U.S. receiving addresses. Each includes a line\nreading \"Bault C/O <your username>\". That line is not decorative: it is the only\nthing that ties an arriving parcel to your account. A parcel that arrives without\nit, or with a username that does not exist, cannot be attributed to anybody.\n\nWhat happens to an unattributable parcel: it is recorded, held unopened, and\nmarked unclaimed. We do not open it — it is somebody's property and we do not\nknow whose. If you believe a parcel of yours is being held this way, contact us\nwith the carrier and tracking number and we will attribute it.\n\nAn unclaimed parcel is held for 12 months before it may be disposed of. We\ncannot store an unidentifiable parcel indefinitely, and the holding period is\nthere so that a genuine mistake has a long time to be corrected. The period is\nkept by the staff who handle unclaimed parcels; the system records a disposal\nbut does not itself enforce the wait.\n\nRegistering a parcel in advance is optional. It does not change how the parcel is\nhandled; it lets you follow it, and it gives the operator receiving it a tracking\nnumber to match against, which is what allows a parcel to be attributed to you\nbefore anyone opens it.\n\nForwarding addresses. Some addresses store nothing and forward everything they\nreceive to the main warehouse. That is what makes a sales-tax-free receiving\nstate useful, and it costs a forwarding fee and several days. The app tells you\nwhich of your addresses forwards, and roughly how long the onward leg takes.\n\nSales tax. Bault is not the seller of anything you buy elsewhere and neither\ncollects nor remits sales tax on it. The tax rates shown against each address are\nthe destination state's, provided so you can compare; what you are actually\ncharged is decided by the seller and by where the goods ship."
+        "heading": "7. Parcels sent to a Card Embassy address",
+        "body": "You are given one or more U.S. receiving addresses. Each includes a line\nreading \"Card Embassy C/O <your username>\". That line is not decorative: it is the only\nthing that ties an arriving parcel to your account. A parcel that arrives without\nit, or with a username that does not exist, cannot be attributed to anybody.\n\nWhat happens to an unattributable parcel: it is recorded, held unopened, and\nmarked unclaimed. We do not open it — it is somebody's property and we do not\nknow whose. If you believe a parcel of yours is being held this way, contact us\nwith the carrier and tracking number and we will attribute it.\n\nAn unclaimed parcel is held for 12 months before it may be disposed of. We\ncannot store an unidentifiable parcel indefinitely, and the holding period is\nthere so that a genuine mistake has a long time to be corrected. The period is\nkept by the staff who handle unclaimed parcels; the system records a disposal\nbut does not itself enforce the wait.\n\nRegistering a parcel in advance is optional. It does not change how the parcel is\nhandled; it lets you follow it, and it gives the operator receiving it a tracking\nnumber to match against, which is what allows a parcel to be attributed to you\nbefore anyone opens it.\n\nForwarding addresses. Some addresses store nothing and forward everything they\nreceive to the main warehouse. That is what makes a sales-tax-free receiving\nstate useful, and it costs a forwarding fee and several days. The app tells you\nwhich of your addresses forwards, and roughly how long the onward leg takes.\n\nSales tax. Card Embassy is not the seller of anything you buy elsewhere and neither\ncollects nor remits sales tax on it. The tax rates shown against each address are\nthe destination state's, provided so you can compare; what you are actually\ncharged is decided by the seller and by where the goods ship."
       },
       {
         "id": "inbound-international",
         "heading": "8. Parcels sent from outside the United States",
-        "body": "You may have goods shipped to a Bault address from another country, but the\nimport is yours, not ours.\n\nAs the recipient of record you are responsible for clearing U.S. customs, and for\nany duty, tariff, tax, brokerage or carrier charge that arises. Bault is not the\nimporter, cannot act as one, and cannot release a parcel held by customs on your\nbehalf.\n\nAsk the sender to complete the customs paperwork accurately. A parcel held,\nreturned or abandoned by customs is outside our control, and any charge the\ncarrier passes on for storage, return transport or brokerage falls to you.\n\nMark the parcel as internationally shipped when you register it, so the\nobligation is recorded against the parcel rather than only in this document."
+        "body": "You may have goods shipped to a Card Embassy address from another country, but the\nimport is yours, not ours.\n\nAs the recipient of record you are responsible for clearing U.S. customs, and for\nany duty, tariff, tax, brokerage or carrier charge that arises. Card Embassy is not the\nimporter, cannot act as one, and cannot release a parcel held by customs on your\nbehalf.\n\nAsk the sender to complete the customs paperwork accurately. A parcel held,\nreturned or abandoned by customs is outside our control, and any charge the\ncarrier passes on for storage, return transport or brokerage falls to you.\n\nMark the parcel as internationally shipped when you register it, so the\nobligation is recorded against the parcel rather than only in this document."
       },
       {
         "id": "items-we-cannot-accept",
@@ -303,22 +305,23 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
       {
         "id": "records",
         "heading": "10. What we keep, and what we cannot change",
-        "body": "Certain records in Bault are append-only and cannot be edited or deleted by\nanyone, including Bault staff:\n\n  - the custody log for every item (who owned it, where it sat, what state it\n    was in, and when each of those changed);\n  - the ledger that your wallet balance is derived from;\n  - the audit trail of every cash-in and cash-out request.\n\nCorrections are made by adding a new, offsetting record — never by rewriting an\nold one. This means your own history is equally permanent: the custody log of\nan item that has left your vault is kept, and a fee you were charged stays on\nyour ledger even after it is refunded by a compensating credit."
+        "body": "Certain records in Card Embassy are append-only and cannot be edited or deleted by\nanyone, including Card Embassy staff:\n\n  - the custody log for every item (who owned it, where it sat, what state it\n    was in, and when each of those changed);\n  - the ledger that your wallet balance is derived from;\n  - the audit trail of every cash-in and cash-out request.\n\nCorrections are made by adding a new, offsetting record — never by rewriting an\nold one. This means your own history is equally permanent: the custody log of\nan item that has left your vault is kept, and a fee you were charged stays on\nyour ledger even after it is refunded by a compensating credit."
       },
       {
         "id": "all-sales-final",
         "heading": "11. Purchases are final",
-        "body": "Everything bought through Bault is bought outright, and a purchase is not reversed once it has executed.\n\nThis is not a hard line for its own sake. A marketplace purchase moves ownership of a physical object in a custody record that is append-only by design, and it does so atomically with the money: the seller is credited and the item changes hands in one transaction that either happens completely or not at all. There is no state in which the money has moved and the card has not, which is what makes the record trustworthy — and it is also why there is no button that quietly puts it back.\n\nWhat exists instead:\n\n  Before you buy    Every listing shows the item's condition grade and its\n                    photographs. Inspections and video reviews are ordered by\n                    an item's owner, so ask the seller if you want one.\n  Escrow            For a private deal with somebody you do not know, escrow\n                    exists precisely so that the card is inspected and reported\n                    on before either side is asked to release. Use it.\n  A dispute         If what arrived is not what the record said, open a support\n                    ticket. Disputes are handled by people, on the evidence,\n                    and a correction is made by adding an offsetting record —\n                    never by rewriting the original one.\n\nA fee that has already been charged is not refunded because you changed your mind about the service it paid for. Where a service was not delivered, say so and it will be corrected."
+        "body": "Everything bought through Card Embassy is bought outright, and a purchase is not reversed once it has executed.\n\nThis is not a hard line for its own sake. A marketplace purchase moves ownership of a physical object in a custody record that is append-only by design, and it does so atomically with the money: the seller is credited and the item changes hands in one transaction that either happens completely or not at all. There is no state in which the money has moved and the card has not, which is what makes the record trustworthy — and it is also why there is no button that quietly puts it back.\n\nWhat exists instead:\n\n  Before you buy    Every listing shows the item's condition grade and its\n                    photographs. Inspections and video reviews are ordered by\n                    an item's owner, so ask the seller if you want one.\n  Escrow            For a private deal with somebody you do not know, escrow\n                    exists precisely so that the card is inspected and reported\n                    on before either side is asked to release. Use it.\n  A dispute         If what arrived is not what the record said, open a support\n                    ticket. Disputes are handled by people, on the evidence,\n                    and a correction is made by adding an offsetting record —\n                    never by rewriting the original one.\n\nA fee that has already been charged is not refunded because you changed your mind about the service it paid for. Where a service was not delivered, say so and it will be corrected."
       },
       {
         "id": "chargebacks",
         "heading": "12. Reversed payments",
-        "body": "If you fund your wallet by card or by PayPal Goods & Services and then ask your bank or PayPal to reverse that payment, two things happen on your Bault account.\n\n  The reversal    The amount is taken back off your balance. It has to be: the\n                  balance is derived from a ledger of real movements, and money\n                  that has been recalled is not money Bault holds.\n  A handling fee  $25.00, which is what the payment provider charges Bault to\n                  handle a disputed payment, whichever way the dispute goes.\n\nBoth appear on your ledger as ordinary entries, so you can see exactly what happened and when. If the reversal takes your balance negative, the balance policy in section 6 applies to it like any other debt — including the grace period before interest starts, and the suspension threshold.\n\nRaising a chargeback is not the way to resolve a problem with Bault, and it is slower than the alternative: it takes weeks, it costs you the handling fee, and it does not put your cards anywhere. Open a support ticket instead. If we are wrong we will fix it, and a correcting credit is immediate.\n\nWhere a chargeback is raised on a payment that funded goods already shipped, Bault reserves the right to suspend the account until the balance is settled. Items in the vault are never seized: a suspended account still owns everything in it, and the custody record is unaffected."
+        "body": "If you fund your wallet by card or by PayPal Goods & Services and then ask your bank or PayPal to reverse that payment, two things happen on your Card Embassy account.\n\n  The reversal    The amount is taken back off your balance. It has to be: the\n                  balance is derived from a ledger of real movements, and money\n                  that has been recalled is not money Card Embassy holds.\n  A handling fee  $25.00, which is what the payment provider charges Card Embassy to\n                  handle a disputed payment, whichever way the dispute goes.\n\nBoth appear on your ledger as ordinary entries, so you can see exactly what happened and when. If the reversal takes your balance negative, the balance policy in section 6 applies to it like any other debt — including the grace period before interest starts, and the suspension threshold.\n\nRaising a chargeback is not the way to resolve a problem with Card Embassy, and it is slower than the alternative: it takes weeks, it costs you the handling fee, and it does not put your cards anywhere. Open a support ticket instead. If we are wrong we will fix it, and a correcting credit is immediate.\n\nWhere a chargeback is raised on a payment that funded goods already shipped, Card Embassy reserves the right to suspend the account until the balance is settled. Items in the vault are never seized: a suspended account still owns everything in it, and the custody record is unaffected."
       }
     ]
   },
   {
     "id": "ofl-1-1",
+    "preformatted": true,
     "title": "Font licence: SIL Open Font License, Version 1.1",
     "provenance": "legal.provenance.ofl",
     "lastUpdated": "2007-02-26",
@@ -327,7 +330,7 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
       {
         "id": "notice",
         "heading": "Notice",
-        "body": "This application bundles these fonts, served from /fonts:\n\n  IBM Plex Sans, IBM Plex Sans Hebrew, IBM Plex Mono\n    Copyright © 2017 IBM Corp. with Reserved Font Name \"Plex\"\n\n  Frank Ruhl Libre\n    Copyright 2015 The Frank Ruhl Libre Project Authors\n    (https://github.com/fontef/frankruhllibre)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttps://openfontlicense.org\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------"
+        "body": "This application bundles these fonts, served from /fonts:\n\n  Geist, Geist Mono\n    Copyright 2023 The Geist Project Authors\n    (https://github.com/vercel/geist-font)\n\n  Frank Ruhl Libre\n    Copyright 2015 The Frank Ruhl Libre Project Authors\n    (https://github.com/fontef/frankruhllibre)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttps://openfontlicense.org\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------"
       },
       {
         "id": "preamble",

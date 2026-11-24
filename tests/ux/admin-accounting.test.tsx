@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const get = vi.fn();
@@ -21,10 +21,6 @@ function renderIn(ui: React.ReactElement) {
 
 beforeEach(() => {
   get.mockReset();
-  try {
-    localStorage.setItem('bault.locale', 'en');
-  } catch {
-  }
 });
 
 describe('admin accounting', () => {
@@ -48,8 +44,14 @@ describe('admin accounting', () => {
       month: '2026-10',
       currency: 'USD',
       byType: [{ type: 'fee', direction: 'debit', count: 2, totalMinor: 700 }],
-      revenue: { totalMinor: 700, lines: [{ key: 'cash_out_fee', totalMinor: 700 }], carrierCostOnShippingChargesMinor: 0 },
-      customerMoney: { inMinor: 50_000, outMinor: 20_000, reversedMinor: 0, netMinor: 30_000 },
+      revenue: {
+        totalMinor: 700,
+        lines: [{ key: 'cash_out_fee', totalMinor: 700 }],
+        refundsMinor: 0,
+        cashOutFeesReturnedMinor: 0,
+        carrierCostOnShippingChargesMinor: 0,
+      },
+      customerMoney: { inMinor: 50_000, outMinor: 20_000, payoutsReturnedMinor: 0, reversedMinor: 0, netMinor: 30_000 },
       balancesHeld: {
         asOf: '2026-10-15T00:00:00.000Z',
         customerTotalMinor: 29_300,
@@ -64,10 +66,73 @@ describe('admin accounting', () => {
     await user.click(screen.getByRole('button', { name: /show summary/i }));
 
     await waitFor(() => expect(get).toHaveBeenCalledWith(expect.stringMatching(/^\/admin\/accounting\/summary\?month=\d{4}-\d{2}$/)));
-    expect(await screen.findByText('Bault revenue')).toBeInTheDocument();
+    expect(await screen.findByText('Card Embassy revenue')).toBeInTheDocument();
     expect(screen.getByText('Customer money in')).toBeInTheDocument();
     expect(screen.getByText('Customer balances held')).toBeInTheDocument();
     expect(screen.getByText('Cash-out fees')).toBeInTheDocument();
+  });
+
+  it('shows what the month gave back: refunds, returned cash-out fees and returned payouts', async () => {
+    const user = userEvent.setup();
+    get.mockResolvedValueOnce({
+      month: '2026-10',
+      currency: 'USD',
+      byType: [],
+      revenue: {
+        totalMinor: 3_000,
+        lines: [{ key: 'service_charge', totalMinor: 3_000 }],
+        refundsMinor: 2_000,
+        cashOutFeesReturnedMinor: 99,
+        carrierCostOnShippingChargesMinor: 0,
+      },
+      customerMoney: { inMinor: 50_000, outMinor: 18_500, payoutsReturnedMinor: 1_500, reversedMinor: 0, netMinor: 31_500 },
+      balancesHeld: {
+        asOf: '2026-10-15T00:00:00.000Z',
+        customerTotalMinor: 31_500,
+        owedToCustomersMinor: 31_500,
+        owedByCustomersMinor: 0,
+        accountsWithBalance: 1,
+        platformAccountMinor: 0,
+      },
+      note: '',
+    });
+    renderIn(<AccountingSection onError={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /show summary/i }));
+
+    expect(await screen.findByText(/\$20\.00 refunded/)).toBeInTheDocument();
+    expect(screen.getByText(/\$0\.99 in cash-out fees given back/)).toBeInTheDocument();
+    expect(screen.getByText(/\$15\.00 in payouts returned/)).toBeInTheDocument();
+  });
+
+  it('shows PayPal\'s fees on cash-ins as Bault\'s cost, beside revenue', async () => {
+    const user = userEvent.setup();
+    get.mockResolvedValueOnce({
+      month: '2026-10',
+      currency: 'USD',
+      byType: [],
+      revenue: {
+        totalMinor: 0,
+        lines: [],
+        refundsMinor: 0,
+        cashOutFeesReturnedMinor: 0,
+        carrierCostOnShippingChargesMinor: 0,
+        cashInProviderFeesMinor: 224,
+      },
+      customerMoney: { inMinor: 5_000, outMinor: 0, payoutsReturnedMinor: 0, reversedMinor: 0, netMinor: 5_000 },
+      balancesHeld: {
+        asOf: '2026-10-15T00:00:00.000Z',
+        customerTotalMinor: 5_000,
+        owedToCustomersMinor: 5_000,
+        owedByCustomersMinor: 0,
+        accountsWithBalance: 1,
+        platformAccountMinor: 0,
+      },
+      note: '',
+    });
+    renderIn(<AccountingSection onError={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /show summary/i }));
+
+    expect(await screen.findByText(/PayPal's fees on cash-ins, which Card Embassy pays and the collector does not: \$2\.24/)).toBeInTheDocument();
   });
 
   it('runs the reconciliation and lists each difference', async () => {
@@ -78,7 +143,7 @@ describe('admin accounting', () => {
       mismatches: [
         {
           kind: 'withdrawal_without_payout',
-          detail: 'Money left this wallet and no payout at any provider records it leaving Bault.',
+          detail: 'Money left this wallet and no payout at any provider records it leaving Card Embassy.',
           paymentId: null,
           ledgerId: 'l-1',
           username: 'golden',
@@ -115,9 +180,15 @@ describe('admin pricing coverage', () => {
 
     expect(await screen.findByText('Prices are missing')).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith('/admin/pricing/coverage');
-    const rows = screen.getAllByRole('row').slice(1);
+    // What is missing is in view, first, under its own heading; what is priced is folded under the sheet.
+    const rows = screen.getAllByRole('row').filter((r) => r.querySelector('td'));
     expect(rows[0]).toHaveTextContent('storage');
     expect(rows[0]).toHaveTextContent('Missing — the action fails');
-    expect(rows[1]).toHaveTextContent('$5.00');
+    expect(screen.getByText('Needs a rule')).toBeInTheDocument();
+    const priced = screen.getByText('Priced', { selector: '.roll-group-name' });
+    expect(priced.closest('details')).not.toHaveAttribute('open');
+    await userEvent.setup().click(priced);
+    expect(priced.closest('details')).toHaveAttribute('open');
+    expect(within(priced.closest('details') as HTMLElement).getByText('$5.00')).toBeInTheDocument();
   });
 });

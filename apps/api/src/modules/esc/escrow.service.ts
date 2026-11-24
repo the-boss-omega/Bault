@@ -7,7 +7,6 @@ import { ErrorCode } from '../../shared/errors/error-codes';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { CustodyService } from '../cst/custody.service';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
-import { PricingService } from '../prc/pricing.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { charge } from '../pay/pay.schema';
 import { userAccount } from '../acc/acc.schema';
@@ -15,7 +14,6 @@ import { item } from '../cst/cst.schema';
 import { shipment } from '../shp/shp.schema';
 import { escrowDeal, escrowEvent } from './escrow.schema';
 import {
-  ESCROW_FEE_ACTION,
   ESCROW_FEE_BPS,
   ESCROW_MINIMUM_FEE_MINOR,
   ESCROW_MINIMUM_VALUE_MINOR,
@@ -24,8 +22,67 @@ import {
 } from './escrow-terms';
 import { formatMinor } from '../../shared/money';
 import { MembershipService } from '../mem/membership.service';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
 
 type Deal = typeof escrowDeal.$inferSelect;
+
+function dealSides(deal: Deal): { buyerId: string | null; sellerId: string | null } {
+  if (deal.raiserRole === 'buyer') {
+    return { buyerId: deal.raisedBy, sellerId: deal.counterpartyUserId };
+  }
+  return { buyerId: deal.counterpartyUserId, sellerId: deal.raisedBy };
+}
+
+export function collectorDealView(deal: Deal, userId: string) {
+  const { buyerId } = dealSides(deal);
+  return {
+    id: deal.id,
+    code: deal.code,
+    raiserRole: deal.raiserRole,
+    myRole: buyerId === userId ? ('buyer' as const) : ('seller' as const),
+    raisedByMe: deal.raisedBy === userId,
+    counterpartyIsMember: deal.counterpartyUserId !== null,
+    counterpartyName: deal.counterpartyName,
+    counterpartyEmail: deal.counterpartyEmail,
+    description: deal.description,
+    valueMinor: deal.valueMinor,
+    currency: deal.currency,
+    feeMinor: deal.feeMinor,
+    status: deal.status,
+    settlement: deal.settlement,
+    fundingSource: deal.fundingSource,
+    fundedAt: deal.fundedAt,
+    fundingReference: deal.fundingReference,
+    itemReceivedAt: deal.itemReceivedAt,
+    inspectedAt: deal.inspectedAt,
+    inspectionMatches: deal.inspectionMatches,
+    inspectionNotes: deal.inspectionNotes,
+    buyerReleasedAt: deal.buyerReleasedAt,
+    sellerReleasedAt: deal.sellerReleasedAt,
+    settledAt: deal.settledAt,
+    returnedAt: deal.returnedAt,
+    cancelledAt: deal.cancelledAt,
+    closeReason: deal.closeReason,
+    createdAt: deal.createdAt,
+    updatedAt: deal.updatedAt,
+  };
+}
+
+function heldMinorOf(deal: Pick<Deal, 'valueMinor' | 'feeMinor' | 'raiserRole'>): number {
+  return deal.valueMinor + (deal.raiserRole === 'buyer' ? deal.feeMinor : 0);
+}
+
+function collectorDealEventView(event: typeof escrowEvent.$inferSelect, deal: Deal) {
+  const { buyerId, sellerId } = dealSides(deal);
+  return {
+    eventType: event.eventType,
+    fromStatus: event.fromStatus,
+    toStatus: event.toStatus,
+    occurredAt: event.occurredAt,
+    notes: event.notes,
+    byStaff: event.actorId !== null && event.actorId !== buyerId && event.actorId !== sellerId,
+  };
+}
 
 export interface EscrowActor {
   id: string;
@@ -42,18 +99,15 @@ export class EscrowService {
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly custody: CustodyService,
     private readonly ledger: LedgerService,
-    private readonly pricing: PricingService,
     private readonly outbox: OutboxService,
     private readonly memberships: MembershipService,
   ) {}
 
-  async terms() {
-    const rule = await this.pricing.tryPrice(ESCROW_FEE_ACTION);
+  terms() {
     return {
       feeBps: ESCROW_FEE_BPS,
       minimumFeeMinor: ESCROW_MINIMUM_FEE_MINOR,
       minimumValueMinor: ESCROW_MINIMUM_VALUE_MINOR,
-      configuredBps: rule?.snapshot ? rule.amount.amount : null,
     };
   }
 
@@ -82,13 +136,6 @@ export class EscrowService {
     });
   }
 
-  private sides(deal: Deal): { buyerId: string | null; sellerId: string | null } {
-    if (deal.raiserRole === 'buyer') {
-      return { buyerId: deal.raisedBy, sellerId: deal.counterpartyUserId };
-    }
-    return { buyerId: deal.counterpartyUserId, sellerId: deal.raisedBy };
-  }
-
   private async load(dealId: string, tx?: Database): Promise<Deal> {
     const exec = tx ?? this.db;
     const [row] = await exec.select().from(escrowDeal).where(eq(escrowDeal.id, dealId)).limit(1);
@@ -99,7 +146,7 @@ export class EscrowService {
   private async loadFor(dealId: string, actor: EscrowActor): Promise<Deal> {
     const deal = await this.load(dealId);
     if (isStaff(actor)) return deal;
-    const { buyerId, sellerId } = this.sides(deal);
+    const { buyerId, sellerId } = dealSides(deal);
     if (actor.id !== buyerId && actor.id !== sellerId) throw AppError.notFound('Deal not found');
     return deal;
   }
@@ -136,12 +183,15 @@ export class EscrowService {
     let counterpartyUserId: string | null = null;
     if (input.counterpartyUsername?.trim()) {
       const [row] = await this.db
-        .select({ id: userAccount.id })
+        .select({ id: userAccount.id, status: userAccount.status, role: userAccount.role })
         .from(userAccount)
         .where(eq(userAccount.username, input.counterpartyUsername.trim().toLowerCase()))
         .limit(1);
-      if (!row) throw AppError.validation('No Bault account with that username');
+      if (!row) throw AppError.validation('No Card Embassy account with that username');
       if (row.id === raiserId) throw AppError.validation('You cannot be both sides of a deal');
+      if (row.status !== 'active' || row.role !== 'user') {
+        throw AppError.validation('That collector cannot trade right now');
+      }
       counterpartyUserId = row.id;
     }
 
@@ -205,7 +255,7 @@ export class EscrowService {
     const external = deal.counterpartyUserId === null;
     if (external && !isStaff(actor)) {
       throw AppError.forbidden(
-        'The other side is not a Bault account, so their agreement has to be recorded by us.',
+        'The other side is not a Card Embassy account, so their agreement has to be recorded by us.',
       );
     }
     if (!external && actor.id !== deal.counterpartyUserId && !isStaff(actor)) {
@@ -241,12 +291,12 @@ export class EscrowService {
     const deal = await this.loadFor(dealId, actor);
     this.assertStatus(deal, ['agreed']);
 
-    const { buyerId } = this.sides(deal);
-    const total = deal.valueMinor;
+    const { buyerId } = dealSides(deal);
 
     if (buyerId === null) {
+      const total = deal.valueMinor;
       if (!isStaff(actor)) {
-        throw AppError.forbidden('The buyer is not a Bault account — we record receipt of the funds.');
+        throw AppError.forbidden('The buyer is not a Card Embassy account — we record receipt of the funds.');
       }
       if (!reference?.trim()) {
         throw AppError.validation('Record the payment reference you received it under.');
@@ -282,12 +332,15 @@ export class EscrowService {
     }
 
     return this.db.transaction(async (tx) => {
-      await this.lockDeal(tx, dealId, ['agreed']);
+      const cur = await this.lockDeal(tx, dealId, ['agreed']);
+      const total = heldMinorOf(cur);
       const balance = await this.ledger.balanceOf(buyerId, tx);
       if (balance.amount < total) {
         throw new AppError(
-          ErrorCode.CONFLICT,
-          `Short by ${formatMinor(total - balance.amount)}. The full amount has to be held before it is sent.`,
+          ErrorCode.INSUFFICIENT_BALANCE,
+          cur.raiserRole === 'buyer'
+            ? `Short by ${formatMinor(total - balance.amount)}. The deal value and your ${formatMinor(cur.feeMinor)} fee have to be held before it is sent.`
+            : `Short by ${formatMinor(total - balance.amount)}. The full amount has to be held before it is sent.`,
           409,
         );
       }
@@ -319,10 +372,10 @@ export class EscrowService {
         fromStatus: 'agreed',
         toStatus: 'funded',
         actorId: actor.id,
-        metadata: { amountMinor: total, source: 'wallet' },
+        metadata: { amountMinor: total, feeHeldMinor: total - cur.valueMinor, source: 'wallet' },
       });
 
-      const { sellerId } = this.sides(deal);
+      const { sellerId } = dealSides(deal);
       if (sellerId) {
         await this.outbox.emit(tx, {
           aggregateType: 'escrow_deal',
@@ -347,7 +400,7 @@ export class EscrowService {
         throw new AppError(ErrorCode.CONFLICT, `That item is ${it.lifecycleState}, not stored`, 409);
       }
       if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'That item is on hold', 409);
-      const { sellerId } = this.sides(deal);
+      const { sellerId } = dealSides(deal);
       if (sellerId && it.ownerId !== sellerId) {
         throw new AppError(ErrorCode.CONFLICT, "That item is not the seller's", 409);
       }
@@ -363,6 +416,7 @@ export class EscrowService {
         )
         .limit(1);
       if (other) throw new AppError(ErrorCode.CONFLICT, `That item is already in deal ${other.code}`, 409);
+      await assertItemsUncommitted(tx as Database, [itemId], 'taken into escrow', { escrowDealId: dealId });
 
       await tx
         .update(escrowDeal)
@@ -412,7 +466,7 @@ export class EscrowService {
         metadata: { matches: form.matches },
       });
 
-      const { buyerId, sellerId } = this.sides(deal);
+      const { buyerId, sellerId } = dealSides(deal);
       const recipients = [buyerId, sellerId].filter((id): id is string => Boolean(id));
       if (recipients.length > 0) {
         await this.outbox.emit(tx, {
@@ -429,7 +483,7 @@ export class EscrowService {
   async release(dealId: string, actor: EscrowActor, side?: 'buyer' | 'seller') {
     const deal = await this.loadFor(dealId, actor);
     this.assertStatus(deal, ['awaiting_release']);
-    const { buyerId, sellerId } = this.sides(deal);
+    const { buyerId, sellerId } = dealSides(deal);
 
     let releasing: 'buyer' | 'seller';
     let attested = false;
@@ -457,6 +511,9 @@ export class EscrowService {
 
     return this.custody.run(async (tx) => {
       const cur = await this.lockDeal(tx, dealId, ['awaiting_release']);
+      if ((releasing === 'buyer' ? cur.buyerReleasedAt : cur.sellerReleasedAt) !== null) {
+        throw new AppError(ErrorCode.CONFLICT, 'You have already released this deal. It is waiting for the other side.', 409);
+      }
       const buyerDone = releasing === 'buyer' || cur.buyerReleasedAt !== null;
       const sellerDone = releasing === 'seller' || cur.sellerReleasedAt !== null;
 
@@ -477,7 +534,7 @@ export class EscrowService {
 
   private async settle(tx: Database, deal: Deal, actorId: string) {
     const dealId = deal.id;
-    const { buyerId, sellerId } = this.sides(deal);
+    const { buyerId, sellerId } = dealSides(deal);
     const now = new Date();
 
     if (buyerId === null && deal.settlement === 'ship_to_buyer') {
@@ -490,6 +547,23 @@ export class EscrowService {
           userId: sellerId,
           type: 'escrow_release',
           amount: deal.valueMinor,
+          direction: 'credit',
+          currency: deal.currency,
+          referenceType: 'escrow_deal',
+          referenceId: dealId,
+        },
+        tx,
+      );
+    }
+
+    await this.ledger.lockWallet(deal.raisedBy, tx);
+    const feeHeld = deal.fundingSource === 'wallet' ? heldMinorOf(deal) - deal.valueMinor : 0;
+    if (feeHeld > 0) {
+      await this.ledger.record(
+        {
+          userId: deal.raisedBy,
+          type: 'escrow_refund',
+          amount: feeHeld,
           direction: 'credit',
           currency: deal.currency,
           referenceType: 'escrow_deal',
@@ -590,7 +664,7 @@ export class EscrowService {
     if (!sent) {
       throw new AppError(
         ErrorCode.CONFLICT,
-        'The buyer has no Bault vault, so the card has to be on its way to them before the seller is paid. ' +
+        'The buyer has no Card Embassy vault, so the card has to be on its way to them before the seller is paid. ' +
           'Ship it to the buyer, and confirm again once it has been dispatched.',
         409,
       );
@@ -616,17 +690,18 @@ export class EscrowService {
     const deal = await this.loadFor(dealId, actor);
     this.assertStatus(deal, ['funded', 'inspecting', 'awaiting_release']);
 
-    const { buyerId } = this.sides(deal);
+    const { buyerId } = dealSides(deal);
     const now = new Date();
 
     return this.db.transaction(async (tx) => {
       const cur = await this.lockDeal(tx, dealId, ['funded', 'inspecting', 'awaiting_release']);
-      if (cur.fundingSource === 'wallet' && buyerId) {
+      const refundedMinor = cur.fundingSource === 'wallet' && buyerId ? heldMinorOf(cur) : 0;
+      if (refundedMinor > 0 && buyerId) {
         await this.ledger.record(
           {
             userId: buyerId,
             type: 'escrow_refund',
-            amount: deal.valueMinor,
+            amount: refundedMinor,
             direction: 'credit',
             currency: deal.currency,
             referenceType: 'escrow_deal',
@@ -646,10 +721,10 @@ export class EscrowService {
         toStatus: 'returned',
         actorId: actor.id,
         notes: reason.trim(),
-        metadata: { refundedMinor: cur.fundingSource === 'wallet' ? cur.valueMinor : 0 },
+        metadata: { refundedMinor },
       });
 
-      const { sellerId } = this.sides(deal);
+      const { sellerId } = dealSides(deal);
       const recipients = [buyerId, sellerId].filter((id): id is string => Boolean(id));
       if (recipients.length > 0) {
         await this.outbox.emit(tx, {
@@ -659,7 +734,7 @@ export class EscrowService {
           payload: { recipientIds: recipients, dealCode: deal.code, reason: reason.trim() },
         });
       }
-      return { status: 'returned' as const, refundedMinor: cur.fundingSource === 'wallet' ? cur.valueMinor : 0 };
+      return { status: 'returned' as const, refundedMinor };
     });
   }
 
@@ -682,16 +757,27 @@ export class EscrowService {
         actorId: actor.id,
         notes: reason.trim(),
       });
+      const { buyerId, sellerId } = dealSides(cur);
+      const others = [buyerId, sellerId].filter((id): id is string => Boolean(id) && id !== actor.id);
+      if (others.length > 0) {
+        await this.outbox.emit(tx, {
+          aggregateType: 'escrow_deal',
+          aggregateId: dealId,
+          eventType: 'escrow_cancelled',
+          payload: { recipientIds: others, dealCode: cur.code, reason: reason.trim() },
+        });
+      }
       return { status: 'cancelled' as const };
     });
   }
 
   async listMine(userId: string) {
-    return this.db
+    const rows = await this.db
       .select()
       .from(escrowDeal)
       .where(or(eq(escrowDeal.raisedBy, userId), eq(escrowDeal.counterpartyUserId, userId)))
       .orderBy(desc(escrowDeal.createdAt));
+    return rows.map((deal) => collectorDealView(deal, userId));
   }
 
   async queue() {
@@ -713,13 +799,16 @@ export class EscrowService {
       .from(escrowEvent)
       .where(eq(escrowEvent.dealId, dealId))
       .orderBy(desc(escrowEvent.occurredAt));
-    const { buyerId, sellerId } = this.sides(deal);
+    if (!isStaff(actor)) {
+      return { deal: collectorDealView(deal, actor.id), events: events.map((e) => collectorDealEventView(e, deal)) };
+    }
+    const { buyerId, sellerId } = dealSides(deal);
     return { deal, events, buyerId, sellerId };
   }
 
   async heldFor(userId: string) {
     const rows = await this.db
-      .select({ valueMinor: escrowDeal.valueMinor, code: escrowDeal.code, id: escrowDeal.id })
+      .select({ valueMinor: escrowDeal.valueMinor, feeMinor: escrowDeal.feeMinor, raiserRole: escrowDeal.raiserRole })
       .from(escrowDeal)
       .where(
         and(
@@ -731,9 +820,6 @@ export class EscrowService {
           ),
         ),
       );
-    return {
-      heldMinor: rows.reduce((sum, r) => sum + r.valueMinor, 0),
-      deals: rows.map((r) => ({ id: r.id, code: r.code, amountMinor: r.valueMinor })),
-    };
+    return { heldMinor: rows.reduce((sum, r) => sum + heldMinorOf(r), 0) };
   }
 }

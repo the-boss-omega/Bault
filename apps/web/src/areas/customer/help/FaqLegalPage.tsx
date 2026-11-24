@@ -12,10 +12,11 @@ import {
   TabPanel,
 } from '../../../shared/ui/primitives';
 import { IconAsk, IconChevronDown, IconDownload, IconLegal, IconPrint, IconSearch } from '../../../shared/ui/icons';
+import { Amount } from '../../../shared/ui/Serial';
 import { FAQ, type FaqAvailability, type FaqBlock, type FaqEntry } from './faqContent';
 import { IntakePolicyPanel } from './IntakePolicyPanel';
 import { LEGAL_DOCUMENTS } from './legalContent';
-import { DraftBanner } from './LegalDocumentView';
+import { DraftBanner, LegalBody } from './LegalDocumentView';
 import { ContactPanel, GuidesPanel, ShowsPanel } from './HelpPanels';
 import { PriceListPanel } from './PriceListPanel';
 
@@ -39,7 +40,7 @@ const AVAILABILITY_NOTE: Record<FaqAvailability, MessageKey> = {
   unavailable: 'faq.note.unavailableTitle',
 };
 
-const TABS = ['ask', 'guides', 'faq', 'policy', 'prices', 'shows', 'contact', 'legal'] as const;
+const TABS = ['faq', 'guides', 'policy', 'prices', 'shows', 'contact', 'legal', 'ask'] as const;
 type HelpTab = (typeof TABS)[number];
 
 export function FaqLegalPage() {
@@ -49,7 +50,7 @@ export function FaqLegalPage() {
 
   const tab: HelpTab = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as HelpTab)
-    : 'ask';
+    : 'faq';
 
   const tabs = TABS.map((key) => ({ key, label: t(`faq.tab.${key}` as MessageKey) }));
 
@@ -72,7 +73,11 @@ export function FaqLegalPage() {
           <FaqPanel />
         </TabPanel>
       )}
-      {tab === 'policy' && <IntakePolicyPanel />}
+      {tab === 'policy' && (
+        <TabPanel tab="policy">
+          <IntakePolicyPanel />
+        </TabPanel>
+      )}
 
       {tab === 'prices' && (
         <TabPanel tab="prices">
@@ -139,11 +144,6 @@ function AskPanel() {
 
   return (
     <Panel title={t('faq.ask.title')} subtitle={t('faq.ask.subtitle')}>
-      <p className="ask-notice" role="note">
-        <IconAsk />
-        <span>{t('faq.ask.notConnected')}</span>
-      </p>
-
       <div className="ask-log" ref={logRef} role="log" aria-live="polite" aria-label={t('faq.ask.logLabel')}>
         {turns.length === 0 ? (
           <EmptyState title={t('faq.ask.emptyTitle')} text={t('faq.ask.emptyText')} icon={<IconAsk />} />
@@ -151,16 +151,20 @@ function AskPanel() {
           <ul className="ask-turns">
             {turns.map((turn) => (
               <li key={turn.id} className="ask-turn">
-                <p className="ask-bubble ask-bubble--you">
+                <p className="ask-slip ask-slip--you">
                   <span className="ask-who">{t('faq.ask.you')}</span>
-                  {turn.question}
+                  <span className="ask-words" dir="auto">
+                    {turn.question}
+                  </span>
                 </p>
-                <p className="ask-bubble ask-bubble--bot">
+                <p className="ask-slip ask-slip--bot">
                   <span className="ask-who">{t('faq.ask.assistant')}</span>
                   {turn.answer === null ? (
-                    <span className="hint">{t('faq.ask.thinking')}</span>
+                    <span className="ask-words">{t('faq.ask.thinking')}</span>
                   ) : (
-                    <code dir="ltr">{turn.answer}</code>
+                    <code className="ask-words" dir="ltr">
+                      {turn.answer}
+                    </code>
                   )}
                 </p>
               </li>
@@ -169,20 +173,29 @@ function AskPanel() {
         )}
       </div>
 
-      <form className="ask-form" onSubmit={submit}>
-        <label className="field">
-          <span className="sr-only">{t('faq.ask.inputLabel')}</span>
+      <form className="ask-composer" onSubmit={submit}>
+        <label className="ask-composer-label" htmlFor="ask-question">
+          {t('faq.ask.inputLabel')}
+        </label>
+        <div className="ask-composer-row">
           <input
+            id="ask-question"
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={t('faq.ask.placeholder')}
-            aria-label={t('faq.ask.inputLabel')}
+            dir="auto"
+            autoComplete="off"
+            aria-describedby="ask-question-note"
           />
-        </label>
-        <Button type="submit" variant="gold" disabled={!draft.trim() || busy}>
-          {t('faq.ask.send')}
-        </Button>
+          <Button type="submit" variant="primary" disabled={!draft.trim() || busy}>
+            {t('faq.ask.send')}
+          </Button>
+        </div>
+        <p className="ask-composer-note" id="ask-question-note">
+          <IconAsk />
+          <span>{t('faq.ask.notConnected')}</span>
+        </p>
       </form>
     </Panel>
   );
@@ -339,7 +352,7 @@ function FaqItem({
           <span className="faq-chevron" aria-hidden="true">
             <IconChevronDown />
           </span>
-          <span className="faq-q-text" lang="en" dir="ltr">
+          <span className="faq-q-text">
             {entry.question}
           </span>
           <StatusBadge tone={AVAILABILITY_TONE[entry.availability]} plain>
@@ -355,14 +368,14 @@ function FaqItem({
         className="faq-a"
         hidden={!open}
       >
-        <p className={`faq-note faq-note--${entry.availability}`} lang="en" dir="ltr">
+        <p className={`faq-note faq-note--${entry.availability}`}>
           <strong>
             {t(AVAILABILITY_NOTE[entry.availability])}
           </strong>{' '}
           {entry.baultNote}
         </p>
 
-        <div className="faq-source-answer" lang="en" dir="ltr">
+        <div className="faq-source-answer">
           {entry.blocks.map((block, i) => (
             <FaqBlockView key={i} block={block} />
           ))}
@@ -492,7 +505,7 @@ function LegalPanel() {
                 aria-pressed={d.id === docId}
                 onClick={() => setDocId(d.id)}
               >
-                {d.title}
+                <span>{d.title}</span>
               </button>
             ))}
           </div>
@@ -521,14 +534,14 @@ function LegalPanel() {
             </ol>
           </nav>
 
-          <div className="legal-text" lang="en" dir="ltr">
+          <div className="legal-text">
             {sections.length === 0 ? (
               <EmptyState title={t('legal.noMatches')} icon={<IconLegal />} />
             ) : (
               sections.map((section) => (
                 <section key={section.id} id={`legal-${section.id}`} className="legal-section">
                   <h3>{section.heading}</h3>
-                  <pre className="legal-pre">{section.body}</pre>
+                  <LegalBody body={section.body} preformatted={doc.preformatted} />
                 </section>
               ))
             )}
@@ -576,11 +589,11 @@ function CurrentFiguresPanel() {
     };
   }, []);
 
-  const rows: Array<[string, string]> = terms
+  const rows: Array<[string, ReactNode]> = terms
     ? [
         [t('legal.figures.graceDays'), t('legal.figures.days', { days: terms.debt.graceDays })],
         [t('legal.figures.interest'), t('legal.figures.perDay', { rate: bpsToPercent(terms.debt.interestBpsPerDay) })],
-        [t('legal.figures.suspend'), formatUsd(terms.debt.suspendBelowMinor)],
+        [t('legal.figures.suspend'), <Amount>{formatUsd(terms.debt.suspendBelowMinor)}</Amount>],
         [
           t('legal.figures.cashOut'),
           t('legal.figures.cashOutValue', {
@@ -591,8 +604,8 @@ function CurrentFiguresPanel() {
             largePct: bpsToPercent(terms.cashOut.largeBps),
           }),
         ],
-        [t('legal.figures.chargeback'), formatUsd(terms.chargebackFeeMinor)],
-        [t('legal.figures.restocking'), formatUsd(terms.shipping.restockingFeeMinor)],
+        [t('legal.figures.chargeback'), <Amount>{formatUsd(terms.chargebackFeeMinor)}</Amount>],
+        [t('legal.figures.restocking'), <Amount>{formatUsd(terms.shipping.restockingFeeMinor)}</Amount>],
         [t('legal.figures.paymentWindow'), t('legal.figures.days', { days: terms.shipping.paymentWindowDays })],
         [
           t('legal.figures.insurance'),

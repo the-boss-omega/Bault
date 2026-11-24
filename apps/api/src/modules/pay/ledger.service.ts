@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
-import { ledgerRecord } from './pay.schema';
+import { charge, ledgerRecord } from './pay.schema';
 import { money, type Money } from '../../shared/money';
 
 export const DEFAULT_CURRENCY = 'USD';
@@ -67,9 +67,21 @@ export class LedgerService {
 
   list(userId: string) {
     return this.db
-      .select()
+      .select({
+        ...getTableColumns(ledgerRecord),
+        chargeAction: charge.actionType,
+        chargeItemClass: sql<string | null>`${charge.pricingRuleSnapshot} ->> 'itemClass'`,
+      })
       .from(ledgerRecord)
+      .leftJoin(
+        charge,
+        and(
+          eq(ledgerRecord.referenceType, 'charge'),
+          eq(charge.userId, ledgerRecord.userId),
+          sql`${charge.id}::text = ${ledgerRecord.referenceId}`,
+        ),
+      )
       .where(eq(ledgerRecord.userId, userId))
-      .orderBy(sql`${ledgerRecord.occurredAt} desc`);
+      .orderBy(sql`${ledgerRecord.occurredAt} desc`, sql`${ledgerRecord.id} desc`);
   }
 }

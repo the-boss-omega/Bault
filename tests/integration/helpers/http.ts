@@ -1,3 +1,5 @@
+import { discountedMinor } from '../../../apps/api/src/modules/mem/tiers';
+
 export const BASE = process.env.API_URL ?? 'http://localhost:3000/api/v1';
 
 export class Client {
@@ -129,4 +131,10 @@ export async function intakeFor(
   });
   if (res.status !== 201) throw new Error(`intake failed: ${JSON.stringify(res.body)}`);
   return res.body;
+}
+
+export async function atTier(client: Client, listMinor: number): Promise<number> {
+  const res = await client.get('/tiers/me');
+  if (res.status !== 200) throw new Error(`tier lookup failed: ${JSON.stringify(res.body)}`);
+  return discountedMinor(listMinor, res.body.discountBps as number);
 }

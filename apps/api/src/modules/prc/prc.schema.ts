@@ -1,5 +1,6 @@
-import { pgEnum, pgTable, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, jsonb, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, amountMinor, currency } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
 
 export const pricingModel = pgEnum('pricing_model', ['fixed', 'percentage']);
 
@@ -22,6 +23,6 @@ export const pricingRule = pgTable('pricing_rule', {
   billingTrigger: billingTrigger('billing_trigger').notNull().default('per_event'),
   effectiveFrom: timestamp('effective_from', { withTimezone: true }).notNull().defaultNow(),
   effectiveTo: timestamp('effective_to', { withTimezone: true }),
-  updatedBy: text('updated_by'),
+  updatedBy: uuid('updated_by').references(() => userAccount.id, { onDelete: 'restrict' }),
   createdAt: createdAt(),
 });

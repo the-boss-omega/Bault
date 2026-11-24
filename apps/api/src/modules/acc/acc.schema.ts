@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgEnum, pgTable, text, timestamp, boolean, uniqueIndex, index, check, bigint, integer } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, timestamp, boolean, uniqueIndex, index, check, bigint, integer, primaryKey, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../db/schema/_helpers';
 
 export const accountStatus = pgEnum('account_status', [
@@ -10,6 +10,8 @@ export const accountStatus = pgEnum('account_status', [
 ]);
 
 export const userRole = pgEnum('user_role', ['user', 'warehouse_operator', 'admin']);
+
+export const usageTier = pgEnum('usage_tier', ['bronze', 'silver', 'gold']);
 
 export const userAccount = pgTable(
   'user_account',
@@ -28,6 +30,8 @@ export const userAccount = pgTable(
     autoSuspendedAt: timestamp('auto_suspended_at', { withTimezone: true }),
     termsVersion: text('terms_version'),
     termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
+    usageTier: usageTier('usage_tier').notNull().default('bronze'),
+    usageTierComputedAt: timestamp('usage_tier_computed_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => ({
@@ -48,7 +52,7 @@ export const verificationTokenType = pgEnum('verification_token_type', [
 
 export const verificationToken = pgTable('verification_token', {
   id: pkId(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   type: verificationTokenType('type').notNull(),
   tokenHash: text('token_hash').notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -58,7 +62,7 @@ export const verificationToken = pgTable('verification_token', {
 
 export const loginSession = pgTable('login_session', {
   id: pkId(),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   tokenHash: text('token_hash').notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
@@ -81,7 +85,7 @@ export const loginAttempt = pgTable(
   {
     id: pkId(),
     identifier: text('identifier').notNull(),
-    userId: text('user_id'),
+    userId: uuid('user_id').references(() => userAccount.id, { onDelete: 'restrict' }),
     outcome: loginAttemptOutcome('outcome').notNull(),
     ip: text('ip'),
     userAgent: text('user_agent'),
@@ -94,19 +98,56 @@ export const loginAttempt = pgTable(
   }),
 );
 
-export const mfaFactor = pgTable('mfa_factor', {
-  userId: text('user_id').primaryKey(),
-  secretCiphertext: text('secret_ciphertext').notNull(),
-  enabledAt: timestamp('enabled_at', { withTimezone: true }),
-  lastUsedStep: bigint('last_used_step', { mode: 'number' }),
-  createdAt: createdAt(),
-});
+export const mfaMethod = pgEnum('mfa_method', ['totp', 'email']);
+
+export const mfaFactor = pgTable(
+  'mfa_factor',
+  {
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
+    method: mfaMethod('method').notNull().default('totp'),
+    secretCiphertext: text('secret_ciphertext'),
+    emailAddress: text('email_address'),
+    enabledAt: timestamp('enabled_at', { withTimezone: true }),
+    lastUsedStep: bigint('last_used_step', { mode: 'number' }),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    pk: primaryKey({ name: 'mfa_factor_user_method_pk', columns: [t.userId, t.method] }),
+    oneEnabled: uniqueIndex('mfa_factor_one_enabled')
+      .on(t.userId)
+      .where(sql`${t.enabledAt} IS NOT NULL`),
+  }),
+);
+
+export const mfaEmailCodePurpose = pgEnum('mfa_email_code_purpose', ['sign_in', 'settings']);
+
+export const mfaEmailCode = pgTable(
+  'mfa_email_code',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
+    purpose: mfaEmailCodePurpose('purpose').notNull(),
+    codeHash: text('code_hash'),
+    sentTo: text('sent_to'),
+    failedAttempts: integer('failed_attempts').notNull().default(0),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  },
+  (t) => ({
+    oneLive: uniqueIndex('mfa_email_code_one_live')
+      .on(t.userId, t.purpose)
+      .where(sql`${t.consumedAt} IS NULL`),
+    byUser: index('mfa_email_code_user_idx').on(t.userId, t.requestedAt),
+  }),
+);
 
 export const mfaRecoveryCode = pgTable(
   'mfa_recovery_code',
   {
     id: pkId(),
-    userId: text('user_id').notNull(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
     codeHash: text('code_hash').notNull(),
     usedAt: timestamp('used_at', { withTimezone: true }),
     createdAt: createdAt(),
@@ -120,7 +161,7 @@ export const mfaChallenge = pgTable(
   'mfa_challenge',
   {
     id: pkId(),
-    userId: text('user_id').notNull(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
     identifier: text('identifier').notNull(),
     tokenHash: text('token_hash').notNull(),
     failedAttempts: integer('failed_attempts').notNull().default(0),

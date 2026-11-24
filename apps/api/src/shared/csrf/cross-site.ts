@@ -60,7 +60,7 @@ export function sameOriginWrites(allowed: ReadonlySet<string>, exemptPaths: read
       next();
       return;
     }
-    next(AppError.forbidden('This request came from a page outside Bault, so it was refused.'));
+    next(AppError.forbidden('This request came from a page outside Card Embassy, so it was refused.'));
   };
 }
 

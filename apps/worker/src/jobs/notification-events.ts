@@ -9,9 +9,12 @@ const EMAIL_BY_DEFAULT = new Set([
   'grading_shipped',
   'offer_received',
   'offer_countered',
+  'offer_accepted',
+  'offer_rejected',
   'item_sold',
   'swap_proposed',
   'swap_completed',
+  'swap_rejected',
   'transfer_completed',
   'buyout_quoted',
   'custom_request_quoted',
@@ -31,6 +34,7 @@ const EMAIL_BY_DEFAULT = new Set([
   'escrow_inspected',
   'escrow_settled',
   'escrow_returned',
+  'escrow_cancelled',
   'white_glove_quoted',
   'show_pickup_booked',
   'handed_over',
@@ -56,11 +60,14 @@ const SUBJECTS: Record<string, string> = {
   grading_shipped: 'Your card is on its way to the grader',
   offer_received: 'You have an offer',
   offer_countered: 'Your offer was countered',
+  offer_accepted: 'Your offer was accepted',
+  offer_rejected: 'An offer was turned down',
   item_sold: 'Your item sold',
   swap_proposed: 'Somebody proposed a swap',
   swap_completed: 'Your swap is complete',
+  swap_rejected: 'A swap was turned down',
   transfer_completed: 'Your transfer is complete',
-  buyout_quoted: 'Bault has quoted you for your collectible',
+  buyout_quoted: 'Card Embassy has quoted you for your collectible',
   custom_request_raised: 'We have your custom request',
   custom_request_quoted: 'Your custom request has been priced',
   custom_request_declined: 'We cannot do that one',
@@ -82,6 +89,7 @@ const SUBJECTS: Record<string, string> = {
   escrow_inspected: 'We have looked at the item on your deal',
   escrow_settled: 'Your deal has settled',
   escrow_returned: 'Your deal was returned',
+  escrow_cancelled: 'A deal was called off',
   white_glove_requested: 'We have your hand-delivery request',
   white_glove_quoted: 'Your hand delivery has been quoted',
   show_pickup_booked: 'Your show pickup is booked',
@@ -91,5 +99,5 @@ const SUBJECTS: Record<string, string> = {
 };
 
 export function eventSubject(eventType: string): string {
-  return SUBJECTS[eventType] ?? 'An update on your Bault vault';
+  return SUBJECTS[eventType] ?? 'An update on your Card Embassy vault';
 }

@@ -1,125 +1,115 @@
 ## 2.7 Shipping
 
-The `shp` module takes cards out of the vault (T13): a collector prices a parcel and pays from the wallet, an operator scans it and buys the label, and the worker follows the tracking (2.8). Read the schema and the four pure rule files, then `parcel-profile.service.ts` and `shipment.service.ts`, which the rest build on. Then come edit and cancel, dispatch, hand delivery and show pickup, groups, direct overnight, customs and the controller. The closing table lists what each money step locks, in order (T15.2). Budget: 25 minutes.
+The shipping module, `shp`, takes cards out of the vault, as T13 describes. A collector prices a parcel and pays from the wallet, an operator buys the label, and the worker in 2.8 follows the tracking. Read the schema and the four rule files, which only compute, then `parcel-profile.service.ts` and `shipment.service.ts`, which the rest build on. After them come edit and cancel, dispatch, hand delivery and show pickup, groups, direct overnight, customs, the controller and the country files. Every money step locks its business rows first, then the wallet, then the member's period, as T15.2 explains. Dispatch moves no collector money. The section takes about 25 minutes.
 
-#### `apps/api/src/modules/shp/shp.schema.ts`, `apps/api/src/modules/shp/shipment-group.schema.ts` · 2 min · T13.1, T13.2, T13.7, T5.4
-The `shipment` and `shipment_group` tables.
-- `shipmentStatus` — `requested`, then `awaiting_payment` (the wallet was short) or `rates_selected` (paid), then `labeled`, `shipped`, `in_transit`, and `delivered` or `exception`. Only `cancelled` frees the items. Nothing writes `picking` or `packed`.
-- `shipment` — one wide row for all three `fulfilmentMethod` values (`carrier`, `hand_delivery`, `show_pickup`). `cost` is what the wallet was asked for, net of cover; `membershipCover` is the cover spent, with its period; `destinationDetail` freezes the address as quoted; `providerShipmentId` and `providerRateId` name the carrier's rate that dispatch buys; `fulfillment` holds the dispatch record and its `labelPurchase`.
-- `shipmentGroup` — `forming`, `locked` or `cancelled` (nothing writes `dispatched`), one `payerUserId`, a unique `code`.
+#### `apps/api/src/modules/shp/shp.schema.ts`, `apps/api/src/modules/shp/shipment-group.schema.ts`
 
-**Watch:** `shipment.code` has no unique index. `itemIds` is a jsonb array, so "this card is already on a parcel" is enforced in code (`assertItemsFree`), not by a constraint.
+About 2 minutes. It builds on T13.1, T13.2, T13.7 and T5.4.
 
-#### `apps/api/src/modules/shp/carriers.ts` · 2 min · T13.1, T13.8
-The service catalogue and the rules that refuse a parcel. No I/O.
-- `CARRIER_SERVICES` — seven services, each with its limits and an `easypost` mapping. ePacket and ePost have none, so under EasyPost they are never offered.
-- `checkService` — every `ServiceProblem` at once, each with a `rule` and a formatted `limit`, so the web app translates the sentence and keeps the figure.
-- `rateFor` — matches a carrier rate by exact name (the sandbox) or by the `easypost` codes in order. Never by resemblance.
-- `findService`, `carrierService`, `destinationOf` — lookups; `destinationOf` prefers the frozen `destinationDetail`.
-- `DIRECT_OVERNIGHT_KEY`, `DIRECT_OVERNIGHT_FACILITY` — the $100 flat envelope from `DE`.
+These two files define the shipment tables. In `shipmentStatus`, a new shipment is `requested`. Picking a rate makes it `rates_selected` if the wallet pays, or `awaiting_payment` if the wallet is short. Then come `labeled`, `shipped`, `in_transit`, and `delivered` or `exception`. Only `cancelled` frees the cards, and nothing writes `picking` or `packed`.
 
-#### `apps/api/src/modules/shp/shipping-options.ts`, `apps/api/src/modules/shp/fulfilment.ts` · 1.5 min · T13.1, T13.6
-Constants and option rules for every pricing path.
-- `checkOptions` — the one check quote, create and edit share: cover up to `MAX_INSURED_VALUE_MINOR` ($5,000), a signature above `SIGNATURE_REQUIRED_ABOVE_MINOR` ($500), a customs value on any non-US parcel, add-ons that need insurance.
-- `insurancePremiumMinor` — 1.5%, at least $2. `RESTOCKING_FEE_MINOR` is $25; `PAYMENT_WINDOW_DAYS` is 7.
-- `checkHandDelivery` — sane windows and a 48-hour lead (`WHITE_GLOVE_QUOTE_HOURS`).
-- `addOnFeeAction`, `whiteGloveFeeAction`, `PICKUP_FEE_ACTION` — pricing-rule action names; a rule in force beats the catalogue price (T8.5).
+`shipment` is one wide row for all three `fulfilmentMethod` values, `carrier`, `hand_delivery` and `show_pickup`. `cost` is what the wallet was asked for, net of the membership cover that T12.3 explains. `membershipCover` holds the cover the rate uses and, once it is spent, its period. `destinationDetail` freezes the address as quoted. `providerShipmentId` and `providerRateId` name the rate that dispatch buys. `fulfillment` holds the dispatch record and its `labelPurchase`. `itemIds` is a jsonb array that the database cannot check, so only `assertItemsFree` keeps a card off two parcels.
 
-#### `apps/api/src/modules/shp/boxes.ts` · 1 min · T13.1
-The box catalogue, read through `boxFor`.
-- `SHIPPING_BOXES` — five boxes, with outer dimensions and tare.
-- `chooseBox` — the smallest box that passes `checkBox`. The box gives the carrier its dimensions, so dimensional weight is priced without anyone measuring.
+`shipmentGroup` is a parcel several collectors share. It is `forming`, `locked` or `cancelled`, and nothing writes `dispatched`. It has one `payerUserId` and a unique `code`. `shipment.code` has no unique index.
 
-#### `apps/api/src/modules/shp/parcel-profile.service.ts` · 1.5 min · T13.1, T15.2
-Turns item ids into a parcel, for every path that prices one.
-- `loadShippableItems` — each item must be the owner's, `stored` and not on hold. With `tx` it locks the rows `FOR UPDATE`, in id order.
-- `boxFor` — the chosen box and its problems, or `chooseBox`'s pick.
-- `resolveDestination` — a saved address with its street and `region`, or free text that must carry a country and postal code. A saved address in a country that needs a region and has none is refused with a 422, `address_region_required`, before any carrier is asked; `details.addressId` names it.
-- `buildCustomsLines` — splits the declared total by weight; the last line absorbs rounding. `customsDeclarationFor` sends the same lines to the carrier.
+#### `apps/api/src/modules/shp/carriers.ts`
 
-#### `apps/api/src/modules/shp/shipment.service.ts` · 3 min · T13.1, T13.2, T12.3, T15.3
-The core: quote, create, rate, pay, read. Every `shp` service calls it; `apps/api/src/modules/mkt/listing.service.ts` reads `OPEN_STATUSES`.
-- `assertItemsFree` — refuses a card on any open shipment of the same user. It only holds after `loadShippableItems(…, tx)` has locked the cards, as `create` does.
-- `quote` — prices without creating anything.
-- `priceServices` — one `getRates` call, then per service: carrier line + handling (`shipping`, plus `shipping_rush`) + premium + add-ons − membership cover = `totalMinor`. Ineligible services come back with their problems.
-- `pickBest` — "choose for me": lowest total plus `DAY_OF_WAITING_MINOR` (250 cents) per transit day, postage credit added back.
-- `selectRate`, `selectRecommended`, `settle` — rates are fetched outside any lock, then one transaction. A short wallet gives `awaiting_payment`, with a `paymentDueAt` that choosing again never extends. Otherwise `spendShippingCover`, `chargeFor`, `rates_selected`.
-- `labelRefusal`, `reRate` — a paid shipment whose label was refused may take a new rate; the difference is charged or refunded and `fulfillment` cleared.
-- `pay` — settles a held shipment at its frozen `cost`, checking the cards again.
-- `labelRequest`, `directLabelRequest` — what dispatch buys, at the scale weight less the box's tare.
-- `listFor`, `track`, `toTrackingView` — one view for list and drawer; staff see every shipment.
+About 2 minutes. It builds on T13.1 and T13.8.
 
-**Watch:** `loadFor` lets staff act on any shipment, so an operator who picks a rate or cancels moves the collector's money. `pay` rebuilds the rate from the row, so its charge snapshot counts handling and add-ons inside `carrierCost`. A re-rate notifies nobody.
+This file lists the carrier services and the rules that refuse a parcel. `CARRIER_SERVICES` lists seven services with their limits, each with an `easypost` mapping, and `tests/contract/easypost-catalogue.test.ts` fails if one is added without it. The keys `epacket` and `epost` are kept for stored shipments and prices, but they are sold as USPS First-Class International, EasyPost's `FirstClassPackageInternationalService`, and USPS Priority Mail International, `PriorityMailInternational`, and the sandbox adapter quotes them under the same names. That pairing is a default the owner can change. `checkService` returns every `ServiceProblem` at once, each with a `rule` and usually a formatted `limit`. The web app translates each rule's sentence, except for `dimensions`, and keeps the `limit` figure.
 
-#### `apps/api/src/modules/shp/shipment-edit.service.ts` · 2 min · T13.8, T13.9, T15.1
-Changing a shipment after it is requested, behind `PATCH shipments/:id`, `shipments/:id/merge` and `shipments/:id/cancel`.
-- `update` — only while `requested`. It checks the cards again under the shipment lock, and its write is conditional on `requested`, so an edit can't land after payment.
-- `merge` — same owner and address. Adds the declared and insured values (insured capped), takes the bigger box, locks both rows in id order. The source becomes `cancelled` with `mergedIntoShipmentId`.
-- `cancel` — from `requested`, `awaiting_payment` or `rates_selected`. From `rates_selected` with no tracking number, it refunds the settled `shipping` charges less earlier `shipping_refund` credits, returns the cover and charges `RESTOCKING_FEE_MINOR`. Emits `shipment_cancelled`.
-- `releaseDirectParcel` — returns a direct-overnight parcel to the state its `direct_shipped` event took it from.
+`rateFor` matches a rate by the exact carrier and service name, as the sandbox adapter returns it, or else by the `easypost` codes in order. It never matches by resemblance. `findService` and `carrierService` are lookups, and `destinationOf` prefers the frozen `destinationDetail`. `DIRECT_OVERNIGHT_KEY` and `DIRECT_OVERNIGHT_FACILITY` define the flat $100 overnight service from `DE`.
 
-**Watch:** cancel doesn't clear `groupId`, so a group can still lock on cancelled members. A refused-label shipment still pays the restocking fee. A waived show pickup stores no `membershipCover`, so cancelling it doesn't give the allowance back.
+#### `apps/api/src/modules/shp/shipping-options.ts`, `apps/api/src/modules/shp/fulfilment.ts`
 
-#### `apps/api/src/modules/shp/dispatch.service.ts` · 3 min · T13.3, T15.1, T15.3
-Three steps, because a bought label is money no rollback returns.
-- `claim` — locks the shipment; `verifyContents` resolves scans by id, barcode or serial (`resolveScans`), demands set equality and locks each card with `lockExpecting`. Writes `labeled` and a `labelPurchase` in state `buying`, and commits.
-- `buy` — no locks. `buyLabel` with the shipment id as `idempotencyKey`, bounded by `LABEL_PURCHASE_TIMEOUT_MS`. On failure `settleFailedPurchase` decides: a refusal (`LabelNotPurchasedError`) or an unsent request returns to `rates_selected`; anything else is `unknown` and stays `labeled`.
-- `complete` — writes the tracking number first, then moves the cards to `shipped` in a savepoint; if that fails, the tracking number still commits. Emits `shipment_out`.
-- `directRate` — rates a direct-overnight parcel at dispatch and stores its handles before buying.
+About 1.5 minutes. It builds on T13.1 and T13.6.
 
-**Watch:** a claim younger than `LABEL_PURCHASE_LEASE_MS` turns a second operator away. A `labeled` shipment can't be cancelled. Dispatching again buys against the same `providerShipmentId`, and the EasyPost adapter returns the label that carrier shipment already has (it never sends the key).
+These files hold the limits, prices and checks for shipment options and hand delivery. `checkOptions` is the one check that quote, create and edit share. It refuses insurance above `MAX_INSURED_VALUE_MINOR`, $5,000. It demands a signature when the insured value is above `SIGNATURE_REQUIRED_ABOVE_MINOR`, $500. It also demands a customs value on any non-US parcel, and enough insurance for each add-on. `insurancePremiumMinor` is 1.5 percent of the insured value, at least $2. `RESTOCKING_FEE_MINOR` is the $25 cancel fee, and `PAYMENT_WINDOW_DAYS` gives a held shipment 7 days to be paid. `usdAmount` writes every amount in the module's messages the usual way, with a thousands separator, so the cap reads "Cover stops at $5,000.00 on one parcel" and a carrier's limit reads the same.
 
-#### `apps/api/src/modules/shp/human-fulfilment.service.ts` · 2 min · T13.6, T15.3
-Hand delivery (white glove) and show pickup.
-- `requestHandDelivery` — a `hand_delivery` shipment with no price yet.
-- `quoteHandDelivery` — staff set `quoteMinor` under the shipment lock, only while `requested`.
-- `acceptQuote` — charges `quoteMinor`, then moves to `rates_selected` only if status and quote are unchanged.
-- `pickupShows`, `requestPickup` — free places are counted, not stored. Booking recounts under the show's row lock, applies `memberships.waive(…, 'show_pickup', …)` and charges at once.
-- `handOver` — closes a non-carrier shipment: set-equal scan, cards locked and checked, `shipped`, status `delivered`, `handed_over` emitted.
+`checkHandDelivery` wants both addresses, four dates it can read, windows that end after they start, delivery no earlier than pickup, and a pickup at least `WHITE_GLOVE_QUOTE_HOURS`, 48 hours, away. A `contactPhone` for the courier is optional, and when given it must be 6 to 20 characters of digits, spaces, plus signs and dashes with at least six digits, the same rule a saved address's phone follows, or the request is refused with a 400 whose problem names `contactPhone`. A date it cannot read is refused the same way, with a problem that names the field, and `HandDeliveryDto` already holds the four dates to `IsISO8601`, so an unreadable date never reaches the insert. `shipmentContactPhone` reads that phone back, and only from a hand delivery. `addOnFeeAction`, `whiteGloveFeeAction` and `PICKUP_FEE_ACTION` name pricing-rule actions, as T8.5 describes. A rule in force beats the price in these files. For a show pickup, the show's own fee comes before the rule.
 
-**Watch:** accept carries no "the figure I saw", so a new quote just before acceptance is the one charged. `handOver` compares raw item ids, not barcodes as dispatch does.
+#### `apps/api/src/modules/shp/boxes.ts`
 
-#### `apps/api/src/modules/shp/group-shipment.service.ts` · 1.5 min · T13.7
-Several collectors, one box, one payer; each member keeps and pays for their own shipment.
-- `open`, `join`, `leave` — `requested` shipments only; joining needs the identical address. `assertForming` takes a share lock on the group row, so a join can't slip in after a lock.
-- `lock` — payer only; conditional `forming` to `locked`, a fresh member count, one `group_shipment_locked` per member.
-- `cancel` — payer only; clears every member's `groupId`.
+About 1 minute. It builds on T13.1.
 
-**Watch:** `describe` (`GET /shipping/groups/:id`) checks no ownership, and throws once any member's card has left `stored`. `cancel` checks `dispatched` outside its transaction.
+This file lists the boxes the warehouse packs into. `SHIPPING_BOXES` holds five boxes with their outer dimensions and tare, which the services read through `boxFor`. `chooseBox` picks the smallest box that passes `checkBox`, which checks weight and item classes. The box gives the carrier its dimensions, so dimensional weight is priced without anyone measuring.
 
-#### `apps/api/src/modules/shp/direct-ship.service.ts` · 1.5 min · T13.8, T9.1
-An unopened parcel sent overnight from the `DE` forwarding site, never booked into the vault.
-- `eligibility` — `received`, not forwarded, at `DE`.
-- `request` — locks the parcel, checks the wallet, creates a `rates_selected` shipment with empty `itemIds`, charges flat price plus premium, marks the parcel `processed`, writes `direct_shipped` (the only link between the two) and emits `direct_ship_booked`.
+#### `apps/api/src/modules/shp/parcel-profile.service.ts`
 
-**Watch:** `ShipmentService.isDirect` spots these by `serviceKey` and empty `itemIds`; dispatch and cancel branch on it.
+About 1.5 minutes. It builds on T13.1 and T15.2.
 
-#### `apps/api/src/modules/shp/customs.service.ts`, `apps/api/src/modules/shp/destinations.ts` · 1.5 min · T13.1
-Paperwork for a parcel that crosses a border.
-- `invoice` — the commercial invoice, built on each read from the frozen `customsLines`, never stored.
-- `readiness` — warnings, never refusals, plus `destinationGuidance`: universal notes and four written destinations, each linking its customs authority, with no duty figures.
+This service turns item ids into a parcel, for every path that prices one. `loadShippableItems` requires each item to be the owner's, `stored` and not on hold, and names a card that is not in the vault by `itemStateWords`, such as "away at a grader", never by its raw state. With a `tx`, it also locks the rows `FOR UPDATE` in id order, so two requests for the same cards wait instead of deadlocking. `loadItems` reads items with no such checks, for a group that only needs their weights. `boxFor` returns the box the collector chose with its problems, or else the pick of `chooseBox`. `resolveDestination` takes a saved address with its street, its `line2` as the carrier's `street2`, its `region` and its `phone`, or free text with a country and postal code. The `formatted` text it writes into `destinationAddress` adds `line2` after the street but never the phone, because a group's members, the customs invoice and the benches read that text. The phone travels only in `destinationDetail`, which `collectorShipmentRowView` keeps from collectors, so `labelRequest` and `directLabelRequest` hand it to the carrier through `destinationOf`. A saved address that lacks a region its country needs gets a 422, `address_region_required`, before any carrier is asked. The error's `details.addressId` names the address. `buildCustomsLines` splits the declared total by weight, unless an item has its own value, and the last line absorbs the rounding. `customsDeclarationFor` sends the same lines to the carrier.
 
-**Watch:** `required` and `outstanding` have no route.
+#### `apps/api/src/modules/shp/shipment.service.ts`
 
-#### `apps/api/src/modules/shp/shp.controller.ts`, `apps/api/src/modules/shp/shp.module.ts` · 1.5 min · T6.2, T13
-`/shipping/*`, with its DTOs in the same file (`ShipmentOptionsDto`, shared by create and update; `DispatchDto`; `HandOverDto`). The module exports only `ShipmentService`.
-- Staff only (`@Roles('warehouse_operator', 'admin')`): `white-glove/:id/quote`, `shipments/:id/hand-over`, `shipments/:id/dispatch`.
-- `@Public()`: `destinations/:country`.
-- The rest: any signed-in caller, ownership checked in the service.
+About 3 minutes. It builds on T13.1, T13.2, T12.3 and T15.3.
 
-**What each money step locks.** Rows first, then the wallet, then the member's period (T8.3, T15.2). Dispatch moves no collector money.
+This is the core service, which quotes, creates, rates, pays for and reads shipments. Every `shp` service except `ParcelProfileService` and `DirectShipService` calls it. `OPEN_STATUSES` is `OPEN_SHIPMENT_STATUSES` from the schema, the statuses in which a shipment holds its cards. `assertItemsFree` hands the cards to `assertItemsUncommitted` in `apps/api/src/shared/commitments/item-commitments.ts`, the one check every path that commits a card calls. It refuses a card already on any other open shipment, in an open escrow deal, under an open buyout, consignment, donation, grading request, slab crack-out or lot split, on an active listing, or in a pending swap or gift, and the 409 `item_committed` names where the card is, for example "This card is already committed to a grading request (SVC-…), so it cannot be shipped." The shipping paths pass `shipToBuyer`, so a card in an escrow deal settled by `ship_to_buyer` can still go on a shipment, because that deal pays the seller only once the card is on its way to the buyer. The check only holds after `loadShippableItems` has locked the cards in a transaction, as `create` does, because every other committing path locks the item before it checks too. Without that lock, two requests could both pass and put one card on two parcels.
 
-| Step | Method | Locks, in order | Money |
-|---|---|---|---|
-| Choose a rate | `ShipmentService.settle` | shipment, wallet (`balanceOf`), period (`spendShippingCover`) | charge, or hold |
-| New rate after refusal | `ShipmentService.reRate` | shipment, wallet (`lockWallet`), period (return, then spend) | the difference |
-| Pay a held shipment | `ShipmentService.pay` | shipment, cards, wallet, period | `cost` |
-| Cancel | `ShipmentEditService.cancel` | shipment, direct parcel, wallet, period | refund, restocking fee |
-| Accept a quote | `HumanFulfilmentService.acceptQuote` | shipment, wallet | `quoteMinor` |
-| Book a pickup | `HumanFulfilmentService.requestPickup` | cards, show, wallet, period (`waive`) | fee less waiver |
-| Direct overnight | `DirectShipService.request` | parcel, wallet | flat price plus premium |
+`quote` prices without creating anything. `priceServices` makes one `getRates` call and skips a service the carrier gives no rate for. For each other service, `totalMinor` is the carrier's price plus handling, premium and add-ons, less membership cover. Handling is the `shipping` rule, plus `shipping_rush` for rush. Handling, rush and add-ons are priced at the account's tier, the carrier's price and the premium are not, and each rate carries `tier`, `discountBps` and `listTotalMinor`, what a Bronze account would pay, which the charge snapshot records as `listMinor` beside `chargedMinor`. A shipment left awaiting payment keeps that quote in `fulfillment.tierQuote`, so `pay` records the tier it was quoted at. Ineligible services come back with their problems. A collector's quote and rate list go through `collectorRateView`, which leaves out the provider's shipment and rate ids, while `selectRate` still works from the full rates. `pickBest` chooses for a collector who lets Bault decide, through `selectRecommended`. Its score is the total with membership postage credit added back, plus `DAY_OF_WAITING_MINOR`, 250 cents, per day of the longest transit.
 
-**Also in this area:**
-- `apps/api/src/modules/shp/countries.ts` — `shippingCountries` (each country a service names, plus `US`) for `GET /shipping/countries`, each with `regionRequired` and, for the US and Canada, its `regions`; and `toCountryCode`.
-- `apps/api/src/modules/shp/regions.ts` — `normalizeRegion`, `regionRequired` and `regionsOf`: the US states, territories and military codes, and the Canadian provinces and territories, the two countries whose carriers need one.
-- `apps/api/src/modules/shp/country.validator.ts` — `IsShippableCountry`, used by the address DTOs in `apps/api/src/modules/acc/profile.controller.ts`.
+`selectRate` and `selectRecommended` fetch rates outside any lock, and then `settle` runs one transaction. It locks the shipment, locks and checks the cards again with `loadShippableItems` and `assertItemsFree`, as `pay` does, then the wallet through `balanceOf`. A short wallet gives `awaiting_payment` with a `paymentDueAt`, and choosing again keeps the first deadline. Otherwise `spendShippingCover` uses up the allowance in the period, `chargeFor` charges, and the status becomes `rates_selected`. A paid shipment can be re-rated only after the carrier refused its label, which `labelRefusal` detects, and then `reRate` runs instead. It takes the wallet lock with `lockWallet`, returns the old cover and spends the new one. It charges or refunds the difference and clears `fulfillment`. The charge for a dearer service records the difference as `listMinor` and `chargedMinor`, the amount on the row, and keeps the full new figures as `newTotal` and `newListTotal`. A re-rate notifies nobody, even when an operator makes it.
+
+`pay` settles a held shipment at its frozen `cost`. It locks the shipment, the cards, the wallet and the period, in that order, and checks the cards again, both their state and that nothing else has committed them since. The row keeps no separate handling or add-on figures, so the charge snapshot `pay` writes counts them inside `carrierCost`. `labelRequest` and `directLabelRequest` build what dispatch buys, at the scale weight less any box tare. `listFor`, `track` and `toTrackingView` give one view for the list and the shipment drawer, and staff see every shipment. A collector receives a reduced view, `collectorTrackingView`, without the account name, service key, item barcodes or merge target, and with `labelRefused` as one plain sentence from `labelRefusalSentence` in place of the carrier's text. `loadFor` lets staff act on any shipment, so an operator who picks a rate or cancels moves the collector's money.
+
+#### `apps/api/src/modules/shp/shipment-edit.service.ts`
+
+About 2 minutes. It builds on T13.8, T13.9 and T15.1.
+
+This service edits, merges and cancels shipments, behind `PATCH shipments/:id`, `shipments/:id/merge` and `shipments/:id/cancel`. `update` works only while the shipment is `requested`. It checks the cards again under the shipment lock, and its write is conditional on `requested`, so an edit cannot land after payment. A new `recipientName` is written into `destinationDetail.name` in the same UPDATE, so the label `destinationOf` builds names the person every view shows. The controller passes the result through `collectorShipmentRowView` for a collector, as create does. `merge` folds a source request into a target with the same owner and address. It locks both rows in id order first and works only from what it read under those locks, so an edit that committed a moment earlier is not overwritten. It then locks and checks every card with `loadShippableItems` and `assertItemsUncommitted`. It adds the declared and insured values, caps the insured total, and keeps the bigger box if it fits. The source becomes `cancelled` with `mergedIntoShipmentId` set and leaves any group it was in.
+
+`cancel` works from `requested`, `awaiting_payment` or `rates_selected`. It locks the shipment, the direct parcel, the wallet and the period, in that order. From `rates_selected` with no tracking number, it refunds the settled `shipping` charges less earlier `shipping_refund` credits, so a re-rate and then a cancel never refund twice. It also returns the membership cover, and marks the refunded `shipping` charges `refunded`, so they leave the account's tier count. From `rates_selected`, the collector may also pay `RESTOCKING_FEE_MINOR`, but `restockingFee` charges it only for work already done. A carrier shipment pays it unless the label was refused, as `labelRefusal` reports. A `show_pickup` pays only after its show's `requestDeadline`, and a `hand_delivery` only after `pickupFrom`. No fee is due when a card on the shipment is no longer the collector's. The fee is its own `shipping_restocking_fee` charge, the action the price catalogue already names, with a snapshot that records the account's `tier` and `discountBps: 0`, because the fee is a flat penalty and not a service the tier discounts. Since migration `0049` it does not count toward the tier either. It is taken after the refund, and if the refunded wallet still cannot cover it, `cancel` answers 409 `insufficient_balance` and nothing changes, so a cancel never leaves the wallet below zero.
+
+`cancelFee` gives the drawer the same figure through `GET /shipping/shipments/:id/cancel-fee`, so the rule lives in one place. `cancel` emits `shipment_cancelled`. `releaseDirectParcel` returns a direct parcel to the state its `direct_shipped` event took it from. Cancel clears `groupId` in the same UPDATE that makes the shipment `cancelled`, so a cancelled shipment leaves its shared parcel at once.
+
+#### `apps/api/src/modules/shp/dispatch.service.ts`
+
+About 3 minutes. It builds on T13.3, T15.1 and T15.3.
+
+This service hands a paid shipment to the carrier in three steps, because no rollback returns the money for a bought label. First, `claim` locks the shipment and calls `verifyContents`, which resolves scans by id, barcode or serial through `resolveScans`. The scans must equal the cards, and each card is locked with `lockExpecting`. A direct parcel must match its booking and still be at `DE`. `claim` writes `labeled` and a `labelPurchase` in state `buying`, and commits.
+
+Second, `buy` holds no locks. It calls `buyLabel` with the shipment id as `idempotencyKey`, within `LABEL_PURCHASE_TIMEOUT_MS`, 30 seconds. For a direct parcel, `directRate` first rates it and stores the carrier's ids. If the purchase fails, `settleFailedPurchase` decides. A `LabelNotPurchasedError` refusal or an unsent request means nothing was bought, so the shipment returns to `rates_selected`. Any other failure, such as a timeout, may have bought a label, so it is `unknown` and the shipment stays `labeled`.
+
+Last, `complete` writes the tracking number first, then moves the cards to `shipped` in a savepoint, a nested transaction that can fail alone. If the savepoint fails, the tracking number still commits, and the next dispatch finishes without buying. On success it emits `shipment_out`. The custody reason and the fulfilment record name the shipment's own `carrier`, the one the collector paid for, and not the free text on the operator's form. A claim younger than `LABEL_PURCHASE_LEASE_MS`, 45 seconds, turns a second operator away. A `labeled` shipment cannot be cancelled, so an `unknown` purchase can only be dispatched again, against the same `providerShipmentId`. The EasyPost adapter never sends the key, but it reads that shipment first and returns the label it already has.
+
+#### `apps/api/src/modules/shp/human-fulfilment.service.ts`
+
+About 2 minutes. It builds on T13.6 and T15.3.
+
+This service sends cards out by hand, not by carrier. Hand delivery is also called white glove. `requestHandDelivery` creates a `hand_delivery` shipment with no price yet. The delivery address stays text in `destinationAddress`, and the trimmed phone for the courier goes into the row's `destinationDetail` as `{ phone }`, so no new column was needed. Staff read it as `contactPhone` beside the destination in the list and tracking views, and the requester sees it in their own row and tracking view, while the group views, the customs invoice and the outbox payloads never carry it. `quoteHandDelivery` lets staff set `quoteMinor` under the shipment lock, only while `requested`. `acceptQuote` takes the figure the collector saw, in `AcceptQuoteDto`. It locks the shipment, then the wallet. If `quoteMinor` differs from that figure, it answers 409 `quote_changed` with the new figure and charges nothing. Otherwise it locks and checks the cards again, charges `quoteMinor` and moves to `rates_selected`, but only if the status and the quote are unchanged. The operator's quote is charged as quoted, so the charge snapshot records the account's `tier` with `discountBps: 0`, and `listMinor` and `chargedMinor` both equal to the quote.
+
+Show pickup takes the cards to a show for collection. `pickupShows` counts free places instead of storing them. A collector reads `collectorPickupShows`, with the fee, places left and whether the show is open, but not its capacity, bookings or staff notes. `requestPickup` locks the cards and the show's row, and counts again, so two collectors cannot take the last place. It then locks the wallet, applies `memberships.waive` to the period for `show_pickup`, prices what is left at the collector's tier with `quoteFor`, and charges at once. A waived pickup stores its period as a `membershipCover` through `pickupCover`, so a cancel returns the allowance through `returnShippingCover`.
+
+`handOver` closes a non-carrier shipment. The scan must equal the items, and the cards are locked and checked. The cards become `shipped`, the shipment becomes `delivered`, and `handed_over` is emitted. Unlike dispatch, `handOver` compares raw item ids, so a hand-over that sends barcodes is refused.
+
+#### `apps/api/src/modules/shp/group-shipment.service.ts`
+
+About 1.5 minutes. It builds on T13.7.
+
+This service lets several collectors share one box and one payer, while each keeps and pays for their own shipment. `open` and `join` take `requested` carrier shipments only, so a hand delivery or a show pickup cannot share a box, and joining needs the identical address, apartment line included, though not the same phone. `open` locks the shipment, checks it again, and sets its `groupId` only if it is still `requested` with no group, so two opens at once cannot leave an orphan group. It copies the opener's `destinationDetail` to the group and answers with `describe`, like every other group answer, and `describe` gives only the formatted address, so no member reads another's phone or the payer's id. `leave` ignores the shipment's status, but the group must still be `forming`, and the payer cannot leave. `assertForming` takes a share lock on the group row, so a join and a `lock` wait for each other, and no join lands after a lock.
+
+`lock` and `cancel` are for the payer only. `lock` moves the group from `forming` to `locked` conditionally, counts the members again, and emits one `group_shipment_locked` per member. `lock` counts only members that are not `cancelled`, in its first read and again after it has taken the group row, so a group whose other members cancelled or were released answers 400 and nobody is told it locked. `cancel` moves the group to `cancelled` only from `forming` or `locked`, in one conditional UPDATE, answers 409 otherwise, and then clears every member's `groupId`. `describeFor` serves `GET /shipping/groups/:id`. It answers 404 unless the viewer is staff, the payer, or owns a shipment whose `groupId` is the group, so a stranger or a member who left cannot read the members, the address and the insured values, then hands over to `describe`. `describe` takes the viewer too, and `join` and `mine` pass the signed-in user. A `warehouse_operator` or an `admin` gets every member's full row, with `name`, `weightGrams` and `insuredValueMinor`. A collector gets each member's shipment id and code, username, item count, payer flag and status, never a `name`, and `weightGrams` and `insuredValueMinor` only on the row whose shipment is the viewer's own, while the group totals stay as they are. `describe` reads each member's cards plainly with `ParcelProfileService.loadItems` and weighs them with `measure`, so it still answers after a card has been dispatched, sold or put on hold.
+
+#### `apps/api/src/modules/shp/direct-ship.service.ts`
+
+About 1.5 minutes. It builds on T13.8 and T9.1.
+
+This service ships an unopened parcel overnight from the `DE` forwarding site, so its cards never enter the vault. `eligibility` requires a parcel that is `received`, not forwarded, and at `DE`. `request` is domestic only and takes at most five cards. It refuses an insured value above `MAX_INSURED_VALUE_MINOR` with the same sentence `checkOptions` gives, instead of quietly lowering it. It locks the parcel, then the wallet, and creates a `rates_selected` shipment with empty `itemIds`. It charges the flat price plus the premium, which are carrier postage and insurance and so are not discounted, and the snapshot records the account's `tier` with `discountBps: 0`. It then marks the parcel `processed`, writes a `direct_shipped` parcel event, and emits `direct_ship_booked`. That event is the only link between the parcel and the shipment. `ShipmentService.isDirect` spots these shipments by `serviceKey` and empty `itemIds`, and dispatch and cancel branch on it.
+
+#### `apps/api/src/modules/shp/customs.service.ts`, `apps/api/src/modules/shp/destinations.ts`
+
+About 1.5 minutes. It builds on T13.1.
+
+These files make the customs paperwork for international parcels. `invoice` builds the commercial invoice on each read from the frozen `customsLines`, and never stores it. Its shipper is `ShipmentService.originSite`, the same oldest active primary facility with a real address that the label's origin uses, so the invoice and the label never name different senders. `readiness` gives warnings, never refusals. It adds `destinationGuidance`, with universal notes and four written destinations. Each destination links its customs authority, and none gives duty figures.
+
+#### `apps/api/src/modules/shp/shp.controller.ts`, `apps/api/src/modules/shp/shp.module.ts`
+
+About 1.5 minutes. It builds on T6.2 and T13.
+
+The controller serves `/shipping/*`, and its DTOs, the classes that check request bodies, live in the same file. `ShipmentOptionsDto` is shared by create and update, and the file also holds `DispatchDto` and `HandOverDto`. Three routes are for staff only, through `@Roles('warehouse_operator', 'admin')`. They are `white-glove/:id/quote`, `shipments/:id/hand-over` and `shipments/:id/dispatch`. `destinations/:country` is `@Public()`, so it needs no sign-in. The rest take any signed-in user, and the services check ownership. The create, pickup and white-glove POSTs and the `PATCH` return `collectorShipmentRowView` to a collector, which leaves out the staff-only columns such as provider ids, the label key and the operator's fulfilment form. The module exports only `ShipmentService`.
+
+#### `apps/api/src/modules/shp/countries.ts`, `apps/api/src/modules/shp/regions.ts`, `apps/api/src/modules/shp/country.validator.ts`
+
+About 1 minute. It builds on T13.1.
+
+These files list the countries Bault ships to and their regions. `shippingCountries` serves `GET /shipping/countries`. It lists each country a service names, plus `US`, each with `regionRequired`. The US and Canada also carry their `regions`. `toCountryCode` turns a code or an English name into a code. `regionRequired`, `regionsOf` and `normalizeRegion` know the US states, territories and military codes, and the Canadian provinces and territories. These are the two countries whose carriers need a region. `IsShippableCountry` checks the country on the address DTOs in the account module's `apps/api/src/modules/acc/profile.controller.ts`.

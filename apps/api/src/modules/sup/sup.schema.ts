@@ -1,5 +1,6 @@
-import { pgEnum, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
 
 export const supportTicketStatus = pgEnum('support_ticket_status', [
   'open',
@@ -22,7 +23,7 @@ export const supportTicket = pgTable(
   {
     id: pkId(),
     code: text('code').notNull(),
-    userId: text('user_id').notNull(),
+    userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
     category: supportTicketCategory('category').notNull(),
     subject: text('subject').notNull(),
     status: supportTicketStatus('status').notNull().default('open'),
@@ -30,12 +31,12 @@ export const supportTicket = pgTable(
     relatedType: text('related_type'),
     relatedId: text('related_id'),
 
-    assignedTo: text('assigned_to'),
+    assignedTo: uuid('assigned_to').references(() => userAccount.id, { onDelete: 'restrict' }),
 
     lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull().defaultNow(),
 
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
-    resolvedBy: text('resolved_by'),
+    resolvedBy: uuid('resolved_by').references(() => userAccount.id, { onDelete: 'restrict' }),
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -45,8 +46,8 @@ export const supportTicket = pgTable(
 
 export const supportMessage = pgTable('support_message', {
   id: pkId(),
-  ticketId: text('ticket_id').notNull(),
-  authorId: text('author_id').notNull(),
+  ticketId: uuid('ticket_id').notNull().references(() => supportTicket.id, { onDelete: 'restrict' }),
+  authorId: uuid('author_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   authorRole: text('author_role').notNull(),
   body: text('body').notNull(),
   createdAt: createdAt(),

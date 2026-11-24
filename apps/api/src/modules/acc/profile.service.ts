@@ -23,6 +23,7 @@ export interface ProfileView {
   termsVersion: string | null;
   termsAcceptedAt: Date | null;
   mfaEnabled: boolean;
+  mfaMethod: 'totp' | 'email' | null;
   mfaRequired: boolean;
 }
 
@@ -30,12 +31,31 @@ export interface AddressInput {
   label: string;
   recipient: string;
   line1: string;
+  line2?: string | null;
   city: string;
   region?: string | null;
   country: string;
   postalCode: string;
+  phone?: string | null;
   isDefault?: boolean;
 }
+
+export const ADDRESS_LINE2_MAX = 100;
+
+const PHONE = /^(?=(?:.*\d){6})[0-9+\- ]{6,20}$/;
+
+// eslint-disable-next-line no-control-regex -- control characters are exactly what this rejects
+const MARKUP_OR_CONTROL = /[<>\u0000-\u001f\u007f]/;
+
+const ADDRESS_TEXT = {
+  label: { name: 'label', max: 60 },
+  recipient: { name: 'recipient', max: 120 },
+  line1: { name: 'street address', max: 120 },
+  city: { name: 'city', max: 80 },
+  postalCode: { name: 'postal code', max: 16 },
+} as const;
+
+type AddressTextField = keyof typeof ADDRESS_TEXT;
 
 export type AddressPatch = Partial<AddressInput>;
 
@@ -53,6 +73,7 @@ export class ProfileService {
       .where(eq(userAccount.id, userId))
       .limit(1);
     if (!u) throw AppError.notFound('Profile not found');
+    const mfaMethod = await this.mfa.enabledMethod(u.id);
     return {
       id: u.id,
       email: u.email,
@@ -65,7 +86,8 @@ export class ProfileService {
       nameReviewRequired: u.nameReviewRequired,
       termsVersion: u.termsVersion,
       termsAcceptedAt: u.termsAcceptedAt,
-      mfaEnabled: await this.mfa.isEnabled(u.id),
+      mfaEnabled: mfaMethod !== null,
+      mfaMethod,
       mfaRequired: this.mfa.requiredFor(u.role),
     };
   }
@@ -83,12 +105,13 @@ export class ProfileService {
     return this.get(userId);
   }
 
-  listAddresses(userId: string) {
-    return this.db
+  async listAddresses(userId: string) {
+    const rows = await this.db
       .select()
       .from(shippingAddress)
       .where(eq(shippingAddress.userId, userId))
       .orderBy(sql`${shippingAddress.createdAt} desc`);
+    return rows.map(addressView);
   }
 
   async addAddress(userId: string, dto: AddressInput) {
@@ -102,18 +125,20 @@ export class ProfileService {
         .insert(shippingAddress)
         .values({
           userId,
-          label: dto.label,
-          recipient: dto.recipient,
-          line1: dto.line1,
-          city: dto.city,
+          label: addressText('label', dto.label),
+          recipient: addressText('recipient', dto.recipient),
+          line1: addressText('line1', dto.line1),
+          line2: line2Of(dto.line2),
+          city: addressText('city', dto.city),
           region,
           country,
-          postalCode: dto.postalCode,
+          postalCode: addressText('postalCode', dto.postalCode),
+          phone: phoneOf(dto.phone),
           isDefault: dto.isDefault ?? false,
         })
         .returning();
       if (!row) throw AppError.validation('Failed to add address');
-      return row;
+      return addressView(row);
     });
   }
 
@@ -127,14 +152,17 @@ export class ProfileService {
       if (!existing) throw AppError.notFound('Address not found');
 
       const set: Record<string, unknown> = {};
-      for (const f of ['label', 'recipient', 'line1', 'city', 'country', 'postalCode'] as const) {
+      for (const f of ['label', 'recipient', 'line1', 'city', 'postalCode'] as const) {
         if (patch[f] === undefined) continue;
-        set[f] = f === 'country' ? (toCountryCode(patch[f]!) ?? patch[f]) : patch[f];
+        set[f] = addressText(f, patch[f]);
       }
+      if (patch.country !== undefined) set.country = toCountryCode(patch.country) ?? patch.country;
       if (patch.country !== undefined || patch.region !== undefined) {
         const country = (set.country as string | undefined) ?? existing.country;
         set.region = regionFor(country, patch.region !== undefined ? patch.region : existing.region);
       }
+      if (patch.line2 !== undefined) set.line2 = line2Of(patch.line2);
+      if (patch.phone !== undefined) set.phone = phoneOf(patch.phone);
       if (patch.isDefault !== undefined) set.isDefault = patch.isDefault;
       if (Object.keys(set).length === 0) throw AppError.validation('Nothing to update');
 
@@ -144,7 +172,7 @@ export class ProfileService {
       await tx.update(shippingAddress).set(set as never).where(eq(shippingAddress.id, id));
       const [row] = await tx.select().from(shippingAddress).where(eq(shippingAddress.id, id)).limit(1);
       if (!row) throw AppError.notFound('Address not found');
-      return row;
+      return addressView(row);
     });
   }
 
@@ -160,8 +188,55 @@ export class ProfileService {
   }
 }
 
+function addressView(row: typeof shippingAddress.$inferSelect) {
+  return {
+    id: row.id,
+    label: row.label,
+    recipient: row.recipient,
+    line1: row.line1,
+    line2: row.line2,
+    city: row.city,
+    region: row.region,
+    country: row.country,
+    postalCode: row.postalCode,
+    phone: row.phone,
+    isDefault: row.isDefault,
+  };
+}
+
 function regionFor(country: string, value: string | null | undefined): string | null {
   const result = normalizeRegion(country, value);
   if ('problem' in result) throw AppError.validation(result.problem);
   return result.region;
+}
+
+function addressText(field: AddressTextField, value: string): string {
+  const { name, max } = ADDRESS_TEXT[field];
+  const text = value.trim().replace(/\s+/g, ' ');
+  if (text === '') throw AppError.validation(`The ${name} is required.`);
+  if (text.length > max) throw AppError.validation(`The ${name} can be at most ${max} characters.`);
+  if (MARKUP_OR_CONTROL.test(value.trim())) {
+    throw AppError.validation(`The ${name} cannot contain < or > or control characters.`);
+  }
+  return text;
+}
+
+function line2Of(value: string | null | undefined): string | null {
+  const line = (value ?? '').trim();
+  if (line.length > ADDRESS_LINE2_MAX) {
+    throw AppError.validation(`The apartment, suite or unit line is at most ${ADDRESS_LINE2_MAX} characters`);
+  }
+  if (MARKUP_OR_CONTROL.test(line)) {
+    throw AppError.validation('The apartment, suite or unit line cannot contain < or > or control characters.');
+  }
+  return line || null;
+}
+
+function phoneOf(value: string | null | undefined): string | null {
+  const phone = (value ?? '').trim();
+  if (!phone) return null;
+  if (!PHONE.test(phone)) {
+    throw AppError.validation('A phone number is 6 to 20 characters of digits, spaces, plus and dashes');
+  }
+  return phone;
 }

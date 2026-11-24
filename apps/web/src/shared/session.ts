@@ -1,4 +1,5 @@
 import { api } from './api';
+import { forgetViewerTier } from './tiers';
 
 export interface SessionProfile {
   id: string;
@@ -11,6 +12,7 @@ export interface SessionProfile {
   fullName: string;
   nameReviewRequired: boolean;
   mfaEnabled: boolean;
+  mfaMethod?: 'totp' | 'email' | null;
   mfaRequired: boolean;
 }
 
@@ -32,4 +34,5 @@ export function loadProfile(): Promise<SessionProfile> {
 
 export function resetProfileRequest(): void {
   inFlight = null;
+  forgetViewerTier();
 }

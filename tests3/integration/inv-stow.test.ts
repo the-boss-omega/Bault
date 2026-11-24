@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, signIn, usernameOf, type Client } from '../../tests/integration/helpers/http';
+import { closeDb, sql } from '../../tests/integration/helpers/db';
+
+afterAll(closeDb);
 
 interface BinRow {
   id: string;
@@ -197,8 +200,12 @@ describe('a card moved to another warehouse', () => {
     const collector = await signIn(SEED.collector);
     const vault = await collector.get('/vault/items');
     expect(vault.status).toBe(200);
-    const row = (vault.body as { id: string; binBarcode: string | null }[]).find((i) => i.id === card.body.id);
-    expect(row?.binBarcode ?? null).toBeNull();
+    expect((vault.body as { id: string }[]).some((i) => i.id === card.body.id)).toBe(true);
+    const [row] = await sql<{ shelf: string | null }>(
+      'select b.id as shelf from item i left join bin b on b.id::text = i.bin_id where i.id = $1',
+      [card.body.id],
+    );
+    expect(row?.shelf ?? null).toBeNull();
   });
 });
 

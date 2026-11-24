@@ -45,7 +45,13 @@ function guard(requiredRoles: Role[]) {
   return new guardModule.MfaEnrollmentGuard(new Reflector(), { requiredRoles });
 }
 
-const person = (role: Role, mfaEnabled: boolean | undefined) => ({ id: 'u', role, status: 'active', mfaEnabled });
+const person = (role: Role, mfaEnabled: boolean | undefined, mfaMethod?: 'totp' | 'email') => ({
+  id: 'u',
+  role,
+  status: 'active',
+  mfaEnabled,
+  mfaMethod,
+});
 
 function refusal(run: () => unknown): { status: number; code: string } | null {
   try {
@@ -74,6 +80,18 @@ describe('the enrolment guard, with staff required to enrol (production)', () =>
 
   it('lets them through once enrolled', () => {
     for (const role of STAFF) expect(guard(STAFF).canActivate(context(person(role, true), handler()))).toBe(true);
+    for (const role of STAFF) expect(guard(STAFF).canActivate(context(person(role, true, 'totp'), handler()))).toBe(true);
+  });
+
+  it('does not count emailed codes: a role that requires two-factor sign-in requires the authenticator app', () => {
+    for (const role of STAFF) {
+      expect(refusal(() => guard(STAFF).canActivate(context(person(role, true, 'email'), handler())))).toEqual({
+        status: 403,
+        code: 'mfa_enrollment_required',
+      });
+      expect(guard(STAFF).canActivate(context(person(role, true, 'email'), handler('exempt')))).toBe(true);
+    }
+    expect(guard(STAFF).canActivate(context(person('user', true, 'email'), handler()))).toBe(true);
   });
 
   it('lets them reach the routes marked for it — enrolment, sign-out, their own profile', () => {
@@ -163,6 +181,15 @@ describe('the second sign-in step', () => {
     expect(notAnAuthRoute({ getHandler: () => step } as never)).toBe(false);
     const login = (AuthController.prototype as unknown as Record<string, () => void>).login!;
     expect(Reflect.getMetadata('THROTTLER:LIMITauth', step!)).toBe(Reflect.getMetadata('THROTTLER:LIMITauth', login));
+  });
+
+  it('asks for a new emailed code on a public route in the same bucket', async () => {
+    const { AuthController } = await import('../../apps/api/src/modules/acc/auth.controller');
+    const { notAnAuthRoute } = await import('../../apps/api/src/shared/throttle/auth-bucket');
+    const resend = (AuthController.prototype as unknown as Record<string, () => void>).resendCode;
+    expect(resend, 'AuthController.resendCode').toBeTypeOf('function');
+    expect(Reflect.getMetadata(publicDecorator.IS_PUBLIC_KEY, resend!)).toBe(true);
+    expect(notAnAuthRoute({ getHandler: () => resend } as never)).toBe(false);
   });
 });
 

@@ -21,6 +21,7 @@ vi.mock('../../apps/web/src/shared/api', () => ({
     }
   },
   apiErrorKey: () => null,
+  onSessionEnded: () => undefined,
 }));
 
 vi.mock('../../apps/web/src/shared/Barcode', () => ({
@@ -37,7 +38,6 @@ const { VerifyEmailPage } = await import('../../apps/web/src/areas/customer/auth
 const { ResetPasswordPage } = await import('../../apps/web/src/areas/customer/auth/ResetPasswordPage');
 const { ApiError } = await import('../../apps/web/src/shared/api');
 const { PriceListPanel } = await import('../../apps/web/src/areas/customer/help/PriceListPanel');
-const { IntakePolicyPanel } = await import('../../apps/web/src/areas/customer/help/IntakePolicyPanel');
 const { AdminConsole } = await import('../../apps/web/src/areas/admin/AdminConsole');
 
 function renderIn(ui: React.ReactElement) {
@@ -62,7 +62,6 @@ const ITEM = {
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
-  localStorage.setItem('bault.locale', 'en');
   window.location.hash = '';
 });
 
@@ -74,9 +73,11 @@ describe('an item is named by its serial and description, never by its class key
       }
       return Promise.resolve([]);
     });
-    renderIn(<ShipmentComposer items={[ITEM]} onError={() => {}} onStatus={() => {}} onCreated={() => {}} />);
+    renderIn(<ShipmentComposer items={[ITEM]} onCreated={() => {}} />);
     const label = await screen.findByRole('checkbox', { name: /Rayquaza ex #97\/97/ });
     expect(label.closest('label')!.textContent).toContain('SN-DR97-0001');
+    // The cards are one group with a name, so a screen reader says what it has entered.
+    expect(label.closest('fieldset')).toHaveAccessibleName('Select items to ship');
     expect(document.body.textContent).not.toContain('trading_card');
   });
 
@@ -118,9 +119,9 @@ describe('the browser tab', () => {
         </I18nProvider>
       </ThemeProvider>,
     );
-    await waitFor(() => expect(document.title).toBe(`${t('support.title', 'en')} · Bault`));
+    await waitFor(() => expect(document.title).toBe(`${t('support.title', 'en')} · Card Embassy`));
     unmount();
-    expect(document.title).toBe('Bault');
+    expect(document.title).toBe('Card Embassy');
   });
 });
 
@@ -153,38 +154,32 @@ describe('every wallet movement says what it is in words', () => {
     return Promise.resolve([]);
   }
 
-  for (const locale of ['en', 'he'] as const) {
-    it(`labels each type and reference in ${locale}`, async () => {
-      localStorage.setItem('bault.locale', locale);
-      window.location.hash = '#/wallet/transactions';
-      get.mockImplementation(walletApi);
-      render(
-        <I18nProvider>
-          <WalletPage />
-        </I18nProvider>,
-      );
-      const table = await screen.findByRole('table');
-      await waitFor(() => expect(table.querySelectorAll('tbody tr').length).toBeGreaterThan(10));
-      const text = table.textContent ?? '';
-      for (const raw of [...LEDGER_TYPES, ...REFERENCE_TYPES].filter((key) => key.includes('_'))) {
-        expect(text, raw).not.toContain(raw.replace(/_/g, ' '));
-      }
-      if (locale === 'he') expect(text).not.toMatch(/escrow|request|deal|shipment|chargeback/i);
-    });
-  }
+  it('labels each type and reference in words', async () => {
+    window.location.hash = '#/wallet/transactions';
+    get.mockImplementation(walletApi);
+    render(
+      <I18nProvider>
+        <WalletPage />
+      </I18nProvider>,
+    );
+    const table = await screen.findByRole('table');
+    await waitFor(() => expect(table.querySelectorAll('tbody tr').length).toBeGreaterThan(10));
+    const text = table.textContent ?? '';
+    for (const raw of [...LEDGER_TYPES, ...REFERENCE_TYPES].filter((key) => key.includes('_'))) {
+      expect(text, raw).not.toContain(raw.replace(/_/g, ' '));
+    }
+  });
 });
 
-describe('a link that no longer works says so in the page’s language', () => {
-  it('on the verify page, in Hebrew', async () => {
-    localStorage.setItem('bault.locale', 'he');
+describe('a link that no longer works says so in the product’s own words', () => {
+  it('on the verify page', async () => {
     post.mockRejectedValue(new ApiError('client', 410, 'Invalid verification link', 'TOKEN_EXPIRED'));
     renderIn(<VerifyEmailPage token="stale-token" />);
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/[֐-׿]/));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/^This link no longer works/));
     expect(document.body.textContent).not.toContain('Invalid verification link');
   });
 
-  it('on the reset page, in Hebrew', async () => {
-    localStorage.setItem('bault.locale', 'he');
+  it('on the reset page', async () => {
     post.mockRejectedValue(new ApiError('client', 410, 'Token is expired or already used', 'TOKEN_EXPIRED'));
     const { container } = renderIn(<ResetPasswordPage token="stale-token" />);
     const [password, confirm] = container.querySelectorAll('input[type="password"]');
@@ -192,7 +187,7 @@ describe('a link that no longer works says so in the page’s language', () => {
     fireEvent.change(password!, { target: { value: 'a-new-password' } });
     fireEvent.change(confirm!, { target: { value: 'a-new-password' } });
     fireEvent.submit(container.querySelector('form')!);
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/[֐-׿]/));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/^This reset link no longer works/));
     expect(document.body.textContent).not.toContain('Token is expired');
   });
 });
@@ -213,18 +208,7 @@ describe('the price list', () => {
     note: 'The rule in force at the moment of a charge is recorded with that charge.',
   };
 
-  it('in Hebrew, names the class in words and explains itself in Hebrew', async () => {
-    localStorage.setItem('bault.locale', 'he');
-    get.mockResolvedValue(LIST);
-    renderIn(<PriceListPanel />);
-    const row = await screen.findByText('Intake: A small collectible');
-    expect(document.body.textContent).not.toContain('small_collectible');
-    expect(document.body.textContent).not.toContain('The rule in force');
-    expect(row.closest('.ltr-run, [dir="ltr"]')).not.toBeNull();
-  });
-
   it('sets money in the UI face, not the code face', async () => {
-    localStorage.setItem('bault.locale', 'en');
     get.mockResolvedValue(LIST);
     renderIn(<PriceListPanel />);
     const price = await screen.findByText('$5.00');
@@ -233,42 +217,16 @@ describe('the price list', () => {
   });
 });
 
-describe('what Bault accepts, on a Hebrew page', () => {
-  const POLICY = {
-    acceptedClasses: [{ key: 'trading_card', label: 'Trading card', oversized: false, lotEligible: true, lotMinSize: 6, typicalWeightGrams: 5 }],
-    refusedCategories: [
-      { key: 'gps_tracker', label: 'GPS tracker', prohibited: true, reason: 'A tracker is a powered radio transmitter.' },
-    ],
-    outcomes: ['destroyed', 'given_away'],
-    lotThreshold: 6,
-    rules: [{ id: 'closed', heading: 'The accepted list is closed', body: 'Intake will not book a class that is not on this list.' }],
-  };
-
-  it('names classes, refusals and outcomes in Hebrew, and keeps the English prose left to right', async () => {
-    localStorage.setItem('bault.locale', 'he');
-    get.mockResolvedValue(POLICY);
-    renderIn(<IntakePolicyPanel />);
-    await screen.findByText('The accepted list is closed');
-    const text = document.body.textContent ?? '';
-    expect(text).not.toMatch(/Trading card|GPS tracker|given away|given_away|destroyed/);
-    const rule = screen.getByText('Intake will not book a class that is not on this list.');
-    expect(rule.closest('[lang="en"]')).not.toBeNull();
-    const reason = screen.getByText(/A tracker is a powered radio transmitter/);
-    expect(reason.closest('.ltr-run')).not.toBeNull();
-  });
-});
-
 describe('the console names roles, account states and item states in words', () => {
   const USERS = [
     { id: 'u2', email: 'hermon@bault.dev', username: 'hermon', firstName: 'Hermon', lastName: 'B', nameReviewRequired: false, role: 'warehouse_operator', status: 'suspended', intakeId: null, mfaEnabled: true },
   ];
 
-  it('in Hebrew, on the users tab', async () => {
-    localStorage.setItem('bault.locale', 'he');
+  it('on the users tab', async () => {
     window.location.hash = '#/admin/users';
     get.mockImplementation(async (path: string) => (path === '/admin/users' ? USERS : []));
     renderIn(<AdminConsole currentUserId="me" />);
-    await screen.findByDisplayValue('Hermon');
+    await screen.findByRole('button', { name: 'Hermon B' });
     const text = document.body.textContent ?? '';
     expect(text).not.toMatch(/warehouse_operator|suspended|pending|closed\b/);
   });

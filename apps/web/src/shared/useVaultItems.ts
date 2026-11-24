@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from './api';
+import { getAllPages } from './paging';
 
 export interface VaultItem {
   id: string;
@@ -8,20 +8,22 @@ export interface VaultItem {
   description: string;
   conditionGrade: string | null;
   lifecycleState: string;
-  barcode: string;
 }
 
 export function useVaultItems(storedOnly = false) {
   const [items, setItems] = useState<VaultItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
     try {
-      const all = await api.get<VaultItem[]>('/vault/items');
+      const all = await getAllPages<VaultItem>('/vault/items');
       setItems(storedOnly ? all.filter((i) => i.lifecycleState === 'stored') : all);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setLoaded(true);
     }
   }, [storedOnly]);
 
@@ -29,5 +31,5 @@ export function useVaultItems(storedOnly = false) {
     void reload();
   }, [reload]);
 
-  return { items, error, reload };
+  return { items, error, loaded, reload };
 }

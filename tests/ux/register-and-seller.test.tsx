@@ -44,16 +44,15 @@ describe('the item sheet’s register', () => {
     lifecycleState: 'stored',
     binBarcode: 'BIN-BBBB2222',
     binZone: 'B',
+    receivedAt: '2026-10-01T10:00:00.000Z',
     isLot: false,
     lotSize: 1,
     oversized: false,
   };
-  const A = { barcode: 'BIN-AAAA1111', zone: 'A' };
-  const B = { barcode: 'BIN-BBBB2222', zone: 'B' };
   const TIMELINE = [
     { at: '2026-10-03T10:00:00.000Z', kind: 'sale', params: { amountMinor: 26_000 } },
-    { at: '2026-10-02T10:00:00.000Z', kind: 'relocate', params: { fromBin: A, toBin: B } },
-    { at: '2026-10-01T10:00:00.000Z', kind: 'intake', params: { fromBin: null, toBin: A, fromState: null, toState: 'stored' } },
+    { at: '2026-10-02T10:00:00.000Z', kind: 'state_change', params: { fromState: 'stored', toState: 'listed' } },
+    { at: '2026-10-01T10:00:00.000Z', kind: 'intake', params: { fromState: null, toState: 'stored' } },
   ];
 
   function vaultApi(path: string) {
@@ -65,37 +64,41 @@ describe('the item sheet’s register', () => {
   }
 
   async function register(): Promise<HTMLElement> {
-    const heading = await screen.findByRole('heading', { name: /item history|היסטוריית פריט/i });
+    const heading = await screen.findByRole('heading', { name: /item history/i });
     const column = heading.parentElement as HTMLElement;
     await waitFor(() => expect(within(column).getAllByRole('listitem').length).toBe(TIMELINE.length));
     return column;
   }
 
-  it('reads in English with dollars and shelf labels, and no id', async () => {
+  it('reads in English with dollars and states, and no id', async () => {
     window.location.hash = '#/vault?item=i1';
     get.mockImplementation(vaultApi);
     renderIn(<VaultPage />);
     const column = await register();
     const text = column.textContent!.replace(/[⁨⁩]/g, '');
     expect(text).toContain('$260.00');
-    expect(text).toContain('BIN-AAAA1111 · A → BIN-BBBB2222 · B');
-    expect(text).toContain('Shelved in BIN-AAAA1111 · A');
+    expect(text).toContain('Stored → Listed');
+    expect(text).toContain('Received');
     expect(text).not.toMatch(UUID);
-    expect(text).not.toMatch(/cents/);
+    expect(text).not.toMatch(/cents|BIN-|shelf|Shelved/i);
   });
 
-  it('reads in Hebrew on a Hebrew page, and the entries are not forced left to right', async () => {
-    localStorage.setItem('bault.locale', 'he');
+  it('leaves warehouse moves and record corrections out of the register', async () => {
     window.location.hash = '#/vault?item=i1';
-    get.mockImplementation(vaultApi);
+    get.mockImplementation((path: string) => {
+      if (path.endsWith('/timeline')) {
+        return Promise.resolve([
+          ...TIMELINE,
+          { at: '2026-10-02T11:00:00.000Z', kind: 'relocate', params: {} },
+          { at: '2026-10-02T12:00:00.000Z', kind: 'bin_transfer', params: {} },
+          { at: '2026-10-02T13:00:00.000Z', kind: 'correction', params: {} },
+        ]);
+      }
+      return vaultApi(path);
+    });
     renderIn(<VaultPage />);
     const column = await register();
-    const text = column.textContent!.replace(/[⁨⁩]/g, '');
-    expect(text).toContain('BIN-AAAA1111 · A ← BIN-BBBB2222 · B');
-    expect(text).not.toMatch(/Shelved|Moved|recorded|cents/);
-    for (const entry of column.querySelectorAll('.register-entry')) {
-      expect(entry.classList.contains('ltr-run')).toBe(false);
-    }
+    expect(column.textContent).not.toMatch(/Moved shelf|Corrected/);
   });
 
   it('says a frozen card is frozen, without the machine’s note as its reason', async () => {

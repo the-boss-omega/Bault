@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Headers, Param, Post, Query, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, Max, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import type { Request } from 'express';
+import { CRYPTO_SIGNATURE_HEADER } from '@bault/adapters';
 import { Public } from '../acc/public.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
@@ -11,6 +13,9 @@ import { WithdrawalService } from './withdrawal.service';
 import { WalletRequestService } from './wallet-request.service';
 import { CheckoutService } from './checkout.service';
 import { ChargebackService } from './chargeback.service';
+import { PayPalCheckoutService } from './paypal-checkout.service';
+import { CryptoCheckoutService } from './crypto-checkout.service';
+import { MAX_DESTINATION_LENGTH } from './wallet-request.rules';
 import { Roles } from '../sec/roles.decorator';
 
 class TopupDto {
@@ -18,8 +23,18 @@ class TopupDto {
 }
 class WithdrawRequestDto {
   @IsInt() @IsPositive() amountMinor!: number;
-  @IsString() destinationAccount!: string;
+  @IsString() @MaxLength(MAX_DESTINATION_LENGTH) destinationAccount!: string;
   @IsOptional() @IsString() @MaxLength(140) beneficiaryName?: string;
+}
+
+export const CASH_OUT_QUOTE_MAX_MINOR = 1_000_000_000;
+
+class CashOutQuoteQuery {
+  @Type(() => Number)
+  @IsInt({ message: 'amountMinor has to be a whole number of cents.' })
+  @Min(1, { message: 'amountMinor has to be at least 1 cent.' })
+  @Max(CASH_OUT_QUOTE_MAX_MINOR, { message: 'amountMinor is too large to quote.' })
+  amountMinor!: number;
 }
 class WithdrawConfirmDto {
   @IsString() confirmationToken!: string;
@@ -30,6 +45,17 @@ class CheckoutDto {
   @IsString() route!: string;
   @IsString() @MaxLength(120) idempotencyKey!: string;
   @IsOptional() @IsString() @MaxLength(200) paymentMethodToken?: string;
+}
+
+class PayPalCheckoutDto {
+  @IsInt() @Min(1) amountMinor!: number;
+  @IsString() route!: string;
+  @IsString() @MaxLength(120) idempotencyKey!: string;
+}
+
+class CryptoCheckoutDto {
+  @IsInt() @Min(1) amountMinor!: number;
+  @IsString() @MaxLength(120) idempotencyKey!: string;
 }
 
 class ChargebackDto {
@@ -47,6 +73,8 @@ export class PayController {
     private readonly withdrawals: WithdrawalService,
     private readonly requests: WalletRequestService,
     private readonly checkout: CheckoutService,
+    private readonly paypalCheckout: PayPalCheckoutService,
+    private readonly cryptoCheckout: CryptoCheckoutService,
     private readonly chargebacks: ChargebackService,
   ) {}
 
@@ -60,21 +88,60 @@ export class PayController {
     return this.checkout.checkout(user.id, dto);
   }
 
+  @Post('finance/checkout/paypal')
+  startPayPalCheckout(@CurrentUser() user: AuthUser, @Body() dto: PayPalCheckoutDto) {
+    return this.paypalCheckout.start(user.id, dto);
+  }
+
+  @Post('finance/checkout/paypal/:paymentId/capture')
+  capturePayPalCheckout(@CurrentUser() user: AuthUser, @Param('paymentId') paymentId: string) {
+    return this.paypalCheckout.capture(user.id, paymentId);
+  }
+
+  @Post('finance/checkout/paypal/:paymentId/cancel')
+  cancelPayPalCheckout(@CurrentUser() user: AuthUser, @Param('paymentId') paymentId: string) {
+    return this.paypalCheckout.cancel(user.id, paymentId);
+  }
+
+  @Post('finance/checkout/crypto')
+  startCryptoCheckout(@CurrentUser() user: AuthUser, @Body() dto: CryptoCheckoutDto) {
+    return this.cryptoCheckout.start(user.id, dto);
+  }
+
+  @Get('finance/checkout/crypto/:paymentId')
+  describeCryptoCheckout(@CurrentUser() user: AuthUser, @Param('paymentId') paymentId: string) {
+    return this.cryptoCheckout.describe(user.id, paymentId);
+  }
+
+  @Post('finance/checkout/crypto/:paymentId/cancel')
+  cancelCryptoCheckout(@CurrentUser() user: AuthUser, @Param('paymentId') paymentId: string) {
+    return this.cryptoCheckout.cancel(user.id, paymentId);
+  }
+
   @Get('finance/payments')
   myPayments(@CurrentUser() user: AuthUser) {
     return this.checkout.listMine(user.id);
   }
 
   @Get('finance/cash-out-quote')
-  cashOutQuote(@Query('amountMinor') amountMinor: string) {
-    const amount = Number.parseInt(amountMinor ?? '0', 10);
-    return this.wallet.cashOutQuote(Number.isFinite(amount) ? amount : 0);
+  cashOutQuote(@Query() q: CashOutQuoteQuery) {
+    return this.wallet.cashOutQuote(q.amountMinor);
   }
 
   @Roles('admin')
   @Get('finance/chargebacks/reversible')
   reversible() {
     return this.chargebacks.reversible();
+  }
+
+  @Roles('admin')
+  @Post('finance/chargebacks/wallet-requests/:requestId')
+  recordCashInRecall(
+    @CurrentUser() user: AuthUser,
+    @Param('requestId') requestId: string,
+    @Body() dto: ChargebackDto,
+  ) {
+    return this.chargebacks.recordCashInRecall(user.id, requestId, dto);
   }
 
   @Roles('admin')
@@ -104,13 +171,11 @@ export class PayController {
 
   @Post('finance/wallet/topups')
   async topup(@CurrentUser() user: AuthUser, @Body() dto: TopupDto) {
-    const created = await this.requests.submit(user.id, {
-      type: 'cash_in',
-      amountMinor: dto.amountMinor,
-      currency: 'USD',
-      fundingSource: 'bank_transfer',
-      notes: 'Raised through the legacy /finance/wallet/topups endpoint.',
-    });
+    const created = await this.requests.submit(
+      user.id,
+      { type: 'cash_in', amountMinor: dto.amountMinor, currency: 'USD', fundingSource: 'bank_transfer' },
+      'legacy POST /finance/wallet/topups',
+    );
     return {
       status: 'pending_approval',
       requestId: created.id,
@@ -122,14 +187,11 @@ export class PayController {
   @Post('finance/withdrawals')
   async requestWithdrawal(@CurrentUser() user: AuthUser, @Body() dto: WithdrawRequestDto) {
     const beneficiaryName = dto.beneficiaryName?.trim() || (await this.requests.accountHolderName(user.id));
-    const created = await this.requests.submit(user.id, {
-      type: 'cash_out',
-      amountMinor: dto.amountMinor,
-      currency: 'USD',
-      destinationAccount: dto.destinationAccount,
-      beneficiaryName,
-      notes: 'Raised through the legacy /finance/withdrawals endpoint.',
-    });
+    const created = await this.requests.submit(
+      user.id,
+      { type: 'cash_out', amountMinor: dto.amountMinor, currency: 'USD', destinationAccount: dto.destinationAccount, beneficiaryName },
+      'legacy POST /finance/withdrawals',
+    );
     return {
       status: 'pending_approval',
       requestId: created.id,
@@ -150,6 +212,13 @@ export class PayController {
       rawBody: JSON.stringify(req.body ?? {}),
       headers: req.headers as Record<string, string | undefined>,
     });
+    return { received: true, outcome };
+  }
+
+  @Public()
+  @Post('webhooks/crypto')
+  async cryptoWebhook(@Req() req: Request & { rawBody?: Buffer }, @Headers(CRYPTO_SIGNATURE_HEADER) signature?: string) {
+    const { outcome } = await this.cryptoCheckout.handleWebhook(req.rawBody ? req.rawBody.toString('utf8') : null, signature);
     return { received: true, outcome };
   }
 }

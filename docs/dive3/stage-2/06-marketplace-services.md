@@ -1,209 +1,189 @@
 ## 2.6 The marketplace, escrow, owner services and notifications
 
-Cards and money move in `mkt`, `esc`, `dis` and `not`. The usual shape, in one transaction: claim the idempotency key or consume the confirmation token; lock rows `FOR UPDATE`, then wallet, then membership period (`LedgerService.lockWallet`, T8.3, T15.2); write ledger, custody, `transaction` and outbox rows. Repeats are safe: the key replays, the token works once, or a status re-read under the row lock answers 409. Entries give what differs. Read in order; `purchase.service.ts` is the model. Budget: 35 minutes.
+This section covers how cards and money move between people, in the marketplace module `mkt`, the escrow module `esc` and the owner services module `dis`. The notifications module `not` tells people what happened. Most write paths share one shape. A guard against a repeated request comes first, either an idempotency key claimed inside the transaction or a confirmation token consumed just before it, as T6.5 and T6.6 explain. The transaction then locks the business rows `FOR UPDATE`, then the wallet with `LedgerService.lockWallet`, then the membership period, as T8.3 and T15.2 describe. It writes ledger, custody, `transaction` and outbox rows. A repeat is safe because the key replays the first answer, the token works once, or a status re-read under the row lock answers 409. Each entry gives what differs. Read in order, with `purchase.service.ts` as the model. The section takes about 35 minutes.
 
-#### `apps/api/src/modules/mkt/mkt.schema.ts`, `apps/api/src/modules/mkt/house.schema.ts` · 1.5 min · T11, T5.4
-Marketplace and house-store tables.
-- `listing` — an item for sale (`listing_status`: `active`, `sold`, `removed`); only the item's state (`stored` to `listed`, under its row lock) prevents a second.
-- `transaction` — each sale, swap, transfer or consignment (`transaction_type`); `frozenPricing` freezes rule and waiver against repricing; `price` null for a gift.
-- `offer` — `proposedBy` (who set the price) drives the accept rule; `parentOfferId` chains counters.
-- `swap_proposal` — swaps and gifts (empty `requestedItemIds`); `proposerApproved` starts true.
-- `house_listing` — a product with `stock` copies, not an item; `house_order` — a sold copy, `awaiting_stow` then `stowed`.
+#### `apps/api/src/modules/mkt/mkt.schema.ts`, `apps/api/src/modules/mkt/house.schema.ts`
 
-**Watch:** only migrations hold `offer_one_open_per_buyer` (partial unique, `0020_an_offer_knows_who_made_it.sql`), `CHECK ("stock" >= 0)` and the code indexes (`0026_bault_sells_its_own_cards.sql`). `transaction.code` has no unique index.
+About 1.5 minutes. It builds on T11 and T5.4.
 
-#### `apps/api/src/modules/mkt/listing.service.ts` · 1.5 min · T11.1, T9.4, T15.1
-Listings; called by `MktController`.
-- `create` — locks the item (seller's, `stored`, not on hold), `assertNotCommitted`, sets `listed`, inserts; a retry finds `listed`, 409.
-- `assertNotCommitted` — refuses a card in an open escrow deal (`OPEN_ESCROW_STATUSES`), shipment (`ShipmentService.OPEN_STATUSES`), buyout, consignment or donation (`OWNERSHIP_CHANGING_SERVICES`), under the item lock so it holds at insert.
-- `requestRemove`, `confirmRemove` — two-step (`listing_removal`); confirm locks the listing, sets `removed`, `closeOpenOffers`, item back to `stored`.
-- `reprice` — checks status, then updates unlocked and unconditionally.
+These files define listings, sales, offers, swaps and the house store. A `listing` is an item for sale, with a `listing_status` of `active`, `sold` or `removed`. Only the item's state prevents a second listing of it, because listing moves the item from `stored` to `listed` under its row lock. A `transaction` records each sale, swap, transfer or consignment by `transaction_type`. `frozenPricing` freezes the pricing rule and any waiver, so a later repricing cannot change the record. `price` is null for a gift.
 
-**Watch:** a `reprice` racing a sale can rewrite a `sold` listing's `askingPrice`; the sale charged what it read under the lock.
+An `offer` records in `proposedBy` who named the price, and that decides who may accept it. `parentOfferId` links a counter-offer to the offer it answers. A `swap_proposal` holds swaps and gifts, and a gift has an empty `requestedItemIds`. `proposerApproved` starts true, because proposing counts as approving.
 
-#### `apps/api/src/modules/mkt/purchase.service.ts` · 3 min · T11.3, T8.3, T15.3, T6.5
-The direct sale, also behind accepted offers; called by `MktController.purchase` and `OfferService.accept`.
-- `purchase` — in order:
-  1. `IdempotencyService.claim` on `purchase:<listingId>`; a replay returns the first result, `replayed: true` (SPA: "already bought").
-  2. Listing `FOR UPDATE`: `active`, not the buyer's (`SELF_DEALING_FORBIDDEN`); a second buyer waits, then gets `ITEM_NO_LONGER_AVAILABLE`.
-  3. Item `FOR UPDATE`: not on hold.
-  4. Fee: `PricingService.price('marketplace_fee', …)`, snapshotted.
-  5. Both wallets (`LedgerService.lockWallet`) in user-id order; the buyer must cover it (`INSUFFICIENT_BALANCE`).
-  6. Seller's period: `MembershipService.waive`, which only lowers the fee.
-  7. Ledger: buyer `purchase` debit, seller `sale_credit`, seller `fee` debit if any.
-  8. `CustodyService.transferOwnership` expecting `{ ownerId: l.sellerId, fromStates: ['listed'] }`; `stored` under the buyer.
-  9. Listing `sold`, `inSale`, `closeOpenOffers`, `transaction` (waiver in `frozenPricing`), `item_sold`, `IdempotencyService.complete`.
-- `priceOverride`, `inSale` — an accepted offer's price and acceptance, inside the sale: both commit or fail together.
+A `house_listing` is a product with `stock` copies, not an item. A `house_order` is one sold copy, first `awaiting_stow` and then `stowed`. Some rules live only in migrations. The partial unique index `offer_one_open_per_buyer`, which allows one pending offer per buyer per listing, is in `0020_an_offer_knows_who_made_it.sql`. `CHECK ("stock" >= 0)` and the unique indexes on the two `code` columns are in `0026_bault_sells_its_own_cards.sql`. `transaction.code` has no unique index.
 
-**Watch:** without an `Idempotency-Key` header the controller uses `purchase-<buyerId>-<listingId>`, safe only as a listing sells once. Wallets precede the seller's period, as in membership payments; reversed, they could deadlock.
+#### `apps/api/src/modules/mkt/listing.service.ts`
 
-#### `apps/api/src/modules/mkt/offer.service.ts`, `apps/api/src/modules/mkt/open-offers.ts` · 2 min · T11.2, T15.3, T15.4
-Offers and counters; who named a price may not accept it (`assertNotProposer`).
-- `submit` — plain reads (active, not the buyer's, at most `askingPrice`, funds via `assertCanCover`, none open via `assertNoOpenOffer`), then the listing `FOR SHARE` (waits behind a sale or removal), a `pending` insert (`proposedBy: 'buyer'`), `offer_received`.
-- `accept` — `loadParticipating`, `assertNotProposer`, `assertCanCover`, then `PurchaseService.purchase` at the offer's amount; its `inSale` callback sets `accepted` only if still `pending`, so a prior withdrawal or counter rolls the sale back.
-- `reject` — either side; conditional `pending` to `rejected`; `by` names the side.
-- `counter` — either side; conditional to `countered`, a `pending` child (`proposedBy` the counterer), `offer_countered` with explicit `recipientIds`.
-- `closeOpenOffers` — a listing's `pending` offers to `rejected`.
+About 1.5 minutes. It builds on T11.1, T9.4 and T15.1.
 
-**Watch:**
-- A retried accept gets 409 ("already been accepted"), not a replay: `loadParticipating` precedes the key claim.
-- Parallel submits by one buyer both pass `assertNoOpenOffer`; the second hits `offer_one_open_per_buyer`, a 500 (Stage 3).
-- Lapsed offers are not notified (Stage 3).
+`ListingService` puts a card up for sale and takes it down again, for `MktController`. `create` first locks the item. The item must belong to the seller, be `stored` and have no hold. `assertItemsUncommitted`, from `apps/api/src/shared/commitments/item-commitments.ts`, then refuses a card that another flow already holds. That means an open escrow deal from `OPEN_ESCROW_STATUSES`, an open shipment from `OPEN_SHIPMENT_STATUSES`, an open request of a type in `COMMITTING_SERVICES`, which are buyout, consignment, donation, grading, slab crack-out and lot split, an active listing, or a pending swap or gift. The 409 `item_committed` names where the card is, in a sentence such as "This card is already committed to a grading request (SVC-…), so it cannot be listed." Every path that commits a card calls the same check, under its own lock on the item: shipment create, edit, merge, pay and settle, hand delivery and its accepted quote, show pickup, the donation, cull, buyout, consignment, deslab, lot split and grading requests and their confirms, the grading send, the buyout accept and the consignment sale, swaps and gifts, and escrow's `receiveItem`. The check runs under the item lock, so nothing can commit the card between the check and the insert. `create` then sets the item to `listed` and inserts the listing. If the same request arrives twice, the second one finds the item already `listed` and gets a 409, so a card is never listed twice.
 
-#### `apps/api/src/modules/mkt/trade.service.ts` · 2 min · T11.4, T9.4, T15.2
-Swaps and gifts: a `swap_proposal` needing two approvals.
-- `proposeSwap` — `assertOwnedStoredUnheld` on both sides (plain reads), insert, `swap_proposed`.
-- `initiateTransfer`, `confirmTransfer` — two-step (`transfer`) by the sender, then a proposal requesting nothing.
-- `approve` — the responder's approval executes (`proposerApproved` starts true): locks the proposal (`pending`), then all items via `CustodyService.lockItems` (id order); `transferOwnership` per item against the proposal's owner; charges `service` via `BILLING_PORT` to the proposer (and responder on a swap); `transaction`, `executed`, `swap_completed` or `transfer_completed` to both. Retry: `executed`, 409.
-- `reject` — conditional `pending` to `rejected`.
+`reprice` changes the asking price. It checks the listing's status, but it takes no lock and writes without a condition. So a `reprice` that races a sale can change the `askingPrice` of a listing that is already `sold`. The buyer is still charged the price the sale read under its lock, so only the stored figure is wrong. A `reprice` below a pending offer leaves the offer open, and `purchase` then refuses to accept it, as the next entry says.
 
-**Watch:**
-- `confirmTransfer` emits nothing, so a gift's recipient is never told.
-- The charges write the proposer's period, then the responder's: two members whose tier covers `service`, approving opposite swaps at once, can deadlock; Postgres aborts one.
+`requestRemove` and `confirmRemove` take a listing down in two steps with the `listing_removal` token. `confirmRemove` locks the listing, sets `removed`, rejects its pending offers with `closeOpenOffers` and returns the item to `stored`.
 
-#### `apps/api/src/modules/mkt/house-store.service.ts` · 2 min · T11.6, T9.3, T15.3
-Bault selling its own stock.
-- `purchase` — key `house-purchase:<listingId>`, the `house_listing` row (`active`, `stock > 0`), the buyer's wallet (`LedgerService.balanceOf` with `tx`); `CustodyService.createWithIntake` mints the item (`makeItemSerial`, `makeItemBarcode`, `received`, no bin); `transaction`, buyer debit, platform credit, relative `stock` decrement, `house_order`; no intake fee.
-- `update` — reprice, restock, take off sale; a stock change needs `expectedStock`; a mismatch under the row lock is a 409 with the figure.
-- `listForSale`, `listAll`, `create` — public shelf, admin catalogue.
-- `queue`, `stowOrder` — locks the order (`awaiting_stow`); `relocate` to a named (`StowService.resolveBin`) or suggested (`StowService.suggest`) bin; `received` to `stored`; photos via `MediaService.assertAttachable` (`modules/med`); `stowed`, `item_received`.
+#### `apps/api/src/modules/mkt/purchase.service.ts`
 
-**Watch:** without an `Idempotency-Key` header `purchase` uses a random key, so a headerless retry buys again, deliberately: a buyer-and-product key would answer a second copy with the first receipt. `HouseStorePanel.tsx` sends one. `PLATFORM_EMAIL` is the platform account's fixed address.
+About 3 minutes. It builds on T11.3, T8.3, T15.3 and T6.5.
 
-#### `apps/api/src/modules/mkt/browse.service.ts`, `market-read.service.ts`, `mkt.controller.ts`, `offer.controller.ts`, `trade.controller.ts`, `house-store.controller.ts`, `mkt.module.ts` · 2 min · T11, T6.2
-Reads (no locks or writes) and the `/marketplace` routes and DTOs.
-- `BrowseService.list` — active listings with item and the seller's username (`sellerUsername`, a left join on `user_account`); SQL filters and sort, as `clampLimit` caps at 200 rows; a signed URL per newest image.
-- `BrowseService.detail` — one listing for anybody, safe fields only: the seller's username, never an account id, bin, barcode or storage key (`mkt-listing-detail.test.ts` lists them); sold and removed ones still served (decision in Stage 3).
-- `MarketReadService` — `counterparty` (username to id, active only), `tradableItem` (another's item by serial, the privacy control), `myListings`, `myOffers` (`yourTurn`), `mySwaps` (`awaitingMe`), public `storefront` (active only).
-- `MktController` — public `listings`, `listings/:id`, `sellers/:username`; `listings/mine` precedes `listings/:id`, so `mine` is no id.
-- `OfferController.respond` — `action` `accept`, `reject` or `counter`; accept's default key is `offer-<offerId>`.
-- `TradeController` — swaps and transfers by username.
-- `HouseStoreController` — `/marketplace/house`: public shelf; manage, create, update by `admin`; queue and stow by `warehouse_operator` or `admin`.
+`purchase` is the direct sale of a listed card. `MktController.purchase` calls it, and so does `OfferService.accept`. It runs in one transaction, in this order. `IdempotencyService.claim` on `purchase:<listingId>` comes first. A replay returns the first result with `replayed: true`, which the web app shows as already bought. Next the listing is locked `FOR UPDATE` and must be `active`. A buyer's own listing fails with `SELF_DEALING_FORBIDDEN`. If two buyers race, the second waits on this lock, then finds the listing sold and gets `ITEM_NO_LONGER_AVAILABLE`. The item is locked next and must not be on hold.
 
-#### `apps/api/src/modules/esc/escrow.schema.ts`, `apps/api/src/modules/esc/escrow-terms.ts` · 1.5 min · T11.5, T5.6
-Private deals, Bault in the middle.
-- `escrow_deal` — `escrow_status`: `proposed`, `agreed`, `funded`, `inspecting`, `awaiting_release`, `settled`, else `returned` or `cancelled`. The raiser (`raisedBy`, an account) pays the fee; the other side is an account (`counterpartyUserId`) or name and e-mail. `feeMinor` frozen at raise. `fundingSource`: `wallet` (ledger debit) or `external` (operator attestation, no ledger row). `*ReleaseAttestedBy`: an operator recorded an external party's release.
-- `escrow_event` — append-only trail (`apps/api/src/db/sql/0001_append_only.sql`).
-- `escrowFeeMinor` — 1% (`ESCROW_FEE_BPS`), min `ESCROW_MINIMUM_FEE_MINOR` ($25); deals from `ESCROW_MINIMUM_VALUE_MINOR` ($500).
-- `checkDeal` — pre-creation checks: value, description, other side named once, no `buyer_vault` for an external buyer.
+`PricingService.price` prices the `marketplace_fee` at the seller's tier, and its snapshot, with the tier fields, is kept. Both wallets are locked with `LedgerService.lockWallet`, in user-id order. The buyer must cover the price, or the sale fails with `INSUFFICIENT_BALANCE`. `MembershipService.waive` then writes the seller's membership period, and it can only lower the fee. The wallets come before the seller's period, as in membership payments, because the reverse order could deadlock.
 
-#### `apps/api/src/modules/esc/escrow.service.ts`, `esc.controller.ts`, `esc.module.ts` · 3 min · T11.5, T8.3, T12.3, T15.4
-Each step re-reads the deal via `lockDeal` (`FOR UPDATE`, expected statuses): a race's loser, or a retry, gets 409.
-- `raise` — resolves the username, `checkDeal`, freezes the fee, `raised` event; `escrow_proposed` only to an account.
-- `agree` — the other side; staff record it for an external party (`onBehalfOf`).
-- `fund` — wallet buyer: deal, wallet (`balanceOf` with `tx`), `escrow_hold` debit, `funded`, `escrow_funded`. External buyer: staff, with a payment reference.
-- `receiveItem` — staff; deal, then item `FOR UPDATE`: `stored`, not on hold, the seller's (if an account), in no other deal at `inspecting` or `awaiting_release`; the event records `ownerId`.
-- `inspect` — staff; `inspectionMatches`, notes, `awaiting_release`, `escrow_inspected`.
-- `release` — each side, or staff for the external one; the second runs `settle` in the same locked transaction, paying the seller once.
-- `settle` — in order: for an external buyer with `ship_to_buyer`, `assertOnItsWayToBuyer` (a seller's shipment with the card, `picking` or later); seller `escrow_release` credit; `MembershipService.waive('escrow_fee', …)` on the raiser's period; `charge` row and `fee` debit for the rest; `transferOwnership` to the buyer against the seller (external seller: owner from `receivedFrom`); `settled`, `escrow_settled`.
-- `returnDeal` — `funded` to `awaiting_release`; `escrow_refund` credit if wallet-funded; no fee.
-- `cancel` — only `proposed` or `agreed`, so no hold is stranded.
-- `heldFor` — totals open wallet holds, already out of the balance.
-- `EscController` — `/escrow`: `queue`, `receive-item`, `inspect` need `warehouse_operator` or `admin`, the rest a session; `EscrowService.loadFor` answers 404 to non-parties (staff excepted), hiding the deal.
+The ledger gets a `purchase` debit for the buyer, a `sale_credit` for the seller, and a `fee` debit for the seller if any fee remains. `CustodyService.transferOwnership` moves the item, expecting `{ ownerId: l.sellerId, fromStates: ['listed'] }`, and the item becomes `stored` under the buyer. The listing becomes `sold`, `inSale` runs, and `closeOpenOffers` rejects the other pending offers. The `transaction` row keeps any waiver in `frozenPricing`. `item_sold` is emitted, and `IdempotencyService.complete` stores the result.
 
-**Watch:**
-- `settle` writes the raiser's period without a wallet lock, then locks the item, breaking the lock order (Stage 3).
-- Staff may `fund` from a wallet buyer's money (a decision in Stage 3).
-- `receiveItem` neither holds the card nor changes its state; only `ListingService` refuses it. A swap, gift or donation meanwhile fails `settle`'s ownership check; the deal can only be returned.
+`priceOverride` and `inSale` let an accepted offer set the price and mark itself accepted inside the sale, so both commit or fail together. A `priceOverride` above the `askingPrice` read under the listing lock is refused with a 409, so a buyer never pays more than the buy-now price. `inSale` is handed the item's description for its notice. Without an `Idempotency-Key` header, the controller uses the key `purchase-<buyerId>-<listingId>`. That is safe only because a listing sells once. The web app sends no header, so it relies on this key.
 
-#### `apps/api/src/modules/dis/dis.schema.ts`, `apps/api/src/modules/dis/service.service.ts` · 2 min · T10.1, T8.4, T15.1
-One `service_request` table: `type` (`service_request_type`), `typeFields` (per-type data, with `stage`), `fulfillment` (closing form); status `requested`, `in_progress` (operator accepted), `completed` or `cancelled`.
-- `create` — in the caller's transaction: `WalletService.assertNotBlocked` (plain read; negative balance refuses), `assertNotAlreadyOpen` (one open per type, item, requester, unless `allowDuplicate`), then `BillingService.charge` (`actionType: 'service'`, optional `feeActionType`) unless `free`: billed at raise.
-- `accept`, `deny` — via `transition`: locks the request, moves only from `requested`.
-- `get` — with `tx`, `FOR UPDATE`; every completion starts here.
-- `assertAccepted` — completion needs `in_progress`.
-- `completeWithFulfillment` — refuses a required field missing, blank, zero or `false`, and a `completed` or `cancelled` request, so no credit or transfer repeats.
-- `setStatus` — locks, merges `typeFields`; checks no status.
-- `platformAccountId` — the custodian (`platform@bault.dev`) of donated, consigned, bought-out cards.
+#### `apps/api/src/modules/mkt/offer.service.ts`, `apps/api/src/modules/mkt/open-offers.ts`
 
-**Watch:**
-- `deny` keeps the creation fee.
-- `assertNotAlreadyOpen` is a plain read, sound only under the caller's item lock.
-- `DisController.get` (`GET /services/requests/:id`) checks no role or requester: anyone signed in with the id reads it.
+About 2 minutes. It builds on T11.2, T15.3 and T15.4.
 
-#### `apps/api/src/modules/dis/grading.service.ts`, `grading-tiers.ts`, `grading-submission.schema.ts` · 2 min · T10.2, T9.4
-A batched pipeline.
-- `GRADING_TIERS` — five tiers, `maxDeclaredMinor` and turnaround each; only `psa_walkthrough` has `requiresApproval`.
-- `checkTier` — refuses a value over the cap, or a walkthrough under `WALKTHROUGH_THRESHOLD_MINOR`. `tierFeeAction` — `grading_fee:<key>`.
-- `tiers` — prices via `PricingService.tryPrice`; `null` without a rule.
-- `request` — locks the item (owner's, `stored`, not on hold); `ServiceRequestService.create` at the tier's fee action; `approvalState` `pending` or `not_required`.
-- `approve` — admin; locks the request; refusal cancels.
-- `openSubmission`, `readyFor`, `addToSubmission` — the `grading_submission` batch (`open`, `shipped`, `returned`); adding (accepted requests only) locks it, then the request.
-- `shipSubmission` — locks the submission; each `in_progress` member goes `at_grader` (custody event, `grading_shipped`).
-- `complete` — locks request, then item; writes `conditionGrade` and `item_change_history`; back to `stored` only from `at_grader`.
-- `closeSubmission` — only when no member is open.
+These files handle offers and counter-offers. Whoever named a price may not accept it, and `assertNotProposer` enforces that. `submit` starts with plain reads. The listing must be active and not the buyer's, and the amount at most `askingPrice`. `assertCanCover` checks the buyer's funds, and `assertNoOpenOffer` refuses a second open offer from the same buyer. `submit` then reads the listing `FOR SHARE`, which waits behind a sale or removal in progress. That transaction, `createOffer`, inserts a `pending` offer with `proposedBy: 'buyer'`, emits `offer_received` to the seller and answers with `offerView`, which leaves out the buyer and parent offer ids. `assertNoOpenOffer` runs outside it, so two parallel offers can both pass; the partial unique index `offer_one_open_per_buyer` then refuses the second insert, and `submit` catches that violation around the whole transaction, matched on the constraint name, and answers the same 409.
 
-**Watch:** a refused approval cancels without a refund.
+`accept` runs `loadParticipating`, `assertNotProposer` and `assertCanCover`, then calls `PurchaseService.purchase` at the offer's amount. Its `inSale` callback sets the offer to `accepted` only while the offer is still `pending`. So if the offer was withdrawn or countered meanwhile, the whole sale rolls back. When the seller accepts, the callback also emits `offer_accepted` to the buyer, who would otherwise be charged without a word, since `item_sold` goes to the seller. `reject` works for either side, and a buyer uses it to withdraw. It moves `pending` to `rejected` with a conditional UPDATE, names the side in `by` and emits `offer_rejected` to the other side. `counter` also works for either side, and neither side may counter above the `askingPrice`. Its transaction first reads the listing `FOR SHARE`, as `createOffer` does, and refuses a listing that is no longer `active` or whose price has dropped under the counter. That lock orders a counter behind a sale in progress, and a sale behind a counter, so `closeOpenOffers` always sees the new child, as `tests/concurrency/counter-during-sale.test.ts` checks. It then moves the offer to `countered` with a conditional UPDATE and inserts a `pending` child with `proposedBy` set to the side that countered. It emits `offer_countered` with explicit `recipientIds` and answers with `offerView`. `closeOpenOffers` rejects a listing's `pending` offers.
 
-#### `apps/api/src/modules/dis/photography.service.ts`, `apps/api/src/modules/dis/media.service.ts` · 1 min · T10.3
-Media or a report on an item; this `MediaService` is not `modules/med/media.service.ts`.
-- `PhotographyService.complete` — locks the request, adds a `professional` `item_image` at the next version, closes.
-- `MediaService.requestVideo`, `completeVideo` — the same, type `video`, fee action `service_fee:video_review`.
-- `MediaService.requestInspection`, `completeInspection` — areas from `INSPECTION_AREAS`, each graded `clean`, `minor` or `notable`; fee action `service_fee:condition_inspection`.
+A retried accept gets a 409 saying the offer was already accepted, not a replay. That is because `loadParticipating` checks the offer's status before the key is claimed. Offers rejected by `closeOpenOffers` send no notification, so those buyers are not told. Stage 3 covers the missing notification.
 
-**Watch:** unlocked item reads let two parallel requests both pass the duplicate check and pay. The completion `objectKey` gets a shape check (`IsObjectKey`), no `assertAttachable`.
+#### `apps/api/src/modules/mkt/trade.service.ts`
 
-#### `apps/api/src/modules/dis/disposal-services.service.ts`, `apps/api/src/modules/dis/donation.service.ts` · 2 min · T10.4, T10.7, T9.7, T6.6
-Irreversible, two steps: checks and `ConfirmationService.issue`, then `consume` and the work. A reused token is refused (`AppError.tokenExpired`); `consume` precedes the work's transaction, so a failed confirm restarts.
-- `confirmDeslab` — `CustodyService.lockExpecting` on the item (owner's, `stored`, not on hold), re-checks the grade, raises a request billed at `service_fee:deslab`.
-- `completeDeslab` — locks request, then item (still the requester's); `conditionGrade` becomes `conditionAfter`, recorded.
-- `requestCull`, `confirmCull` — remove commons, free, within `CULL_WINDOW_DAYS` of intake. Confirm: request, `lockItems` (id order), `lockExpecting` each, then donate (platform, `donated`) or discard (`discarded`); `commons_removed`.
-- `DonationService.confirm` — the billed request first (its charge can write the donor's period), then `transferOwnership` to the platform (item locked, donor expected); `donated`, a `transfer` `transaction` with null price, `item_donated`.
+About 2 minutes. It builds on T11.4, T9.4 and T15.2.
 
-**Watch:** a card sold after its deslab was accepted makes `completeDeslab` refuse; the fee stays charged, the request open (Stage 3).
+This file handles swaps and gifts between collectors. Each is a `swap_proposal` that needs two approvals. `proposeSwap` checks both sides' items with `assertTradable`, a plain read, and with `assertItemsUncommitted`, so a card on a shipment, under a service or in another pending swap cannot be offered, then inserts the proposal and emits `swap_proposed`. The refusals of `assertTradable` name the card by description or serial and say whose it is not, never a raw id. `TradeController` answers a proposal with the `mySwaps` view of it, so the proposer sees usernames, not account ids. `initiateTransfer` and `confirmTransfer` make a gift in two steps with the `transfer` token, and both run the same two checks. `confirmTransfer` creates a proposal that requests nothing, and it emits nothing, so the recipient is never told.
 
-#### `apps/api/src/modules/dis/consignment.service.ts`, `consignment-channels.ts`, `consignment-event.schema.ts` · 2 min · T10.5, T10.7, T15.4
-Consignment, plus the staff warehouse transfer.
-- `CONSIGNMENT_CHANNELS` — `card_show` (needs a show), `auction_house` (graded only, $50 minimum), `ebay_partner` (unrestricted).
-- `checkEligibility` — refuses before any fee. `channelFeeAction` — `consignment_fee:<key>`.
-- `consignment_event` — a show: `requestDeadline`, `capacity` (0 unlimited), pickup settings for shipping (`pickupEnabled`, `pickupCapacity`, `pickupFeeMinor`).
-- `request` — locks the item, checks eligibility, counts the show's requests, creates the billed request; the item stays `stored`, the owner's.
-- `complete` — locks the request (`in_progress`); prices the cut (`consignment_fee:<channel>`, else `marketplace_fee`); owner `sale_credit` and `fee` debit; `transferOwnership` to the platform against the owner, `consigned`; a `consignment` `transaction`; closes. A repeat fails `assertAccepted`.
-- `warehouseTransfer` — staff; one call creates, relocates (text bin `EXT:<warehouse>/<bin>`) and closes a `warehouse_transfer` request.
+`approve` executes the trade on the responder's approval, because `proposerApproved` starts true. The proposer's own approve answers `DUAL_CONSENT_REQUIRED` before anything is written. It locks the proposal, which must be `pending`, then all the items through `CustodyService.lockItems` in id order, and runs `assertItemsUncommitted` on them, leaving out this proposal. It calls `transferOwnership` per item, expecting the owner the proposal names. So an item that changed hands or left `stored` since the proposal stops the trade. `approve` then locks the paying wallets with `LedgerService.lockWallet` in user-id order, writes the `transaction`, and charges `service` through `BILLING_PORT` to the proposer, and to the responder too on a swap. `BillingService.charge` takes no wallet lock and checks no balance, so `approve` reads each payer's balance under the lock after the charge and refuses with `INSUFFICIENT_BALANCE` when it is negative, which rolls the whole trade back. Each charge row's `referenceId` is set to the transaction id, and the transaction keeps the total in `fee` and each side's outcome and snapshot in `frozenPricing.charges`. It sets `executed` and sends `swap_completed` or `transfer_completed` to both. A retry finds `executed` and gets a 409. `reject` moves `pending` to `rejected` with a conditional UPDATE and emits `swap_rejected` to the other side.
 
-**Watch:**
-- The show row is read without `FOR UPDATE`: two requests can take the last place (Stage 3).
-- `warehouseTransfer` bills the operator, who is its requester.
+Because both wallets are locked in a fixed order before either charge, two members whose tiers cover `service` who approve opposite swaps at once queue on the first wallet, instead of each holding one membership period and waiting for the other.
 
-#### `apps/api/src/modules/dis/buyout.service.ts`, `apps/api/src/modules/dis/custom-request.service.ts` · 2 min · T10.5, T10.6, T8.3
-An operator quotes; only the collector's acceptance moves anything, at the figure re-read from `typeFields` under the lock, not the caller's.
-- `BuyoutService.request` — locks the item; a request billed at `service`, `stage: 'awaiting_quote'`.
-- `BuyoutService.quote` — operator; locks the request (`in_progress`), `assertQuotable`, `stage: 'quoted'`, `buyout_quoted`.
-- `BuyoutService.accept` — locks the request (stage `quoted`); owner `sale_credit`; `transferOwnership` to the platform against the owner, `sold`; a `sale` `transaction`; stage `accepted`. Retry: `accepted`, 409.
-- `CustomRequestService.ask` — `free: true`, duplicates allowed; `custom_request_raised`.
-- `CustomRequestService.quote` — operator; price and written `scope`; `QUOTABLE_STAGES` allows re-quotes only before acceptance.
-- `CustomRequestService.acceptQuote` — locks request, then wallet (`assertNotBlocked`, `balanceOf` with `tx`); balance must cover; a `fee` debit straight to the ledger (no pricing rule); stage `accepted`.
-- `CustomRequestService.declineToQuote` — operator; locks request, then wallet; refunds as `service_refund` what `refundable` finds; cancels.
-- `CustomRequestService.complete` — only after `accepted`.
+#### `apps/api/src/modules/mkt/house-store.service.ts`
 
-**Watch:** `refundable` sums this request's `fee` debits less `service_refund` credits: exactly what was paid, never twice.
+About 2 minutes. It builds on T11.6, T9.3 and T15.3.
 
-#### `apps/api/src/modules/dis/lot-split.service.ts` · 1 min · T10.7, T9.2
-The owner's lot split.
-- `request` — locks the item (`stored`, unsplit lot, not on hold); a request billed at `service`, with `willCreate`.
-- `complete` — locks the request; `IntakeService.breakLot` in the same `tx`, the requester as owner (each child a new item, billed intake); closes with `producedCount`. A repeat fails `assertAccepted`.
+This file is Bault selling its own stock. `listForSale` is the public shelf, and `listAll` and `create` serve the admin catalogue. `update` reprices, restocks or takes a product off sale. A stock change needs `expectedStock`, the figure the admin last saw. A mismatch under the row lock is a 409 with the current figure, so a copy sold meanwhile is not put back on sale.
 
-#### `apps/api/src/modules/dis/dis.controller.ts`, `dis.module.ts` · 1 min · T10.1, T6.2
-`/services` routes; DTOs carry the fulfilment forms (`Equals(true)` on `itemVerified`). Collectors need a session; `accept`, `deny`, every `complete`, quotes, grading submissions and `warehouse-transfer` need `warehouse_operator` or `admin`; grading approval `admin`. `DisModule` also provides `IntakeService` (lot split).
+`purchase` claims the idempotency key on `house-purchase:<listingId>` and locks the `house_listing` row, which must be `active` with `stock` above 0. The price is the tier-discounted figure from `PricingService.quoteFor`, frozen into the transaction's `frozenPricing` with the asking price. It checks the buyer's balance against that price with `LedgerService.balanceOf` and `tx`, which takes the wallet lock. `CustodyService.createWithIntake` mints the item with `makeItemSerial` and `makeItemBarcode`, as `received` with no bin. `purchase` writes the `transaction`, a buyer debit and a platform credit, lowers `stock` with a relative UPDATE and inserts the `house_order`. No intake fee is charged. It answers with the order code, item id, serial and price, and leaves out the warehouse barcode, which only the stow queue shows.
 
-#### `apps/api/src/modules/not/outbox/outbox.schema.ts`, `apps/api/src/modules/not/outbox/outbox.service.ts` · 1 min · T14.3, T14.4
-The transactional outbox.
-- `outbox_message` — an event (`aggregateType`, `aggregateId`, `eventType`, `payload`); `dispatchedAt` null until sent; `attempts`, `lastError`, `lastAttemptAt` log failures.
-- `OutboxService.emit` — an insert on the caller's `tx`, committing or rolling back with the change.
+Without an `Idempotency-Key` header, `purchase` uses a random key, so a retry without the header buys a second copy. That is deliberate. A key built from buyer and product would answer a real second purchase with the first receipt. `HouseStorePanel.tsx` sends a key, and `PLATFORM_EMAIL` is the platform account's fixed address.
 
-**Watch:** the worker (`apps/worker/src/jobs/outbox-dispatch.ts`) takes the recipient from `recipientIds`, else the first of `SINGLE_RECIPIENT_KEYS` (`ownerId`, `userId`, `sellerId`, `buyerId`, `responderId`, `donorId`); a payload naming two people must say whom, as `offer_countered` does.
+`queue` lists the orders waiting for a shelf. `stowOrder` locks one order, which must be `awaiting_stow`. It calls `relocate` to a bin from `StowService.resolveBin` or `StowService.suggest`. The suggestion gets no facility, so it can pick a shelf in any building. The item moves from `received` to `stored`, and photos pass `MediaService.assertAttachable` from the media module `med`. The order becomes `stowed`, and `item_received` is emitted.
 
-#### `apps/api/src/modules/not/event-types.ts`, `notification.schema.ts`, `notification.service.ts`, `notification.controller.ts` · 1.5 min · T14.4
-The event catalogue and preferences.
-- `NOTIFICATION_EVENT_TYPES` — each event's `category` and `emailByDefault`; two are `mandatoryInApp` (`parcel_damaged`, `arrival_not_accepted`).
-- `defaultEnabled` — in-app on, e-mail per catalogue; unlisted events are in-app only.
-- `notification` — a row per delivery and channel (`status` `sent` or `failed`, `failureReason`); the worker writes, the API reads.
-- `notification_preference` — explicit choices per user, event type and channel (`notification_preference_user_event_channel_unique`).
-- `NotificationService` — `getPreferences` (full matrix with defaults, plus raw rows), `setPreference` (refuses unknown keys and switching off a mandatory event), `setChannel` (one channel, every event).
+#### `apps/api/src/modules/mkt/browse.service.ts`, `apps/api/src/modules/mkt/market-read.service.ts`, `apps/api/src/modules/mkt/mkt.controller.ts`, `apps/api/src/modules/mkt/offer.controller.ts`, `apps/api/src/modules/mkt/trade.controller.ts`, `apps/api/src/modules/mkt/house-store.controller.ts`, `apps/api/src/modules/mkt/mkt.module.ts`
 
-**Watch:** unable to import this catalogue, the worker copies the e-mail defaults (`EMAIL_BY_DEFAULT`, `apps/worker/src/jobs/notification-events.ts`); they match today; a new event needs both. `setPreference` reads, then inserts: of two parallel saves of a new row, one gets a 500 from the unique index.
+About 2 minutes. It builds on T11 and T6.2.
 
-#### Also in this area
-- `apps/api/src/modules/not/not.module.ts` — `@Global`; exports `OutboxService` so any module can emit.
-- `apps/api/src/modules/not/content.service.ts`, `content.controller.ts` — public `/content`: shows, contact (`SUPPORT_*` settings), locations, intake policy, account terms.
-- `apps/api/src/modules/not/account-terms.ts` — `accountTerms` publishes figures from the charging code's constants and settings.
+These files hold the marketplace's reads, which take no locks and write nothing, and its `/marketplace` routes and DTOs. `BrowseService.list` returns active listings with their item and `sellerUsername`, from a left join on `user_account`. Filters and sort run in SQL, with a percent sign, an underscore or a backslash in the search text or condition matched as itself. The controller's `pageLimit` caps a page at 200 rows, Every sort ends on the listing id so the order is total, newest by `published_at`, the price sorts by `asking_price` then `published_at`, and `cursor`, the id of the last listing of the page before, returns the listings after it in that order, so Browse's Show more reaches past the first 50 even when prices tie. A cursor that is not a listing is a 400, as `tests/integration/mkt-browse-paging.test.ts` checks with 55 listings. One `DISTINCT ON` query finds every row's newest image, which gets a signed URL. `BrowseService.detail` serves one listing to anybody. It shows the seller's username but never an account id, bin, barcode or storage key, as `tests/integration/mkt-listing-detail.test.ts` checks. Sold and removed listings are still served, a decision left to Stage 3. Browse, the listing page and the storefront leave out the item id, since purchases and offers post the listing id.
+
+`MarketReadService.counterparty` turns a username into an id, for active accounts other than the caller. `tradableItem` finds another collector's item by its exact serial, and needing the exact serial is the privacy control. `myListings`, `myOffers` and `mySwaps` serve the caller, and `mySwaps` can be narrowed to one proposal. A card that has left the vault shows there as "A card that is no longer in the vault". `myOffers` adds `yourTurn` and `mySwaps` adds `awaitingMe`, to show whose move it is. `myOffers` names both sides by username, `buyerUsername` and `sellerUsername`, the second through an alias of `user_account`, so an offer the caller made says whom it went to. The public `storefront` shows active listings only. A collector receives a reduced view of the other side: the collector lookup goes through `collectorProfile`, which returns the username only, `tradableItem` leaves out the owner's username, and `myOffers` leaves out the buyer, seller, parent offer and item ids.
+
+`MktController` serves the public `listings`, `listings/:id` and `sellers/:username`. `listings/mine` is declared before `listings/:id`, so `mine` is never read as an id. `OfferController.respond` takes an `action` of `accept`, `reject` or `counter`, and accept's default key is `offer-<offerId>`. `TradeController` serves swaps and transfers, naming the other side by username. `HouseStoreController` serves `/marketplace/house`, where the shelf is public. Managing, creating and updating products need `admin`, and the queue and stow need `warehouse_operator` or `admin`.
+
+#### `apps/api/src/modules/esc/escrow.schema.ts`, `apps/api/src/modules/esc/escrow-terms.ts`
+
+About 1.5 minutes. It builds on T11.5 and T5.6.
+
+These files define an escrow deal and its fee. An `escrow_deal` is a private sale with Bault in the middle, holding the money until both sides release it. Its `escrow_status` runs `proposed`, `agreed`, `funded`, `inspecting`, `awaiting_release` and `settled`, or ends `returned` or `cancelled`. The raiser in `raisedBy` is an account and pays the fee. A buyer who raises a deal has that fee held with the value when funding, and a seller who raises one pays it out of the value at settlement. The other side is an account in `counterpartyUserId`, or an outside person with a name and an e-mail. `feeMinor` is frozen at raise.
+
+`fundingSource` is `wallet` when the money came from a ledger debit. It is `external` when an operator attests that money arrived outside Bault, and then no ledger row exists. `buyerReleaseAttestedBy` and `sellerReleaseAttestedBy` record an operator confirming an outside party's release. `escrow_event` is the append-only trail, enforced in `apps/api/src/db/sql/0001_append_only.sql`.
+
+`escrowFeeMinor` charges 1 percent from `ESCROW_FEE_BPS`, and at least $25 from `ESCROW_MINIMUM_FEE_MINOR`. Deals start at $500 from `ESCROW_MINIMUM_VALUE_MINOR` and stop at $20,000,000 from `ESCROW_MAXIMUM_VALUE_MINOR`, which keeps value and fee inside the `integer` columns. `checkDeal` runs the checks before creation. It needs a value, a description and the other side named exactly once. It refuses `buyer_vault` for an outside buyer, who has no vault.
+
+#### `apps/api/src/modules/esc/escrow.service.ts`, `apps/api/src/modules/esc/esc.controller.ts`, `apps/api/src/modules/esc/esc.module.ts`
+
+About 3 minutes. It builds on T11.5, T8.3, T12.3 and T15.4.
+
+This file runs a deal from raise to settlement or return. Each step re-reads the deal through `lockDeal`, which locks it `FOR UPDATE` and checks that its status is one the step expects. So the loser of a race, or a retry, finds the status already moved and gets a 409. `raise` resolves the username, refusing an account that is not an active collector, so a suspended or closed account, staff or the platform account cannot be the other side. `RaiseDealDto` checks that an outside party's address is an e-mail address. `raise` then runs `checkDeal`, freezes the fee and writes a `raised` event. It emits `escrow_proposed` only to an account. `agree` is for the other side, and staff record it for an outside party with `onBehalfOf`. A collector receives a reduced view: `collectorDealView` replaces the party and staff ids with `myRole`, `raisedByMe` and `counterpartyIsMember`, events carry `byStaff` in place of the actor and `onBehalfOf`, `terms` leaves out the configured bps, and `heldFor` returns the amount only, while staff still read the full deal.
+
+For a buyer with an account, `fund` locks the deal, then the wallet through `balanceOf` with `tx`. The amount held is `heldMinorOf`, the value plus the fee when the buyer raised the deal and the value alone otherwise, and a buyer short of it gets `INSUFFICIENT_BALANCE`. It writes one `escrow_hold` debit for that amount, sets `funded` and emits `escrow_funded`. Staff may also fund from such a buyer's wallet, a decision left to Stage 3. For an outside buyer, staff fund the deal by recording a payment reference.
+
+`receiveItem` is for staff. It locks the deal, then the item. The item must be `stored`, not on hold, the seller's when the seller has an account, and in no other deal at `inspecting` or `awaiting_release`. Its `item_received` event records the item's `ownerId`. `receiveItem` neither places a hold nor changes the card's state, and only `ListingService` refuses to list it. So a swap, gift or donation of the card meanwhile fails the ownership check in `settle`, and the deal can then only be returned. `inspect` is for staff. It records `inspectionMatches` and notes, sets `awaiting_release` and emits `escrow_inspected`. It then runs `assertItemsUncommitted`, leaving out this deal, so a card on a shipment, under a service, listed or in a swap cannot be taken into escrow.
+
+`release` comes from each side, or from staff on behalf of an outside party. A side that has already released gets a 409, so its time and its trail row are written once. The second side's release runs `settle` in the same locked transaction, so the seller is paid once. For an outside buyer with `ship_to_buyer`, `settle` first calls `assertOnItsWayToBuyer`. That needs a seller's shipment holding the card at `picking` or later. `settle` then credits the seller with `escrow_release`. It then takes the raiser's wallet lock. When the raiser is a buyer who funded from the wallet, it credits the held fee back as an `escrow_refund`. It calls `MembershipService.waive` for `escrow_fee` on the raiser's period, then writes a `charge` row and a `fee` debit for the rest, so any waived part of the fee stays with the buyer and settling never takes a buyer who raised the deal below zero. It calls `transferOwnership` to the buyer, expecting the seller, or the owner from `receivedFrom` when the seller is an outside person. It sets `settled` and emits `escrow_settled`. The order is deal, wallet, period, then the item.
+
+`returnDeal` works from `funded`, `inspecting` or `awaiting_release`, for either party or staff. It credits `escrow_refund` for the whole hold if the deal was wallet-funded, fee included, and it charges no fee. `cancel` works only from `proposed` or `agreed`, before any money is held, so no hold is stranded, and it emits `escrow_cancelled` to the side with an account that did not cancel. `heldFor` totals open wallet holds with `heldMinorOf`, which are already out of the balance. In `EscController` under `/escrow`, `queue`, `receive-item` and `inspect` need `warehouse_operator` or `admin`, and the rest need a session. `loadFor` answers 404 to anyone who is not a party or staff, so the deal stays hidden.
+
+#### `apps/api/src/modules/dis/dis.schema.ts`, `apps/api/src/modules/dis/service.service.ts`
+
+About 2 minutes. It builds on T10.1, T8.4 and T15.1.
+
+These files hold the framework that every owner service shares. Each service request is a row in one `service_request` table, with a `type` from `service_request_type`, per-type `typeFields` such as `stage`, and a closing `fulfillment` form. Its status is `requested`, then `in_progress` once an operator accepts, then `completed` or `cancelled`. A collector receives a reduced view: `collectorRequestView` keeps the code, type, status, item and dates and only the `typeFields` the collector typed or is told, with `billed` cut to an amount or `covered`, and `listMine` and the collector's service POSTs go through it.
+
+`create` runs in the caller's transaction. `WalletService.assertNotBlocked` refuses a negative balance with a plain read. `assertNotAlreadyOpen` allows one open request per type, item and requester, unless `allowDuplicate` is set. It is a plain read too, so it is only reliable under the caller's item lock. A caller that commits the card passes `commits`, a few words such as `'sent for grading'`, and `create` then runs `assertItemsUncommitted` for it, after the duplicate check so a repeat still gets its own sentence. Unless `free` is set, `create` takes `lockWallet`, then bills through the billing port with `actionType: 'service'` and an optional `feeActionType`, so a request is billed when it is raised, and the lock order stays request or item, wallet, period. A charge the wallet cannot cover is refused with 409 `insufficient_balance` and rolls back, so a service never takes the balance below zero. What the port returns is kept as `typeFields.billed`, so a cancellation knows what to give back.
+
+`accept` goes through `transition`, which locks the request and moves it only from `requested`. `deny` locks the request and answers 409 for a closed one. It passes an open one, `requested` or `in_progress`, to `refundAndCancel`. So `deny` also cancels a request under way and refunds work already started, and the queue offers it as Cancel and refund. A grading request it cancels gets `approvalState: 'refused'` if it was still pending. If its card is already `at_grader`, `deny` brings the card back to `stored` with a hold placed and records `returnedUngraded`, so nothing can list, ship or commit it until an operator scans it back in and releases the hold, and no card is left `at_grader` for good. `refundAndCancel` expects the caller to hold the request lock. It first reads `paidDirectly`, what the collector paid against the request outside the billing port: legacy `fee` debits against the request, plus the `custom` charges whose `referenceId` is the request, less its `service_refund` credits. If anything is to be refunded, it takes `lockWallet`. For a charged request it credits a `service_refund` of `billed.amountMinor` and marks the charge `refunded`, which takes it out of the account's tier count on the spot. For a covered request it calls `restoreCounted` on the period. It also credits a second `service_refund` for whatever `paidDirectly` found, and `markQuoteRefunded` marks the custom charge `refunded`. It then sets `cancelled` with `refundedMinor` or `allowanceRestored`. The lock order is request, wallet, period. `paidDirectly` reads under the request lock, which every direct charge also takes, so the figure cannot change while it is read. A request created before `billed` existed has none, so cancelling it refunds nothing.
+
+`get` with a `tx` reads `FOR UPDATE`, and every completion starts there. `assertAccepted` requires `in_progress`. `setStatus` locks the request and merges `typeFields` without checking the status. `completeWithFulfillment` refuses a required field that is missing, blank, zero or `false`. It also refuses a `completed` or `cancelled` request, so no credit or transfer repeats. `platformAccountId` finds `platform@bault.dev`, the custodian of donated, consigned and bought-out cards. `DisController.get` serves `GET /services/requests/:id` through `getFor`, which reads without a lock and answers 404 unless the viewer is the requester, a `warehouse_operator` or an `admin`, so a stranger cannot tell the request exists.
+
+#### `apps/api/src/modules/dis/grading.service.ts`, `apps/api/src/modules/dis/grading-tiers.ts`, `apps/api/src/modules/dis/grading-submission.schema.ts`
+
+About 2 minutes. It builds on T10.2 and T9.4.
+
+These files send cards to outside graders in batches. `GRADING_TIERS` has five tiers, each with a `maxDeclaredMinor` and a turnaround, and only `psa_walkthrough` has `requiresApproval`. `checkTier` refuses a declared value over the cap, or a walkthrough under `WALKTHROUGH_THRESHOLD_MINOR`, and says the walkthrough is for cards declared at or above it, which is what the check accepts. Its amounts, like every amount in `dis`, are written by `usdAmount`, with a thousands separator. `tierFeeAction` returns `grading_fee:<key>`.
+
+`tiers` prices each tier through `PricingService.tryPrice` at list price, with `null` where no rule exists; the form shows it through `TierPrice`, and the charge is priced at the owner's tier. `request` locks the item, which must be the owner's, `stored` and not on hold. It calls `ServiceRequestService.create` at the tier's fee action with `commits`, and sets `approvalState` to `pending` or `not_required`. From then on the open request holds the card, so it cannot be listed, shipped, donated or sold while it waits. `approve` is for admins and locks the request. It answers 409 unless the request is still `requested` or `in_progress`, so a request staff already cancelled cannot be refunded a second time, and it locks the item expecting the requester. A refusal refunds and cancels the request through `refundAndCancel`.
+
+A `grading_submission` is one batch for one grader, with status `open`, `shipped` or `returned`. `openSubmission` creates one, and `readyFor` lists the requests ready for a grader. `addToSubmission` takes accepted requests only, and locks the submission, then the request. `shipSubmission` locks the submission, then each member's item with `lockExpecting`, expecting the requester as owner and the card `stored`, checks nothing else holds it, and moves it to `at_grader`, with a custody event and `grading_shipped`. A card that changed hands makes the whole send answer 409 `item_no_longer_available`, so nobody else's card goes to the grader. `complete` locks the request, then the item, expecting the requester, `at_grader` or `stored`, with a hold allowed. It writes `conditionGrade` and an `item_change_history` row, and returns the item to `stored` only from `at_grader`. `closeSubmission` closes a shipped submission only when no member is still open.
+
+#### `apps/api/src/modules/dis/photography.service.ts`, `apps/api/src/modules/dis/media.service.ts`
+
+About 1 minute. It builds on T10.3.
+
+These services add photos, a video or a condition report to an item. This `MediaService` is not the upload checker in `apps/api/src/modules/med/media.service.ts`. `PhotographyService.complete` locks the request, adds a `professional` `item_image` at the next version and closes the request. `MediaService.requestVideo` and `completeVideo` do the same for type `video`, with the fee action `service_fee:video_review`. `requestInspection` and `completeInspection` cover areas from `INSPECTION_AREAS`, each graded `clean`, `minor` or `notable`, with the fee action `service_fee:condition_inspection`. The request methods lock the item with `CustodyService.lockExpecting`, expecting the caller as owner and the card `stored` or `listed`, with a hold allowed, before the duplicate check and the charge. Parallel requests for one card therefore queue on the item row, the first creates and bills the request, and the rest find it open and get a 409, so the owner pays once. A card that is not the caller's gets a 409 saying it has changed hands, and an unknown id gets a 404. `tests/concurrency/service-capacity.test.ts` sends six of each at once. The completion `objectKey` gets a shape check from `IsObjectKey`, but no `assertAttachable` check that the file was uploaded here.
+
+#### `apps/api/src/modules/dis/disposal-services.service.ts`, `apps/api/src/modules/dis/donation.service.ts`
+
+About 2 minutes. It builds on T10.4, T10.7, T9.7 and T6.6.
+
+These services cannot be undone, so each takes two steps. The first runs checks and calls `ConfirmationService.issue`. The second calls `consume` and then does the work. A reused token is refused with `AppError.tokenExpired`. `consume` commits before the work's transaction starts. So if the work fails, the collector must start again with a new token.
+
+`confirmDeslab` asks for a graded card to be cracked out of its slab. It calls `CustodyService.lockExpecting` on the item, which must be the owner's, `stored` and not on hold. It re-checks the grade and raises a request billed at `service_fee:deslab`, with `commits`, so the card cannot be listed or shipped while it waits. `completeDeslab` locks the request, then the item, which must still be the requester's. It records `conditionGrade` becoming `conditionAfter`. A card that changed hands after its deslab was accepted, which only staff can now cause, makes `completeDeslab` refuse. The operator then cancels the request with `deny`, which refunds the old owner.
+
+`requestCull` and `confirmCull` remove commons, cards worth less than their storage, for free within `CULL_WINDOW_DAYS`, which is 30 days, of intake. `requestCull` refuses a card that something else holds. `confirmCull` first calls `lockItems` in id order, `lockExpecting` on each item and `assertItemsUncommitted` on them all, and only then creates the request. It donates the items to the platform as `donated` or discards them as `discarded`, and emits `commons_removed`.
+
+`DonationService.request` refuses a card that something else holds. `DonationService.confirm` first locks the item with `lockExpecting`, expecting the donor, then creates the billed request with `commits`, so a card that went onto a shipment or into a swap after the token was issued is refused, and the lock order is item, wallet, period. `confirm` then calls `transferOwnership` to the platform. It sets `donated`, writes a `transfer` `transaction` with a null price and emits `item_donated`.
+
+#### `apps/api/src/modules/dis/consignment.service.ts`, `apps/api/src/modules/dis/consignment-channels.ts`, `apps/api/src/modules/dis/consignment-event.schema.ts`
+
+About 2 minutes. It builds on T10.5, T10.7 and T15.4.
+
+These files hold consignment, where Bault sells a card for its owner through an outside channel, and the staff warehouse transfer. In `CONSIGNMENT_CHANNELS`, `card_show` needs a show, `auction_house` takes graded items only with a $50 minimum, `ebay_partner` has no restriction, `alt` takes graded items only with a $100 minimum and pays out in 7 to 21 days, and `fanatics_collect` takes graded items only with a $250 minimum and pays out in 30 to 60 days. Alt and Fanatics Collect are worked by hand, so staff list the card on the partner's site and record the sale with `complete` as for any other channel, and each partner deducts its own fee before remitting. Every channel has its own `consignment_fee:<key>` rule in the seed and in `infra/production/prices.json`, and the consignment form names a channel by the `label` the list sends, so a channel added here needs no web change. `checkEligibility` refuses before any fee, and `channelFeeAction` returns `consignment_fee:<key>`. A `consignment_event` is a show with a `requestDeadline` and a `capacity`, where 0 means unlimited. Shipping uses its pickup settings `pickupEnabled`, `pickupCapacity` and `pickupFeeMinor`. The channel list a collector reads leaves out `partnerFeeNote`, and `collectorEvents` gives each show's name, place, times and deadline without its capacity, flags or staff notes.
+
+`request` locks the item, checks eligibility, locks the show row with `FOR UPDATE`, counts the show's requests and creates the billed request, all in one transaction. The item stays `stored` and stays the owner's. Two sellers asking for a show's last place queue on the show row, so the second counts the first's request and gets a 409 saying the show is full. `HumanFulfilmentService.requestPickup` locks the same row for pickup places, and `tests/concurrency/service-capacity.test.ts` covers the race.
+
+`complete` records the sale. It locks the request, which must be `in_progress`. It refuses a sale below the owner's `askingMinor`, since that is the price the owner agreed to. It locks the item expecting the owner, checks nothing else holds it, and takes `lockWallet`. It prices Bault's cut with `consignment_fee:<channel>`, or else `marketplace_fee`, where the channel is always the one on the request, stored as `feeChannel`, and the operator's `channel` text is kept only as part of the form. It credits the owner with `sale_credit`, debits the cut as a `fee`, and calls `transferOwnership` to the platform, expecting the owner. It sets `consigned`, writes a `consignment` `transaction` and closes the request, so a repeat fails `assertAccepted`. `warehouseTransfer` is for staff. It locks the item first, which must be `stored`, not on hold and committed to nothing, and refuses a move to the bin the card is already recorded at, so a retried POST does not move it twice. One call then creates a free `warehouse_transfer` request, relocates the item to the text bin `EXT:<warehouse>/<bin>` and closes the request. It bills nobody, since the operator who asks for it is not a customer.
+
+#### `apps/api/src/modules/dis/buyout.service.ts`, `apps/api/src/modules/dis/custom-request.service.ts`
+
+About 2 minutes. It builds on T10.5, T10.6 and T8.3.
+
+In both services an operator quotes, and nothing moves until the collector accepts. The figure is then re-read from `typeFields` under the request lock. `BuyoutService.request` asks Bault to buy a card. It locks the item and raises a request billed at `service` with `stage: 'awaiting_quote'` and `commits`. `BuyoutService.quote` is for operators. It locks the request, which must be `in_progress`, calls `assertQuotable`, sets `stage: 'quoted'` and emits `buyout_quoted`. `BuyoutService.accept` locks the request, calls `assertAccepted` and needs stage `quoted`. `assertAccepted` answers 409 for a request that is already cancelled or completed, so an owner cannot accept a buyout that staff cancelled with `deny`, which leaves the stage at `quoted`. It locks the item expecting the owner, checks nothing else holds it, and takes `lockWallet`, then credits the owner with `sale_credit`, calls `transferOwnership` to the platform and sets `sold`. It writes a `sale` `transaction` and sets stage `accepted`, so a retry gets a 409. `BuyoutService.decline` lets the owner refuse an open quote, and it keeps the fee charged when the buyout was raised, because the quote was work done.
+
+`CustomRequestService.ask` raises a request for something Bault does not list, with `free: true` and duplicates allowed, and emits `custom_request_raised`. `quote` is for operators and records a price and a written `scope`. `QUOTABLE_STAGES` allows a new quote only before acceptance. `declineToQuote` is for operators. It locks the request, then the wallet, refunds as `service_refund` what `ServiceRequestService.paidDirectly` finds, and cancels. `paidDirectly` sums this request's `fee` debits and `custom` charges less its `service_refund` credits. That is exactly what was paid and not yet returned, so nothing is refunded twice, and `markQuoteRefunded` marks the charge `refunded`. `acceptQuote` locks the request and calls `assertAccepted`, so a request that staff cancelled cannot be accepted. It then takes `lockWallet`, and the balance must cover the price. It inserts a `charge` with `actionType` `custom`, whose snapshot keeps the quote, its `scope`, who quoted it and the account's `tier` with `discountBps: 0`, because an operator's quote is charged as quoted. It debits a `service_charge` against that charge, so the quote counts once in the account's tier, and the accounting summary still reports it as `custom_request_fee`. It then sets stage `accepted`. `declineQuote` lets the collector refuse an open quote, and `complete` works only on an open request at stage `accepted`.
+
+#### `apps/api/src/modules/dis/lot-split.service.ts`
+
+About 1 minute. It builds on T10.7 and T9.2.
+
+This file splits a collector's lot into single items on request. `LotSplitService.request` locks the item, which must be `stored`, an unsplit lot and not on hold. It raises a `batch_split` request billed at `service` with `willCreate` and `commits`. A card that is not in the vault is named by `itemStateWords`, as in the other `dis` refusals, and never by its raw state. `complete` locks the request and calls `IntakeService.breakLot` in the same `tx`, with the requester as the expected owner. Each child is a new item with a billed intake. The request closes with `producedCount`, and a repeat fails `assertAccepted`.
+
+#### `apps/api/src/modules/dis/dis.controller.ts`, `apps/api/src/modules/dis/dis.module.ts`
+
+About 1 minute. It builds on T10.1 and T6.2.
+
+`DisController` serves the `/services` routes. Its DTOs carry the fulfilment forms, with `Equals(true)` on `itemVerified`, so an operator must confirm the item. Collectors need a session. `accept`, `deny`, every `complete`, the quotes, grading submissions and `warehouse-transfer` need `warehouse_operator` or `admin`, and grading approval needs `admin`. `DisModule` also provides `IntakeService` for the lot split.
+
+#### `apps/api/src/modules/not/outbox/outbox.schema.ts`, `apps/api/src/modules/not/outbox/outbox.service.ts`, `apps/api/src/modules/not/not.module.ts`
+
+About 1 minute. It builds on T14.3 and T14.4.
+
+These files are the outbox, the table that carries every notification. An `outbox_message` holds one event with `aggregateType`, `aggregateId`, `eventType` and `payload`. `dispatchedAt` stays null until the worker sends the message, and `attempts`, `lastError` and `lastAttemptAt` log failures. `OutboxService.emit` inserts on the caller's `tx`, so the event commits or rolls back with the change. `NotModule` is `@Global` and exports `OutboxService`, `NotificationService` and `ContentService`, so any module can emit.
+
+The worker in `apps/worker/src/jobs/outbox-dispatch.ts` takes the recipients from `recipientIds`. Without them it takes the first of `SINGLE_RECIPIENT_KEYS` present, in the order `ownerId`, `userId`, `sellerId`, `buyerId`, `responderId` and `donorId`. So a payload that names two people must say whom to tell, as `offer_countered` does. `item_sold` names both seller and buyer without `recipientIds`, so only the seller is told.
+
+#### `apps/api/src/modules/not/event-types.ts`, `apps/api/src/modules/not/notification.schema.ts`, `apps/api/src/modules/not/notification.service.ts`, `apps/api/src/modules/not/notification.controller.ts`, `apps/api/src/modules/not/content.service.ts`, `apps/api/src/modules/not/content.controller.ts`, `apps/api/src/modules/not/account-terms.ts`
+
+About 1.5 minutes. It builds on T14.4.
+
+These files hold the notification catalogue, each user's choices and the public content routes. `NOTIFICATION_EVENT_TYPES` gives each event a `category` and `emailByDefault`. `parcel_damaged` and `arrival_not_accepted` are `mandatoryInApp`, so their in-app notice cannot be turned off. `defaultEnabled` turns in-app on and e-mail on as the catalogue says, so an unlisted event is in-app only. A `notification` row is one delivery on one channel, with `status` `sent` or `failed` and a `failureReason`. The worker writes these rows and the API reads them. `listMine` gives a collector a reduced view, a page at a time, newest first: `limit` is 1 to 100, 50 when absent, and `before`, the id of the last notification already shown, asks for the page after it, by `(created_at, id)`. It sends only the `in_app` rows, each as id, event type, time and a content cut to the message, codes and amounts, so delivery status, provider references, failure text and the payload's ids and staff reasons stay out. A `notification_preference` row is an explicit choice per user, event type and channel, unique under `notification_preference_user_event_channel_unique`.
+
+`NotificationService.getPreferences` returns the full matrix with defaults and nothing else, so no row id, user id or timestamps reach the collector. `setPreference` refuses unknown keys and refuses to switch off a mandatory event, saying the notice cannot be turned off because we must tell you when something of yours arrives damaged or cannot be accepted, and it answers with the saved `eventType`, `channel` and `enabled` alone. `setChannel` sets one channel for every event in one multi-row upsert, so a failure leaves the channel as it was. `setPreference` is one `INSERT … ON CONFLICT (user_id, event_type, channel) DO UPDATE`, so two saves of a new choice that arrive together both succeed and leave one row. The worker cannot import this catalogue, so it copies the e-mail defaults into `EMAIL_BY_DEFAULT` in `apps/worker/src/jobs/notification-events.ts`. The two match today. A new event needs both, and `tests/web/notification-catalogue.test.ts` fails when they disagree.
+
+`ContentController` serves the public `/content` routes for shows, contact details from the `SUPPORT_*` settings, locations, the intake policy and the account terms. `accountTerms` in `account-terms.ts` publishes figures from the charging code's constants and settings.

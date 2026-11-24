@@ -266,6 +266,7 @@ describe('packing a shipment', () => {
     await load(user);
 
     await user.type(await screen.findByLabelText('Notes'), 'Rigid mailer.');
+    await user.type(screen.getByLabelText('Package weight (grams)'), '120');
     const complete = screen.getByRole('button', { name: 'Complete' });
     expect(complete).toBeDisabled();
 
@@ -300,6 +301,7 @@ describe('packing a shipment', () => {
     });
     await load(user);
     await user.type(await screen.findByLabelText('Notes'), 'Overnight envelope.');
+    await user.type(screen.getByLabelText('Package weight (grams)'), '120');
     const complete = screen.getByRole('button', { name: 'Complete' });
 
     await scan(user, /scan the parcel/i, 'PKG-SOMEONE-ELSE');
@@ -314,5 +316,39 @@ describe('packing a shipment', () => {
     const [, body] = post.mock.calls[0]!;
     expect(body).toMatchObject({ scannedParcel: '1Z999AA10123456784' });
     expect(body).not.toHaveProperty('scannedItemIds');
+  });
+});
+
+describe('the service queue', () => {
+  beforeEach(() => {
+    get.mockReset();
+    post.mockReset();
+    post.mockResolvedValue({});
+  });
+
+  it('lets the operator cancel and refund a request that is already under way', async () => {
+    const DESLAB = {
+      id: 'sr-1',
+      code: 'SR-DESLAB1',
+      type: 'deslab',
+      status: 'in_progress',
+      itemId: 'it-1',
+      requesterEmail: 'red@bault.dev',
+      itemDescription: 'Sold before the bench',
+      typeFields: {},
+    };
+    get.mockImplementation(apiFor({ '/services/queue': [DESLAB] }));
+    window.location.hash = '#/warehouse/services';
+    render(
+      <I18nProvider>
+        <WarehouseConsole />
+      </I18nProvider>,
+    );
+    const button = await screen.findByRole('button', { name: /cancel and refund/i });
+    await userEvent.click(button);
+    expect(post).not.toHaveBeenCalledWith('/services/requests/sr-1/deny');
+    expect(screen.getByText(/give the customer back what they paid/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, cancel and refund' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/services/requests/sr-1/deny'));
   });
 });

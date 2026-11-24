@@ -5,6 +5,7 @@ umask 077
 
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 RETAIN_DAYS="${BACKUP_RETAIN_DAYS:-30}"
+FAILED_MARKER="${BACKUP_DIR}/BACKUP-FAILED"
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -15,7 +16,14 @@ require_url() {
 PLAIN_TMP=""
 SCRATCH_DB=""
 SCRATCH_ADMIN_URL=""
+DUMPING=0
 cleanup() {
+  local status=$?
+  if [ "$DUMPING" -eq 1 ] && [ "$status" -ne 0 ]; then
+    mkdir -p "$BACKUP_DIR" 2> /dev/null || true
+    printf '%s backup.sh dump failed (exit %s) on %s; see /var/log/bault/backup.log\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$status" "$(hostname)" > "$FAILED_MARKER" 2> /dev/null || true
+  fi
   [ -z "$PLAIN_TMP" ] || rm -f "$PLAIN_TMP"
   if [ -n "$SCRATCH_DB" ]; then
     psql "$SCRATCH_ADMIN_URL" -X -q -c "DROP DATABASE IF EXISTS \"${SCRATCH_DB}\";" > /dev/null 2>&1 || true
@@ -145,6 +153,7 @@ cmd_dump() {
     find "$BACKUP_DIR" -name 'bault-*.dump*' -type f -mtime "+${RETAIN_DAYS}" -print -delete
   fi
 
+  rm -f "$FAILED_MARKER"
   echo "$file"
 }
 
@@ -219,7 +228,8 @@ cmd_verify() {
            count(*)
       FROM unnest(ARRAY['ledger_record', 'custody_event', 'audit_record', 'bin_transfer',
                         'wallet_request_event', 'arrival_disposal', 'parcel_event',
-                        'support_message', 'escrow_event', 'login_attempt']) AS t(name)
+                        'support_message', 'escrow_event', 'login_attempt',
+                        'usage_tier_change']) AS t(name)
      WHERE NOT EXISTS (SELECT 1 FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
                         WHERE c.relname = t.name AND tg.tgname = 'trg_append_only_' || t.name)
     UNION ALL
@@ -282,7 +292,7 @@ cmd_restore() {
 }
 
 case "${1:-}" in
-  dump)    shift; cmd_dump "$@" ;;
+  dump)    shift; DUMPING=1; cmd_dump "$@" ;;
   verify)  shift; cmd_verify "$@" ;;
   restore) shift; cmd_restore "$@" ;;
   *) die "usage: backup.sh {dump|verify|restore}" ;;

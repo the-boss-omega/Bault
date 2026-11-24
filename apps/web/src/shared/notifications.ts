@@ -1,4 +1,6 @@
 import type { MessageKey, TranslateFn } from './i18n';
+import type { AppNotification } from './hooks';
+import { dayKey } from './money';
 
 export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
   item_received: 'notifications.event.item_received',
@@ -20,8 +22,11 @@ export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
   commons_removed: 'notifications.event.commons_removed',
   grading_shipped: 'notifications.event.grading_shipped',
   offer_countered: 'notifications.event.offer_countered',
+  offer_accepted: 'notifications.event.offer_accepted',
+  offer_rejected: 'notifications.event.offer_rejected',
   swap_proposed: 'notifications.event.swap_proposed',
   swap_completed: 'notifications.event.swap_completed',
+  swap_rejected: 'notifications.event.swap_rejected',
   transfer_completed: 'notifications.event.transfer_completed',
   shipment_cancelled: 'notifications.event.shipment_cancelled',
   shipment_delivered: 'notifications.event.shipment_delivered',
@@ -38,6 +43,7 @@ export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
   escrow_inspected: 'notifications.event.escrow_inspected',
   escrow_settled: 'notifications.event.escrow_settled',
   escrow_returned: 'notifications.event.escrow_returned',
+  escrow_cancelled: 'notifications.event.escrow_cancelled',
   white_glove_requested: 'notifications.event.white_glove_requested',
   white_glove_quoted: 'notifications.event.white_glove_quoted',
   show_pickup_booked: 'notifications.event.show_pickup_booked',
@@ -66,28 +72,88 @@ export function eventLabel(t: TranslateFn, eventType: string): string {
   return key ? t(key) : eventType;
 }
 
+export function notificationMessage(content: unknown): string | null {
+  if (typeof content === 'string') return content.trim() === '' ? null : content;
+  if (content == null || typeof content !== 'object') return null;
+  const message = (content as Record<string, unknown>).message;
+  return typeof message === 'string' && message.trim() !== '' ? message : null;
+}
+
 export function renderContent(content: unknown, label: string): string {
-  if (content == null) return label;
-  if (typeof content === 'string') return content;
-  if (typeof content !== 'object') return String(content);
+  return notificationMessage(content) ?? label;
+}
 
-  const record = content as Record<string, unknown>;
-  if (typeof record.message === 'string' && record.message.trim() !== '') return record.message;
+/** The serial of the card a notification is about, when it says: the item events carry it as `barcode`. */
+export function notificationBarcode(content: unknown): string | null {
+  if (content == null || typeof content !== 'object') return null;
+  const barcode = (content as Record<string, unknown>).barcode;
+  return typeof barcode === 'string' && /^[A-Z]{2,4}-[A-Z0-9]+-\d{3,}$/.test(barcode) ? barcode : null;
+}
 
-  const skip = new Set([
-    'recipientIds',
-    'ownerId',
-    'userId',
-    'sellerId',
-    'buyerId',
-    'donorId',
-    'responderId',
-  ]);
-  const parts = Object.entries(record)
-    .filter(([key, value]) => !skip.has(key) && value != null && typeof value !== 'object')
-    .map(([key, value]) => {
-      const readable = key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
-      return `${readable}: ${String(value)}`;
-    });
-  return parts.length > 0 ? `${label} — ${parts.join(', ')}` : label;
+export interface NotificationLink {
+  section: string;
+  tab: string;
+  params: Record<string, string>;
+  label: MessageKey;
+}
+
+const SHIPMENT_EVENTS = new Set([
+  'shipment_out',
+  'shipment_delivered',
+  'shipment_exception',
+  'shipment_cancelled',
+  'shipment_expired',
+  'direct_ship_booked',
+]);
+
+const contentCode = (content: unknown, key: string): string | null => {
+  if (content == null || typeof content !== 'object') return null;
+  const value = (content as Record<string, unknown>)[key];
+  return typeof value === 'string' && /^[A-Z][A-Z0-9]*-[A-Z0-9-]+$/.test(value) ? value : null;
+};
+
+export function notificationLink(eventType: string, content: unknown): NotificationLink | null {
+  if (eventType.startsWith('parcel_')) {
+    const code = contentCode(content, 'parcelCode');
+    return code ? { section: 'inbound', tab: 'parcels', params: { parcel: code }, label: 'notif.openParcel' } : null;
+  }
+  if (SHIPMENT_EVENTS.has(eventType)) {
+    const code = contentCode(content, 'shipmentCode');
+    return code
+      ? { section: 'shipping-services', tab: 'tracking', params: { shipment: code }, label: 'notif.openShipment' }
+      : null;
+  }
+  if (eventType === 'offer_received' || eventType === 'offer_countered') {
+    return { section: 'marketplace', tab: 'offers', params: {}, label: 'notif.openOffers' };
+  }
+  if (eventType === 'swap_proposed' || eventType === 'swap_completed' || eventType === 'transfer_completed') {
+    return { section: 'marketplace', tab: 'trade', params: {}, label: 'notif.openTrades' };
+  }
+  return null;
+}
+
+export type NotificationGlyph = 'card' | 'market' | 'escrow' | 'wallet' | 'shipping' | 'inbox' | 'help' | 'bell';
+
+/** What kind of thing an event is about, for the mark in front of it: by the way its name starts. */
+export function notificationGlyph(eventType: string): NotificationGlyph {
+  if (/^(?:item|hold|arrival|commons|grading)_/.test(eventType)) return 'card';
+  if (/^(?:offer|swap|transfer|buyout)_/.test(eventType)) return 'market';
+  if (/^escrow_/.test(eventType)) return 'escrow';
+  if (/^(?:wallet|topup|payment)_/.test(eventType)) return 'wallet';
+  if (/^parcel_/.test(eventType)) return 'inbox';
+  if (/^(?:shipment|direct_ship|group_shipment|show_pickup|white_glove|handed_over)/.test(eventType)) return 'shipping';
+  if (/^(?:support|custom_request)_/.test(eventType)) return 'help';
+  return 'bell';
+}
+
+/** The feed, newest first, in runs of one calendar day. */
+export function byDay(items: readonly AppNotification[]) {
+  const days: Array<{ key: string; items: AppNotification[]; first: AppNotification }> = [];
+  for (const n of items) {
+    const key = dayKey(n.createdAt);
+    const last = days[days.length - 1];
+    if (last && last.key === key) last.items.push(n);
+    else days.push({ key, items: [n], first: n });
+  }
+  return days;
 }
