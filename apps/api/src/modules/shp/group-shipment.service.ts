@@ -30,35 +30,50 @@ export class GroupShipmentService {
   ) {
     const s = await this.shipments.loadFor(shipmentId, actor);
     if (s.userId !== userId) throw AppError.forbidden('That is not your shipment');
-    if (s.status !== 'requested') {
-      throw new AppError(ErrorCode.CONFLICT, 'A group can only be opened around a request that has not been rated', 409);
-    }
-    if (s.groupId) throw new AppError(ErrorCode.CONFLICT, 'That request is already in a group', 409);
+    GroupShipmentService.assertGroupable(s, 'A group can only be opened around a request that has not been rated');
 
-    return this.db.transaction(async (tx) => {
+    const groupId = await this.db.transaction(async (tx) => {
+      const [cur] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
+      if (!cur) throw AppError.notFound('Shipment not found');
+      GroupShipmentService.assertGroupable(cur, 'A group can only be opened around a request that has not been rated');
+
       const [group] = await tx
         .insert(shipmentGroup)
         .values({
           code: prefixedId(ID_PREFIX.shipmentGroup),
           payerUserId: userId,
-          destinationAddress: s.destinationAddress,
-          recipientName: s.recipientName ?? '',
-          destinationCountry: s.destinationCountry,
-          destinationPostalCode: s.destinationPostalCode,
-          destinationDetail: s.destinationDetail,
+          destinationAddress: cur.destinationAddress,
+          recipientName: cur.recipientName ?? '',
+          destinationCountry: cur.destinationCountry,
+          destinationPostalCode: cur.destinationPostalCode,
+          destinationDetail: cur.destinationDetail,
           notes: notes?.trim() || null,
           status: 'forming',
         })
         .returning();
       if (!group) throw AppError.validation('Failed to open the group');
 
-      await tx
+      const [grouped] = await tx
         .update(shipment)
         .set({ groupId: group.id, updatedAt: new Date() })
-        .where(eq(shipment.id, shipmentId));
+        .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested'), isNull(shipment.groupId)))
+        .returning({ id: shipment.id });
+      if (!grouped) throw new AppError(ErrorCode.CONFLICT, 'That request has moved on and cannot open a group', 409);
 
-      return group;
+      return group.id;
     });
+    return this.describe(groupId, actor);
+  }
+
+  private static assertGroupable(
+    s: { status: string; groupId: string | null; fulfilmentMethod: string; mergedIntoShipmentId: string | null },
+    notRequested: string,
+  ) {
+    if (s.fulfilmentMethod !== 'carrier') {
+      throw AppError.validation('Only a parcel going by carrier can share a box. A hand delivery or a show pickup travels on its own.');
+    }
+    if (s.status !== 'requested' || s.mergedIntoShipmentId) throw new AppError(ErrorCode.CONFLICT, notRequested, 409);
+    if (s.groupId) throw new AppError(ErrorCode.CONFLICT, 'That request is already in a group', 409);
   }
 
   async join(userId: string, groupCode: string, shipmentId: string, actor: ShipmentActor) {
@@ -74,10 +89,7 @@ export class GroupShipmentService {
 
     const s = await this.shipments.loadFor(shipmentId, actor);
     if (s.userId !== userId) throw AppError.forbidden('That is not your shipment');
-    if (s.groupId) throw new AppError(ErrorCode.CONFLICT, 'That request is already in a group', 409);
-    if (s.status !== 'requested') {
-      throw new AppError(ErrorCode.CONFLICT, 'Only a request that has not been rated can join a group', 409);
-    }
+    GroupShipmentService.assertGroupable(s, 'Only a request that has not been rated can join a group');
     if (
       s.destinationAddress !== group.destinationAddress ||
       s.destinationCountry !== group.destinationCountry ||
@@ -116,7 +128,7 @@ export class GroupShipmentService {
 
     const [group] = await this.db.select().from(shipmentGroup).where(eq(shipmentGroup.id, s.groupId)).limit(1);
     if (group?.status !== 'forming') {
-      throw new AppError(ErrorCode.CONFLICT, 'That group has been locked — ask support to unpick it', 409);
+      throw new AppError(ErrorCode.CONFLICT, 'That group has been locked — ask support to take your request out of it', 409);
     }
     if (group.payerUserId === userId) {
       throw new AppError(
@@ -128,7 +140,7 @@ export class GroupShipmentService {
 
     const groupId = s.groupId;
     await this.db.transaction(async (tx) => {
-      await this.assertForming(tx, groupId, 'That group has been locked — ask support to unpick it');
+      await this.assertForming(tx, groupId, 'That group has been locked — ask support to take your request out of it');
       await tx
         .update(shipment)
         .set({ groupId: null, updatedAt: new Date() })
