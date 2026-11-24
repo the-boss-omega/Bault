@@ -7,6 +7,7 @@ import { notificationMessage } from './notification-message';
 import { defaultEmailEnabled, eventSubject } from './notification-events';
 import { PASSWORD_RESET_REQUESTED, sendPasswordReset } from './password-reset-mail';
 import { MFA_EMAIL_CODE_REQUESTED, sendMfaEmailCode } from './mfa-email-code-mail';
+import { EMAIL_CHANGED, EMAIL_CHANGE_REQUESTED, sendEmailChangeLink, sendEmailChangedNotice } from './email-change-mail';
 import { OCR_REQUESTED } from './ocr-read';
 
 const SINGLE_RECIPIENT_KEYS = ['ownerId', 'userId', 'sellerId', 'buyerId', 'responderId', 'donorId'];
@@ -188,7 +189,13 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
                 mailed: sent ? 1 : 0,
                 failed: 0,
               }))
-            : await deliver(client, env, claimed);
+            : claimed.event_type === EMAIL_CHANGE_REQUESTED || claimed.event_type === EMAIL_CHANGED
+              ? await (claimed.event_type === EMAIL_CHANGE_REQUESTED ? sendEmailChangeLink : sendEmailChangedNotice)(
+                  client,
+                  claimed.payload,
+                  emailAdapter(),
+                ).then((sent) => ({ delivered: 0, mailed: sent ? 1 : 0, failed: 0 }))
+              : await deliver(client, env, claimed);
       await client.query(
         `UPDATE outbox_message
             SET dispatched_at = now(), attempts = attempts + 1, last_attempt_at = now()
