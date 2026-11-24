@@ -43,6 +43,20 @@ describe('PAY separation of duties does not read the path text', () => {
     expect(row!.status).toBe('submitted');
     expect((await admin.post(`/finance/wallet-requests/${id.toUpperCase()}/cancel`, {})).status).toBe(201);
   });
+
+  it('refuses a request id that is not a uuid as a bad request, never as a server error', async () => {
+    const admin = await signIn(SEED.admin);
+    const collector = await signIn(SEED.collector);
+    const answers = [
+      await admin.get('/admin/wallet-requests/not-a-uuid'),
+      await admin.post('/admin/wallet-requests/not-a-uuid/approve', {}),
+      await admin.post('/admin/wallet-requests/not-a-uuid/complete', {}),
+      await collector.get('/finance/wallet-requests/not-a-uuid'),
+      await collector.post('/finance/wallet-requests/not-a-uuid/cancel', {}),
+      await admin.post('/finance/chargebacks/wallet-requests/not-a-uuid', { reason: 'x' }),
+    ];
+    expect(answers.map((r) => r.status)).toEqual([400, 400, 400, 400, 400, 400]);
+  });
 });
 
 describe('PAY the sandbox direct top-up refuses a key reused for another amount', () => {
