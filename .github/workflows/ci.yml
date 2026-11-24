@@ -40,6 +40,7 @@ jobs:
       API_PORT: 3000
       AUTH_RATE_LIMIT_PER_MINUTE: 5000
       RATE_LIMIT_PER_MINUTE: 20000
+      CORS_ORIGINS: http://localhost:4180
       MINIO_VERSION: v0.0.0-20250907161309-07c3a429bfed
 
     steps:
@@ -158,6 +159,21 @@ jobs:
         run: |
           pnpm --filter @bault/api db:seed
           pnpm test:worker
+
+      - name: Browser journeys (collector, operator, administrator)
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:journeys
+        env:
+          JOURNEY_FAILURES: ${{ runner.temp }}/journey-failures
+
+      - name: Keep what the journeys saw when one fails
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: journey-failures
+          path: ${{ runner.temp }}/journey-failures
+          if-no-files-found: ignore
 
       - name: Stop the API
         if: always()
