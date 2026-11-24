@@ -128,23 +128,34 @@ describe('MKT swaps & transfers', () => {
     const mine = await intakeFor(operator, SEED.collector);
     const theirs = await intakeFor(operator, SEED.collector2);
 
+    expect((await proposer.post('/services/buyout', { itemId: mine.id })).status).toBe(201);
+
     const swap = await proposer.post('/marketplace/swaps', {
       responderUsername,
       offeredItemIds: [mine.id],
       requestedItemIds: [theirs.id],
     });
-    expect(swap.status).toBe(201);
-    expect((await proposer.post('/services/buyout', { itemId: mine.id })).status).toBe(201);
-
-    const res = await responder.post(`/marketplace/swaps/${swap.body.id}/approve`);
-    expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe('item_committed');
-    expect(String(res.body.error.message)).toMatch(/buyout/i);
-    expect(await vaultIds(responder)).not.toContain(mine.id);
+    expect(swap.status).toBe(409);
+    expect(swap.body.error.code).toBe('item_committed');
+    expect(String(swap.body.error.message)).toMatch(/buyout/i);
 
     const gift = await proposer.post('/marketplace/transfers', { itemId: mine.id, toUsername: responderUsername });
     expect(gift.status).toBe(409);
     expect(gift.body.error.code).toBe('item_committed');
+
+    const other = await intakeFor(operator, SEED.collector);
+    const pending = await proposer.post('/marketplace/swaps', {
+      responderUsername,
+      offeredItemIds: [other.id],
+      requestedItemIds: [theirs.id],
+    });
+    expect(pending.status).toBe(201);
+    const late = await proposer.post('/services/buyout', { itemId: other.id });
+    expect(late.status).toBe(409);
+    expect(late.body.error.code).toBe('item_committed');
+    const res = await responder.post(`/marketplace/swaps/${pending.body.id}/approve`);
+    expect(res.status).toBe(201);
+    expect(await vaultIds(responder)).toContain(other.id);
   });
 
   it('names whose card it is not, and the card, never a raw id', { timeout: 20_000 }, async () => {
