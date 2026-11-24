@@ -43,7 +43,7 @@ export class SessionAuthGuard implements CanActivate {
           user.status === 'active' ||
           allowAnyStatus === true ||
           (allowSuspended === true && user.status === 'suspended');
-        if (!permitted) throw AppError.accountSuspended();
+        if (!permitted) throw AppError.accountSuspended(user.status);
         req.user = user;
       }
     }

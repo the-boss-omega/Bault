@@ -12,6 +12,7 @@ import { transaction } from '../mkt/mkt.schema';
 import { DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { ServiceRequestService } from './service.service';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
 
 @Injectable()
 export class DonationService {
@@ -28,6 +29,7 @@ export class DonationService {
     if (!it || it.ownerId !== ownerId) throw AppError.forbidden('Not your item');
     if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
     if (it.lifecycleState !== 'stored') throw new AppError(ErrorCode.CONFLICT, 'Item must be stored', 409);
+    await assertItemsUncommitted(this.db, [itemId], 'donated');
     return this.confirmation.issue(ownerId, 'donation', { itemId });
   }
 
@@ -36,7 +38,8 @@ export class DonationService {
 
     return this.custody.run(async (tx) => {
       const platformId = await this.requests.platformAccountId(tx);
-      const req = await this.requests.create(tx, { type: 'donation', requesterId: ownerId, itemId });
+      const donated = await this.custody.lockExpecting(tx, itemId, { ownerId });
+      const req = await this.requests.create(tx, { type: 'donation', requesterId: ownerId, itemId, commits: 'donated' });
       if (!req) throw AppError.validation('Failed to create donation request');
 
       await this.custody.transferOwnership(tx, itemId, platformId, ownerId, 'donation', { ownerId });
@@ -63,7 +66,7 @@ export class DonationService {
         aggregateType: 'item',
         aggregateId: itemId,
         eventType: 'item_donated',
-        payload: { itemId, donorId: ownerId },
+        payload: { itemId, donorId: ownerId, itemDescription: donated?.description },
       });
       return { status: 'donated', itemId };
     });

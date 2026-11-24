@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, intakeFor, signIn, type Client } from './helpers/http';
 import { activeAccount, passwordOnly } from './helpers/mfa';
-import { sql } from './helpers/db';
+import { honouredMembership, sql } from './helpers/db';
 
 describe('DIS value-added services', () => {
   async function freshItem() {
@@ -148,7 +148,7 @@ describe('DIS value-added services', () => {
     expect(cashIn.status).toBe(201);
     expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/approve`, {})).status).toBe(201);
     expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/complete`, {})).status).toBe(201);
-    expect([200, 201]).toContain((await member.post('/membership/subscribe', { tier: 'folio' })).status);
+    await honouredMembership(account, 'bronze');
     const bins = (await operator.get('/custody/bins')).body as { id: string }[];
     const intake = await operator.post('/intake/items', {
       ownerUsername: account.username,

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -30,35 +30,50 @@ export class GroupShipmentService {
   ) {
     const s = await this.shipments.loadFor(shipmentId, actor);
     if (s.userId !== userId) throw AppError.forbidden('That is not your shipment');
-    if (s.status !== 'requested') {
-      throw new AppError(ErrorCode.CONFLICT, 'A group can only be opened around a request that has not been rated', 409);
-    }
-    if (s.groupId) throw new AppError(ErrorCode.CONFLICT, 'That request is already in a group', 409);
+    GroupShipmentService.assertGroupable(s, 'A group can only be opened around a request that has not been rated');
 
-    return this.db.transaction(async (tx) => {
+    const groupId = await this.db.transaction(async (tx) => {
+      const [cur] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
+      if (!cur) throw AppError.notFound('Shipment not found');
+      GroupShipmentService.assertGroupable(cur, 'A group can only be opened around a request that has not been rated');
+
       const [group] = await tx
         .insert(shipmentGroup)
         .values({
           code: prefixedId(ID_PREFIX.shipmentGroup),
           payerUserId: userId,
-          destinationAddress: s.destinationAddress,
-          recipientName: s.recipientName ?? '',
-          destinationCountry: s.destinationCountry,
-          destinationPostalCode: s.destinationPostalCode,
-          destinationDetail: s.destinationDetail,
+          destinationAddress: cur.destinationAddress,
+          recipientName: cur.recipientName ?? '',
+          destinationCountry: cur.destinationCountry,
+          destinationPostalCode: cur.destinationPostalCode,
+          destinationDetail: cur.destinationDetail,
           notes: notes?.trim() || null,
           status: 'forming',
         })
         .returning();
       if (!group) throw AppError.validation('Failed to open the group');
 
-      await tx
+      const [grouped] = await tx
         .update(shipment)
         .set({ groupId: group.id, updatedAt: new Date() })
-        .where(eq(shipment.id, shipmentId));
+        .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested'), isNull(shipment.groupId)))
+        .returning({ id: shipment.id });
+      if (!grouped) throw new AppError(ErrorCode.CONFLICT, 'That request has moved on and cannot open a group', 409);
 
-      return group;
+      return group.id;
     });
+    return this.describe(groupId, actor);
+  }
+
+  private static assertGroupable(
+    s: { status: string; groupId: string | null; fulfilmentMethod: string; mergedIntoShipmentId: string | null },
+    notRequested: string,
+  ) {
+    if (s.fulfilmentMethod !== 'carrier') {
+      throw AppError.validation('Only a parcel going by carrier can share a box. A hand delivery or a show pickup travels on its own.');
+    }
+    if (s.status !== 'requested' || s.mergedIntoShipmentId) throw new AppError(ErrorCode.CONFLICT, notRequested, 409);
+    if (s.groupId) throw new AppError(ErrorCode.CONFLICT, 'That request is already in a group', 409);
   }
 
   async join(userId: string, groupCode: string, shipmentId: string, actor: ShipmentActor) {
@@ -74,10 +89,7 @@ export class GroupShipmentService {
 
     const s = await this.shipments.loadFor(shipmentId, actor);
     if (s.userId !== userId) throw AppError.forbidden('That is not your shipment');
-    if (s.groupId) throw new AppError(ErrorCode.CONFLICT, 'That request is already in a group', 409);
-    if (s.status !== 'requested') {
-      throw new AppError(ErrorCode.CONFLICT, 'Only a request that has not been rated can join a group', 409);
-    }
+    GroupShipmentService.assertGroupable(s, 'Only a request that has not been rated can join a group');
     if (
       s.destinationAddress !== group.destinationAddress ||
       s.destinationCountry !== group.destinationCountry ||
@@ -96,7 +108,7 @@ export class GroupShipmentService {
       if (!joined) throw new AppError(ErrorCode.CONFLICT, 'That request has moved on and cannot join a group', 409);
     });
 
-    return this.describe(group.id);
+    return this.describe(group.id, actor);
   }
 
   private async assertForming(tx: Database, groupId: string, message: string) {
@@ -116,7 +128,7 @@ export class GroupShipmentService {
 
     const [group] = await this.db.select().from(shipmentGroup).where(eq(shipmentGroup.id, s.groupId)).limit(1);
     if (group?.status !== 'forming') {
-      throw new AppError(ErrorCode.CONFLICT, 'That group has been locked — ask support to unpick it', 409);
+      throw new AppError(ErrorCode.CONFLICT, 'That group has been locked — ask support to take your request out of it', 409);
     }
     if (group.payerUserId === userId) {
       throw new AppError(
@@ -128,7 +140,7 @@ export class GroupShipmentService {
 
     const groupId = s.groupId;
     await this.db.transaction(async (tx) => {
-      await this.assertForming(tx, groupId, 'That group has been locked — ask support to unpick it');
+      await this.assertForming(tx, groupId, 'That group has been locked — ask support to take your request out of it');
       await tx
         .update(shipment)
         .set({ groupId: null, updatedAt: new Date() })
@@ -137,7 +149,28 @@ export class GroupShipmentService {
     return { status: 'left' as const };
   }
 
-  async describe(groupId: string) {
+  async describeFor(groupId: string, viewer: ShipmentActor) {
+    if (!isStaff(viewer)) {
+      const [group] = await this.db
+        .select({ payerUserId: shipmentGroup.payerUserId })
+        .from(shipmentGroup)
+        .where(eq(shipmentGroup.id, groupId))
+        .limit(1);
+      if (!group) throw AppError.notFound('Group not found');
+      if (group.payerUserId !== viewer.id) {
+        const [mine] = await this.db
+          .select({ id: shipment.id })
+          .from(shipment)
+          .where(and(eq(shipment.groupId, groupId), eq(shipment.userId, viewer.id)))
+          .limit(1);
+        if (!mine) throw AppError.notFound('Group not found');
+      }
+    }
+    return this.describe(groupId, viewer);
+  }
+
+  async describe(groupId: string, viewer: ShipmentActor) {
+    const staff = isStaff(viewer);
     const [group] = await this.db.select().from(shipmentGroup).where(eq(shipmentGroup.id, groupId)).limit(1);
     if (!group) throw AppError.notFound('Group not found');
 
@@ -157,21 +190,44 @@ export class GroupShipmentService {
     const rows = [];
     for (const m of members) {
       const ids = (m.shipment.itemIds as string[]) ?? [];
-      const items = ids.length > 0 ? await this.profiles.loadShippableItems(m.shipment.userId, ids) : [];
+      const items = await this.profiles.loadItems(ids);
       const measured = this.profiles.measure(items);
       totalWeightGrams += measured.totalWeightGrams;
       totalItems += items.length;
-      rows.push({
-        shipmentId: m.shipment.id,
-        shipmentCode: m.shipment.code,
-        username: m.username,
-        name: fullName(m.firstName, m.lastName) || null,
-        itemCount: items.length,
-        weightGrams: measured.totalWeightGrams,
-        isPayer: m.shipment.userId === group.payerUserId,
-        insuredValueMinor: m.shipment.insuredValueMinor,
-        status: m.shipment.status,
-      });
+      const isPayer = m.shipment.userId === group.payerUserId;
+      if (staff) {
+        rows.push({
+          shipmentId: m.shipment.id,
+          shipmentCode: m.shipment.code,
+          username: m.username,
+          name: fullName(m.firstName, m.lastName) || null,
+          itemCount: items.length,
+          weightGrams: measured.totalWeightGrams,
+          isPayer,
+          insuredValueMinor: m.shipment.insuredValueMinor,
+          status: m.shipment.status,
+        });
+      } else if (m.shipment.userId === viewer.id) {
+        rows.push({
+          shipmentId: m.shipment.id,
+          shipmentCode: m.shipment.code,
+          username: m.username,
+          itemCount: items.length,
+          weightGrams: measured.totalWeightGrams,
+          isPayer,
+          insuredValueMinor: m.shipment.insuredValueMinor,
+          status: m.shipment.status,
+        });
+      } else {
+        rows.push({
+          shipmentId: m.shipment.id,
+          shipmentCode: m.shipment.code,
+          username: m.username,
+          itemCount: items.length,
+          isPayer,
+          status: m.shipment.status,
+        });
+      }
     }
 
     return {
@@ -188,15 +244,15 @@ export class GroupShipmentService {
     };
   }
 
-  async mine(userId: string) {
+  async mine(viewer: ShipmentActor) {
     const rows = await this.db
       .select({ groupId: shipment.groupId })
       .from(shipment)
-      .where(and(eq(shipment.userId, userId)));
+      .where(and(eq(shipment.userId, viewer.id)));
     const ids = [...new Set(rows.map((r) => r.groupId).filter((id): id is string => Boolean(id)))];
     if (ids.length === 0) return [];
     const groups = await this.db.select().from(shipmentGroup).where(inArray(shipmentGroup.id, ids));
-    return Promise.all(groups.map((g) => this.describe(g.id)));
+    return Promise.all(groups.map((g) => this.describe(g.id, viewer)));
   }
 
   async lock(userId: string, groupId: string) {
@@ -205,7 +261,10 @@ export class GroupShipmentService {
     if (group.payerUserId !== userId) throw AppError.forbidden('Only the payer can lock the group');
     if (group.status !== 'forming') throw new AppError(ErrorCode.CONFLICT, 'Already locked', 409);
 
-    const members = await this.db.select().from(shipment).where(eq(shipment.groupId, groupId));
+    const members = await this.db
+      .select({ id: shipment.id })
+      .from(shipment)
+      .where(and(eq(shipment.groupId, groupId), ne(shipment.status, 'cancelled')));
     if (members.length < 2) {
       throw AppError.validation('A shared parcel needs at least two people in it.');
     }
@@ -219,7 +278,10 @@ export class GroupShipmentService {
         .returning({ id: shipmentGroup.id });
       if (!locked) throw new AppError(ErrorCode.CONFLICT, 'That group is no longer open to locking', 409);
 
-      const current = await tx.select().from(shipment).where(eq(shipment.groupId, groupId));
+      const current = await tx
+        .select()
+        .from(shipment)
+        .where(and(eq(shipment.groupId, groupId), ne(shipment.status, 'cancelled')));
       if (current.length < 2) {
         throw AppError.validation('A shared parcel needs at least two people in it.');
       }
@@ -246,18 +308,23 @@ export class GroupShipmentService {
     const [group] = await this.db.select().from(shipmentGroup).where(eq(shipmentGroup.id, groupId)).limit(1);
     if (!group) throw AppError.notFound('Group not found');
     if (group.payerUserId !== userId) throw AppError.forbidden('Only the payer can cancel the group');
-    if (group.status === 'dispatched') {
-      throw new AppError(ErrorCode.CONFLICT, 'That parcel has already gone', 409);
-    }
 
     const now = new Date();
     return this.db.transaction(async (tx) => {
-      await tx
+      const [cancelled] = await tx
         .update(shipmentGroup)
         .set({ status: 'cancelled', cancelledAt: now, notes: reason.trim(), updatedAt: now })
-        .where(eq(shipmentGroup.id, groupId));
+        .where(and(eq(shipmentGroup.id, groupId), inArray(shipmentGroup.status, ['forming', 'locked'])))
+        .returning({ id: shipmentGroup.id });
+      if (!cancelled) {
+        throw new AppError(ErrorCode.CONFLICT, 'That shared parcel has already gone or been cancelled', 409);
+      }
       await tx.update(shipment).set({ groupId: null, updatedAt: now }).where(eq(shipment.groupId, groupId));
       return { status: 'cancelled' as const };
     });
   }
+}
+
+function isStaff(viewer: ShipmentActor) {
+  return viewer.role === 'warehouse_operator' || viewer.role === 'admin';
 }

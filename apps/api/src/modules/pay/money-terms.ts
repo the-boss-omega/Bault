@@ -28,10 +28,6 @@ export function cashOutSettlement(amountMinor: number, waivedMinor = 0): CashOut
   return { grossMinor, feeMinor, netMinor: grossMinor - feeMinor };
 }
 
-export function cashOutNetMinor(amountMinor: number): number {
-  return cashOutSettlement(amountMinor).netMinor;
-}
-
 export const CHARGEBACK_FEE_MINOR = 2_500;
 export const CHARGEBACK_FEE_ACTION = 'chargeback_fee';
 

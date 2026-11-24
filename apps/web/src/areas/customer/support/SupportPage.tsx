@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
-import { formatDateTime } from '../../../shared/money';
+import { formatDateTime, formatDayHeading, formatTime } from '../../../shared/money';
+import { inDays } from '../../../shared/days';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
   TICKET_CATEGORIES,
+  messageFromStaff,
   TICKET_TONE,
   ticketCategoryLabel,
   ticketStatusLabel,
+  type SupportMessage,
   type SupportThread,
   type SupportTicket,
 } from '../../../shared/support';
@@ -24,7 +27,8 @@ import {
   TabPanel,
 } from '../../../shared/ui/primitives';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import { IconAsk, IconPlus } from '../../../shared/ui/icons';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
+import { IconAsk, IconPlus, IconSearch } from '../../../shared/ui/icons';
 
 const TABS = ['tickets', 'new'] as const;
 type SupportTab = (typeof TABS)[number];
@@ -48,7 +52,6 @@ export function SupportPage({ suspended = false }: { suspended?: boolean }) {
       setError(null);
     } catch (e) {
       setError((e as Error).message);
-      setTickets([]);
     }
   }, []);
 
@@ -70,6 +73,7 @@ export function SupportPage({ suspended = false }: { suspended?: boolean }) {
         <TabPanel tab="tickets">
           <TicketList
             tickets={tickets}
+            failed={error !== null}
             openId={route.params.ticket ?? null}
             onOpen={(id) => openRecord('ticket', id)}
             onNew={() => goTab('new')}
@@ -102,18 +106,30 @@ export function SupportPage({ suspended = false }: { suspended?: boolean }) {
   );
 }
 
+const TICKET_FILTERS = ['all', 'awaiting_customer', 'open', 'resolved'] as const;
+
 function TicketList({
   tickets,
+  failed,
   openId,
   onOpen,
   onNew,
 }: {
   tickets: SupportTicket[] | null;
+  failed: boolean;
   openId: string | null;
   onOpen: (id: string) => void;
   onNew: () => void;
 }) {
   const { t, locale } = useI18n();
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState<(typeof TICKET_FILTERS)[number]>('all');
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = (tickets ?? []).filter(
+    (ticket) =>
+      (filter === 'all' || ticket.status === filter) &&
+      words.every((w) => `${ticket.subject} ${ticket.code}`.toLowerCase().includes(w)),
+  );
 
   return (
     <Panel
@@ -121,75 +137,105 @@ function TicketList({
       subtitle={t('support.list.subtitle')}
       flush
       tools={
-        <Button size="sm" variant="gold" icon={<IconPlus />} onClick={onNew}>
+        <Button size="sm" variant="primary" icon={<IconPlus />} onClick={onNew}>
           {t('support.new')}
         </Button>
       }
     >
       {tickets === null ? (
-        <SkeletonTable rows={3} columns={4} />
+        failed ? null : <SkeletonTable rows={3} columns={4} />
       ) : tickets.length === 0 ? (
-        <EmptyState title={t('support.empty')} text={t('support.emptyText')} icon={<IconAsk />} />
+        <EmptyState
+          title={t('support.empty')}
+          text={t('support.emptyText')}
+          icon={<IconAsk />}
+          action={
+            <Button size="sm" variant="secondary" onClick={onNew}>
+              {t('support.new')}
+            </Button>
+          }
+        />
       ) : (
-        <div className="dt-wrap dt-wrap--stack">
-          <table className="data-table">
-            <caption>{t('support.list.title')}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t('support.col.subject')}</th>
-                <th scope="col">{t('support.col.category')}</th>
-                <th scope="col">{t('support.col.status')}</th>
-                <th scope="col">{t('support.col.activity')}</th>
-                <th scope="col" className="td-tight" />
-              </tr>
-            </thead>
-            <tbody>
-              {tickets.map((ticket) => (
-                <tr
-                  key={ticket.id}
-                  className={'is-clickable' + (ticket.id === openId ? ' is-selected' : '')}
-                  tabIndex={0}
-                  onClick={() => onOpen(ticket.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onOpen(ticket.id);
-                    }
-                  }}
+        <div className="register-days panel-body">
+          <div className="faq-controls">
+            <div className="search search--wide">
+              <IconSearch />
+              <input
+                type="search"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={t('support.list.searchPlaceholder')}
+                aria-label={t('support.list.searchLabel')}
+              />
+            </div>
+            <div className="chip-row" role="group" aria-label={t('support.list.filterLabel')}>
+              {TICKET_FILTERS.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`chip${filter === key ? ' is-on' : ''}`}
+                  aria-pressed={filter === key}
+                  onClick={() => setFilter(key)}
                 >
-                  <td data-label={t('support.col.subject')} className="dt-primary">
-                    {ticket.subject}
-                    <span className="dt-sub" dir="ltr">
-                      {ticket.code}
-                    </span>
-                  </td>
-                  <td data-label={t('support.col.category')}>
-                    {ticketCategoryLabel(t, ticket.category)}
-                  </td>
-                  <td data-label={t('support.col.status')}>
-                    <StatusBadge tone={TICKET_TONE[ticket.status] ?? 'neutral'}>
-                      {ticketStatusLabel(t, ticket.status)}
-                    </StatusBadge>
-                  </td>
-                  <td data-label={t('support.col.activity')}>
-                    {formatDateTime(ticket.lastMessageAt, locale)}
-                  </td>
-                  <td className="td-tight">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpen(ticket.id);
-                      }}
-                    >
-                      {t('support.open')}
-                    </Button>
-                  </td>
-                </tr>
+                  {key === 'all' ? t('support.list.filterAll') : ticketStatusLabel(t, key)}
+                </button>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </div>
+          {shown.length === 0 && (
+            <EmptyState
+              title={t('support.list.noMatch')}
+              text={t('support.list.noMatchText')}
+              icon={<IconSearch />}
+            />
+          )}
+          {inDays(
+            [...shown].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt)),
+            (ticket) => ticket.lastMessageAt,
+          ).map(({ key, items, first }) => (
+            <div key={key} className="register-day-group">
+              <h3 className="register-day" id={`tickets-${key}`}>
+                <span className="date">{formatDayHeading(first.lastMessageAt, locale)}</span>
+              </h3>
+              <ul className="timeline timeline--stamped" aria-labelledby={`tickets-${key}`}>
+                {items.map((ticket) => (
+                  <li
+                    key={ticket.id}
+                    className={'is-clickable' + (ticket.id === openId ? ' is-selected' : '')}
+                    onClick={() => onOpen(ticket.id)}
+                  >
+                    <span className="hint date">{formatTime(ticket.lastMessageAt, locale)}</span>
+                    <div className="register-text">
+                      <span className="register-kind">
+                        <StatusBadge tone={TICKET_TONE[ticket.status] ?? 'neutral'}>
+                          {ticketStatusLabel(t, ticket.status)}
+                        </StatusBadge>
+                      </span>
+                      <p className="register-entry">
+                        <button
+                          type="button"
+                          className="register-link"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpen(ticket.id);
+                          }}
+                        >
+                          {ticket.subject}
+                        </button>
+                      </p>
+                      <p className="register-meta">
+                        <span className="code-inline" dir="ltr">
+                          {ticket.code}
+                        </span>
+                        {' · '}
+                        {ticketCategoryLabel(t, ticket.category)}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       )}
     </Panel>
@@ -231,40 +277,77 @@ function NewTicketForm({
 
   return (
     <Panel title={t('support.newTitle')} subtitle={t('support.newSubtitle')}>
-      <div className="stack stack--tight" style={{ maxWidth: 620 }}>
-        <label className="field">
-          <span className="field-label">{t('support.col.category')}</span>
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            {TICKET_CATEGORIES.map((c) => (
-              <option key={c.key} value={c.key}>
-                {t(c.labelKey)}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="request-form">
+        <div className="stack stack--tight request-form-fields">
+          <label className="field">
+            <span className="field-label">{t('support.col.category')}</span>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {TICKET_CATEGORIES.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {t(c.labelKey)}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="field">
-          <span className="field-label">{t('support.col.subject')}</span>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} />
-        </label>
+          <label className="field">
+            <span className="field-label">{t('support.col.subject')}</span>
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              maxLength={200}
+              dir="auto"
+            />
+          </label>
 
-        <Field label={t('support.message')} hint={t('support.messageHint')}>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={7}
-            maxLength={5000}
-          />
-        </Field>
+          <Field label={t('support.message')} hint={t('support.messageHint')}>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={7}
+              maxLength={5000}
+              dir="auto"
+            />
+          </Field>
+        </div>
 
-        <div className="row">
-          <Button variant="gold" disabled={busy || !ready} onClick={() => void submit()}>
+        <aside className="request-slip">
+          <DrawerTag
+            kicker={t('support.newTitle')}
+            title={
+              subject.trim() || <span className="drawer-tag-quiet">{t('support.col.subject')}</span>
+            }
+            status={
+              <StatusBadge tone={TICKET_TONE.open ?? 'neutral'}>
+                {ticketStatusLabel(t, 'open')}
+              </StatusBadge>
+            }
+            lines={[{ label: t('support.col.category'), value: ticketCategoryLabel(t, category) }]}
+          >
+            <div className="ticket-note">
+              <span className="slip-label">{t('support.message')}</span>
+              <p>{body.trim() || '—'}</p>
+            </div>
+          </DrawerTag>
+        </aside>
+
+        <div className="row request-form-actions">
+          <Button variant="primary" disabled={busy || !ready} onClick={() => void submit()}>
             {t('support.submit')}
           </Button>
         </div>
       </div>
     </Panel>
   );
+}
+
+function authorLabel(t: TranslateFn, message: SupportMessage, staff: boolean): string {
+  const fromStaff = messageFromStaff(message);
+  if (!staff) return fromStaff ? t('support.fromStaff') : t('support.fromYou');
+  if (fromStaff) {
+    return message.authorUsername ? t('support.fromStaffNamed', { username: message.authorUsername }) : t('support.fromStaff');
+  }
+  return message.authorUsername ?? t('support.fromCustomer');
 }
 
 export function ThreadDrawer({
@@ -334,7 +417,11 @@ export function ThreadDrawer({
       dirty={reply.trim() !== ''}
       footer={
         <>
-          <Button variant="gold" disabled={busy || reply.trim() === ''} onClick={() => void send()}>
+          <Button
+            variant="primary"
+            disabled={busy || reply.trim() === ''}
+            onClick={() => void send()}
+          >
             {t('support.send')}
           </Button>
           {staff && !resolved && (
@@ -372,14 +459,14 @@ export function ThreadDrawer({
             {thread.messages.map((m) => (
               <li key={m.id} className="detail-row" style={{ display: 'block' }}>
                 <div className="row" style={{ gap: 'var(--sp-2)' }}>
-                  <StatusBadge tone={m.authorRole === 'staff' ? 'gold' : 'info'} plain>
-                    {m.authorRole === 'staff' ? t('support.fromStaff') : t('support.fromYou')}
+                  <StatusBadge tone={messageFromStaff(m) ? 'gold' : 'info'} plain>
+                    {authorLabel(t, m, staff)}
                   </StatusBadge>
-                  <span className="hint" dir="ltr">
-                    {formatDateTime(m.createdAt, locale)}
-                  </span>
+                  <span className="hint date">{formatDateTime(m.createdAt, locale)}</span>
                 </div>
-                <p style={{ marginBlockStart: 4, fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{m.body}</p>
+                <p className="bidi" style={{ marginBlockStart: 4, fontSize: 13.5, whiteSpace: 'pre-wrap' }}>
+                  {m.body}
+                </p>
               </li>
             ))}
           </ul>
@@ -388,7 +475,13 @@ export function ThreadDrawer({
 
           <label className="field" style={{ marginBlockStart: 'var(--sp-5)' }}>
             <span className="field-label">{t('support.reply')}</span>
-            <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={5} maxLength={5000} />
+            <textarea
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              rows={5}
+              maxLength={5000}
+              dir="auto"
+            />
           </label>
         </>
       )}

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useI18n, useT, type Locale } from '../i18n';
+import { useI18n, useT } from '../i18n';
+import { formatDayHeading, formatTime } from '../money';
+import { byDay } from '../notifications';
+import { NotificationMark } from './NotificationMark';
 import { useTheme } from '../theme';
 import type { AppNotification } from '../hooks';
 import { IconButton } from './primitives';
@@ -7,7 +10,7 @@ import {
   IconBell,
   IconChevronDown,
   IconChevronRight,
-  IconGlobe,
+  IconMenu,
   IconMonitor,
   IconMoon,
   IconSun,
@@ -57,6 +60,26 @@ export function PageHeader({
       </div>
       <div className="ph-actions">{actions}</div>
     </header>
+  );
+}
+
+/**
+ * The bar across the top of a phone: the button that opens the rail, the mark and the name of the page. It is the
+ * colour of the page's ground in either theme, so its button takes its colour from the system's inks and not
+ * from a bar that was dark in the first edition.
+ */
+export function MobileBar({ title, onOpenMenu }: { title: string; onOpenMenu: () => void }) {
+  const t = useT();
+  return (
+    <div className="mobile-bar">
+      <IconButton label={t('nav.openMenu')} bare onClick={onOpenMenu}>
+        <IconMenu />
+      </IconButton>
+      <span className="rail-mark" aria-hidden="true">
+        C
+      </span>
+      <span className="mobile-bar-title">{title}</span>
+    </div>
   );
 }
 
@@ -137,7 +160,7 @@ export function NotificationBell({
   renderTitle: (n: AppNotification) => string;
   renderText: (n: AppNotification) => string;
 }) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = usePopover(open, () => setOpen(false));
   const recent = items.slice(0, 5);
@@ -174,19 +197,31 @@ export function NotificationBell({
               {t('notifications.empty')}
             </p>
           ) : (
-            <ul className="pop-list">
-              {recent.map((n) => (
-                <li key={n.id}>
-                  <div className="pop-row">
-                    <p className="pop-row-title">{renderTitle(n)}</p>
-                    <p className="pop-row-text">{renderText(n)}</p>
-                    <p className="pop-row-date" dir="ltr">
-                      {n.createdAt?.slice(0, 10)}
-                    </p>
-                  </div>
-                </li>
+            <div className="pop-list">
+              {byDay(recent).map(({ key, items: day, first }) => (
+                <div key={key} className="register-day-group">
+                  <h3 className="register-day register-day--pop" id={`pop-day-${key}`}>
+                    <span className="date">{formatDayHeading(first.createdAt, locale)}</span>
+                  </h3>
+                  <ul aria-labelledby={`pop-day-${key}`}>
+                    {day.map((n) => (
+                      <li key={n.id}>
+                        <div className="pop-row">
+                          <NotificationMark n={n} />
+                          <div className="pop-row-body">
+                            <p className="pop-row-title">{renderTitle(n)}</p>
+                            <p className="pop-row-text">{renderText(n)}</p>
+                            <p className="pop-row-date">
+                              <span className="date">{formatTime(n.createdAt, locale)}</span>
+                            </p>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
           <div className="pop-foot">
             <button
@@ -233,66 +268,6 @@ export function ThemeToggle() {
         <IconSun />
       )}
     </IconButton>
-  );
-}
-
-export function LanguageSwitcher() {
-  const t = useT();
-  const { locale, setLocale } = useI18n();
-  const [open, setOpen] = useState(false);
-  const ref = usePopover(open, () => setOpen(false));
-
-  const options: { value: Locale; label: string }[] = [
-    { value: 'he', label: 'עברית' },
-    { value: 'en', label: 'English' },
-  ];
-  const current = options.find((o) => o.value === locale);
-
-  return (
-    <div className="pop-wrap" ref={ref}>
-      <IconButton
-        label={t('app.switchLanguageLabel')}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className={open ? 'is-on' : ''}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <IconGlobe />
-        <span className="lang-code" aria-hidden="true">
-          {locale.toUpperCase()}
-        </span>
-      </IconButton>
-
-      {open && (
-        <div className="pop" role="menu" aria-label={t('app.switchLanguageLabel')}>
-          <div className="menu-head">
-            <p className="menu-name">{t('menu.language')}</p>
-            <p className="menu-sub">{current?.label ?? locale}</p>
-          </div>
-          <div className="menu-sep" />
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              role="menuitemradio"
-              aria-checked={option.value === locale}
-              className={`menu-item${option.value === locale ? ' is-on' : ''}`}
-              dir={option.value === 'he' ? 'rtl' : 'ltr'}
-              onClick={() => {
-                setLocale(option.value);
-                setOpen(false);
-              }}
-            >
-              <IconGlobe />
-              {option.label}
-              {option.value === locale && (
-                <span className="menu-item-note">{t('menu.languageCurrent')}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

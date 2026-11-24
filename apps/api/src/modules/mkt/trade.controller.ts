@@ -35,7 +35,9 @@ export class TradeController {
   @Post('swaps')
   async propose(@CurrentUser() user: AuthUser, @Body() dto: ProposeSwapDto) {
     const responder = await this.read.counterparty(dto.responderUsername, user.id);
-    return this.trades.proposeSwap(user.id, responder.id, dto.offeredItemIds, dto.requestedItemIds);
+    const s = await this.trades.proposeSwap(user.id, responder, dto.offeredItemIds, dto.requestedItemIds);
+    const [view] = await this.read.mySwaps(user.id, s.id);
+    return view;
   }
 
   @Post('swaps/:id/approve')

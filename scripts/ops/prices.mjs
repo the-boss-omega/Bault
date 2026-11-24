@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { apiBase, argValue, hasFlag, Session, signInAdmin } from './session.mjs';
+import { apiBase, argValue, hasFlag, signInAdmin } from './session.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_FILE = resolve(here, '..', '..', 'infra', 'production', 'prices.json');
@@ -10,7 +10,6 @@ export const DEFAULT_FILE = resolve(here, '..', '..', 'infra', 'production', 'pr
 const TRIGGERS = new Set(['per_event', 'daily', 'weekly', 'monthly']);
 const STORAGE_ACTIONS = new Set(['storage', 'storage_oversized']);
 const STORAGE_PARAMETERS = ['freeDays', 'periodDays', 'percentOfIntakeBps'];
-const TIER_PARAMETERS = ['storedItems', 'insuredShipments', 'insuredValueCapMinor', 'postageCreditMinor', 'commissionWaivedOnMinor'];
 
 const say = (msg = '') => process.stdout.write(`${msg}\n`);
 
@@ -53,8 +52,8 @@ export function parsePriceFile(doc) {
     if (!TRIGGERS.has(entry.billingTrigger)) {
       throw new Error(`${where}: billingTrigger must be one of ${[...TRIGGERS].join(', ')}`);
     }
-    if (entry.actionType.startsWith('membership:') && entry.parameters !== undefined) {
-      throw new Error(`${where}: leave parameters out; a membership's allowances come from the tier catalogue`);
+    if (entry.actionType.startsWith('membership:')) {
+      throw new Error(`${where}: memberships are no longer sold; a tier is a price level the API works out from use`);
     }
     if (STORAGE_ACTIONS.has(entry.actionType)) {
       for (const p of STORAGE_PARAMETERS) {
@@ -84,15 +83,6 @@ export function readPriceFile(path) {
     throw new Error(`Could not read ${path}: ${e.message}`);
   }
   return parsePriceFile(doc);
-}
-
-export function withTierParameters(rules, tiers) {
-  return rules.map((rule) => {
-    if (!rule.actionType.startsWith('membership:')) return rule;
-    const tier = tiers.find((t) => t.feeActionType === rule.actionType);
-    if (!tier) throw new Error(`${rule.actionType} is not a tier the API knows`);
-    return { ...rule, parameters: Object.fromEntries(TIER_PARAMETERS.map((p) => [p, tier[p]])) };
-  });
 }
 
 function canonical(value) {
@@ -214,8 +204,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const update = hasFlag(argv, '--update');
   const parsed = readPriceFile(file);
 
-  const tiers = await expectOk(await new Session(base).get('/membership/tiers'), 'GET /membership/tiers');
-  const rules = withTierParameters(parsed.rules, tiers.tiers);
+  const rules = parsed.rules;
   const admin = await signInAdmin(base, { env });
   const coverage = await expectOk(await admin.get('/admin/pricing/coverage'), 'GET /admin/pricing/coverage');
   const serverRules = await expectOk(await admin.get('/pricing/rules'), 'GET /pricing/rules');

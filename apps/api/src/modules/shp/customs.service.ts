@@ -4,9 +4,7 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { userAccount } from '../acc/acc.schema';
-import { facility } from '../inv/facility.schema';
 import { fullName } from '../../shared/names';
-import { shipment } from './shp.schema';
 import { ShipmentService, type ShipmentActor } from './shipment.service';
 import { DEFAULT_HS_CODE, needsCustoms } from './shipping-options';
 import { destinationGuidance } from './destinations';
@@ -35,17 +33,12 @@ export class CustomsService {
         username: userAccount.username,
         firstName: userAccount.firstName,
         lastName: userAccount.lastName,
-        email: userAccount.email,
       })
       .from(userAccount)
       .where(eq(userAccount.id, s.userId))
       .limit(1);
 
-    const [origin] = await this.db
-      .select()
-      .from(facility)
-      .where(eq(facility.role, 'primary'))
-      .limit(1);
+    const origin = await this.shipments.originSite();
 
     const totalValueMinor = lines.reduce((sum, l) => sum + l.valueMinor, 0);
     const totalWeightGrams = lines.reduce((sum, l) => sum + l.weightGrams, 0);
@@ -85,27 +78,10 @@ export class CustomsService {
         currency: s.currency,
       },
       declaration:
-        'The values stated are those declared by the owner of the goods. Bault does not adjust, reduce or omit a declared value for any reason.',
+        'The values stated are those declared by the owner of the goods. Card Embassy does not adjust, reduce or omit a declared value for any reason.',
       dutyNote:
         'Import duty, VAT and any brokerage the destination country charges are payable by the recipient on arrival.',
     };
-  }
-
-  async required(shipmentId: string, actor: ShipmentActor) {
-    const s = await this.shipments.loadFor(shipmentId, actor);
-    return {
-      required: needsCustoms(s.destinationCountry),
-      hasLines: ((s.customsLines as CustomsLine[]) ?? []).length > 0,
-      declaredValueMinor: s.declaredValueMinor,
-    };
-  }
-
-  async outstanding() {
-    const rows = await this.db.select().from(shipment).where(eq(shipment.status, 'rates_selected'));
-    return rows
-      .filter((s) => needsCustoms(s.destinationCountry))
-      .filter((s) => ((s.customsLines as CustomsLine[]) ?? []).length === 0)
-      .map((s) => ({ id: s.id, code: s.code, country: s.destinationCountry }));
   }
 
   async readiness(shipmentId: string, actor: ShipmentActor) {
@@ -153,5 +129,4 @@ export class CustomsService {
         : { universal: [], specific: null },
     };
   }
-
 }

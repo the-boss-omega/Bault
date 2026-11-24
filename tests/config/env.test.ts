@@ -35,7 +35,7 @@ const PROD = {
   SMTP_HOST: 'smtp.example.com',
   SMTP_USER: 'u',
   SMTP_PASSWORD: 'p',
-  SMTP_FROM: 'Bault <noreply@example.com>',
+  SMTP_FROM: 'Card Embassy <noreply@example.com>',
   APP_BASE_URL: 'https://app.example.com',
   TRUST_PROXY: 'uniquelocal',
 };
@@ -57,8 +57,15 @@ describe('environment schema', () => {
     expect(env).not.toHaveProperty('DATABASE_STATEMENT_TIMEOUT_MS');
   });
 
-  it('no longer requires the unused session secret', async () => {
-    expect((await load(DEV)).SESSION_COOKIE_SECRET).toBe('');
+  it('ignores the retired session secret and email API key', async () => {
+    const env = await load({ ...PROD, SESSION_COOKIE_SECRET: 'an-old-secret-value', EMAIL_API_KEY: 'old' });
+    expect(env).not.toHaveProperty('SESSION_COOKIE_SECRET');
+    expect(env).not.toHaveProperty('EMAIL_API_KEY');
+  });
+
+  it('defaults the payout note to the text PayPal has always sent', async () => {
+    expect((await load(DEV)).PAYPAL_PAYOUT_NOTE).toBe('Your Card Embassy cash-out');
+    expect((await load({ ...DEV, PAYPAL_PAYOUT_NOTE: 'Store credit' })).PAYPAL_PAYOUT_NOTE).toBe('Store credit');
   });
 
   it('refuses the loopback proxy setting in production', async () => {
@@ -175,5 +182,91 @@ describe('two-factor configuration', () => {
     await expect(load({ ...DEV, MFA_REQUIRED_ROLES: 'admin,operator' })).rejects.toThrow(
       /MFA_REQUIRED_ROLES/,
     );
+  });
+});
+
+describe('cash-in by PayPal checkout', () => {
+  it('leaves cash-in by PayPal checkout off until it is switched on', async () => {
+    expect((await load(DEV)).PAYPAL_CHECKOUT_ENABLED).toBe(false);
+    expect((await load(PROD)).PAYPAL_CHECKOUT_ENABLED).toBe(false);
+    expect((await load({ ...PROD, PAYPAL_CHECKOUT_ENABLED: 'ture' })).PAYPAL_CHECKOUT_ENABLED).toBe(false);
+    expect((await load({ ...PROD, PAYPAL_CHECKOUT_ENABLED: 'true' })).PAYPAL_CHECKOUT_ENABLED).toBe(true);
+  });
+
+  it('still wants PayPal itself, and its keys, in production once checkout is on', async () => {
+    const on = { ...PROD, PAYPAL_CHECKOUT_ENABLED: 'true' };
+    await expect(load({ ...on, PAYMENT_PROVIDER: 'sandbox' })).rejects.toThrow(/PAYMENT_PROVIDER/);
+    for (const key of ['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'PAYPAL_WEBHOOK_ID']) {
+      await expect(load({ ...on, [key]: '' }), key).rejects.toThrow(new RegExp(key));
+    }
+    await expect(load({ ...on, APP_BASE_URL: 'http://app.example.com' })).rejects.toThrow(/APP_BASE_URL/);
+  });
+});
+
+describe('cash-in by crypto', () => {
+  it('leaves crypto checkout off and on the sandbox processor until it is configured', async () => {
+    const dev = await load(DEV);
+    expect(dev.CRYPTO_CHECKOUT_ENABLED).toBe(false);
+    expect(dev.CRYPTO_PROVIDER).toBe('sandbox');
+    expect(dev.COINBASE_COMMERCE_API_KEY).toBe('');
+    expect(dev.COINBASE_COMMERCE_WEBHOOK_SECRET).toBe('');
+    const prod = await load(PROD);
+    expect(prod.CRYPTO_CHECKOUT_ENABLED).toBe(false);
+    expect(prod.CRYPTO_PROVIDER).toBe('sandbox');
+  });
+
+  it('refuses Coinbase Commerce without its API key or its webhook secret', async () => {
+    const coinbase = {
+      ...DEV,
+      CRYPTO_PROVIDER: 'coinbase_commerce',
+      COINBASE_COMMERCE_API_KEY: 'k',
+      COINBASE_COMMERCE_WEBHOOK_SECRET: 's',
+    };
+    expect((await load(coinbase)).CRYPTO_PROVIDER).toBe('coinbase_commerce');
+    await expect(load({ ...coinbase, COINBASE_COMMERCE_API_KEY: '' })).rejects.toThrow(/COINBASE_COMMERCE_API_KEY/);
+    await expect(load({ ...coinbase, COINBASE_COMMERCE_API_KEY: undefined })).rejects.toThrow(/COINBASE_COMMERCE_API_KEY/);
+    await expect(load({ ...coinbase, COINBASE_COMMERCE_WEBHOOK_SECRET: '' })).rejects.toThrow(
+      /COINBASE_COMMERCE_WEBHOOK_SECRET/,
+    );
+    await expect(load({ ...DEV, CRYPTO_PROVIDER: 'bitpay' })).rejects.toThrow(/CRYPTO_PROVIDER/);
+  });
+
+  it('refuses crypto checkout switched on in production without Coinbase Commerce', async () => {
+    await expect(load({ ...PROD, CRYPTO_CHECKOUT_ENABLED: 'true' })).rejects.toThrow(/CRYPTO_PROVIDER/);
+    const on = {
+      ...PROD,
+      CRYPTO_CHECKOUT_ENABLED: 'true',
+      CRYPTO_PROVIDER: 'coinbase_commerce',
+      COINBASE_COMMERCE_API_KEY: 'k',
+      COINBASE_COMMERCE_WEBHOOK_SECRET: 's',
+    };
+    expect((await load(on)).CRYPTO_CHECKOUT_ENABLED).toBe(true);
+    expect((await load({ ...DEV, CRYPTO_CHECKOUT_ENABLED: 'true' })).CRYPTO_CHECKOUT_ENABLED).toBe(true);
+  });
+});
+
+describe('reading photographs at intake', () => {
+  it('leaves OCR off and on the sandbox reader until it is configured', async () => {
+    const dev = await load(DEV);
+    expect(dev.OCR_ENABLED).toBe(false);
+    expect(dev.OCR_PROVIDER).toBe('sandbox');
+    const prod = await load(PROD);
+    expect(prod.OCR_ENABLED).toBe(false);
+    expect(prod.OCR_PROVIDER).toBe('sandbox');
+  });
+
+  it('accepts the sandbox reader switched on outside production', async () => {
+    const env = await load({ ...DEV, OCR_ENABLED: 'true' });
+    expect(env.OCR_ENABLED).toBe(true);
+    expect(env.OCR_PROVIDER).toBe('sandbox');
+    await expect(load({ ...DEV, OCR_PROVIDER: 'textract' })).rejects.toThrow(/OCR_PROVIDER/);
+  });
+
+  it('refuses OCR switched on in production without Tesseract', async () => {
+    await expect(load({ ...PROD, OCR_ENABLED: 'true' })).rejects.toThrow(/OCR_PROVIDER/);
+    await expect(load({ ...PROD, OCR_ENABLED: 'true', OCR_PROVIDER: 'sandbox' })).rejects.toThrow(/OCR_PROVIDER/);
+    const on = await load({ ...PROD, OCR_ENABLED: 'true', OCR_PROVIDER: 'tesseract' });
+    expect(on.OCR_ENABLED).toBe(true);
+    expect(on.OCR_PROVIDER).toBe('tesseract');
   });
 });

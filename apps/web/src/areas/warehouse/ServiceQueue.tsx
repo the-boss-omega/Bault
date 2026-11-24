@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../shared/api';
 import { useT } from '../../shared/i18n';
 import type { MessageKey, TranslateFn } from '../../shared/i18n';
 import { serviceStatusLabel, serviceTypeLabel } from '../../shared/serviceLabels';
 import { areaLabel, severityLabel, INSPECTION_SEVERITIES } from '../../shared/grading';
-import { dollarsToCents } from '../../shared/money';
+import { dollarsToCents, formatUsd } from '../../shared/money';
+import { ListSearch, NoMatch, matchesQuery } from './ListTools';
 import {
   Button,
   EmptyState,
@@ -31,6 +32,7 @@ interface QueueItem {
   status: string;
   itemId: string | null;
   requesterEmail: string | null;
+  requesterUsername?: string | null;
   itemDescription: string | null;
   typeFields: Record<string, unknown> | null;
 }
@@ -40,16 +42,29 @@ export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | 
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('all');
 
   const load = useCallback(async () => {
     try {
       setQueue(await api.get<QueueItem[]>('/services/queue'));
-      setError(null);
+      setLoadError(null);
     } catch (e) {
-      setError((e as Error).message);
-      setQueue([]);
+      setLoadError((e as Error).message);
+      setQueue((prev) => prev ?? []);
     }
   }, []);
+
+  const shown = useMemo(
+    () =>
+      (queue ?? []).filter(
+        (r) =>
+          (status === 'all' || r.status === status) &&
+          matchesQuery(q, r.code, r.requesterUsername, r.requesterEmail, r.itemDescription, serviceTypeLabel(t, r.type)),
+      ),
+    [queue, q, status, t],
+  );
 
   useEffect(() => {
     void load();
@@ -63,6 +78,7 @@ export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | 
       await load();
       await onChanged?.();
     } catch (e) {
+      setMessage(null);
       setError((e as Error).message);
     }
   }
@@ -74,13 +90,51 @@ export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | 
           {error ? <ErrorState message={error} /> : message ? <SuccessNote>{message}</SuccessNote> : null}
         </div>
       )}
+      {loadError && (
+        <div style={{ padding: 'var(--sp-4) var(--sp-6) 0' }}>
+          <ErrorState
+            title={t('queue.loadFailed')}
+            message={loadError}
+            onRetry={() => void load()}
+            retryLabel={t('ui.retry')}
+          />
+        </div>
+      )}
+      {queue !== null && queue.length > 0 && (
+        <ListSearch
+          value={q}
+          onChange={setQ}
+          label={t('queue.search')}
+          placeholder={t('queue.searchPlaceholder')}
+          shown={shown.length}
+          total={queue.length}
+        >
+          <select
+            className="vault-sort"
+            value={status}
+            aria-label={t('queue.filter')}
+            onChange={(e) => setStatus(e.target.value)}
+          >
+            <option value="all">{t('queue.filter.all')}</option>
+            <option value="requested">{serviceStatusLabel(t, 'requested')}</option>
+            <option value="in_progress">{serviceStatusLabel(t, 'in_progress')}</option>
+          </select>
+        </ListSearch>
+      )}
 
       {queue === null ? (
         <SkeletonTable rows={4} columns={5} />
       ) : queue.length === 0 ? (
-        <EmptyState title={t('queue.empty')} text={t('queue.emptyText')} icon={<IconServices />} />
+        loadError ? null : <EmptyState title={t('queue.empty')} text={t('queue.emptyText')} icon={<IconServices />} />
+      ) : shown.length === 0 ? (
+        <NoMatch
+          onClear={() => {
+            setQ('');
+            setStatus('all');
+          }}
+        />
       ) : (
-        <div className="dt-wrap">
+        <div className="dt-wrap dt-wrap--stack">
           <table className="data-table">
             <thead>
               <tr>
@@ -93,20 +147,39 @@ export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | 
               </tr>
             </thead>
             <tbody>
-              {queue.map((q) => (
+              {shown.map((q) => (
                 <tr key={q.id}>
-                  <td dir="ltr">
-                    <code>{q.code ?? q.id.slice(0, 8)}</code>
+                  <td data-label={t('queue.col.request')}>
+                    <code dir="ltr">{q.code ?? q.id.slice(0, 8)}</code>
                   </td>
-                  <td className="dt-primary">{serviceTypeLabel(t, q.type)}</td>
-                  <td dir="ltr">{q.requesterEmail ?? '—'}</td>
-                  <td>{q.itemDescription ?? '—'}</td>
-                  <td>
+                  <td data-label={t('queue.col.service')} className="dt-primary">
+                    {serviceTypeLabel(t, q.type)}
+                  </td>
+                  <td data-label={t('queue.col.customer')}>
+                    {q.requesterUsername ? (
+                      <>
+                        <bdi dir="ltr">@{q.requesterUsername}</bdi>
+                        {q.requesterEmail && (
+                          <span className="dt-sub">
+                            <bdi dir="ltr">{q.requesterEmail}</bdi>
+                          </span>
+                        )}
+                      </>
+                    ) : q.requesterEmail ? (
+                      <bdi dir="ltr">{q.requesterEmail}</bdi>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td data-label={t('queue.col.item')}>
+                    <bdi dir="auto">{q.itemDescription ?? '—'}</bdi>
+                  </td>
+                  <td data-label={t('queue.col.status')}>
                     <StatusBadge tone={STATUS_TONE[q.status] ?? 'neutral'}>
-                      {serviceStatusLabel(t, q.status)}
+                      {serviceStatusLabel(t, q.status, q.type)}
                     </StatusBadge>
                   </td>
-                  <td>
+                  <td data-label={t('queue.col.actions')}>
                     <QueueActions q={q} onAct={act} />
                   </td>
                 </tr>
@@ -127,13 +200,42 @@ function QueueActions({
   onAct: (fn: () => Promise<unknown>, ok: string) => void;
 }) {
   const t = useT();
+  const [confirming, setConfirming] = useState<'decline' | 'cancel' | null>(null);
+  const label = q.code ?? q.id.slice(0, 8);
+
+  if (confirming) {
+    const decline = confirming === 'decline';
+    return (
+      <div className="fulfill-form" role="group" aria-label={t(decline ? 'queue.action.decline' : 'queue.action.cancelRefund')}>
+        <span className="hint">{t(decline ? 'queue.confirm.decline' : 'queue.confirm.cancel', { code: label })}</span>
+        <div className="actions">
+          <Button
+            size="sm"
+            variant="danger"
+            icon={<IconClose />}
+            onClick={() =>
+              onAct(
+                () => api.post(`/services/requests/${q.id}/deny`),
+                t(decline ? 'queue.msg.declined' : 'queue.msg.cancelled'),
+              )
+            }
+          >
+            {t(decline ? 'queue.confirm.declineYes' : 'queue.confirm.cancelYes')}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
+            {t('queue.confirm.keep')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (q.status === 'requested') {
     return (
       <div className="actions">
         <Button
           size="sm"
-          variant="gold"
+          variant="primary"
           icon={<IconCheck />}
           onClick={() => onAct(() => api.post(`/services/requests/${q.id}/accept`), t('queue.msg.approved'))}
         >
@@ -143,7 +245,7 @@ function QueueActions({
           size="sm"
           variant="danger"
           icon={<IconClose />}
-          onClick={() => onAct(() => api.post(`/services/requests/${q.id}/deny`), t('queue.msg.declined'))}
+          onClick={() => setConfirming('decline')}
         >
           {t('queue.action.decline')}
         </Button>
@@ -163,7 +265,7 @@ function QueueActions({
           size="sm"
           variant="danger"
           icon={<IconClose />}
-          onClick={() => onAct(() => api.post(`/services/requests/${q.id}/deny`), t('queue.msg.cancelled'))}
+          onClick={() => setConfirming('cancel')}
         >
           {t('queue.action.cancelRefund')}
         </Button>
@@ -263,7 +365,7 @@ function InspectionFulfillment({
       <div className="actions">
         <Button
           size="sm"
-          variant="gold"
+          variant="primary"
           disabled={!complete}
           onClick={() =>
             onAct(() => api.post(`/services/inspection/${q.id}/complete`, payload()), t('queue.msg.inspectionDone'))
@@ -271,7 +373,11 @@ function InspectionFulfillment({
         >
           {t('queue.fulfill.submit')}
         </Button>
-        {!complete && <span className="field-hint">{t('queue.fulfill.required')}</span>}
+        {!complete && (
+          <span className="field-hint">
+            {t('queue.fulfill.required')}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -318,7 +424,7 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
     endpoint: (id) => `/services/buyout/${id}/quote`,
     ok: 'queue.msg.buyoutQuoted',
     fields: [
-      { name: 'offerMinor', label: 'queue.fulfill.offerMinor', kind: 'money', initial: '100.00', width: '8rem' },
+      { name: 'offerMinor', label: 'queue.fulfill.offerMinor', kind: 'money', initial: '', width: '8rem' },
       { name: 'rationale', label: 'queue.fulfill.rationale', kind: 'text', initial: '', width: '16rem' },
       { name: 'itemVerified', label: 'queue.fulfill.itemVerified', kind: 'checkbox', initial: false },
     ],
@@ -327,7 +433,7 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
     endpoint: (id) => `/services/custom/${id}/quote`,
     ok: 'queue.msg.customQuoted',
     fields: [
-      { name: 'priceMinor', label: 'queue.fulfill.customPrice', kind: 'money', initial: '25.00', width: '8rem' },
+      { name: 'priceMinor', label: 'queue.fulfill.customPrice', kind: 'money', initial: '', width: '8rem' },
       { name: 'scope', label: 'queue.fulfill.customScope', kind: 'text', initial: '', width: '20rem' },
     ],
   },
@@ -374,7 +480,7 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
     endpoint: (id) => `/services/consignment/${id}/complete`,
     ok: 'queue.msg.saleDone',
     fields: [
-      { name: 'saleAmountMinor', label: 'queue.fulfill.saleAmount', kind: 'money', initial: '1000.00', width: '8rem' },
+      { name: 'saleAmountMinor', label: 'queue.fulfill.saleAmount', kind: 'money', initial: '', width: '8rem' },
       { name: 'channel', label: 'queue.fulfill.channel', kind: 'text', initial: 'eBay', width: '8rem' },
       {
         name: 'externalReference',
@@ -404,6 +510,7 @@ function FulfillmentForm({
   );
 
   if (!spec) return <span className="hint">{t('queue.fulfill.noForm')}</span>;
+  const asksVerified = spec.fields.some((f) => f.name === 'itemVerified');
 
   const complete = spec.fields.every((f) => {
     const v = values[f.name];
@@ -427,10 +534,9 @@ function FulfillmentForm({
       {q.type === 'custom' && (
         <div className="ask-notice">
           <IconAsk />
-          <span>
-            <strong>{String((q.typeFields as { summary?: string } | null)?.summary ?? '')}</strong>
-            <br />
-            {String((q.typeFields as { detail?: string } | null)?.detail ?? '')}
+          <span className="ask-notice-text">
+            <strong className="bidi ask-line">{String((q.typeFields as { summary?: string } | null)?.summary ?? '')}</strong>
+            <span className="bidi ask-line">{String((q.typeFields as { detail?: string } | null)?.detail ?? '')}</span>
           </span>
         </div>
       )}
@@ -453,6 +559,11 @@ function FulfillmentForm({
                 {f.kind === 'money' && ' ($)'}
               </span>
               <input
+                aria-invalid={
+                  f.kind === 'money' && String(values[f.name] ?? '').trim() !== '' && dollarsToCents(String(values[f.name])) === null
+                    ? true
+                    : undefined
+                }
                 type={f.kind === 'number' ? 'number' : 'text'}
                 inputMode={f.kind === 'money' ? 'decimal' : undefined}
                 value={String(values[f.name] ?? '')}
@@ -465,6 +576,13 @@ function FulfillmentForm({
                   }))
                 }
               />
+              {f.kind === 'money' && String(values[f.name] ?? '').trim() !== '' && (
+                <span className={dollarsToCents(String(values[f.name])) === null ? 'field-error' : 'field-hint'}>
+                  {dollarsToCents(String(values[f.name])) === null
+                    ? t('queue.fulfill.notAmount')
+                    : formatUsd(dollarsToCents(String(values[f.name])) ?? 0)}
+                </span>
+              )}
             </label>
           ),
         )}
@@ -472,13 +590,17 @@ function FulfillmentForm({
       <div className="actions">
         <Button
           size="sm"
-          variant="gold"
+          variant="primary"
           disabled={!complete}
           onClick={() => onAct(() => api.post(spec.endpoint(q.id), payload()), t(spec.ok))}
         >
           {t('queue.fulfill.submit')}
         </Button>
-        {!complete && <span className="field-hint">{t('queue.fulfill.required')}</span>}
+        {!complete && (
+          <span className="field-hint">
+            {t(asksVerified ? 'queue.fulfill.required' : 'queue.fulfill.requiredFields')}
+          </span>
+        )}
       </div>
     </div>
   );

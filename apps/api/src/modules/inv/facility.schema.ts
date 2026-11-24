@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, integer, boolean, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, integer, boolean, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
 
 export const facilityRole = pgEnum('facility_role', ['primary', 'forwarding']);
@@ -21,7 +21,7 @@ export const facility = pgTable(
 
     salesTaxBps: integer('sales_tax_bps').notNull().default(0),
 
-    forwardsToFacilityId: text('forwards_to_facility_id'),
+    forwardsToFacilityId: uuid('forwards_to_facility_id').references((): AnyPgColumn => facility.id, { onDelete: 'restrict' }),
     forwardingDays: integer('forwarding_days'),
 
     active: boolean('active').notNull().default(true),

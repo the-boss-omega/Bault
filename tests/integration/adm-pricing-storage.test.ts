@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, signIn } from './helpers/http';
+import { closeDb, sql } from './helpers/db';
+
+afterAll(closeDb);
 
 describe('ADM pricing rules', () => {
   it('requires a description, value, scope and billing trigger on every rule', async () => {
@@ -74,6 +77,27 @@ describe('ADM storage fees are automatic only', () => {
 
     const manual = await admin.post('/admin/storage-fee-runs', { thresholdDays: 1 });
     expect(manual.status).toBe(404);
+  });
+
+  it('lists the items each run charged, by serial, description and owner', async () => {
+    const admin = await signIn(SEED.admin);
+    const [it] = await sql<{ id: string; serial_number: string; description: string; username: string }>(
+      `SELECT i.id, i.serial_number, i.description, u.username
+         FROM item i JOIN user_account u ON u.id = i.owner_id
+        ORDER BY i.created_at LIMIT 1`,
+    );
+    const [run] = await sql<{ id: string }>(
+      `INSERT INTO storage_fee_run (threshold_days, triggered_by, charged_item_ids, charged_account_ids, total_amount, currency)
+       VALUES (90, 'system', $1::jsonb, '[]'::jsonb, 140, 'USD') RETURNING id`,
+      [JSON.stringify([it!.id, '00000000-0000-0000-0000-000000000000'])],
+    );
+
+    const runs = await admin.get('/admin/storage-fee-runs');
+    expect(runs.status).toBe(200);
+    const listed = (runs.body as { id: string; chargedItems: unknown[] }[]).find((r) => r.id === run!.id);
+    expect(listed?.chargedItems).toEqual([
+      { id: it!.id, serialNumber: it!.serial_number, description: it!.description, ownerUsername: it!.username },
+    ]);
   });
 });
 

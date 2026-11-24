@@ -61,7 +61,7 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO bault_app, bault_worker
 DO $$
 DECLARE
   t text;
-  history_tables text[] := ARRAY['ledger_record', 'custody_event', 'audit_record', 'bin_transfer', 'wallet_request_event', 'arrival_disposal', 'parcel_event', 'support_message', 'escrow_event', 'login_attempt'];
+  history_tables text[] := ARRAY['ledger_record', 'custody_event', 'audit_record', 'bin_transfer', 'wallet_request_event', 'arrival_disposal', 'parcel_event', 'support_message', 'escrow_event', 'login_attempt', 'usage_tier_change'];
 BEGIN
   FOREACH t IN ARRAY history_tables LOOP
     IF to_regclass(format('public.%I', t)) IS NULL THEN

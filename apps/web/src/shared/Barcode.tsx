@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { barcodeSvg, type BarcodeOptions } from './barcode128';
 import { useT } from './i18n';
 import { IconPrint } from './ui/icons';
+import { Button } from './ui/primitives';
 
 export function Barcode({ value, options }: { value: string; options?: BarcodeOptions }) {
   const t = useT();
@@ -105,47 +106,41 @@ export function printBarcodes(labels: readonly PrintableLabel[]): void {
 
 export function BarcodePrintAllButton({
   labels,
-  className = 'btn btn--gold',
+  variant = 'primary',
+  size,
 }: {
   labels: readonly PrintableLabel[];
-  className?: string;
+  variant?: 'primary' | 'secondary';
+  size?: 'md' | 'sm';
 }) {
   const t = useT();
   if (labels.length === 0) return null;
   return (
-    <button
-      type="button"
-      className={className}
+    <Button
+      variant={variant}
+      size={size}
+      icon={<IconPrint />}
       title={t('barcode.printAll', { count: labels.length })}
       onClick={() => printBarcodes(labels)}
     >
-      <IconPrint />
       {t('barcode.printAll', { count: labels.length })}
-    </button>
+    </Button>
   );
 }
 
-export function BarcodePrintButton({
-  value,
-  caption,
-  className = 'btn btn--ghost btn--sm',
-}: {
-  value: string;
-  caption?: string;
-  className?: string;
-}) {
+export function BarcodePrintButton({ value, caption }: { value: string; caption?: string }) {
   const t = useT();
   return (
-    <button
-      type="button"
-      className={className}
+    <Button
+      variant="ghost"
+      size="sm"
+      icon={<IconPrint />}
       title={t('barcode.print')}
       aria-label={t('barcode.printOf', { value })}
       onClick={() => printBarcode(value, caption)}
     >
-      <IconPrint />
       {t('barcode.print')}
-    </button>
+    </Button>
   );
 }
 

@@ -1,10 +1,25 @@
-import { cloneElement, isValidElement, useId } from 'react';
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode } from 'react';
-import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
+import { cloneElement, isValidElement, useId, useLayoutEffect, useRef } from 'react';
+import type {
+  AnchorHTMLAttributes,
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactElement,
+  ReactNode,
+  Ref,
+} from 'react';
+import { CountUp } from './CountUp';
+import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox, IconScan } from './icons';
+import { scrollBehavior } from './motionPreference';
 
-type ButtonVariant = 'gold' | 'navy' | 'secondary' | 'ghost' | 'danger';
+/**
+ * What a button is for, in the order a screen asks for it:
+ * primary is the one thing to do next (a view has one, and it is the one with foil on its edge);
+ * secondary is another thing one may do; ghost is the way out and what is only sometimes wanted;
+ * danger is what cannot be taken back; link is an action that sits inside a sentence.
+ */
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link';
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonStyle {
   variant?: ButtonVariant;
   size?: 'md' | 'sm';
   block?: boolean;
@@ -12,19 +27,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
 }
 
-export function Button({
+function buttonClass({
   variant = 'secondary',
   size = 'md',
   block,
-  icon,
   loading,
-  children,
   className = '',
-  type = 'button',
-  disabled,
-  ...rest
-}: ButtonProps) {
-  const classes = [
+}: ButtonStyle & { className?: string }) {
+  return [
     'btn',
     `btn--${variant}`,
     size === 'sm' ? 'btn--sm' : '',
@@ -34,17 +44,58 @@ export function Button({
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, ButtonStyle {
+  /** The state of a button that is a switch (a filter that is on, a mode that is set). */
+  pressed?: boolean;
+}
+
+export function Button({
+  variant,
+  size,
+  block,
+  icon,
+  loading,
+  pressed,
+  children,
+  className,
+  type = 'button',
+  disabled,
+  ...rest
+}: ButtonProps) {
   return (
     <button
       type={type}
-      className={classes}
+      className={buttonClass({ variant, size, block, loading, className })}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
+      aria-pressed={pressed}
       {...rest}
     >
       {loading ? <span className="btn-spinner" aria-hidden="true" /> : icon}
-      {children}
+      {children !== undefined && children !== null && children !== false ? (
+        <span className="btn-label">{children}</span>
+      ) : null}
     </button>
+  );
+}
+
+/** A link that is drawn as a button: a download, a file, a page that is somewhere else. */
+export function ButtonLink({
+  variant,
+  size,
+  block,
+  icon,
+  children,
+  className,
+  ...rest
+}: AnchorHTMLAttributes<HTMLAnchorElement> & Omit<ButtonStyle, 'loading'>) {
+  return (
+    <a className={buttonClass({ variant, size, block, className })} {...rest}>
+      {icon}
+      <span className="btn-label">{children}</span>
+    </a>
   );
 }
 
@@ -84,7 +135,7 @@ export function Field({
       {control}
       {error ? (
         <span className="field-error" id={`${id}-error`} role="alert">
-          {error}
+          <bdi dir="auto">{error}</bdi>
         </span>
       ) : hint ? (
         <span className="field-hint" id={`${id}-hint`}>
@@ -138,7 +189,77 @@ export function MoneyField({
       </div>
       {error ? (
         <span className="field-error" id={`${controlId}-error`} role="alert">
-          {error}
+          <bdi dir="auto">{error}</bdi>
+        </span>
+      ) : hint ? (
+        <span className="field-hint" id={`${controlId}-hint`}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A field that a scanner fills: a serial, a shelf, a parcel. What is read is a code, so it is set in the code's face,
+ * left to right, with the glyph of what reads it at its start. A scanner ends what it reads with Enter, and `onScan`
+ * is what that does (go to the next field; do the job): without it, Enter is left to the form.
+ */
+export function ScanField({
+  label,
+  hint,
+  error,
+  value,
+  onChange,
+  onScan,
+  inputRef,
+  id,
+  ...rest
+}: {
+  label: ReactNode;
+  hint?: ReactNode;
+  error?: ReactNode;
+  value: string;
+  onChange: (value: string) => void;
+  onScan?: () => void;
+  inputRef?: Ref<HTMLInputElement>;
+  id?: string;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'id' | 'ref'>) {
+  const generated = useId();
+  const controlId = id ?? generated;
+  const describedBy = error ? `${controlId}-error` : hint ? `${controlId}-hint` : undefined;
+
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor={controlId}>
+        {label}
+      </label>
+      <div className="scan-input">
+        <IconScan />
+        <input
+          {...rest}
+          ref={inputRef}
+          id={controlId}
+          dir="ltr"
+          autoComplete="off"
+          spellCheck={false}
+          enterKeyHint={onScan ? 'next' : undefined}
+          aria-describedby={describedBy}
+          aria-invalid={error ? true : undefined}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            rest.onKeyDown?.(e);
+            if (e.key === 'Enter' && onScan && !e.defaultPrevented) {
+              e.preventDefault();
+              onScan();
+            }
+          }}
+        />
+      </div>
+      {error ? (
+        <span className="field-error" id={`${controlId}-error`} role="alert">
+          <bdi dir="auto">{error}</bdi>
         </span>
       ) : hint ? (
         <span className="field-hint" id={`${controlId}-hint`}>
@@ -154,13 +275,15 @@ export function IconButton({
   children,
   className = '',
   bare,
+  pressed,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; bare?: boolean }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; bare?: boolean; pressed?: boolean }) {
   return (
     <button
       type="button"
       className={`icon-btn${bare ? ' icon-btn--bare' : ''} ${className}`.trim()}
       aria-label={label}
+      aria-pressed={pressed}
       title={label}
       {...rest}
     >
@@ -260,7 +383,10 @@ export function ErrorState({
       <IconAlert />
       <div className="errorbox-body">
         {title && <p className="errorbox-title">{title}</p>}
-        <p>{message}</p>
+        {/* What the server wrote is its own island: an English sentence keeps its full stop at its end. */}
+        <p>
+          <bdi dir="auto">{message}</bdi>
+        </p>
       </div>
       {onRetry && retryLabel && (
         <Button size="sm" variant="secondary" onClick={onRetry}>
@@ -331,7 +457,7 @@ export function MetricCard({
       <span className={`metric-icon metric-icon--${tone}`}>{icon}</span>
       <div>
         <p className="metric-label">{label}</p>
-        <p className="metric-value">{value}</p>
+        <p className="metric-value">{typeof value === 'string' ? <CountUp value={value} /> : value}</p>
       </div>
       {footer && <p className="metric-foot">{footer}</p>}
     </article>
@@ -356,26 +482,89 @@ export function ContextTabs({
   actions?: ReactNode;
   label: string;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const count = tabs.length;
+  const labels = tabs.map((t) => t.label).join('\u0000');
+
+  // Position the gliding indicator under the active tab, measured from the
+  // strip's start. A tab's width changes when the webfont arrives, when its
+  // label changes and when the bar is resized, so it is measured again for each
+  // of those; measuring once would leave the indicator where the fallback font
+  // put the tab.
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    let live = true;
+    const place = () => {
+      const tab = list.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (!live || !tab) return;
+      const l = list.getBoundingClientRect();
+      const t = tab.getBoundingClientRect();
+      const x = t.left - l.left;
+      list.style.setProperty('--tab-x', `${x + list.scrollLeft}px`);
+      list.style.setProperty('--tab-w', `${t.width}px`);
+      list.dataset.ready = 'true';
+    };
+    const edges = () => {
+      if (!live) return;
+      const max = list.scrollWidth - list.clientWidth;
+      list.dataset.moreStart = String(max > 1 && list.scrollLeft > 1);
+      list.dataset.moreEnd = String(max > 1 && list.scrollLeft < max - 1);
+    };
+    const reveal = () => {
+      const tab = list.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (!live || !tab) return;
+      const room = 16;
+      const l = list.getBoundingClientRect();
+      const t = tab.getBoundingClientRect();
+      const past = t.left - room < l.left ? t.left - room - l.left : t.right + room > l.right ? t.right + room - l.right : 0;
+      if (past) list.scrollTo?.({ left: list.scrollLeft + past, behavior: scrollBehavior() });
+    };
+    place();
+    reveal();
+    edges();
+    list.addEventListener('scroll', edges, { passive: true });
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            place();
+            edges();
+          });
+    observer?.observe(list);
+    list.querySelectorAll('[role="tab"]').forEach((el) => observer?.observe(el));
+    void document.fonts?.ready.then(() => {
+      place();
+      reveal();
+      edges();
+    });
+    return () => {
+      live = false;
+      list.removeEventListener('scroll', edges);
+      observer?.disconnect();
+    };
+  }, [active, count, labels]);
+
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const index = tabs.findIndex((t) => t.key === active);
     if (index < 0) return;
-    const rtl = document.documentElement.dir === 'rtl';
-    const forward = rtl ? 'ArrowLeft' : 'ArrowRight';
-    const back = rtl ? 'ArrowRight' : 'ArrowLeft';
     let next: number | null = null;
-    if (event.key === forward) next = (index + 1) % tabs.length;
-    else if (event.key === back) next = (index - 1 + tabs.length) % tabs.length;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
     else if (event.key === 'Home') next = 0;
     else if (event.key === 'End') next = tabs.length - 1;
     if (next === null) return;
     event.preventDefault();
     const target = tabs[next];
-    if (target) onSelect(target.key);
+    if (!target) return;
+    onSelect(target.key);
+    // Focus goes with the selection, so what the ring is on is what is selected.
+    listRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
   }
 
   return (
     <div className="ctx-bar">
-      <div className="ctx-tabs" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
+      <div ref={listRef} className="ctx-tabs" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
         {tabs.map((tab) => {
           const isActive = tab.key === active;
           return (

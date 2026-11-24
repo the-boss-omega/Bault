@@ -24,9 +24,19 @@ const LEGACY_TABS: Record<string, Record<string, string>> = {
   },
 };
 
-export function legacyRedirect(route: Route): { section: string; tab: string } | null {
+const MOVED_TABS: Record<string, Record<string, { section: string; tab: string | null }>> = {
+  marketplace: {
+    house: { section: 'store', tab: null },
+    escrow: { section: 'escrow', tab: null },
+  },
+};
+
+export function legacyRedirect(route: Route): { section: string; tab: string | null } | null {
   const section = LEGACY_ROUTES[route.section];
   if (section) return section;
+
+  const moved = route.tab ? MOVED_TABS[route.section]?.[route.tab] : undefined;
+  if (moved) return moved;
 
   const tab = route.tab ? LEGACY_TABS[route.section]?.[route.tab] : undefined;
   if (tab) return { section: route.section, tab };

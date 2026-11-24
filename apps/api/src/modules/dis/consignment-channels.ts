@@ -1,4 +1,4 @@
-import { formatMinor } from '../../shared/money';
+import { usdAmount } from '../shp/shipping-options';
 
 export interface ConsignmentChannel {
   key: string;
@@ -20,7 +20,7 @@ export const CONSIGNMENT_CHANNELS: readonly ConsignmentChannel[] = [
     requiresEvent: true,
     payoutDaysMin: 3,
     payoutDaysMax: 10,
-    partnerFeeNote: 'No partner commission — Bault sells it at the table.',
+    partnerFeeNote: 'No partner commission — Card Embassy sells it at the table.',
   },
   {
     key: 'auction_house',
@@ -42,16 +42,32 @@ export const CONSIGNMENT_CHANNELS: readonly ConsignmentChannel[] = [
     payoutDaysMax: 35,
     partnerFeeNote: "The partner seller deducts its own rate before remitting.",
   },
+  {
+    key: 'alt',
+    label: 'Alt',
+    gradedOnly: true,
+    minAskingMinor: 10_000,
+    requiresEvent: false,
+    payoutDaysMin: 7,
+    payoutDaysMax: 21,
+    partnerFeeNote: 'Alt deducts its own fee before remitting.',
+  },
+  {
+    key: 'fanatics_collect',
+    label: 'Fanatics Collect',
+    gradedOnly: true,
+    minAskingMinor: 25_000,
+    requiresEvent: false,
+    payoutDaysMin: 30,
+    payoutDaysMax: 60,
+    partnerFeeNote: 'Fanatics Collect deducts its own fee before remitting.',
+  },
 ];
 
 const BY_KEY = new Map(CONSIGNMENT_CHANNELS.map((c) => [c.key, c]));
 
 export function consignmentChannel(key: string): ConsignmentChannel | undefined {
   return BY_KEY.get(key);
-}
-
-export function isKnownChannel(key: string): boolean {
-  return BY_KEY.has(key);
 }
 
 export function channelFeeAction(key: string): string {
@@ -82,7 +98,7 @@ export function checkEligibility(
   if (channel.minAskingMinor > 0 && input.askingMinor < channel.minAskingMinor) {
     problems.push({
       field: 'askingPrice',
-      message: `${channel.label} has a minimum of ${formatMinor(channel.minAskingMinor)}.`,
+      message: `${channel.label} has a minimum of ${usdAmount(channel.minAskingMinor)}.`,
     });
   }
 

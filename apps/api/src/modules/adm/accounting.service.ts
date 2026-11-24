@@ -183,6 +183,7 @@ export class AccountingService {
                  WHEN l.type = 'service_refund' AND s.type::text = 'custom' THEN 'custom_request_fee'
                  WHEN l.type = 'service_refund' THEN 'service_charge'
                  WHEN l.type = 'interest' THEN 'interest'
+                 WHEN c.action_type = 'custom' THEN 'custom_request_fee'
                  WHEN l.type = 'service_charge' THEN 'service_charge'
                  WHEN c.pricing_rule_snapshot ? 'escrowFeeBps' THEN 'escrow_fee'
                  WHEN c.pricing_rule_snapshot ->> 'cashOutFee' = 'true' THEN 'cash_out_fee'
@@ -239,6 +240,16 @@ export class AccountingService {
            AND l.occurred_at >= ${from}::timestamptz AND l.occurred_at < ${to}::timestamptz`)
     ).rows;
 
+    const [cashInFees] = (
+      await this.db.execute<{ total: string }>(sql`
+        SELECT COALESCE(sum(ep.provider_fee_minor), 0)::text AS total
+          FROM ledger_record l
+          JOIN external_payment ep ON l.reference_type = 'external_payment' AND ep.id::text = l.reference_id
+         WHERE l.type = 'credit_topup' AND l.direction = 'credit'
+           AND ep.provider_fee_minor IS NOT NULL
+           AND l.occurred_at >= ${from}::timestamptz AND l.occurred_at < ${to}::timestamptz`)
+    ).rows;
+
     const sumOf = (type: string, direction: string) =>
       byType.filter((r) => r.type === type && r.direction === direction).reduce((a, r) => a + r.totalMinor, 0);
     const inMinor = sumOf('credit_topup', 'credit');
@@ -284,6 +295,7 @@ export class AccountingService {
         refundsMinor: Number(refunds?.total ?? 0),
         cashOutFeesReturnedMinor: returnedFeeMinor,
         carrierCostOnShippingChargesMinor: Number(carrier?.total ?? 0),
+        cashInProviderFeesMinor: Number(cashInFees?.total ?? 0),
       },
       customerMoney: {
         inMinor,
@@ -304,6 +316,8 @@ export class AccountingService {
         'Single-entry wallet ledger: revenue is the net of fee, service_charge and interest rows, ' +
         'less the shipping and service refunds written that month, each off the line its charge was counted on, ' +
         'and less the cash-out fees given back when a payout was refused or returned. ' +
+        'PayPal\'s fees on cash-ins credited that month are Card Embassy\'s cost: the collector is credited what they paid, ' +
+        'and the fees are shown beside revenue, not taken off it. ' +
         'No tax has been applied or separated; which lines are taxable is for the accountant.',
     };
   }

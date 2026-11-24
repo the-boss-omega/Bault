@@ -7,7 +7,7 @@ import { AuthBucket } from '../../../shared/throttle/auth-bucket';
 import { CurrentUser } from '../../sec/current-user.decorator';
 import type { AuthUser } from '../../sec/auth-context';
 import { CREDENTIAL_ROUTE } from '../auth.controller';
-import { ConfirmMfaDto, DisableMfaDto, MfaCodeDto } from '../acc.dto';
+import { ConfirmMfaDto, DisableMfaDto, MfaCodeDto, SetupMfaDto } from '../acc.dto';
 import { AllowWithoutMfa } from './allow-without-mfa.decorator';
 import { MfaService } from './mfa.service';
 
@@ -26,8 +26,15 @@ export class MfaController {
   @Post('setup')
   @HttpCode(200)
   @Header('Cache-Control', 'no-store')
-  setup(@CurrentUser() user: AuthUser) {
-    return this.mfa.beginSetup(user.id);
+  setup(@CurrentUser() user: AuthUser, @Body() dto: SetupMfaDto) {
+    return this.mfa.beginSetup(user, dto.method ?? 'totp');
+  }
+
+  @AuthBucket(CREDENTIAL_ROUTE)
+  @Post('email/code')
+  @HttpCode(202)
+  sendEmailCode(@CurrentUser() user: AuthUser) {
+    return this.mfa.sendSettingsCode(user);
   }
 
   @AllowWithoutMfa()
@@ -38,6 +45,7 @@ export class MfaController {
   async confirm(@CurrentUser() user: AuthUser, @Body() dto: ConfirmMfaDto, @Req() req: Request) {
     const { recoveryCodes, otherSessionsEnded } = await this.mfa.confirmSetup(
       user,
+      dto.method ?? 'totp',
       dto.password,
       dto.code,
       this.rawSessionToken(req),

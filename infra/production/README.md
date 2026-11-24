@@ -75,7 +75,36 @@ Fill in every value. In `production.env` at least: `BAULT_DOMAIN`,
 `compose.yml`, `172.30.89.0/24`), PayPal, `PAYOUT_MODE`, EasyPost, SMTP,
 `STORAGE_*`, `SENTRY_DSN`, and `MFA_ENCRYPTION_KEY` (`openssl rand -base64 32`;
 keep a copy — losing it locks every enrolled authenticator out). Never
-`ALLOW_DESTRUCTIVE_SEED`.
+`ALLOW_DESTRUCTIVE_SEED`. `PAYPAL_PAYOUT_NOTE` is the subject of the email
+PayPal sends with each cash-out (empty means `Your Card Embassy cash-out`), and
+`SUPPORT_EMAIL`, `SUPPORT_PHONE`, `SUPPORT_HOURS` and `SUPPORT_TEAM` are the
+contact page's details, each shown as not published when empty. Crypto
+cash-in stays off with `CRYPTO_CHECKOUT_ENABLED=false` and
+`CRYPTO_PROVIDER=sandbox`, which production accepts because the sandbox is
+never built there. To turn it on, set `CRYPTO_PROVIDER=coinbase_commerce`,
+`COINBASE_COMMERCE_API_KEY`, `COINBASE_COMMERCE_WEBHOOK_SECRET` and
+`CRYPTO_CHECKOUT_ENABLED=true`, and subscribe a Coinbase Commerce webhook for
+`https://<domain>/api/v1/webhooks/crypto` to `charge:confirmed`,
+`charge:failed`, `charge:delayed` and `charge:pending` (on Compute Engine,
+`infra/gcp/configure.sh --change crypto` asks for all of it). Reading parcel
+labels and items at intake stays off with `OCR_ENABLED=false`, and
+`OCR_PROVIDER=sandbox` is accepted while it is off. To turn it on, set
+`OCR_PROVIDER=tesseract` and `OCR_ENABLED=true` for both the API and the
+worker and restart them: Tesseract runs inside the worker with its English data
+shipped in the image, so it needs no account, no key and no outbound network,
+and production refuses `OCR_ENABLED=true` with any other provider. There is no
+session secret: sessions are random tokens looked up by hash, and an old
+`SESSION_COOKIE_SECRET` or `EMAIL_API_KEY` line is ignored.
+
+The web app's error reporting is not configured here: `bault-web` is a built
+bundle, so its two variables are build arguments of `apps/web/Dockerfile`, and
+nothing in `compose.yml` or `/etc/bault` changes them. `release.yml` passes
+`VITE_RELEASE` (the tag being released) and `VITE_SENTRY_DSN`, taken from the
+GitHub repository variable of that name (Settings, Secrets and variables,
+Actions, Variables). The DSN is the public key of a Sentry browser project;
+leave the variable unset and the web app loads and sends nothing. Set it before
+tagging, because a released image keeps the DSN it was built with, and the
+image's CSP then allows that one Sentry host in `connect-src`.
 
 Check the owner's connection from the host before going further:
 
@@ -142,6 +171,29 @@ curl -s https://<domain>/api/v1/readyz                                # {"status
 curl -sI https://<domain>/ | grep -iE 'strict-transport|content-security'
 ```
 
+### The first administrator (after the first deploy only)
+
+The migration already created `platform@bault.dev`, the platform's own
+account, which nobody signs in as. Create your own administrator with the
+command in the release image. The password goes in on standard input, so it is
+in neither the shell history nor the process list; `read -rs` does not echo
+it. Use at least 12 characters:
+
+```sh
+cd /opt/bault
+read -rs ADMIN_PASSWORD
+printf '%s\n' "$ADMIN_PASSWORD" | BAULT_TAG=<tag> BAULT_ENV_DIR=/etc/bault docker compose \
+  --env-file /etc/bault/production.env -f infra/production/compose.yml --profile migrate \
+  run --rm -T migrate node dist/db/create-admin.js \
+  --email <your email> --username <username> --first-name <first> --last-name <last>
+unset ADMIN_PASSWORD
+```
+
+It prints `✔ administrator … created`. Sign in at `https://<domain>` and enrol
+two-factor, which production asks of every administrator. The command refuses,
+and changes nothing, once any administrator exists; add further staff from the
+console.
+
 ## 6. Nightly backup
 
 ```sh
@@ -149,7 +201,21 @@ sudo -u deploy crontab /opt/bault/infra/ops/crontab.example   # replaces deploy'
 ```
 
 Settings in `/etc/bault/backup.env` (mode 600) as that file describes; the
-restore drill is `infra/ops/RESTORE.md`.
+restore drill is `infra/ops/RESTORE.md`. The same crontab runs
+`infra/ops/watchdog.sh` every two minutes, which restarts a container that
+hangs (compose restarts only one that exits), and logs what it does to
+`/var/log/bault/watchdog.log`.
+
+Before installing the crontab, replace `MAILTO=CHANGE_ME@your-ops-address`
+in it with an address this host can actually deliver to (a mail relay such as
+`msmtp-mta` must be set up, since the server sends no mail of its own), or
+with `MAILTO=""` if nobody will read cron mail. A failed dump leaves
+`BACKUP-FAILED` in `BACKUP_DIR` (`/var/backups/bault`) with the time and the
+exit status, the watchdog writes it once to `watchdog.log` as
+`backup: the nightly backup FAILED: …`, and the next good dump removes it, so
+`ls /var/backups/bault/BACKUP-FAILED` is the quick check. The commented
+dead-man's-switch line in the crontab is what reaches a person when the host
+cannot send mail.
 
 ## 7. Prices (the first deploy, and whenever a price changes)
 
@@ -167,7 +233,7 @@ It signs in as an administrator, asking for the password and the code from
 your authenticator app (or reading `BAULT_ADMIN_IDENTIFIER`,
 `BAULT_ADMIN_PASSWORD` and `BAULT_ADMIN_TOTP`), and stores neither. Each price
 becomes a rule through the admin API, with the storage terms the console's form
-cannot send and each membership's allowances from the tier catalogue. A run
+cannot send. A run
 loads only what is missing; `--update` also replaces rules that differ from the
 file. A changed price is a new rule, so charges already made keep theirs.
 
@@ -220,8 +286,15 @@ What it checks, in order:
   account. Either sends Bault the event that returns the money.
 
 Still by hand, because nothing outside the server can drive them:
+- with `PAYPAL_CHECKOUT_ENABLED=true`, a cash-in by PayPal checkout: pay $10
+  from a sandbox personal account and once more by "Debit or Credit Card" with
+  one of PayPal's sandbox test cards, see each credited once, and see the
+  webhook's `PAYMENT.CAPTURE.COMPLETED` delivered in the PayPal app's webhook
+  events;
 - the verify and reset emails landed in the inbox, not in spam;
 - Sentry shows the forged webhook (a `WebhookVerificationError`);
+- with `VITE_SENTRY_DSN` set, a browser error reaches Sentry tagged with the
+  release, and the browser console shows no CSP refusal for it;
 - a label refused at dispatch, re-rated from the shipment drawer;
 - a delivered parcel sending its notification;
 - the requeue drill: stop SMTP, let a message park, restore SMTP, requeue it
@@ -229,6 +302,17 @@ Still by hand, because nothing outside the server can drive them:
 
 With it, the journeys take about 30 minutes, not 2 hours, and the provider
 checks about 2 hours, not 4.
+
+The `chk…` collectors stay behind. `pnpm users:remove-test --production-i-know`
+lists them, and with `--apply` as well it asks you to type `delete` and then
+handles each account in its own transaction. An account with nothing kept is
+deleted, together with its sessions, tokens, two-factor rows, notifications,
+notification settings, idempotency keys and support tickets that hold no
+message. An account that money, custody, an audit record or any other kept row
+still names is set to `closed`, as the admin console would, and printed as
+"closed, not deleted, because of <table>". The staging check moves money, so
+expect its buyer and seller to be closed rather than deleted. Without `--apply`
+it prints the same decisions and changes nothing.
 
 ## 9. Checks before launch (on staging)
 
@@ -316,10 +400,13 @@ not delete. Replace it instead.
    - the database passwords: `bault_owner` with `gcloud sql users
      set-password`, and `bault_app` and `bault_worker` by running `roles.sql`
      again with new `BAULT_APP_PASSWORD` and `BAULT_WORKER_PASSWORD`;
-   - the images and backups storage keys: deactivate and delete the old ones
-     (`gcloud storage hmac list`, `update --deactivate`, `delete`), remove
-     them from `bault-gcp.env`, and run `provision.sh` again, which makes new
-     ones;
+   - the images storage key: deactivate and delete the old one
+     (`gcloud storage hmac list`, `update --deactivate`, `delete`), remove it
+     from `bault-gcp.env`, and run `provision.sh` again, which makes a new one
+     (in an organisation that forbids keys, lift that for the project first,
+     as `infra/gcp/README.md` step 1 shows). The backups have no key to
+     rotate on Google Cloud: the server's own service account writes them,
+     and a token taken from the old server expires within the hour;
    - the PayPal client secret, the EasyPost key, the SMTP password,
      `API_DOCS_PASSWORD` and the registry token.
 

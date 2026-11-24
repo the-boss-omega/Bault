@@ -63,7 +63,7 @@ const smtp = (overrides: Record<string, unknown> = {}) =>
     SMTP_REQUIRE_TLS: true,
     SMTP_USER: 'bault@example.test',
     SMTP_PASSWORD: 'app-password',
-    SMTP_FROM: 'Bault <bault@example.test>',
+    SMTP_FROM: 'Card Embassy <bault@example.test>',
     ...overrides,
   } as Parameters<typeof createEmailAdapter>[0]);
 

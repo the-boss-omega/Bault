@@ -39,4 +39,24 @@ describe('shipment expiry', () => {
     const { rows } = await pool.query<{ status: string }>(`SELECT status FROM shipment WHERE id = $1`, [id]);
     expect(rows[0]!.status).toBe('cancelled');
   });
+
+  it('takes a released shipment out of its shared parcel', async () => {
+    const id = await overdue(pool);
+    const { rows: groups } = await pool.query<{ id: string }>(
+      `INSERT INTO shipment_group (code, payer_user_id, destination_address, recipient_name, destination_postal_code)
+       SELECT 'GRP-' || substr(md5(random()::text), 1, 10), user_id::uuid, destination_address, 'Worker suite', '00000'
+         FROM shipment WHERE id = $1
+       RETURNING id`,
+      [id],
+    );
+    await pool.query(`UPDATE shipment SET group_id = $2 WHERE id = $1`, [id, groups[0]!.id]);
+
+    await expireUnpaidShipments(pool);
+
+    const { rows } = await pool.query<{ status: string; group_id: string | null }>(
+      `SELECT status, group_id FROM shipment WHERE id = $1`,
+      [id],
+    );
+    expect(rows[0]).toEqual({ status: 'cancelled', group_id: null });
+  });
 });

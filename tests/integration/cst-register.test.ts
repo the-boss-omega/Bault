@@ -9,7 +9,7 @@ interface RegisterEntry {
   params: Record<string, unknown>;
 }
 
-describe('CST the item register, as the card’s owner reads it', () => {
+describe('CST the item register, as the warehouse and the card’s owners read it', () => {
   it('names shelves by label, keeps amounts in minor units, and carries no ids or English sentences', async () => {
     const operator = await signIn(SEED.operator);
     const item = await intakeFor(operator, SEED.collector, {
@@ -35,7 +35,7 @@ describe('CST the item register, as the card’s owner reads it', () => {
     const buyer = await signIn(SEED.collector2);
     expect((await buyer.post(`/marketplace/listings/${listing.id}/purchase`)).status).toBe(201);
 
-    const res = await buyer.get(`/vault/items/${itemId}/timeline`);
+    const res = await operator.get(`/custody/items/${itemId}/timeline`);
     expect(res.status).toBe(200);
     const events = res.body as RegisterEntry[];
 
@@ -71,6 +71,22 @@ describe('CST the item register, as the card’s owner reads it', () => {
     });
     expect(events.find((e) => e.kind === 'ownership_transfer')?.params).toEqual({});
     expect(events.find((e) => e.kind === 'sale')?.params).toEqual({ amountMinor: 26_000 });
+
+    const sellerRead = (await seller.get(`/vault/items/${itemId}/timeline`)).body as RegisterEntry[];
+    expect(JSON.stringify(sellerRead)).not.toMatch(UUID);
+    expect(sellerRead.filter((e) => /^(relocate|bin_transfer|correction)$/.test(e.kind))).toEqual([]);
+    expect(sellerRead.find((e) => e.kind === 'intake')?.params).toEqual({ fromState: null, toState: 'stored' });
+    expect(sellerRead.find((e) => e.kind === 'state_change' && e.params.toState === 'listed')?.params).toEqual({
+      fromState: 'stored',
+      toState: 'listed',
+    });
+    expect(sellerRead.find((e) => e.kind === 'sale')?.params).toEqual({ amountMinor: 26_000 });
+
+    const buyerRead = (await buyer.get(`/vault/items/${itemId}/timeline`)).body as RegisterEntry[];
+    expect(buyerRead.map((e) => e.kind)).not.toContain('intake');
+    expect(buyerRead.map((e) => e.kind)).not.toContain('correction');
+    expect(buyerRead.find((e) => e.kind === 'ownership_transfer')?.params).toEqual({});
+    expect(buyerRead.find((e) => e.kind === 'sale')?.params).toEqual({ amountMinor: 26_000 });
   });
 
   it('gives the warehouse the same entries', async () => {

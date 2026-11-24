@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
+import { honouredMembership } from './helpers/db';
 
 describe('SHP outbound shipping', () => {
   async function itemFor(cls = 'trading_card', weightGrams?: number) {
@@ -251,6 +252,7 @@ describe('SHP outbound shipping', () => {
       signatureRequired: true,
     });
     expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe('Cover stops at $5,000.00 on one parcel. Split it across two.');
   });
 
   it('will not sell a tracker on an uninsured parcel', async () => {
@@ -316,7 +318,8 @@ describe('SHP outbound shipping', () => {
 
     const absorbed = (await collector.get(`/shipping/shipments/${source.id}`)).body;
     expect(absorbed.status).toBe('cancelled');
-    expect(absorbed.mergedIntoShipmentId).toBe(target.id);
+    expect(absorbed.mergedIntoShipmentId).toBeUndefined();
+    expect(absorbed.cancelReason).toBe(`Merged into ${target.code}`);
   });
 
   it('refuses to merge two requests going to different addresses', async () => {
@@ -403,8 +406,7 @@ describe('SHP outbound shipping', () => {
   it('gives back the membership cover a cancelled parcel had spent', async () => {
     const operator = await signIn(SEED.operator);
     await fundWallet(SEED.operator, 20_000);
-    const joined = await operator.post('/membership/subscribe', { tier: 'folio' });
-    expect([200, 201]).toContain(joined.status);
+    await honouredMembership({ email: SEED.operator }, 'bronze');
 
     const item = await intakeFor(operator, SEED.operator);
     const us = await addressFor(operator, { ...US, recipient: 'Hermon Vale' });
@@ -418,20 +420,20 @@ describe('SHP outbound shipping', () => {
     const covered = rates.find((r) => r.eligible && (r.membershipCover?.postageMinor ?? 0) > 0)!;
     expect(covered).toBeTruthy();
 
-    const usedBefore = (await operator.get('/membership/me')).body.membership.postage.usedMinor as number;
+    const usedBefore = (await operator.get('/tiers/me')).body.honoured.postage.usedMinor as number;
     const balanceBefore = (await operator.get('/finance/wallet')).body.amount as number;
     const selected = await operator.post(`/shipping/shipments/${s.id}/select-rate`, {
       carrier: covered.carrier,
       serviceLevel: covered.serviceLevel,
     });
     expect(selected.body.status).toBe('rates_selected');
-    const spent = (await operator.get('/membership/me')).body.membership.postage.usedMinor as number;
+    const spent = (await operator.get('/tiers/me')).body.honoured.postage.usedMinor as number;
     expect(spent).toBe(usedBefore + covered.membershipCover!.postageMinor);
 
     const cancelled = await operator.post(`/shipping/shipments/${s.id}/cancel`, { reason: 'Not needed after all.' });
     expect(cancelled.status).toBe(201);
 
-    expect((await operator.get('/membership/me')).body.membership.postage.usedMinor).toBe(usedBefore);
+    expect((await operator.get('/tiers/me')).body.honoured.postage.usedMinor).toBe(usedBefore);
     expect((await operator.get('/finance/wallet')).body.amount).toBe(
       balanceBefore - (cancelled.body.restockingFeeMinor as number),
     );
@@ -457,7 +459,7 @@ describe('SHP outbound shipping', () => {
     const operator = await signIn(SEED.operator);
     const cases = [];
     for (let i = 0; i < 3; i += 1) {
-      cases.push(await intakeFor(operator, SEED.collector3, { typeClass: 'sealed_case' }));
+      cases.push(await intakeFor(operator, SEED.collector3, { typeClass: 'sealed_case', binId: undefined, autoStow: true }));
     }
     const broke = await signIn(SEED.collector3);
     const au = await addressFor(broke, {
@@ -593,6 +595,116 @@ describe('SHP outbound shipping', () => {
     expect(locked.body.memberCount).toBe(2);
   });
 
+  it('keeps a member\'s phone off the shared parcel the others read, and the apartment line on it', async () => {
+    const operator = await signIn(SEED.operator);
+    const mine = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
+    const theirs = await intakeFor(operator, SEED.collector2, { typeClass: 'trading_card' });
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+
+    const shared = {
+      label: 'Convention suite',
+      recipient: 'Front desk — Bault group',
+      line1: '400 Boardwalk',
+      line2: 'Suite 1201',
+      city: 'Atlantic City',
+      region: 'NJ',
+      country: 'US',
+      postalCode: '08401',
+    };
+    const redAddr = await addressFor(red, { ...shared, phone: '+1 609-555-0188' });
+    const goldenAddr = await addressFor(golden, shared);
+    const redShip = (await red.post('/shipping/shipments', { itemIds: [mine.id], addressId: redAddr })).body;
+    const goldenShip = (await golden.post('/shipping/shipments', { itemIds: [theirs.id], addressId: goldenAddr })).body;
+    expect(redShip.destinationAddress).toContain('Suite 1201');
+
+    const group = (await red.post('/shipping/groups', { shipmentId: redShip.id })).body;
+    expect((await golden.post('/shipping/groups/join', { groupCode: group.code, shipmentId: goldenShip.id })).status).toBe(201);
+
+    const seen = await golden.get(`/shipping/groups/${group.id}`);
+    expect(seen.status).toBe(200);
+    expect(seen.body.destinationAddress).toContain('400 Boardwalk, Suite 1201');
+    expect(JSON.stringify(seen.body)).not.toContain('555-0188');
+    expect(JSON.stringify((await red.get(`/shipping/shipments/${redShip.id}`)).body)).not.toContain('555-0188');
+  });
+
+  async function sharedParcel() {
+    const operator = await signIn(SEED.operator);
+    const mine = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
+    const theirs = await intakeFor(operator, SEED.collector2, { typeClass: 'trading_card' });
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+    const shared = {
+      label: 'Convention hotel',
+      recipient: 'Front desk — Bault group',
+      line1: '400 Boardwalk',
+      city: 'Atlantic City',
+      region: 'NJ',
+      country: 'US',
+      postalCode: '08401',
+    };
+    const redAddr = await addressFor(red, shared);
+    const goldenAddr = await addressFor(golden, shared);
+    const redShip = (await red.post('/shipping/shipments', { itemIds: [mine.id], addressId: redAddr })).body;
+    const goldenShip = (
+      await golden.post('/shipping/shipments', { itemIds: [theirs.id], addressId: goldenAddr })
+    ).body;
+    const group = (await red.post('/shipping/groups', { shipmentId: redShip.id })).body;
+    const joined = await golden.post('/shipping/groups/join', { groupCode: group.code, shipmentId: goldenShip.id });
+    expect(joined.status).toBe(201);
+    return { operator, red, golden, group, goldenShip, theirs };
+  }
+
+  it('does not lock a shared parcel whose only other member cancelled her shipment', async () => {
+    const { red, golden, group, goldenShip } = await sharedParcel();
+
+    const cancelled = await golden.post(`/shipping/shipments/${goldenShip.id}/cancel`, { reason: 'Changed my mind.' });
+    expect(cancelled.status).toBe(201);
+    expect((await golden.get(`/shipping/shipments/${goldenShip.id}`)).body.groupId ?? null).toBeNull();
+
+    const locked = await red.post(`/shipping/groups/${group.id}/lock`);
+    expect(locked.status).toBe(400);
+    expect(locked.body.error.message).toBe('A shared parcel needs at least two people in it.');
+    expect((await red.get(`/shipping/groups/${group.id}`)).body.memberCount).toBe(1);
+
+    expect((await red.post(`/shipping/groups/${group.id}/cancel`, { reason: 'Nobody left.' })).status).toBe(201);
+    expect((await red.post(`/shipping/groups/${group.id}/cancel`, { reason: 'Again.' })).status).toBe(409);
+  });
+
+  it('still shows a shared parcel after one member’s card has gone out', async () => {
+    const { operator, red, golden, group, goldenShip, theirs } = await sharedParcel();
+    await fundWallet(SEED.collector2, 100_000);
+
+    const rates = (await golden.get(`/shipping/shipments/${goldenShip.id}/rates`)).body as {
+      carrier: string;
+      serviceLevel: string;
+      eligible: boolean;
+    }[];
+    const pick = rates.find((r) => r.eligible)!;
+    const selected = await golden.post(`/shipping/shipments/${goldenShip.id}/select-rate`, {
+      carrier: pick.carrier,
+      serviceLevel: pick.serviceLevel,
+    });
+    expect(selected.status).toBe(201);
+    const dispatched = await operator.post(`/shipping/shipments/${goldenShip.id}/dispatch`, {
+      scannedItemIds: [theirs.id],
+      carrier: 'USPS',
+      packageWeightGrams: 220,
+      fulfillmentNotes: 'Top-loader in a rigid mailer.',
+    });
+    expect(dispatched.status).toBe(201);
+
+    for (const member of [red, golden]) {
+      const one = await member.get(`/shipping/groups/${group.id}`);
+      expect(one.status, JSON.stringify(one.body)).toBe(200);
+      expect(one.body.memberCount).toBe(2);
+      expect(one.body.totalItems).toBe(2);
+      const all = await member.get('/shipping/groups');
+      expect(all.status, JSON.stringify(all.body)).toBe(200);
+      expect((all.body as { id: string }[]).some((g) => g.id === group.id)).toBe(true);
+    }
+  });
+
   it('refuses to join a shared parcel going somewhere else', async () => {
     const operator = await signIn(SEED.operator);
     const mine = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
@@ -681,7 +793,8 @@ describe('SHP outbound shipping', () => {
 
     const shipment = (await collector.get(`/shipping/shipments/${shipped.body.shipmentId}`)).body;
     expect(shipment.itemIds).toHaveLength(0);
-    expect(shipment.serviceKey).toBe('direct_overnight');
+    expect(shipment.serviceKey).toBeUndefined();
+    expect((await operator.get(`/shipping/shipments/${shipped.body.shipmentId}`)).body.serviceKey).toBe('direct_overnight');
 
     const form = { carrier: 'FedEx', packageWeightGrams: 180, fulfillmentNotes: 'Overnight envelope, two slabs.' };
     const wrongParcel = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {

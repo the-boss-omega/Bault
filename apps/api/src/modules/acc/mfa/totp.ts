@@ -84,5 +84,5 @@ export function otpauthUri({ issuer, account, secret }: { issuer: string; accoun
     digits: String(TOTP_DIGITS),
     period: String(TOTP_STEP_SECONDS),
   });
-  return `otpauth://totp/${label}?${params.toString()}`;
+  return `otpauth://totp/${label}?${params.toString().replace(/\+/g, '%20')}`;
 }

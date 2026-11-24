@@ -109,8 +109,40 @@ describe('the storage contract', () => {
   });
 });
 
+describe('reading an object back for the worker', () => {
+  it('reads the exact bytes it stored', async ({ skip }) => {
+    if (!storeIsUp) skip();
+    const s3 = new S3StorageAdapter(CONFIG);
+    const body = Buffer.from(Array.from({ length: 1024 }, (_, i) => (i * 13 + 5) % 256));
+    const key = `parcels/test/${Date.now()}-read.png`;
+    await s3.putObject({ key, body, contentType: 'image/png' });
+    expect((await s3.getObject(key)).equals(body)).toBe(true);
+  });
+
+  it('reports a missing object instead of returning nothing', async ({ skip }) => {
+    if (!storeIsUp) skip();
+    const s3 = new S3StorageAdapter(CONFIG);
+    await expect(s3.getObject(`parcels/test/${Date.now()}-never-stored.png`)).rejects.toThrow(/Storage read failed/);
+  });
+
+  it('refuses a key with a dot segment', async () => {
+    const s3 = new S3StorageAdapter({ ...CONFIG, endpoint: 'http://127.0.0.1:9' });
+    await expect(s3.getObject('intake/../other-bucket/x.png')).rejects.toThrow(/segment/);
+    await expect(new SandboxStorageAdapter().getObject('intake/../x.png')).rejects.toThrow(/segment/);
+  });
+});
+
 describe('the sandbox adapter', () => {
-  it('accepts bytes and keeps none of them', async () => {
+  it('keeps what it was given in this process only, and a placeholder for anything else', async () => {
+    const sandbox = new SandboxStorageAdapter();
+    const body = Buffer.from('a label photographed at the bench');
+    await sandbox.putObject({ key: 'parcels/2026/09/label.png', body, contentType: 'image/png' });
+    expect((await sandbox.getObject('parcels/2026/09/label.png')).equals(body)).toBe(true);
+    expect((await new SandboxStorageAdapter().getObject('parcels/2026/09/label.png')).equals(body)).toBe(false);
+    expect((await sandbox.getObject('parcels/2026/09/elsewhere.png')).length).toBeGreaterThan(0);
+  });
+
+  it('accepts bytes and signs no URL for them', async () => {
     const sandbox = new SandboxStorageAdapter();
     const result = await sandbox.putObject({
       key: 'intake/2026/09/whatever.png',

@@ -1,15 +1,18 @@
 import { pgTable, text, integer, jsonb, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
+import { item } from '../cst/cst.schema';
+import { transaction } from '../mkt/mkt.schema';
 
 export const dispute = pgTable('dispute', {
   id: pkId(),
   code: text('code'),
-  transactionId: text('transaction_id').notNull(),
-  openedBy: text('opened_by').notNull(),
+  transactionId: uuid('transaction_id').notNull().references(() => transaction.id, { onDelete: 'restrict' }),
+  openedBy: uuid('opened_by').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   status: text('status').notNull().default('open'),
   ruling: text('ruling'),
   note: text('note'),
-  assignedAdminId: text('assigned_admin_id'),
+  assignedAdminId: uuid('assigned_admin_id').references(() => userAccount.id, { onDelete: 'restrict' }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -27,6 +30,6 @@ export const storageFeeRun = pgTable('storage_fee_run', {
 });
 
 export const storageCover = pgTable('storage_cover', {
-  itemId: uuid('item_id').primaryKey(),
+  itemId: uuid('item_id').references(() => item.id, { onDelete: 'restrict' }).primaryKey(),
   coveredUntil: timestamp('covered_until', { withTimezone: true }).notNull(),
 });

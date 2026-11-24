@@ -1,38 +1,39 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useVaultItems } from '../../../shared/useVaultItems';
-import { ITEM_CLASSES, itemClassLabel, itemName, itemPickText } from '../../../shared/itemClasses';
-import { EscrowTab } from './EscrowTab';
+import { ITEM_CLASSES, itemClassLabel, itemName } from '../../../shared/itemClasses';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
-import { Amount, Code, Serial } from '../../../shared/ui/Serial';
-import { storefrontHref } from '../../../shared/market';
-import { dollarsToCents, formatUsd } from '../../../shared/money';
+import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
+import { Amount, ItemPick, Serial } from '../../../shared/ui/Serial';
+import { dollarsToCents, formatUsd, isolate } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { useNavigation, useRoute } from '../../../shared/routing';
+import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
   ContextTabs,
   EmptyState,
   ErrorState,
   Field,
+  MoneyField,
   Panel,
   SkeletonBlock,
+  StatusBadge,
   SuccessNote,
   TabPanel,
 } from '../../../shared/ui/primitives';
-import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { IconSearch, IconTag } from '../../../shared/ui/icons';
 import { MyListingsPanel, OffersPanel, SwapsPanel } from './SellerPanels';
 import { ProposeTradePanel } from './ProposeTradePanel';
 import { StorefrontPanel } from './StorefrontPanel';
-import { HouseStorePanel } from './HouseStorePanel';
+import { ListingDealFlow, SellerLink, type ListingDeal } from './ListingDeal';
 import { loadProfile } from '../../../shared/session';
+import { LIST_TOOLS_FROM } from './ListTools';
 
 interface Listing {
   id: string;
   askingPrice: number;
   currency: string;
-  itemId: string;
   serialNumber: string;
   typeClass: string;
   conditionGrade: string | null;
@@ -41,7 +42,16 @@ interface Listing {
   imageUrl?: string;
 }
 
-const TABS = ['browse', 'house', 'sell', 'listings', 'offers', 'trade', 'escrow', 'store'] as const;
+const BROWSE_PAGE = 50;
+
+function browsePage(search: string, cursor?: string): string {
+  const params = new URLSearchParams(search);
+  params.set('limit', String(BROWSE_PAGE));
+  if (cursor) params.set('cursor', cursor);
+  return params.toString();
+}
+
+const TABS = ['browse', 'sell', 'listings', 'offers', 'trade', 'store'] as const;
 type MarketTab = (typeof TABS)[number];
 
 export function MarketplacePage() {
@@ -50,6 +60,10 @@ export function MarketplacePage() {
   const { goTab, setParams } = useNavigation(route);
 
   const [listings, setListings] = useState<Listing[] | null>(null);
+  const [moreListings, setMoreListings] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const q = route.params.q ?? '';
@@ -65,18 +79,14 @@ export function MarketplacePage() {
   function clearFilters() {
     setParams({ q: null, type: null, condition: null, min: null, max: null, sort: null });
   }
-  const [buying, setBuying] = useState<Listing | null>(null);
-  const [offering, setOffering] = useState<Listing | null>(null);
-  const { items, reload: reloadItems } = useVaultItems(true);
+  const [deal, setDeal] = useState<ListingDeal | null>(null);
+  const keepStatus = useRef(false);
+  const { items, loaded: itemsLoaded, reload: reloadItems } = useVaultItems(true);
   const [myUsername, setMyUsername] = useState<string | undefined>(undefined);
-  const [meId, setMeId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadProfile()
-      .then((p) => {
-        setMyUsername(p.username);
-        setMeId(p.id);
-      })
+      .then((p) => setMyUsername(p.username))
       .catch(() => undefined);
   }, []);
 
@@ -84,50 +94,80 @@ export function MarketplacePage() {
     ? (route.tab as MarketTab)
     : 'browse';
 
+  const shownTab = useRef(tab);
+  useEffect(() => {
+    if (shownTab.current === tab) return;
+    shownTab.current = tab;
+    setError(null);
+    if (!keepStatus.current) setStatus(null);
+    keepStatus.current = false;
+  }, [tab]);
+
+  const minCents = dollarsToCents(minPrice);
+  const maxCents = dollarsToCents(maxPrice);
+  const minBad = minPrice.trim() !== '' && minCents === null;
+  const maxBad = maxPrice.trim() !== '' && maxCents === null;
+  const rangeBad = minCents !== null && maxCents !== null && minCents > maxCents;
+
   const query = useMemo(() => {
     const params = new URLSearchParams();
     if (q.trim()) params.set('q', q.trim());
     if (type) params.set('type', type);
     if (condition.trim()) params.set('condition', condition.trim());
-    const cents = (value: string) => dollarsToCents(value);
-    const min = cents(minPrice);
-    const max = cents(maxPrice);
+    const min = dollarsToCents(minPrice);
+    const max = dollarsToCents(maxPrice);
     if (min !== null) params.set('minPrice', String(min));
-    if (max !== null) params.set('maxPrice', String(max));
+    if (max !== null && (min === null || max >= min)) params.set('maxPrice', String(max));
     if (sort !== 'newest') params.set('sort', sort);
     return params.toString();
   }, [q, type, condition, minPrice, maxPrice, sort]);
 
   const loadListings = useCallback(async (search: string) => {
     try {
-      setListings(await api.get<Listing[]>(`/marketplace/listings?${search}`));
-      setError(null);
+      const page = await api.get<Listing[]>(`/marketplace/listings?${browsePage(search)}`);
+      setListings(page);
+      setMoreListings(page.length === BROWSE_PAGE);
+      setMoreError(null);
+      setLoadError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setLoadError((e as Error).message);
       setListings([]);
+      setMoreListings(false);
     }
   }, []);
+
+  async function showMoreListings() {
+    const last = listings?.[listings.length - 1];
+    if (!last) return;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const page = await api.get<Listing[]>(`/marketplace/listings?${browsePage(query, last.id)}`);
+      setListings((prev) => [...(prev ?? []), ...page.filter((l) => !(prev ?? []).some((p) => p.id === l.id))]);
+      setMoreListings(page.length === BROWSE_PAGE);
+    } catch (e) {
+      setMoreError((e as Error).message);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     const handle = setTimeout(() => void loadListings(query), 250);
     return () => clearTimeout(handle);
   }, [query, loadListings]);
 
-  async function buy(listing: Listing) {
-    try {
-      const result = await api.post<{ replayed?: boolean }>(
-        `/marketplace/listings/${listing.id}/purchase`,
-      );
-      setStatus(result?.replayed ? t('market.alreadyBought') : t('market.status.purchased'));
+  const dealDone = useCallback(
+    async (message: string, kind: ListingDeal['kind']) => {
+      setStatus(message);
       setError(null);
-      await loadListings(query);
-      await reloadItems();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBuying(null);
-    }
-  }
+      if (kind === 'buy') {
+        await loadListings(query);
+        await reloadItems();
+      }
+    },
+    [loadListings, query, reloadItems],
+  );
 
   const tabs = TABS.map((key) => ({ key, label: t(`market.tab.${key}` as MessageKey) }));
 
@@ -172,8 +212,13 @@ export function MarketplacePage() {
                 />
               </Field>
 
-              <Field label={t('market.filter.minPrice')} className="field--compact">
+              <Field
+                label={t('market.filter.minPrice')}
+                className="field--compact"
+                error={minBad ? t('market.filter.priceBad') : undefined}
+              >
                 <input
+                  aria-invalid={minBad || undefined}
                   inputMode="decimal"
                   value={minPrice}
                   onChange={(e) => setParams({ min: e.target.value })}
@@ -182,8 +227,15 @@ export function MarketplacePage() {
                 />
               </Field>
 
-              <Field label={t('market.filter.maxPrice')} className="field--compact">
+              <Field
+                label={t('market.filter.maxPrice')}
+                className="field--compact"
+                error={
+                  maxBad ? t('market.filter.priceBad') : rangeBad ? t('market.filter.rangeBad') : undefined
+                }
+              >
                 <input
+                  aria-invalid={maxBad || rangeBad || undefined}
                   inputMode="decimal"
                   value={maxPrice}
                   onChange={(e) => setParams({ max: e.target.value })}
@@ -212,15 +264,27 @@ export function MarketplacePage() {
               <span className="spacer" />
 
               {listings !== null && (
-                <span className="vault-count">
-                  {listings.length === 1
-                    ? t('market.listingsCountOne')
-                    : t('market.listingsCount', { count: listings.length })}
+                <span className="vault-count" role="status">
+                  {moreListings
+                    ? t('market.listingsCountMore', { count: listings.length })
+                    : listings.length === 1
+                      ? t('market.listingsCountOne')
+                      : t('market.listingsCount', { count: listings.length })}
                 </span>
               )}
             </div>
 
-            {listings === null ? (
+            {loadError ? (
+              <ErrorState
+                title={t('market.loadFailed')}
+                message={loadError}
+                onRetry={() => {
+                  setListings(null);
+                  void loadListings(query);
+                }}
+                retryLabel={t('ui.retry')}
+              />
+            ) : listings === null ? (
               <ul className="card-grid">
                 {Array.from({ length: 6 }, (_, i) => (
                   <li key={i}>
@@ -237,19 +301,22 @@ export function MarketplacePage() {
                     <Button size="sm" onClick={clearFilters}>
                       {t('market.filter.clear')}
                     </Button>
-                  ) : undefined
+                  ) : (
+                    <Button size="sm" variant="primary" onClick={() => goTab('sell')}>
+                      {t('market.empty.sellOne')}
+                    </Button>
+                  )
                 }
               />
             ) : (
               <ul className="card-grid card-grid--listings">
-                <li className="register-head" aria-hidden="true">
-                  <span />
-                  <span>{t('market.mine.col.price')}</span>
-                  <span>{t('vault.col.state')}</span>
-                  <span />
-                </li>
                 {listings.map((listing) => (
-                  <li key={listing.id} className="card card--interactive card--listing">
+                  <li
+                    key={listing.id}
+                    className="card card--interactive card--listing"
+                    onPointerMove={slabMove}
+                    onPointerLeave={slabLeave}
+                  >
                     <div className="card-art">
                       <CardPhotoThumb
                         serialNumber={listing.serialNumber}
@@ -258,6 +325,7 @@ export function MarketplacePage() {
                     </div>
 
                     <div className="card-id">
+                      <span className="money-label">{t('market.mine.col.price')}</span>
                       <p className="price">
                         <Amount>{formatUsd(listing.askingPrice)}</Amount>
                       </p>
@@ -275,132 +343,109 @@ export function MarketplacePage() {
                       <span className="card-sub">{itemClassLabel(t, listing.typeClass)}</span>
                     </div>
 
-                    <div className="actions">
-                      <Button variant="gold" size="sm" onClick={() => setBuying(listing)}>
-                        {t('market.buy')}
-                      </Button>
-                      <Button variant="secondary" size="sm" onClick={() => setOffering(listing)}>
-                        {t('market.makeOffer')}
-                      </Button>
-                    </div>
+                    {myUsername !== undefined && listing.sellerUsername === myUsername ? (
+                      <div className="actions">
+                        <StatusBadge tone="gold" plain>
+                          {t('market.yours')}
+                        </StatusBadge>
+                        <Button variant="secondary" size="sm" onClick={() => goTab('listings')}>
+                          {t('market.manage')}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="actions">
+                        <Button variant="primary" size="sm" onClick={() => setDeal({ kind: 'buy', listing })}>
+                          {t('market.buy')}
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => setDeal({ kind: 'offer', listing })}>
+                          {t('market.makeOffer')}
+                        </Button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
+            {!loadError && listings !== null && moreListings && (
+              <div className="actions">
+                {moreError && <ErrorState message={moreError} />}
+                <Button variant="secondary" disabled={loadingMore} onClick={() => void showMoreListings()}>
+                  {loadingMore ? t('market.showingMore') : t('market.showMore')}
+                </Button>
+              </div>
+            )}
           </Panel>
-        </TabPanel>
-      )}
-
-      {tab === 'house' && (
-        <TabPanel tab="house">
-          <HouseStorePanel
-            onBought={async (m) => {
-              setStatus(m);
-              await reloadItems();
-            }}
-            onError={setError}
-          />
         </TabPanel>
       )}
 
       {tab === 'sell' && (
         <TabPanel tab="sell">
           <SellPanel
+            key={route.params.item ?? route.params.serial ?? ''}
             items={items}
             t={t}
-            onListed={async () => {
-              setStatus(t('market.status.listed'));
-              await loadListings(q);
+            loaded={itemsLoaded}
+            initialItem={route.params.item ?? route.params.serial}
+            onListed={async (message) => {
+              setStatus(message);
+              keepStatus.current = true;
+              await loadListings(query);
               await reloadItems();
-              goTab('browse');
+              goTab('listings');
             }}
-            onError={setError}
           />
         </TabPanel>
       )}
 
-      {buying && (
-        <ConfirmationModal
-          title={t('market.buy.confirmTitle')}
-          body={
-            <p>
-              {t('market.buy.confirmBody', {
-                item: itemName(t, buying),
-                amount: formatUsd(buying.askingPrice),
-              })}
-            </p>
-          }
-          confirmLabel={t('market.buy')}
-          cancelLabel={t('ui.cancel')}
-          onConfirm={() => void buy(buying)}
-          onCancel={() => setBuying(null)}
-        />
-      )}
-
       {tab === 'listings' && (
         <TabPanel tab="listings">
-          <MyListingsPanel onChanged={async (m) => setStatus(m)} onError={setError} />
+          <MyListingsPanel onChanged={async (m) => setStatus(m)} />
         </TabPanel>
       )}
 
       {tab === 'offers' && (
         <TabPanel tab="offers">
           <OffersPanel
+            initialQuery={route.params.search ?? ''}
             onChanged={async (m) => {
               setStatus(m);
-              await loadListings(q);
+              await loadListings(query);
               await reloadItems();
             }}
-            onError={setError}
           />
         </TabPanel>
       )}
 
       {tab === 'trade' && (
         <TabPanel tab="trade">
-          <ProposeTradePanel onProposed={async (m) => setStatus(m)} onError={setError} />
+          <ProposeTradePanel
+            key={`${route.params.with ?? ''}|${route.params.serial ?? ''}`}
+            initialUsername={route.params.with}
+            initialSerial={route.params.serial}
+            onProposed={async (m) => setStatus(m)}
+          />
           <SwapsPanel
             onChanged={async (m) => {
               setStatus(m);
               await reloadItems();
             }}
-            onError={setError}
           />
-        </TabPanel>
-      )}
-
-      {tab === 'escrow' && (
-        <TabPanel tab="escrow">
-          <EscrowTab meId={meId} />
         </TabPanel>
       )}
 
       {tab === 'store' && (
         <TabPanel tab="store">
-          <StorefrontPanel seller={route.params.seller} myUsername={myUsername} onError={setError} />
+          <StorefrontPanel
+            seller={route.params.seller}
+            myUsername={myUsername}
+            onDone={dealDone}
+            onError={setError}
+          />
         </TabPanel>
       )}
 
-      {offering && (
-        <OfferDrawer
-          listing={offering}
-          t={t}
-          onClose={() => setOffering(null)}
-          onSent={() => {
-            setStatus(t('market.status.offerSent'));
-            setOffering(null);
-          }}
-        />
-      )}
+      <ListingDealFlow deal={deal} onClose={() => setDeal(null)} onDone={dealDone} onError={setError} />
     </>
-  );
-}
-
-function SellerLink({ t, username }: { t: TranslateFn; username: string }) {
-  return (
-    <a href={storefrontHref(username)} aria-label={t('market.store.of', { username })}>
-      <Code value={`@${username}`} />
-    </a>
   );
 }
 
@@ -412,170 +457,174 @@ function SellerLine({ t, username }: { t: TranslateFn; username: string }) {
   );
 }
 
-function SellPanel({
+export function SellPanel({
   items,
   t,
+  loaded = true,
+  initialItem,
   onListed,
-  onError,
 }: {
   items: readonly { id: string; serialNumber?: string; typeClass: string; description: string }[];
   t: TranslateFn;
-  onListed: () => Promise<void>;
-  onError: (message: string) => void;
+  loaded?: boolean;
+  initialItem?: string;
+  onListed: (message: string) => Promise<void>;
+  onError?: (message: string) => void;
 }) {
   const [itemId, setItemId] = useState('');
-  const [price, setPrice] = useState('500.00');
+  const [price, setPrice] = useState('');
+  const [touched, setTouched] = useState(false);
+  const [find, setFind] = useState('');
   const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!itemId && items[0]) setItemId(items[0].id);
-  }, [items, itemId]);
+    if (itemId && items.some((item) => item.id === itemId)) return;
+    const wanted = initialItem
+      ? items.find((item) => item.id === initialItem || item.serialNumber === initialItem)
+      : undefined;
+    const first = wanted ?? items[0];
+    if (first) setItemId(first.id);
+  }, [items, itemId, initialItem]);
+
+  const asked = initialItem && loaded && !items.some((item) => item.id === initialItem || item.serialNumber === initialItem);
 
   const cents = dollarsToCents(price);
+  const priceError = touched && price.trim() !== '' && cents === null ? t('market.sell.priceBad') : undefined;
 
   async function sell() {
+    setTouched(true);
     if (!itemId || cents === null) return;
     setBusy(true);
+    setFailure(null);
     try {
       await api.post('/marketplace/listings', { itemId, askingPrice: cents });
-      await onListed();
+      const listed = items.find((item) => item.id === itemId);
+      await onListed(
+        t('market.status.listedItem', {
+          item: isolate(listed ? itemName(t, listed).split(' · ')[0]! : ''),
+          amount: formatUsd(cents),
+        }),
+      );
     } catch (e) {
-      onError((e as Error).message);
+      setFailure((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
+
+  const chosen = items.find((item) => item.id === itemId);
+  const needle = find.trim().toLowerCase();
+  const pickable = needle
+    ? items.filter(
+        (item) =>
+          item.id === itemId ||
+          `${item.serialNumber ?? ''} ${itemName(t, item)}`.toLowerCase().includes(needle),
+      )
+    : items;
 
   return (
     <Panel title={t('market.sellLegend')} subtitle={t('market.sell.subtitle')}>
-      {items.length === 0 ? (
-        <EmptyState title={t('services.noItems')} text={t('market.sell.noItemsText')} icon={<IconTag />} />
+      {!loaded ? (
+        <SkeletonBlock className="skel-metric" />
+      ) : items.length === 0 ? (
+        <EmptyState
+          title={t('services.noItems')}
+          text={t('market.sell.noItemsText')}
+          icon={<IconTag />}
+          action={
+            <Button size="sm" variant="secondary" onClick={() => navigate({ section: 'vault', tab: null })}>
+              {t('market.sell.toVault')}
+            </Button>
+          }
+        />
       ) : (
-        <div className="stack stack--tight" style={{ maxWidth: 460 }}>
-          <label className="field">
-            <span className="field-label">{t('market.sell.itemLabel')}</span>
-            <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
-              <option value="">{t('market.selectItemOption')}</option>
-              {items.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {itemPickText(t, item)}
-                </option>
-              ))}
-            </select>
-          </label>
+        <form
+          className="request-form"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void sell();
+          }}
+        >
+          <div className="stack stack--tight request-form-fields">
+            {asked && <SuccessNote tone="warning">{t('market.sell.notSellable')}</SuccessNote>}
+            {items.length > LIST_TOOLS_FROM && (
+              <div className="search">
+                <IconSearch />
+                <input
+                  type="search"
+                  placeholder={t('market.sell.find')}
+                  aria-label={t('market.sell.find')}
+                  value={find}
+                  onChange={(e) => setFind(e.target.value)}
+                />
+              </div>
+            )}
+            <fieldset className="field field--cards">
+              <legend className="field-label">{t('market.sell.itemLabel')}</legend>
+              <ul className="check-list">
+                {pickable.map((item) => (
+                  <li key={item.id}>
+                    <label className="check">
+                      <input
+                        type="radio"
+                        name="sell-item"
+                        value={item.id}
+                        checked={itemId === item.id}
+                        onChange={() => setItemId(item.id)}
+                      />
+                      <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
 
-          <div className="field">
-            <label className="field-label" htmlFor="ask-price">
-              {t('market.sell.priceLabel')}
-            </label>
-            <div className="money-input">
-              <span aria-hidden="true">$</span>
-              <input
-                id="ask-price"
-                inputMode="decimal"
-                dir="ltr"
-                value={price}
-                aria-describedby="ask-hint"
-                onChange={(e) => setPrice(e.target.value)}
-              />
-            </div>
-            <p className="field-hint" id="ask-hint">
-              {cents === null ? t('market.sell.priceHint') : t('market.sell.willList', { amount: formatUsd(cents) })}
-            </p>
+            <MoneyField
+              id="ask-price"
+              label={t('market.sell.priceLabel')}
+              value={price}
+              placeholder="0.00"
+              onChange={setPrice}
+              onBlur={() => setTouched(true)}
+              error={priceError}
+              hint={cents === null ? t('market.sell.priceHint') : t('market.sell.willList', { amount: formatUsd(cents) })}
+            />
           </div>
 
-          <Button variant="gold" block disabled={busy || !itemId || cents === null} onClick={sell}>
-            {t('market.listForSale')}
-          </Button>
-        </div>
+          <aside className="request-slip">
+            <DrawerTag
+              kicker={t('market.sell.priceLabel')}
+              art={
+                chosen?.serialNumber ? (
+                  <CardPhotoThumb serialNumber={chosen.serialNumber} title={itemName(t, chosen)} decorative />
+                ) : undefined
+              }
+              amount={cents !== null && cents > 0 ? formatUsd(cents) : '—'}
+              lines={
+                chosen
+                  ? [
+                      ...(chosen.serialNumber
+                        ? [{ label: t('vault.serial'), value: <Serial value={chosen.serialNumber} /> }]
+                        : []),
+                      { label: t('market.mine.col.item'), value: <span className="ltr-run">{itemName(t, chosen).split(' · ')[0]}</span> },
+                    ]
+                  : []
+              }
+              status={<StatusBadge tone="success">{t('market.listing.active')}</StatusBadge>}
+            />
+          </aside>
+
+          <div className="stack stack--tight request-form-actions">
+            {failure && <ErrorState message={failure} />}
+            <Button type="submit" variant="primary" block disabled={busy || !itemId || cents === null}>
+              {t('market.listForSale')}
+            </Button>
+            <p className="field-hint">{t('market.sell.next')}</p>
+          </div>
+        </form>
       )}
     </Panel>
-  );
-}
-
-function OfferDrawer({
-  listing,
-  t,
-  onClose,
-  onSent,
-}: {
-  listing: Listing;
-  t: TranslateFn;
-  onClose: () => void;
-  onSent: () => void;
-}) {
-  const [amount, setAmount] = useState(() => (listing.askingPrice / 100).toFixed(2));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const cents = dollarsToCents(amount);
-
-  async function send() {
-    if (cents === null) return;
-    setBusy(true);
-    try {
-      await api.post(`/marketplace/listings/${listing.id}/offers`, { amount: cents });
-      onSent();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <DetailDrawer
-      title={t('market.offer.title')}
-      subtitle={itemName(t, listing)}
-      onClose={onClose}
-      dirty
-      footer={
-        <>
-          <Button variant="gold" disabled={busy || cents === null} onClick={send}>
-            {t('market.offer.submit')}
-          </Button>
-          <Button variant="ghost" onClick={onClose}>
-            {t('ui.cancel')}
-          </Button>
-        </>
-      }
-    >
-      <dl className="detail-list">
-        <div className="detail-row">
-          <dt className="detail-label">{t('market.offer.askingPrice')}</dt>
-          <dd className="detail-value num" dir="ltr">
-            {formatUsd(listing.askingPrice)}
-          </dd>
-        </div>
-        {listing.sellerUsername && (
-          <div className="detail-row">
-            <dt className="detail-label">{t('market.listing.soldBy')}</dt>
-            <dd className="detail-value">
-              <SellerLink t={t} username={listing.sellerUsername} />
-            </dd>
-          </div>
-        )}
-      </dl>
-
-      <div className="field" style={{ marginBlockStart: 'var(--sp-5)' }}>
-        <label className="field-label" htmlFor="offer-amount">
-          {t('market.offer.amountLabel')}
-        </label>
-        <div className="money-input">
-          <span aria-hidden="true">$</span>
-          <input
-            id="offer-amount"
-            inputMode="decimal"
-            dir="ltr"
-            autoFocus
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </div>
-        <p className="field-hint">{t('market.offer.hint')}</p>
-      </div>
-
-      {error && <div className="stack-top" ><ErrorState message={error} /></div>}
-    </DetailDrawer>
   );
 }

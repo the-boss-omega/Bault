@@ -7,13 +7,13 @@ import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { ListingService } from './listing.service';
 import { BrowseService, type BrowseSort } from './browse.service';
+import { PurchaseService } from './purchase.service';
+import { MarketReadService } from './market-read.service';
 
 const BROWSE_DEFAULT = 50;
 const BROWSE_MAX = 200;
 
 const BROWSE_SORTS: readonly string[] = ['newest', 'price_asc', 'price_desc'];
-import { PurchaseService } from './purchase.service';
-import { MarketReadService } from './market-read.service';
 
 class CreateListingDto {
   @IsString() itemId!: string;
@@ -46,6 +46,7 @@ export class MktController {
     @Query('minPrice') minPrice?: string,
     @Query('maxPrice') maxPrice?: string,
     @Query('sort') sort?: string,
+    @Query('cursor') cursor?: string,
   ) {
     const price = (raw: string | undefined) => {
       const n = Number(raw);
@@ -58,6 +59,7 @@ export class MktController {
       minPrice: price(minPrice),
       maxPrice: price(maxPrice),
       sort: BROWSE_SORTS.includes(sort as BrowseSort) ? (sort as BrowseSort) : 'newest',
+      cursor: cursor === undefined || cursor === '' ? undefined : cursor,
     });
   }
 
@@ -73,7 +75,7 @@ export class MktController {
 
   @Get('collectors/:username')
   collector(@CurrentUser() user: AuthUser, @Param('username') username: string) {
-    return this.read.counterparty(username, user.id);
+    return this.read.collectorProfile(username, user.id);
   }
 
   @Get('collectors/:username/items/:serial')

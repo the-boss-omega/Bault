@@ -39,11 +39,24 @@ describe('legacy route redirects', () => {
     expect(legacyRedirect(route('shipping', 'anything'))?.section).toBe('shipping-services');
   });
 
+  it('sends the house store and escrow tabs of the marketplace to their own sections', () => {
+    expect(legacyRedirect(route('marketplace', 'house'))).toEqual({ section: 'store', tab: null });
+    expect(legacyRedirect(route('marketplace', 'escrow'))).toEqual({ section: 'escrow', tab: null });
+  });
+
+  it('leaves the marketplace tabs that stayed alone, the collector storefront among them', () => {
+    for (const tab of ['browse', 'sell', 'listings', 'offers', 'trade', 'store']) {
+      expect(legacyRedirect(route('marketplace', tab))).toBeNull();
+    }
+  });
+
   it('leaves current sections alone', () => {
     for (const section of [
       'vault',
       'wallet',
       'marketplace',
+      'store',
+      'escrow',
       'shipping-services',
       'warehouse',
       'notifications',

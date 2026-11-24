@@ -114,3 +114,19 @@ describe('VLT scopes cover every state', () => {
     expect(row!.historical).toBe(true);
   });
 });
+
+describe('VLT search', () => {
+  it('reads % and \\ in the search box as the characters typed, not as wildcards', async () => {
+    const operator = await signIn(SEED.operator);
+    const owner = await signIn(SEED.collector);
+    const marked = await intakeFor(operator, SEED.collector, { description: `100% mint ${Date.now()}` });
+    const plain = await intakeFor(operator, SEED.collector, { description: 'No sign at all' });
+
+    const found = (await owner.get('/vault/items?q=%25')).body as { id: string }[];
+    expect(found.some((i) => i.id === marked.id)).toBe(true);
+    expect(found.some((i) => i.id === plain.id)).toBe(false);
+
+    const slash = (await owner.get('/vault/items?q=%5C')).body as { id: string }[];
+    expect(slash.some((i) => i.id === plain.id)).toBe(false);
+  });
+});

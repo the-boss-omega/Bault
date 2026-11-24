@@ -12,6 +12,7 @@ import { item } from '../cst/cst.schema';
 import { transaction } from '../mkt/mkt.schema';
 import { ServiceRequestService } from './service.service';
 import { assertQuotable } from './custom-request.service';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
 
 export interface BuyoutQuoteForm {
   offerMinor: number;
@@ -39,6 +40,7 @@ export class BuyoutService {
         type: 'buyout',
         requesterId: ownerId,
         itemId,
+        commits: 'bought out',
         typeFields: { stage: 'awaiting_quote' },
       });
     });
@@ -95,6 +97,10 @@ export class BuyoutService {
       const currency = DEFAULT_CURRENCY;
       const platformId = await this.requests.platformAccountId(tx);
 
+      await this.custody.lockExpecting(tx, req.itemId, { ownerId });
+      await assertItemsUncommitted(tx, [req.itemId], 'bought out', { serviceRequestId: req.id });
+      await this.ledger.lockWallet(ownerId, tx);
+
       await this.ledger.record(
         {
           userId: ownerId,
@@ -109,7 +115,7 @@ export class BuyoutService {
       );
 
       await this.custody.transferOwnership(tx, req.itemId, platformId, ownerId, 'buyout accepted', { ownerId });
-      await this.custody.changeState(tx, req.itemId, 'sold', ownerId, 'bought by Bault');
+      await this.custody.changeState(tx, req.itemId, 'sold', ownerId, 'bought by Card Embassy');
 
       const [txn] = await tx
         .insert(transaction)

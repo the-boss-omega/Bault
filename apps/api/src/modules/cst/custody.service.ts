@@ -6,7 +6,7 @@ import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { binTransfer, custodyEvent, item } from './cst.schema';
-import { assertTransition, type LifecycleState } from './lifecycle';
+import { IN_THE_BUILDING, assertTransition, type LifecycleState } from './lifecycle';
 
 type Tx = Database;
 
@@ -95,6 +95,7 @@ export class CustodyService {
       description?: string;
       conditionGrade?: string;
       binId?: string;
+      placementUndecidedReason?: string;
       sourceBatchId?: string;
       sourceParcelId?: string;
       oversized?: boolean;
@@ -104,6 +105,7 @@ export class CustodyService {
       actorId: string;
       eventType?: 'intake' | 'batch_split';
       lifecycleState?: 'stored' | 'received';
+      receivedAt?: Date;
     },
   ) {
     const [created] = await tx
@@ -116,6 +118,8 @@ export class CustodyService {
         description: input.description ?? '',
         conditionGrade: input.conditionGrade,
         binId: input.binId,
+        placementUndecidedReason: input.binId ? null : (input.placementUndecidedReason ?? null),
+        placementUndecidedAt: !input.binId && input.placementUndecidedReason ? new Date() : null,
         sourceBatchId: input.sourceBatchId,
         sourceParcelId: input.sourceParcelId,
         oversized: input.oversized ?? false,
@@ -123,7 +127,7 @@ export class CustodyService {
         isLot: input.isLot ?? false,
         lotSize: input.lotSize ?? 1,
         lifecycleState: input.lifecycleState ?? 'stored',
-        receivedAt: new Date(),
+        receivedAt: input.receivedAt ?? new Date(),
       })
       .returning();
     if (!created) throw AppError.validation('Failed to create item');
@@ -136,6 +140,9 @@ export class CustodyService {
       newState: input.lifecycleState ?? 'stored',
       actorId: input.actorId,
       reason: input.eventType ?? 'intake',
+      ...(!input.binId && input.placementUndecidedReason
+        ? { metadata: { placementUndecidedReason: input.placementUndecidedReason } }
+        : {}),
     });
     if (input.binId) {
       await tx.insert(binTransfer).values({
@@ -152,8 +159,20 @@ export class CustodyService {
   async relocate(tx: Tx, itemId: string, newBinId: string, actorId: string) {
     const current = await this.lockItem(tx, itemId);
     if (current.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
+    if (!(IN_THE_BUILDING as readonly string[]).includes(current.lifecycleState)) {
+      throw new AppError(
+        ErrorCode.CONFLICT,
+        `This item is ${current.lifecycleState}, so it is not on a shelf here to move`,
+        409,
+        { itemId, state: current.lifecycleState },
+      );
+    }
+    CustodyService.assertNotSplitLot(current);
 
-    await tx.update(item).set({ binId: newBinId, updatedAt: new Date() }).where(eq(item.id, itemId));
+    await tx
+      .update(item)
+      .set({ binId: newBinId, placementUndecidedReason: null, placementUndecidedAt: null, updatedAt: new Date() })
+      .where(eq(item.id, itemId));
     await tx.insert(custodyEvent).values({
       itemId,
       eventType: 'relocate',
@@ -161,6 +180,9 @@ export class CustodyService {
       newBinId,
       actorId,
       reason: 'scan relocate',
+      ...(current.placementUndecidedReason
+        ? { metadata: { placementUndecidedReason: current.placementUndecidedReason } }
+        : {}),
     });
     await tx.insert(binTransfer).values({
       itemId,

@@ -18,9 +18,7 @@ export function ForcedEnrollmentPage({
         <p>{t('mfa.forced.body')}</p>
         <TwoFactorPanel onEnabled={onEnrolled} />
         <div className="row">
-          <Button variant="ghost" onClick={onSignOut}>
-            {t('app.logout')}
-          </Button>
+          <Button onClick={onSignOut}>{t('app.logout')}</Button>
         </div>
       </div>
     </AuthShell>

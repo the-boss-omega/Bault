@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Pool } from 'pg';
 import { dispatchOutbox } from '../../apps/worker/src/jobs/outbox-dispatch';
-import { count, createUser, testPool } from './helpers/db';
+import { count, createItem, createUser, testPool } from './helpers/db';
 
 let pool: Pool;
 const poisoned: string[] = [];
@@ -68,7 +68,7 @@ describe('dispatching the outbox', () => {
     expect(rows[0]!.dispatched_at).toBeNull();
     expect(rows[0]!.attempts).toBe(1);
     expect(rows[0]!.last_error).toMatch(/uuid/i);
-    expect(await count(pool, `SELECT 1 FROM notification WHERE user_id = 'not-a-uuid'`)).toBe(0);
+    expect(await count(pool, `SELECT 1 FROM notification WHERE user_id::text = 'not-a-uuid'`)).toBe(0);
   });
 });
 
@@ -123,5 +123,68 @@ describe('dispatching a password reset', () => {
     await dispatchOutbox(pool);
     expect(await undispatched(pool, [id])).toBe(0);
     expect(await validTokens(pool, user)).toBe(0);
+  });
+});
+
+describe('a notification names the record it is about by its human code', () => {
+  const contentOf = async (userId: string, eventType: string) =>
+    (
+      await pool.query<{ content: Record<string, unknown> }>(
+        `SELECT content FROM notification WHERE user_id = $1 AND event_type = $2 AND channel = 'in_app'
+          ORDER BY created_at DESC LIMIT 1`,
+        [userId, eventType],
+      )
+    ).rows[0]?.content;
+
+  it('gives a completed swap the code of the transaction it made', async () => {
+    const a = await createUser(pool);
+    const b = await createUser(pool);
+    const code = `TX-WK${Date.now().toString(36).toUpperCase()}`;
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO transaction (code, type, item_ids, currency) VALUES ($1, 'swap', '[]'::jsonb, 'USD') RETURNING id`,
+      [code],
+    );
+    await emit(pool, 'swap_completed', { transactionId: rows[0]!.id, recipientIds: [a, b] });
+    await dispatchOutbox(pool);
+
+    for (const user of [a, b]) {
+      const content = await contentOf(user, 'swap_completed');
+      expect(content?.transactionCode).toBe(code);
+      expect(content?.message).toContain(code);
+    }
+  });
+
+  it('gives a counter-offer the serial of the card it is on', async () => {
+    const seller = await createUser(pool);
+    const buyer = await createUser(pool);
+    const itemId = await createItem(pool, seller, 1);
+    const { rows: items } = await pool.query<{ barcode: string }>(`SELECT barcode FROM item WHERE id = $1`, [itemId]);
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO listing (item_id, seller_id, asking_price, currency) VALUES ($1, $2, 5000, 'USD') RETURNING id`,
+      [itemId, seller],
+    );
+    await emit(pool, 'offer_countered', {
+      listingId: rows[0]!.id,
+      sellerId: seller,
+      buyerId: buyer,
+      amount: 4000,
+      counteredBy: 'seller',
+      recipientIds: [buyer],
+    });
+    await dispatchOutbox(pool);
+
+    expect((await contentOf(buyer, 'offer_countered'))?.barcode).toBe(items[0]!.barcode);
+  });
+
+  it('keeps a code the message already carries, and adds nothing when the record is gone', async () => {
+    const user = await createUser(pool);
+    await emit(pool, 'swap_completed', {
+      transactionId: '00000000-0000-0000-0000-000000000000',
+      recipientIds: [user],
+    });
+    await dispatchOutbox(pool);
+    const content = await contentOf(user, 'swap_completed');
+    expect(content).toBeDefined();
+    expect(content?.transactionCode).toBeUndefined();
   });
 });

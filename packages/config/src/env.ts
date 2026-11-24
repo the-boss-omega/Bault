@@ -35,7 +35,6 @@ const BaseSchema = z.object({
 
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
 
-  SESSION_COOKIE_SECRET: z.string().optional().default(''),
   SESSION_COOKIE_NAME: z.string().default('session'),
 
   MFA_ENCRYPTION_KEY: z.string().optional().default(''),
@@ -55,9 +54,19 @@ const BaseSchema = z.object({
   PAYPAL_CLIENT_ID: z.string().optional().default(''),
   PAYPAL_CLIENT_SECRET: z.string().optional().default(''),
   PAYPAL_WEBHOOK_ID: z.string().optional().default(''),
-  PAYPAL_PAYOUT_NOTE: z.string().optional().default('Your Bault cash-out'),
+  PAYPAL_PAYOUT_NOTE: z.string().optional().default('Your Card Embassy cash-out'),
 
   PAYOUT_MODE: z.enum(['provider', 'manual']).default('provider'),
+
+  PAYPAL_CHECKOUT_ENABLED: booleanFromEnv(false),
+
+  CRYPTO_PROVIDER: z.enum(['coinbase_commerce', 'sandbox']).default('sandbox'),
+  CRYPTO_CHECKOUT_ENABLED: booleanFromEnv(false),
+  COINBASE_COMMERCE_API_KEY: z.string().optional().default(''),
+  COINBASE_COMMERCE_WEBHOOK_SECRET: z.string().optional().default(''),
+
+  OCR_ENABLED: booleanFromEnv(false),
+  OCR_PROVIDER: z.enum(['tesseract', 'sandbox']).default('sandbox'),
 
   CORS_ORIGINS: z.string().optional().default(''),
 
@@ -77,7 +86,6 @@ const BaseSchema = z.object({
   EASYPOST_BASE_URL: z.string().optional().default(''),
 
   EMAIL_PROVIDER: z.enum(['console', 'smtp']).default('console'),
-  EMAIL_API_KEY: z.string().optional().default(''),
 
   SMTP_HOST: z.string().optional().default(''),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
@@ -184,6 +192,12 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
     }
   }
 
+  if (env.CRYPTO_PROVIDER === 'coinbase_commerce') {
+    for (const key of ['COINBASE_COMMERCE_API_KEY', 'COINBASE_COMMERCE_WEBHOOK_SECRET'] as const) {
+      require(key, 'CRYPTO_PROVIDER=coinbase_commerce');
+    }
+  }
+
   if (env.MFA_ENCRYPTION_KEY && !isBase64Key(env.MFA_ENCRYPTION_KEY)) {
     ctx.addIssue({
       code: 'custom',
@@ -274,6 +288,26 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
           'provider with fake money.',
       });
     }
+    if (env.CRYPTO_CHECKOUT_ENABLED && env.CRYPTO_PROVIDER !== 'coinbase_commerce') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CRYPTO_PROVIDER'],
+        message:
+          'CRYPTO_CHECKOUT_ENABLED=true needs CRYPTO_PROVIDER=coinbase_commerce in production. The sandbox ' +
+          'processor confirms whatever it is told to, so it would credit wallets with money nobody paid.',
+      });
+    }
+
+    if (env.OCR_ENABLED && env.OCR_PROVIDER !== 'tesseract') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['OCR_PROVIDER'],
+        message:
+          'OCR_ENABLED=true needs OCR_PROVIDER=tesseract in production. The sandbox reader returns the same ' +
+          'made-up text for every photograph, so the bench would prefill fields nobody read.',
+      });
+    }
+
     if (env.EXPOSE_API_DOCS && !env.API_DOCS_PASSWORD) {
       ctx.addIssue({
         code: 'custom',

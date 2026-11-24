@@ -188,11 +188,11 @@ describe('photographs on an item', () => {
 
     const owner = await signIn(SEED.collector);
     const card = (await owner.get(`/vault/items/${created.body.id}`)).body as {
-      images: { type: string; url: string; objectKey: string }[];
+      images: { type: string; url: string; objectKey?: string }[];
     };
     expect(card.images).toHaveLength(1);
     expect(card.images[0]!.type).toBe('intake');
-    expect(card.images[0]!.objectKey).toBe(key);
+    expect(card.images[0]!.objectKey).toBeUndefined();
     expect(card.images[0]!.url).toContain(key);
   });
 
