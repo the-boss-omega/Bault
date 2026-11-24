@@ -15,8 +15,9 @@ export function useListView<T>(
   rows: readonly T[] | null,
   text: (row: T) => string,
   sorts: readonly SortOption<T>[],
+  initialQuery = '',
 ) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [sort, setSort] = useState(sorts[0]?.key ?? '');
   const shown = useMemo(() => {
     if (!rows) return null;

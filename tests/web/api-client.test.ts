@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, api, apiErrorKey, isUnreachable } from '../../apps/web/src/shared/api';
+import { ApiError, api, apiErrorKey, isUnreachable, onSessionEnded } from '../../apps/web/src/shared/api';
+import { getAllPages } from '../../apps/web/src/shared/paging';
 
 const realFetch = globalThis.fetch;
 
@@ -17,6 +18,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  onSessionEnded(null);
   globalThis.fetch = realFetch;
   vi.restoreAllMocks();
 });
@@ -119,5 +121,76 @@ describe('api client — failure classification', () => {
 
     await api.get('/me/profile').catch(() => undefined);
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe('api client — plain words for a failure the reader cannot act on', () => {
+  it.each([
+    [500, 'Internal server error'],
+    [502, 'Bad Gateway'],
+    [503, 'Service Unavailable'],
+  ])('shows the catalogue sentence for HTTP %i, never the server text "%s"', async (status, raw) => {
+    stubFetch(() => jsonResponse(status, { error: { code: 'internal', message: raw } }));
+    const error = (await api.get('/wallet/me').catch((e: unknown) => e)) as ApiError;
+    expect(error.message).toBe('The server failed to answer. Try again in a moment.');
+  });
+
+  it('shows the catalogue sentence when a proxy answers 502 with no envelope', async () => {
+    stubFetch(() => new Response('<html>Bad Gateway</html>', { status: 502, statusText: 'Bad Gateway' }));
+    const error = (await api.get('/wallet/me').catch((e: unknown) => e)) as ApiError;
+    expect(error.message).not.toMatch(/Bad Gateway|HTTP 502/);
+  });
+});
+
+describe('api client — a session that ends after the app has loaded', () => {
+  it('hands any 401 to the one session-ended handler and says to sign in again', async () => {
+    const ended = vi.fn();
+    onSessionEnded(ended);
+    stubFetch(() => jsonResponse(401, { error: { code: 'unauthenticated', message: 'Authentication required' } }));
+    const error = (await api.post('/wallet/cash-in', {}).catch((e: unknown) => e)) as ApiError;
+    expect(ended).toHaveBeenCalledTimes(1);
+    expect(error.kind).toBe('unauthenticated');
+    expect(error.message).toBe('Your session ended, sign in again.');
+  });
+
+  it('leaves a wrong password on the sign-in form alone', async () => {
+    const ended = vi.fn();
+    onSessionEnded(ended);
+    stubFetch(() => jsonResponse(401, { error: { code: 'unauthenticated', message: 'That email or username and password do not match.' } }));
+    const error = (await api.post('/auth/login', {}).catch((e: unknown) => e)) as ApiError;
+    expect(ended).not.toHaveBeenCalled();
+    expect(error.message).toBe('That email or username and password do not match.');
+  });
+
+  it('does nothing extra before boot, when no handler is set', async () => {
+    stubFetch(() => jsonResponse(401, { error: { code: 'unauthenticated', message: 'Authentication required' } }));
+    const error = (await api.get('/me/profile').catch((e: unknown) => e)) as ApiError;
+    expect(error.kind).toBe('unauthenticated');
+  });
+});
+
+describe('getAllPages — every row, however many pages', () => {
+  it('asks for the largest page and follows the cursor until a short page', async () => {
+    const rows = Array.from({ length: 1_120 }, (_, i) => ({ id: `i${i}` }));
+    stubFetch((url) => {
+      const params = new URL(url, 'http://x').searchParams;
+      const cursor = params.get('cursor');
+      const limit = Number(params.get('limit'));
+      const start = cursor ? rows.findIndex((r) => r.id === cursor) + 1 : 0;
+      return jsonResponse(200, rows.slice(start, start + limit));
+    });
+    const all = await getAllPages<{ id: string }>('/vault/items?scope=active');
+    expect(all).toHaveLength(1_120);
+    expect(calls).toEqual([
+      '/api/v1/vault/items?scope=active&limit=500',
+      '/api/v1/vault/items?scope=active&limit=500&cursor=i499',
+      '/api/v1/vault/items?scope=active&limit=500&cursor=i999',
+    ]);
+  });
+
+  it('starts the query string itself when the path has none', async () => {
+    stubFetch(() => jsonResponse(200, []));
+    await getAllPages('/vault/items');
+    expect(calls).toEqual(['/api/v1/vault/items?limit=500']);
   });
 });

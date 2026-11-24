@@ -83,7 +83,10 @@ function serve(map: Record<string, unknown | (() => Promise<unknown>)>) {
   for (const [path, value] of Object.entries(map)) {
     routes[path] = typeof value === 'function' ? (value as () => Promise<unknown>) : async () => value;
   }
-  get.mockImplementation((path: string) => (routes[path] ? routes[path]!() : Promise.resolve([])));
+  get.mockImplementation((path: string) => {
+    const key = path.startsWith('/vault/items?') ? '/vault/items' : path;
+    return routes[key] ? routes[key]!() : Promise.resolve([]);
+  });
 }
 
 function renderPage(hash: string) {
@@ -162,6 +165,52 @@ describe('the service requests list', () => {
     expect(await screen.findByText('No requests match')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Clear the search' }));
     expect(screen.getByRole('table', { name: 'Open requests' })).toBeInTheDocument();
+  });
+});
+
+describe('answering a quote', () => {
+  const quoted = (type: 'buyout' | 'custom', typeFields: Record<string, unknown>) => ({
+    id: `r-${type}`,
+    code: type === 'buyout' ? 'SR-BUYOUT11' : 'SR-CUSTOM11',
+    type,
+    status: 'in_progress',
+    itemId: 'i1',
+    createdAt: '2026-11-01T00:00:00Z',
+    typeFields: { stage: 'quoted', ...typeFields },
+  });
+
+  it('asks before selling a card to Card Embassy, naming the card and the amount, and names the amount on the button', async () => {
+    serve({ '/vault/items': [ITEM], '/services/mine': [quoted('buyout', { offerMinor: 27_500 })] });
+    post.mockResolvedValue({ creditedMinor: 27_500 });
+    const user = userEvent.setup();
+    renderPage('#/shipping-services/requests');
+
+    await user.click(await screen.findByRole('button', { name: 'Accept $275.00' }));
+    const dialog = screen.getByRole('dialog', { name: 'Sell this item for $275.00?' });
+    expect(dialog).toHaveTextContent('SN-CL10-0005');
+    expect(dialog).toHaveTextContent('cannot be undone');
+    expect(post).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(post).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Accept $275.00' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Accept $275.00' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/services/buyout/r-buyout/accept'));
+  });
+
+  it('asks before a custom quote charges the wallet', async () => {
+    serve({ '/vault/items': [ITEM], '/services/mine': [quoted('custom', { priceMinor: 1_800, summary: 'Raking light' })] });
+    post.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage('#/shipping-services/requests');
+
+    await user.click(await screen.findByRole('button', { name: 'Accept $18.00' }));
+    const dialog = screen.getByRole('dialog', { name: 'Pay $18.00 for this request?' });
+    expect(dialog).toHaveTextContent('taken from your wallet');
+    expect(post).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Accept $18.00' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/services/custom/r-custom/accept-quote'));
   });
 });
 
@@ -252,6 +301,46 @@ describe('the shipment drawer', () => {
     await user.click(await screen.findByRole('button', { name: 'Pay now' }));
     const drawer = screen.getByRole('dialog');
     expect(await within(drawer).findByText('Your wallet is still $12.00 short.')).toBeInTheDocument();
+    expect(within(drawer).queryByRole('button', { name: 'Cash in to your wallet' })).not.toBeInTheDocument();
+  });
+
+  it('links the tracking number to the carrier\'s own tracking page, in a new tab', async () => {
+    serve({});
+    render(
+      <I18nProvider>
+        <Drawer shipment={{ ...SHIPMENT, carrier: 'UPS', trackingNumber: '1Z 999' }} />
+      </I18nProvider>,
+    );
+    const link = await screen.findByRole('link', { name: 'Follow it on the UPS site' });
+    expect(link).toHaveAttribute('href', 'https://www.ups.com/track?tracknum=1Z%20999');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('offers no link for a carrier it has no tracking page for', async () => {
+    serve({});
+    render(
+      <I18nProvider>
+        <Drawer shipment={{ ...SHIPMENT, carrier: 'Postal service', trackingNumber: 'RR123' }} />
+      </I18nProvider>,
+    );
+    expect(await screen.findByText('RR123')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Follow it on/ })).toBeNull();
+  });
+
+  it('offers a way to the wallet next to a shortfall', async () => {
+    serve({});
+    post.mockRejectedValue(Object.assign(new Error('Short by $12.00. Cash in to your wallet and try again.'), { code: 'insufficient_balance' }));
+    const user = userEvent.setup();
+    render(
+      <I18nProvider>
+        <Drawer shipment={OLDER_UNPAID} />
+      </I18nProvider>,
+    );
+    await user.click(await screen.findByRole('button', { name: 'Pay now' }));
+    const drawer = screen.getByRole('dialog');
+    await user.click(await within(drawer).findByRole('button', { name: 'Cash in to your wallet' }));
+    expect(window.location.hash).toBe('#/wallet/cash-in');
   });
 });
 

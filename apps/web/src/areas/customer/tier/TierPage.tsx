@@ -58,7 +58,7 @@ export function TierPage() {
           <div className="mem-allowance">
             <dt>{t('tier.window.actions', { days })}</dt>
             <dd>
-              <span className="amount">{standing.window.actions.toLocaleString()}</span>
+              <span className="amount">{standing.window.actions.toLocaleString('en-US')}</span>
             </dd>
           </div>
           <div className="mem-allowance">
@@ -163,7 +163,7 @@ function Honoured({ honoured }: { honoured: HonouredAllowances }) {
         <div className="mem-allowance">
           <dt>{t('tier.allowance.storedItems')}</dt>
           <dd>
-            <span className="amount">{honoured.storedItems.toLocaleString()}</span>
+            <span className="amount">{honoured.storedItems.toLocaleString('en-US')}</span>
           </dd>
         </div>
         <div className="mem-allowance">

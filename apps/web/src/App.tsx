@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { hasMessage, useI18n, type MessageKey } from './shared/i18n';
-import { ApiError, api, apiErrorKey } from './shared/api';
+import { ApiError, api, apiErrorKey, onSessionEnded } from './shared/api';
 import { loadProfile, resetProfileRequest } from './shared/session';
 import {
   navigate,
@@ -160,6 +160,7 @@ export default function App() {
   const route = useRoute();
   useScrollableRegions();
   const [boot, setBoot] = useState<BootState>({ status: 'loading' });
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
 
   const loadSession = useCallback(async () => {
     const me = await loadProfile();
@@ -186,6 +187,18 @@ export default function App() {
   useEffect(() => {
     void probeSession();
   }, [probeSession]);
+
+  useEffect(() => {
+    if (boot.status !== 'ready') return;
+    onSessionEnded(() => {
+      onSessionEnded(null);
+      resetProfileRequest();
+      setSessionNotice(t('error.sessionEnded'));
+      setBoot({ status: 'anonymous' });
+      navigate({ section: 'signin' }, { replace: true });
+    });
+    return () => onSessionEnded(null);
+  }, [boot.status, t]);
 
   if ((TOKEN_ROUTES as readonly string[]).includes(route.section)) {
     const token = route.params.token ?? null;
@@ -242,7 +255,9 @@ export default function App() {
     return (
       <AuthPage
         initialMode={AUTH_ROUTES[route.section] ?? 'signIn'}
+        notice={sessionNotice}
         onSignedIn={(u) => {
+          setSessionNotice(null);
           setBoot({ status: 'ready', user: u });
           navigate(
             {
@@ -296,7 +311,6 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [railOpen, setRailOpen] = useState(false);
   const suspended = user.status === 'suspended';
-  // A suspended account is refused the feed (and has only the support desk to go to): it is not asked for it.
   const notifications = useNotificationFeed(!suspended);
 
   const isStaff = user.role === 'warehouse_operator' || user.role === 'admin';

@@ -5,29 +5,30 @@ const USD = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
-/**
- * A name set into a sentence keeps its own order: a first-strong isolate (FSI … PDI) takes the
- * direction of the name's first letter, so a name somebody typed in a script that is read from the
- * right stays a run of its own and a full stop after it is the sentence's. Invisible where the name
- * reads the same way as the sentence. For a name in a string that goes through `t()`; in markup, a
- * `<bdi dir="auto">` does the same.
- */
 export function isolate(text: string): string {
   return `\u2068${text}\u2069`;
 }
 
+const MINUS = '\u2212';
+
+function signed(negative: boolean, plus: boolean): string {
+  return negative ? MINUS : plus ? '+' : '';
+}
+
 export function formatUsd(minorUnits: number): string {
-  return USD.format((minorUnits ?? 0) / 100);
+  const value = minorUnits ?? 0;
+  return `${signed(value < 0, false)}${USD.format(Math.abs(value) / 100)}`;
 }
 
 export function formatUsdSigned(minorUnits: number): string {
-  const sign = minorUnits < 0 ? '−' : '+';
-  return `${sign}${formatUsd(Math.abs(minorUnits ?? 0))}`;
+  const value = minorUnits ?? 0;
+  return `${signed(value < 0, true)}${USD.format(Math.abs(value) / 100)}`;
 }
 
 export function formatLedgerAmount(amount: number, direction: string): string {
-  return `${direction === 'credit' ? '+' : '−'}${formatUsd(Math.abs(amount ?? 0))}`;
+  return `${signed(direction !== 'credit', true)}${USD.format(Math.abs(amount ?? 0) / 100)}`;
 }
+
 
 export function dollarsToCents(input: string): number | null {
   const cleaned = input.trim().replace(/[,\s$]/g, '');
@@ -41,11 +42,14 @@ export function bpsToPercent(bps: number): string {
   return String(Number((bps / 100).toFixed(4)));
 }
 
+export function formatPercent(bps: number): string {
+  return `${bpsToPercent(bps)}%`;
+}
+
 export function centsToDollars(minorUnits: number): string {
   return ((minorUnits ?? 0) / 100).toFixed(2);
 }
 
-/** The tag `Intl` formats a date in, for each language the product is written in: English, the American way, as its money is. */
 const INTL_LOCALE: Record<string, string> = { en: 'en-US' };
 const intlLocale = (locale: string) => INTL_LOCALE[locale] ?? 'en-US';
 
@@ -68,7 +72,6 @@ export function formatDate(iso: string | null | undefined, locale: string): stri
   }).format(date);
 }
 
-/** The time of day, and nothing else: "6:08 AM", "06:08". */
 export function formatTime(iso: string | null | undefined, locale: string): string {
   if (!iso) return '—';
   const date = new Date(iso);
@@ -76,18 +79,12 @@ export function formatTime(iso: string | null | undefined, locale: string): stri
   return new Intl.DateTimeFormat(intlLocale(locale), { hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
-/** The calendar day a moment falls on, in the visitor's own time zone: what entries are grouped by. */
 export function dayKey(iso: string | null | undefined): string {
   const date = new Date(iso ?? '');
   if (Number.isNaN(date.getTime())) return '';
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-/**
- * How long ago a moment was, in words from the browser's own tables ("today", "yesterday", "3 days ago",
- * "2 weeks ago"). Nothing here is a message of ours, so there is no plural to get wrong: ours would have
- * said "1 days".
- */
 export function formatAge(iso: string, locale: string, now: Date = new Date()): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
@@ -99,10 +96,6 @@ export function formatAge(iso: string, locale: string, now: Date = new Date()): 
   return words.format(-Math.round(days / 30), 'month');
 }
 
-/**
- * The heading of a day in a register: the day's own words where there are any ("today", "yesterday", from
- * the browser's own tables) and the date. Nothing here is a message of ours.
- */
 export function formatDayHeading(iso: string, locale: string, now: Date = new Date()): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;

@@ -51,7 +51,7 @@ const VAULT = [
 ];
 
 function market(hash: string, routes: Routes) {
-  serve({ '/me/profile': { id: 'u-red', username: 'red' }, '/vault/items': VAULT, ...routes });
+  serve({ '/me/profile': { id: 'u-red', username: 'red' }, '/vault/items*': VAULT, ...routes });
   window.location.hash = hash;
   return render(
     <I18nProvider>
@@ -106,6 +106,34 @@ describe('browse', () => {
     await waitFor(() => expect(get).toHaveBeenCalledWith(expect.stringMatching(/^\/marketplace\/listings\?/)));
     const calls = get.mock.calls.map((c) => String(c[0])).filter((p) => p.startsWith('/marketplace/listings?'));
     expect(calls.every((p) => !p.includes('maxPrice'))).toBe(true);
+  });
+});
+
+describe('browse past the first page', () => {
+  it('says more are waiting, and Show more adds the next page after the last one shown', async () => {
+    const all = Array.from({ length: 60 }, (_, i) => LISTING(`l${i}`, `SN-MORE-${String(i).padStart(4, '0')}`, 'noam', 1000 + i));
+    get.mockImplementation((path: string) => {
+      if (path === '/me/profile') return Promise.resolve({ id: 'u-red', username: 'red' });
+      if (!path.startsWith('/marketplace/listings?')) return Promise.resolve([]);
+      const params = new URL(path, 'http://x').searchParams;
+      const limit = Number(params.get('limit') ?? 50);
+      const cursor = params.get('cursor');
+      const start = cursor ? all.findIndex((l) => l.id === cursor) + 1 : 0;
+      return Promise.resolve(all.slice(start, start + limit));
+    });
+    window.location.hash = '#/marketplace';
+    render(
+      <I18nProvider>
+        <MarketplacePage />
+      </I18nProvider>,
+    );
+    expect(await screen.findByText('50 listings shown, more below')).toBeInTheDocument();
+    expect(screen.queryByText('Card SN-MORE-0055')).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Show more listings' }));
+    expect(await screen.findByText('Card SN-MORE-0055')).toBeInTheDocument();
+    expect(screen.getByText('60 listings')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show more listings' })).not.toBeInTheDocument();
+    expect(get).toHaveBeenCalledWith('/marketplace/listings?limit=50&cursor=l49');
   });
 });
 
@@ -257,7 +285,34 @@ describe('my listings', () => {
     await user.type(input, '3100{Enter}');
     await waitFor(() => expect(patch).toHaveBeenCalledWith('/marketplace/listings/l1', { askingPrice: 310_000 }));
     await user.click(screen.getByRole('button', { name: 'See the 2 open offers' }));
-    expect(window.location.hash).toBe('#/marketplace/offers');
+    expect(window.location.hash).toBe('#/marketplace/offers?search=SN-DX107-0003');
+  });
+
+  it('opens the Offers tab searched on the listing, so only its offers show', async () => {
+    const offer = (id: string, serial: string) => ({
+      id,
+      listingId: id,
+      amount: 1000,
+      status: 'pending',
+      direction: 'incoming',
+      serialNumber: serial,
+      typeClass: 'trading_card',
+      description: `Card ${serial}`,
+      buyerUsername: 'noam',
+      sellerUsername: 'red',
+      createdAt: '2026-10-27T08:00:00.000Z',
+    });
+    market('#/marketplace/offers?search=SN-DX107-0003', {
+      '/marketplace/offers/mine': [offer('o1', 'SN-DX107-0003'), offer('o2', 'SN-OTHER-0001')],
+    });
+    expect(await screen.findByRole('searchbox')).toHaveValue('SN-DX107-0003');
+    expect((await screen.findAllByText(/SN-DX107-0003/)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/SN-OTHER-0001/)).not.toBeInTheDocument();
+  });
+
+  it('says "the open offer" for one', async () => {
+    market('#/marketplace/listings', { '/marketplace/listings/mine': [{ ...MINE, pendingOffers: 1 }] });
+    expect(await screen.findByRole('button', { name: 'See the open offer' })).toBeInTheDocument();
   });
 
   it('does not call a list that failed to load empty', async () => {

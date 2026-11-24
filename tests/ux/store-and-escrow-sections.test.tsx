@@ -24,6 +24,7 @@ vi.mock('../../apps/web/src/shared/api', () => ({
   ApiError: MockApiError,
   apiErrorKey: () => null,
   isUnreachable: () => false,
+  onSessionEnded: () => undefined,
 }));
 
 const { default: App } = await import('../../apps/web/src/App');

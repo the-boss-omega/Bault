@@ -38,7 +38,7 @@ const request = (id: string, status: string) => ({
 function renderOverview(items: unknown[], requests: unknown[], pending = false) {
   get.mockImplementation((path: string) => {
     if (pending) return new Promise(() => {});
-    if (path === '/vault/items') return Promise.resolve(items);
+    if (path.startsWith('/vault/items?')) return Promise.resolve(items);
     if (path === '/services/mine') return Promise.resolve(requests);
     return Promise.resolve([]);
   });

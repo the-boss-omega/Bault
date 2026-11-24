@@ -2,7 +2,8 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
-import { VaultService, type VaultScope } from './vault.service';
+import { pageLimit } from '../../shared/query';
+import { VAULT_PAGE_MAX, VaultService, type VaultScope } from './vault.service';
 
 const SCOPES: readonly VaultScope[] = ['active', 'hold', 'history'];
 
@@ -22,8 +23,17 @@ export class VltController {
     @Query('scope') scope?: string,
     @Query('filter[type]') type?: string,
     @Query('filter[condition]') condition?: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
   ) {
-    return this.vault.listOwned(user.id, { q, type, condition, scope: toScope(scope) });
+    return this.vault.listOwned(user.id, {
+      q,
+      type,
+      condition,
+      scope: toScope(scope),
+      limit: pageLimit(limit, { max: VAULT_PAGE_MAX, fallback: 50 }),
+      cursor: cursor === undefined || cursor === '' ? undefined : cursor,
+    });
   }
 
   @Get('counts')

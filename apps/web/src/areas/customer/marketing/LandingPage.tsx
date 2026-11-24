@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
-import { bpsToPercent, formatUsd } from '../../../shared/money';
+import { bpsToPercent, formatPercent, formatUsd } from '../../../shared/money';
 import { navigate } from '../../../shared/routing';
 import { CardSlab } from '../../../shared/CardPhoto';
 import { Serial } from '../../../shared/ui/Serial';
@@ -14,11 +14,6 @@ import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
 import type { AccountTerms } from '../help/FaqLegalPage';
 import { LedgerArt, PlateArt, RuleArt } from './LandingArt';
 
-/**
- * The cards on the shelf. They are real items from the demo vault, so the
- * photographs are real photographs; each one's label carries its own serial.
- * The first is the card the page opens on.
- */
 const FAN: { serial: string; title: string; slot: 'c' | 'l1' | 'r1' | 'l2' | 'r2' }[] = [
   { serial: LANDING_SERIAL, title: LANDING_TITLE, slot: 'c' },
   {
@@ -43,7 +38,6 @@ const FAN: { serial: string; title: string; slot: 'c' | 'l1' | 'r1' | 'l2' | 'r2
   },
 ];
 
-/** The closing shelf leads with a different card, so the page is not one card said five times. */
 const CLOSE_FAN: typeof FAN = [
   { ...FAN[2]!, slot: 'c' },
   { ...FAN[4]!, slot: 'l1' },
@@ -74,7 +68,7 @@ interface PriceList {
 
 function priceOf(entry: PriceEntry): string {
   return entry.model === 'percentage'
-    ? `${(entry.value / 100).toFixed(entry.value % 100 === 0 ? 0 : 2)}%`
+    ? formatPercent(entry.value)
     : formatUsd(entry.value);
 }
 
@@ -92,12 +86,6 @@ function param(entry: PriceEntry | undefined, key: string): number | null {
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
 }
 
-/**
- * The page is one route of a hash router, so a section link cannot be a #fragment.
- * Scrolling is smooth only for a visitor who has not asked for less motion, and
- * focus moves to the section's heading so a keyboard or screen-reader user lands
- * where the page has scrolled to, not on the link they left.
- */
 function jumpTo(id: string) {
   const section = document.getElementById(id);
   if (!section) return;
@@ -198,7 +186,7 @@ export function LandingPage() {
     freeDays !== null && periodDays !== null && percentBps !== null
       ? t('landing.price.storageTerms', {
           days: freeDays,
-          percent: (percentBps / 100).toFixed(percentBps % 100 === 0 ? 0 : 2),
+          percent: bpsToPercent(percentBps),
           period: periodDays,
         })
       : null;

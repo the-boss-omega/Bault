@@ -314,10 +314,10 @@ describe('a shared parcel, opened, joined and kept', () => {
     expect(members).toHaveLength(2);
     expect(members[0]).toHaveTextContent('red');
     expect(members[0]).toHaveTextContent('SHP-QYCSKRAX');
-    expect(members[0]).toHaveTextContent(/1 items · [\u2066]?5 g/);
+    expect(members[0]).toHaveTextContent(/1 item · [\u2066]?5 g/);
     expect(within(members[0]!).getByText('Payer')).toBeInTheDocument();
     expect(members[1]).toHaveTextContent('golden');
-    expect(members[1]).toHaveTextContent('1 items');
+    expect(members[1]).toHaveTextContent(/1 item$/);
     expect(tag).toHaveTextContent(/2 collectors · 2 items · [\u2066]?10 g[\u2069]?/);
     expect(members[1]).not.toHaveTextContent('SHP-4ZFYRWGF');
     expect(members[1]).not.toHaveTextContent(/7 g|\$450/);

@@ -19,7 +19,9 @@ export function SignInPage({
   onSignedIn,
   onGoToSignUp,
   onGoToForgotPassword,
+  notice = null,
 }: {
+  notice?: string | null;
   onSignedIn: (user: SessionUser) => void;
   onGoToSignUp: () => void;
   onGoToForgotPassword: () => void;
@@ -104,6 +106,8 @@ export function SignInPage({
         </>
       }
     >
+      {notice && !error && <SuccessNote tone="warning">{notice}</SuccessNote>}
+
       <Field
         label={t('auth.identifier')}
         hint={t('auth.identifierHint')}
