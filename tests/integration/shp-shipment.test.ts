@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn } from './helpers/http';
+import { closeDb, sql } from './helpers/db';
+
+afterAll(closeDb);
 
 describe('SHP outbound shipping', () => {
   const DESTINATION = {
@@ -144,5 +147,31 @@ describe('SHP outbound shipping', () => {
       scannedItemIds: [item.id],
     });
     expect(incomplete.status).toBe(400);
+  });
+
+  it('buys the label for the name the collector changed the request to', async () => {
+    const operator = await signIn(SEED.operator);
+    const item = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
+    const collector = await signIn(SEED.collector);
+    const address = await collector.post('/me/addresses', {
+      label: 'Rename',
+      recipient: 'Old Name',
+      line1: '12 Vine St',
+      city: 'Trenton',
+      region: 'NJ',
+      country: 'US',
+      postalCode: '08608',
+    });
+    expect(address.status).toBe(201);
+    const s = (await collector.post('/shipping/shipments', { itemIds: [item.id], addressId: address.body.id })).body;
+
+    const patched = await collector.patch(`/shipping/shipments/${s.id}`, { recipientName: 'New Name' });
+    expect(patched.status).toBe(200);
+    expect(patched.body.recipientName).toBe('New Name');
+    const [row] = await sql<{ recipient_name: string; name: string | null }>(
+      "select recipient_name, destination_detail ->> 'name' as name from shipment where id = $1",
+      [s.id],
+    );
+    expect(row).toEqual({ recipient_name: 'New Name', name: 'New Name' });
   });
 });

@@ -49,13 +49,13 @@ export interface SupportTicket {
   category: string;
   subject: string;
   status: string;
-  relatedType: string | null;
-  relatedId: string | null;
   lastMessageAt: string;
   createdAt: string;
 }
 
 export interface SupportQueueRow extends SupportTicket {
+  relatedType: string | null;
+  relatedId: string | null;
   assignedTo: string | null;
   customerUsername: string | null;
   customerStatus: string | null;
@@ -64,9 +64,16 @@ export interface SupportQueueRow extends SupportTicket {
 export interface SupportMessage {
   id: string;
   authorRole: string;
+  fromStaff?: boolean;
   body: string;
   createdAt: string;
-  authorUsername: string | null;
+  authorUsername?: string | null;
+}
+
+export function messageFromStaff(
+  message: Pick<SupportMessage, 'authorRole' | 'fromStaff'>,
+): boolean {
+  return message.fromStaff ?? message.authorRole === 'staff';
 }
 
 export interface SupportThread {

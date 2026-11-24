@@ -100,5 +100,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_RELEASE=${{ github.ref_name }}
+            VITE_SENTRY_DSN=${{ vars.VITE_SENTRY_DSN }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}

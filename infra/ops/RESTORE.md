@@ -92,7 +92,7 @@ database and never over the live one.
 
 5. **Check it is whole.** Dump the restored cluster and verify the dump. `verify`
    restores it once more into a scratch database, counts rows, checks the ledger
-   and custody trail point at rows that exist and that all eleven append-only
+   and custody trail point at rows that exist and that all twelve append-only
    guard triggers are there, and exits 1 on any violation:
 
    ```
@@ -129,7 +129,7 @@ database and never over the live one.
    aws s3 ls s3://<backup-bucket>/nightly/ [--endpoint-url <endpoint>] | tail -3
    aws s3 cp s3://<backup-bucket>/nightly/bault-<stamp>.dump.age        ./drill/
    aws s3 cp s3://<backup-bucket>/nightly/bault-<stamp>.dump.age.sha256 ./drill/
-   # Google Cloud Storage, with your own login (the server's key can only add)
+   # Google Cloud Storage, with your own login (the server can only add)
    gcloud storage ls gs://<backup-bucket>/nightly/ | tail -3
    gcloud storage cp 'gs://<backup-bucket>/nightly/bault-<stamp>.dump.age*' ./drill/
    ```

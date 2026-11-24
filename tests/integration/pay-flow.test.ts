@@ -217,12 +217,13 @@ describe('PAY wallet requests', () => {
       fromStatus: string | null;
       toStatus: string;
       reason: string | null;
-      actorId: string | null;
+      byStaff: boolean;
       occurredAt: string;
     }[];
     expect(history.map((e) => e.toStatus)).toEqual(['submitted', 'pending_review', 'rejected']);
+    expect(history.map((e) => e.byStaff)).toEqual([false, true, true]);
     for (const event of history) {
-      expect(event.actorId).toBeTruthy();
+      expect(event).not.toHaveProperty('actorId');
       expect(event.occurredAt).toBeTruthy();
     }
     expect(history[2]?.fromStatus).toBe('pending_review');

@@ -1,5 +1,6 @@
-import { jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { foreignKey, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
 
 export const shipmentGroupStatus = pgEnum('shipment_group_status', [
   'forming',
@@ -13,7 +14,7 @@ export const shipmentGroup = pgTable(
   {
     id: pkId(),
     code: text('code').notNull(),
-    payerUserId: text('payer_user_id').notNull(),
+    payerUserId: uuid('payer_user_id').notNull(),
     destinationAddress: text('destination_address').notNull(),
     recipientName: text('recipient_name').notNull(),
     destinationCountry: text('destination_country').notNull().default('US'),
@@ -26,5 +27,8 @@ export const shipmentGroup = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => ({ shipmentGroupCodeUnique: uniqueIndex('shipment_group_code_unique').on(t.code) }),
+  (t) => ({
+    shipmentGroupCodeUnique: uniqueIndex('shipment_group_code_unique').on(t.code),
+    payerFk: foreignKey({ name: 'shipment_group_payer_fk', columns: [t.payerUserId], foreignColumns: [userAccount.id] }),
+  }),
 );

@@ -1,28 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, lte, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
-import { PricingService } from '../prc/pricing.service';
-import { LedgerService } from '../pay/ledger.service';
-import { WalletService } from '../pay/wallet.service';
-import { charge } from '../pay/pay.schema';
 import { membership, membershipPeriod } from './mem.schema';
-import {
-  MEMBERSHIP_TIERS,
-  UNCOVERED,
-  UNLIMITED,
-  covers,
-  isTierKey,
-  membershipTier,
-  remaining,
-  tierRank,
-  type MembershipTier,
-} from './tiers';
-
-const CYCLE_DAYS = 30;
-const CYCLE_MS = CYCLE_DAYS * 86_400_000;
+import { UNLIMITED, covers, honouredAllowance, remaining } from './tiers';
 
 export interface ShippingCover {
   tier: string;
@@ -52,31 +35,7 @@ export interface Entitlement {
 
 @Injectable()
 export class MembershipService {
-  constructor(
-    @Inject(DRIZZLE) private readonly db: Database,
-    private readonly pricing: PricingService,
-    private readonly ledger: LedgerService,
-    private readonly wallet: WalletService,
-  ) {}
-
-  async catalogue() {
-    const tiers = await Promise.all(
-      MEMBERSHIP_TIERS.map(async (t) => ({
-        ...t,
-        priceMinor: await this.feeFor(t).then((f) => f.amountMinor),
-      })),
-    );
-    return { tiers, uncovered: UNCOVERED, cycleDays: CYCLE_DAYS, currency: 'USD' };
-  }
-
-  private async feeFor(tier: MembershipTier, tx?: Database) {
-    const resolved = await this.pricing.tryPrice(tier.feeActionType, {}, tx);
-    return {
-      amountMinor: resolved?.amount.amount ?? tier.listPriceMinor,
-      snapshot: resolved?.snapshot ?? { fallback: 'catalogue', tier: tier.key, listPriceMinor: tier.listPriceMinor },
-      currency: resolved?.amount.currency ?? 'USD',
-    };
-  }
+  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
   async current(userId: string, tx?: Database) {
     const exec = tx ?? this.db;
@@ -94,247 +53,53 @@ export class MembershipService {
 
   async allowances(userId: string) {
     const state = await this.current(userId);
-    if (!state) return null;
-    const tier = membershipTier(state.membership.tier);
-    if (!tier) return null;
+    if (!state || !this.isHonoured(state.membership)) return null;
+    const allowance = honouredAllowance(state.membership.tier);
+    if (!allowance) return null;
 
     const consumed = (state.period?.consumed as Record<string, number>) ?? {};
-    const live = this.isCycleLive(state.membership);
-
     return {
-      tier: tier.key,
-      status: state.membership.status,
-      scheduledTier: state.membership.scheduledTier,
-      currentFeeMinor: state.period?.feeMinor ?? 0,
-      cycleLive: live,
-      currentPeriodStart: state.membership.currentPeriodStart,
-      currentPeriodEnd: state.membership.currentPeriodEnd,
-      cancelledAt: state.membership.cancelledAt,
+      tier: allowance.key,
+      honouredUntil: state.membership.honouredUntil,
       perCycle: Object.fromEntries(
-        Object.keys(tier.perCycle).map((action) => [
+        Object.keys(allowance.perCycle).map((action) => [
           action,
           {
-            allowed: tier.perCycle[action],
+            allowed: allowance.perCycle[action],
             used: consumed[action] ?? 0,
-            remaining: live ? remaining(tier, action, consumed[action] ?? 0) : 0,
+            remaining: remaining(allowance, action, consumed[action] ?? 0),
           },
         ]),
       ),
-      storedItems: tier.storedItems,
+      storedItems: state.membership.honouredStoredItems,
       insuredShipments: {
-        allowed: tier.insuredShipments,
+        allowed: allowance.insuredShipments,
         used: state.period?.insuredShipmentsUsed ?? 0,
-        capMinor: tier.insuredValueCapMinor,
+        capMinor: allowance.insuredValueCapMinor,
       },
       postage: {
-        creditMinor: tier.postageCreditMinor,
+        creditMinor: allowance.postageCreditMinor,
         usedMinor: state.period?.postageUsedMinor ?? 0,
       },
       commission: {
-        waivedOnMinor: tier.commissionWaivedOnMinor,
+        waivedOnMinor: allowance.commissionWaivedOnMinor,
         usedMinor: state.period?.commissionWaivedOnMinor ?? 0,
       },
-      perks: tier.perks,
+      rushIncluded: allowance.rushIncluded,
     };
   }
 
-  private isCycleLive(m: typeof membership.$inferSelect, now = new Date()): boolean {
-    if (m.status === 'ended') return false;
-    return now >= m.currentPeriodStart && now < m.currentPeriodEnd;
-  }
-
-  async subscribe(userId: string, tierKey: string) {
-    if (!isTierKey(tierKey)) throw AppError.validation(`Unknown tier "${tierKey}"`);
-    const tier = membershipTier(tierKey)!;
-
-    return this.db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(membership)
-        .where(eq(membership.userId, userId))
-        .for('update')
-        .limit(1);
-      await this.wallet.assertNotBlocked(userId, tx as Database);
-
-      const now = new Date();
-      const live = existing && existing.status !== 'ended' ? existing : null;
-
-      if (live && live.tier === tierKey) {
-        if (live.status === 'cancelling' || live.scheduledTier) {
-          await tx
-            .update(membership)
-            .set({ status: 'active', cancelledAt: null, scheduledTier: null, updatedAt: now })
-            .where(eq(membership.id, live.id));
-          return {
-            tier: tierKey,
-            status: 'active' as const,
-            effectiveFrom: now,
-            currentPeriodEnd: live.currentPeriodEnd,
-            chargedMinor: 0,
-          };
-        }
-        throw new AppError(ErrorCode.CONFLICT, `Already on ${tier.key}`, 409);
-      }
-
-      if (live && tierRank(tierKey) < tierRank(live.tier)) {
-        await tx
-          .update(membership)
-          .set({ scheduledTier: tierKey, status: 'active', cancelledAt: null, updatedAt: now })
-          .where(eq(membership.id, live.id));
-        return {
-          tier: live.tier,
-          status: 'active' as const,
-          effectiveFrom: live.currentPeriodEnd,
-          scheduledTier: tierKey,
-          chargedMinor: 0,
-        };
-      }
-
-      const listed = await this.feeFor(tier, tx as Database);
-
-      let prorationCreditMinor = 0;
-      if (live && this.isCycleLive(live, now)) {
-        const [current] = await tx
-          .select({ feeMinor: membershipPeriod.feeMinor })
-          .from(membershipPeriod)
-          .where(
-            and(
-              eq(membershipPeriod.membershipId, live.id),
-              eq(membershipPeriod.periodStart, live.currentPeriodStart),
-            ),
-          )
-          .limit(1);
-        const cycleMs = live.currentPeriodEnd.getTime() - live.currentPeriodStart.getTime();
-        const leftMs = live.currentPeriodEnd.getTime() - now.getTime();
-        if (current && cycleMs > 0 && leftMs > 0) {
-          prorationCreditMinor = Math.floor((current.feeMinor * leftMs) / cycleMs);
-        }
-      }
-      const fee = {
-        amountMinor: Math.max(0, listed.amountMinor - prorationCreditMinor),
-        currency: listed.currency,
-        snapshot: {
-          ...listed.snapshot,
-          listPriceMinor: listed.amountMinor,
-          prorationCreditMinor,
-          previousTier: live?.tier ?? null,
-        },
-      };
-
-      const periodEnd = new Date(now.getTime() + CYCLE_MS);
-      const row = live ?? existing;
-      const id = row
-        ? (await tx
-            .update(membership)
-            .set({
-              tier: tierKey,
-              status: 'active',
-              currentPeriodStart: now,
-              currentPeriodEnd: periodEnd,
-              scheduledTier: null,
-              cancelledAt: null,
-              endedAt: null,
-              updatedAt: now,
-            })
-            .where(eq(membership.id, row.id))
-            .returning({ id: membership.id }))[0]!.id
-        : (await tx
-            .insert(membership)
-            .values({
-              userId,
-              tier: tierKey,
-              status: 'active',
-              startedAt: now,
-              currentPeriodStart: now,
-              currentPeriodEnd: periodEnd,
-            })
-            .onConflictDoNothing({ target: membership.userId })
-            .returning({ id: membership.id }))[0]?.id;
-      if (!id) {
-        throw new AppError(ErrorCode.CONFLICT, 'A membership was just started for this account. Reload and try again.', 409);
-      }
-
-      await this.openPeriod(tx as Database, { id, userId }, tier, now, periodEnd, fee);
-      return {
-        tier: tierKey,
-        status: 'active' as const,
-        effectiveFrom: now,
-        currentPeriodEnd: periodEnd,
-        chargedMinor: fee.amountMinor,
-        prorationCreditMinor,
-      };
-    });
-  }
-
-  private async openPeriod(
-    tx: Database,
-    m: { id: string; userId: string },
-    tier: MembershipTier,
-    start: Date,
-    end: Date,
-    fee: { amountMinor: number; snapshot: Record<string, unknown>; currency: string },
-  ) {
-    await tx.insert(membershipPeriod).values({
-      membershipId: m.id,
-      userId: m.userId,
-      tier: tier.key,
-      periodStart: start,
-      periodEnd: end,
-      feeMinor: fee.amountMinor,
-      currency: fee.currency,
-      pricingRuleSnapshot: fee.snapshot,
-      consumed: {},
-    });
-
-    if (fee.amountMinor <= 0) return;
-
-    const [c] = await tx
-      .insert(charge)
-      .values({
-        userId: m.userId,
-        actionType: tier.feeActionType,
-        pricingRuleSnapshot: fee.snapshot,
-        amount: fee.amountMinor,
-        currency: fee.currency,
-        paymentMeans: 'wallet',
-        status: 'settled',
-        referenceId: m.id,
-      })
-      .returning({ id: charge.id });
-    if (!c) throw AppError.validation('Failed to create membership charge');
-
-    await this.ledger.record(
-      {
-        userId: m.userId,
-        type: 'service_charge',
-        amount: fee.amountMinor,
-        direction: 'debit',
-        currency: fee.currency,
-        referenceType: 'charge',
-        referenceId: c.id,
-      },
-      tx,
-    );
-  }
-
-  async cancel(userId: string) {
-    const [m] = await this.db.select().from(membership).where(eq(membership.userId, userId)).limit(1);
-    if (!m || m.status === 'ended') throw AppError.notFound('No active membership');
-    if (m.status === 'cancelling') return { status: 'cancelling' as const, endsAt: m.currentPeriodEnd };
-
-    await this.db
-      .update(membership)
-      .set({ status: 'cancelling', cancelledAt: new Date(), scheduledTier: null, updatedAt: new Date() })
-      .where(eq(membership.id, m.id));
-    return { status: 'cancelling' as const, endsAt: m.currentPeriodEnd };
+  private isHonoured(m: typeof membership.$inferSelect, now = new Date()): boolean {
+    if (m.status === 'ended' || !m.honouredUntil) return false;
+    return now >= m.currentPeriodStart && now < m.currentPeriodEnd && now < m.honouredUntil;
   }
 
   async consume(tx: Database, userId: string, action: string): Promise<Entitlement> {
     const state = await this.current(userId, tx);
     if (!state) return { covered: false, remainingAfter: null, tier: null };
 
-    const tier = membershipTier(state.membership.tier);
-    if (!tier || !this.isCycleLive(state.membership)) {
+    const tier = honouredAllowance(state.membership.tier);
+    if (!tier || !this.isHonoured(state.membership)) {
       return { covered: false, remainingAfter: null, tier: state.membership.tier };
     }
 
@@ -401,8 +166,8 @@ export class MembershipService {
     const none = { waivedMinor: 0, tier: null };
     if (feeMinor <= 0) return none;
     const state = await this.current(userId, tx);
-    if (!state || !this.isCycleLive(state.membership)) return none;
-    const tier = membershipTier(state.membership.tier);
+    if (!state || !this.isHonoured(state.membership)) return none;
+    const tier = honouredAllowance(state.membership.tier);
     if (!tier) return none;
 
     if (action === 'marketplace_fee') {
@@ -444,8 +209,8 @@ export class MembershipService {
 
   async shippingCover(userId: string, tx?: Database): Promise<ShippingCover | null> {
     const state = await this.current(userId, tx);
-    if (!state || !this.isCycleLive(state.membership)) return null;
-    const tier = membershipTier(state.membership.tier);
+    if (!state || !this.isHonoured(state.membership)) return null;
+    const tier = honouredAllowance(state.membership.tier);
     if (!tier) return null;
 
     const p = state.period;
@@ -459,7 +224,7 @@ export class MembershipService {
       insuredShipmentsLeft: Math.max(0, tier.insuredShipments - (p?.insuredShipmentsUsed ?? 0)),
       insuredValueCapMinor: tier.insuredValueCapMinor,
       postageCreditLeftMinor: Math.max(0, tier.postageCreditMinor - (p?.postageUsedMinor ?? 0)),
-      rushIncluded: tier.perks.includes('rush_included'),
+      rushIncluded: tier.rushIncluded,
       addOnsLeft,
     };
   }
@@ -472,9 +237,9 @@ export class MembershipService {
         409,
       );
     const state = await this.current(userId, tx);
-    const tier = state ? membershipTier(state.membership.tier) : undefined;
-    if (!state || !tier || !this.isCycleLive(state.membership) || tier.key !== applied.tier) throw stale();
-    if (applied.rushMinor > 0 && !tier.perks.includes('rush_included')) throw stale();
+    const tier = state ? honouredAllowance(state.membership.tier) : undefined;
+    if (!state || !tier || !this.isHonoured(state.membership) || tier.key !== applied.tier) throw stale();
+    if (applied.rushMinor > 0 && !tier.rushIncluded) throw stale();
 
     const insured = applied.insuredShipment ? 1 : 0;
     if (insured > 0 || applied.postageMinor > 0) {
@@ -524,43 +289,5 @@ export class MembershipService {
         .where(eq(membershipPeriod.id, periodId));
     }
     for (const action of Object.keys(applied.addOns ?? {})) await this.restoreCounted(tx, periodId, action);
-  }
-
-  async renewDue(now = new Date()) {
-    const due = await this.db
-      .select()
-      .from(membership)
-      .where(and(lte(membership.currentPeriodEnd, now), sql`${membership.status} <> 'ended'`));
-
-    let renewed = 0;
-    let ended = 0;
-
-    for (const m of due) {
-      const tier = membershipTier(m.scheduledTier ?? m.tier);
-      if (!tier) continue;
-
-      if (m.status === 'cancelling') {
-        await this.db
-          .update(membership)
-          .set({ status: 'ended', endedAt: now, updatedAt: now })
-          .where(eq(membership.id, m.id));
-        ended += 1;
-        continue;
-      }
-
-      await this.db.transaction(async (tx) => {
-        const start = now;
-        const end = new Date(now.getTime() + CYCLE_MS);
-        const fee = await this.feeFor(tier, tx as Database);
-        await tx
-          .update(membership)
-          .set({ tier: tier.key, scheduledTier: null, currentPeriodStart: start, currentPeriodEnd: end, updatedAt: now })
-          .where(eq(membership.id, m.id));
-        await this.openPeriod(tx as Database, { id: m.id, userId: m.userId }, tier, start, end, fee);
-      });
-      renewed += 1;
-    }
-
-    return { renewed, ended, considered: due.length };
   }
 }

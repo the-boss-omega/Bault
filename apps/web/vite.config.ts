@@ -73,7 +73,7 @@ export default defineConfig(({ mode, command }) => {
                 JSON.stringify({
                   error: {
                     code: 'api_unreachable',
-                    message: `The Bault API is unavailable at ${api.target}.`,
+                    message: `The Card Embassy API is unavailable at ${api.target}.`,
                     details: { target: api.target, codes },
                   },
                 }),
@@ -131,7 +131,7 @@ function previewBasicAuth(user: string, password: string): Plugin {
         const given = header.startsWith('Basic ') ? Buffer.from(header.slice(6), 'base64') : Buffer.alloc(0);
         if (given.length === expected.length && timingSafeEqual(given, expected)) return next();
         res.statusCode = 401;
-        res.setHeader('WWW-Authenticate', 'Basic realm="Bault preview", charset="UTF-8"');
+        res.setHeader('WWW-Authenticate', 'Basic realm="Card Embassy preview", charset="UTF-8"');
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.end('Sign in to view this preview.');
       });

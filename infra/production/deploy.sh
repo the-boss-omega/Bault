@@ -139,6 +139,10 @@ if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   fi
 fi
 
+# infra/ops/watchdog.sh restarts nothing while this lock is held.
+exec 9> "$STATE_DIR/.deploy.lock"
+flock -w 300 9 || die "another deploy holds $STATE_DIR/.deploy.lock"
+
 step "1/7 pull images for $TAG"
 compose pull --quiet
 if [ -n "$DB_SIDECAR" ]; then

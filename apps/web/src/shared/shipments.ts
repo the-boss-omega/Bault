@@ -5,24 +5,22 @@ export interface ShipmentSummary {
   id: string;
   code: string | null;
   status: string;
-  username: string | null;
-  customerName: string | null;
   recipientName: string | null;
   carrier: string | null;
   serviceLevel: string | null;
   trackingNumber: string | null;
-  labelRefused?: { at: string | null; reason: string | null } | null;
+  labelRefused?: { reason: string | null } | null;
   estimatedDeliveryAt: string | null;
   rush: boolean;
   cost: number | null;
   currency: string | null;
   itemIds: string[];
-  items: { id: string; serialNumber: string | null; barcode: string | null; description: string | null }[];
+  items: { id: string; serialNumber: string | null; description: string | null }[];
   directParcel: { code: string; trackingNumber: string | null } | null;
   destinationAddress: string;
+  contactPhone?: string | null;
   destinationCountry: string;
   destinationPostalCode: string;
-  serviceKey: string | null;
   serviceMode: string;
   fulfilmentMethod: string;
   quoteMinor: number | null;
@@ -39,7 +37,6 @@ export interface ShipmentSummary {
   cancelledAt: string | null;
   cancelReason: string | null;
   restockingFeeMinor: number;
-  mergedIntoShipmentId: string | null;
   createdAt: string;
   updatedAt: string | null;
   fulfilledAt: string | null;
@@ -63,12 +60,15 @@ export function shipmentStatusLabel(t: TranslateFn, status: string): string {
   return t(`ss.shipmentStatus.${status}` as MessageKey);
 }
 
-export function matchesShipmentSearch(shipment: ShipmentSummary, needle: string): boolean {
+export function matchesShipmentSearch(
+  shipment: ShipmentSummary,
+  needle: string,
+  statusLabel = '',
+): boolean {
   const q = needle.trim().toLowerCase();
   if (!q) return true;
   return [
-    shipment.username ?? '',
-    shipment.customerName ?? '',
+    statusLabel,
     shipment.recipientName ?? '',
     shipment.trackingNumber ?? '',
     shipment.status,
@@ -92,4 +92,35 @@ export const PREPARING_STATUSES: readonly string[] = [
 
 export function isInTransit(status: string): boolean {
   return status === 'shipped' || status === 'in_transit';
+}
+
+export type ShipmentSort = 'newest' | 'oldest' | 'needsYou';
+
+export function needsCollector(shipment: ShipmentSummary): boolean {
+  return shipment.status === 'awaiting_payment' || Boolean(shipment.labelRefused);
+}
+
+export function sortShipments(
+  rows: readonly ShipmentSummary[],
+  sort: ShipmentSort,
+): ShipmentSummary[] {
+  const byDate = (a: ShipmentSummary, b: ShipmentSummary) => b.createdAt.localeCompare(a.createdAt);
+  const out = [...rows];
+  if (sort === 'oldest') return out.sort((a, b) => byDate(b, a));
+  if (sort === 'needsYou') {
+    return out.sort(
+      (a, b) => Number(needsCollector(b)) - Number(needsCollector(a)) || byDate(a, b),
+    );
+  }
+  return out.sort(byDate);
+}
+
+export function shipmentNextKey(status: string): MessageKey {
+  if (status === 'requested') return 'ship.next.requested';
+  if (status === 'awaiting_payment') return 'ship.next.awaiting_payment';
+  if (PREPARING_STATUSES.includes(status)) return 'ship.next.preparing';
+  if (isInTransit(status)) return 'ship.next.moving';
+  if (status === 'delivered') return 'ship.next.delivered';
+  if (status === 'exception') return 'ship.next.exception';
+  return 'ship.next.cancelled';
 }

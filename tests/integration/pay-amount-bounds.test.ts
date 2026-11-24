@@ -47,7 +47,7 @@ describe('PAY amounts that cannot be right', () => {
     for (const amount of [0, -100]) {
       const insert = sql(
         `INSERT INTO ledger_record (user_id, type, amount, direction, currency, reference_type)
-         VALUES ('ledger-bounds-fixture', 'fee', $1, 'debit', 'USD', 'test')`,
+         VALUES ((SELECT id FROM user_account ORDER BY created_at LIMIT 1), 'fee', $1, 'debit', 'USD', 'test')`,
         [amount],
       );
       await expect(insert, `amount ${amount}`).rejects.toMatchObject({ code: '23514' });

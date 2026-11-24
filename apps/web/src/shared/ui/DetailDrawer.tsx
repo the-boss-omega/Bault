@@ -1,42 +1,11 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 import { Button, IconButton } from './primitives';
 import { IconClose } from './icons';
 import { useT } from '../i18n';
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-const overlays: symbol[] = [];
-
-function pushOverlay(token: symbol): () => void {
-  overlays.push(token);
-  return () => {
-    const at = overlays.indexOf(token);
-    if (at >= 0) overlays.splice(at, 1);
-  };
-}
-
-const isTopOverlay = (token: symbol) => overlays[overlays.length - 1] === token;
-
-function trapTab(event: KeyboardEvent, container: HTMLElement | null): void {
-  if (event.key !== 'Tab' || !container) return;
-  const nodes = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => el.offsetParent !== null || el === document.activeElement,
-  );
-  if (nodes.length === 0) {
-    event.preventDefault();
-    return;
-  }
-  const first = nodes[0]!;
-  const last = nodes[nodes.length - 1]!;
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
-}
+import { useExit } from './useExit';
+import { inBody } from './inBody';
+import { useOverlay } from './useOverlay';
+import { useKeyboardScroll } from './useKeyboardScroll';
 
 export function DetailDrawer({
   title,
@@ -44,6 +13,7 @@ export function DetailDrawer({
   lead,
   onClose,
   footer,
+  notice,
   dirty,
   flush,
   wide,
@@ -54,57 +24,39 @@ export function DetailDrawer({
   lead?: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
+  notice?: ReactNode;
   dirty?: boolean;
   flush?: boolean;
   wide?: boolean;
   children: ReactNode;
 }) {
   const t = useT();
+  const { closing, requestClose } = useExit(onClose);
   const panelRef = useRef<HTMLDivElement>(null);
-  const openerRef = useRef<HTMLElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  const dirtyRef = useRef(Boolean(dirty));
+  dirtyRef.current = Boolean(dirty);
+  const [askingToDiscard, setAskingToDiscard] = useState(false);
+  const onEscape = useCallback(() => {
+    if (dirtyRef.current) setAskingToDiscard(true);
+    else requestClose();
+  }, [requestClose]);
+  useOverlay(panelRef, onEscape);
+  useKeyboardScroll(bodyRef, titleId);
 
-  useEffect(() => {
-    openerRef.current = document.activeElement as HTMLElement | null;
-    const panel = panelRef.current;
-    const token = Symbol('drawer');
-    const popOverlay = pushOverlay(token);
-    panel?.focus();
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (!isTopOverlay(token)) return;
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        onClose();
-        return;
-      }
-      trapTab(event, panel);
-    }
-
-    document.addEventListener('keydown', onKeyDown, true);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.removeEventListener('keydown', onKeyDown, true);
-      document.body.style.overflow = previousOverflow;
-      popOverlay();
-      openerRef.current?.focus?.();
-    };
-  }, [onClose]);
-
-  return (
+  return inBody(
     <>
       <div
-        className="drawer-backdrop"
+        className={closing ? 'drawer-backdrop is-closing' : 'drawer-backdrop'}
         role="presentation"
         onClick={() => {
-          if (!dirty) onClose();
+          if (!dirty) requestClose();
         }}
       />
       <aside
         ref={panelRef}
-        className={wide ? 'drawer drawer--sheet' : 'drawer'}
+        className={`${wide ? 'drawer drawer--sheet' : 'drawer'}${closing ? ' is-closing' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -118,14 +70,35 @@ export function DetailDrawer({
             </h2>
             {subtitle && <p className="drawer-subtitle">{subtitle}</p>}
           </div>
-          <IconButton label={t('ui.close')} onClick={onClose}>
+          <IconButton label={t('ui.close')} onClick={requestClose}>
             <IconClose />
           </IconButton>
         </header>
-        <div className={`drawer-body${flush ? ' drawer-body--flush' : ''}`}>{children}</div>
-        {footer && <footer className="drawer-foot">{footer}</footer>}
+        <div ref={bodyRef} className={`drawer-body${flush ? ' drawer-body--flush' : ''}`}>
+          {children}
+        </div>
+        {(footer || notice) && (
+          <footer className="drawer-foot">
+            {notice && <div className="drawer-notice">{notice}</div>}
+            {footer}
+          </footer>
+        )}
       </aside>
-    </>
+      {askingToDiscard && (
+        <ConfirmationModal
+          title={t('ui.discardTitle')}
+          body={<p>{t('ui.discardBody')}</p>}
+          confirmLabel={t('ui.discard')}
+          cancelLabel={t('ui.keepEditing')}
+          tone="danger"
+          onConfirm={() => {
+            setAskingToDiscard(false);
+            requestClose();
+          }}
+          onCancel={() => setAskingToDiscard(false)}
+        />
+      )}
+    </>,
   );
 }
 
@@ -134,7 +107,7 @@ export function ConfirmationModal({
   body,
   confirmLabel,
   cancelLabel,
-  tone = 'gold',
+  tone = 'primary',
   busy,
   onConfirm,
   onCancel,
@@ -143,42 +116,25 @@ export function ConfirmationModal({
   body: ReactNode;
   confirmLabel: string;
   cancelLabel: string;
-  tone?: 'gold' | 'danger';
+  tone?: 'primary' | 'danger';
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { closing, requestClose: requestCancel } = useExit(onCancel);
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  useOverlay(dialogRef, requestCancel);
 
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    const dialog = dialogRef.current;
-    const token = Symbol('confirm');
-    const popOverlay = pushOverlay(token);
-    dialog?.focus();
-    function onKey(event: KeyboardEvent) {
-      if (!isTopOverlay(token)) return;
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        onCancel();
-        return;
-      }
-      trapTab(event, dialog);
-    }
-    document.addEventListener('keydown', onKey, true);
-    return () => {
-      document.removeEventListener('keydown', onKey, true);
-      popOverlay();
-      opener?.focus?.();
-    };
-  }, [onCancel]);
-
-  return (
-    <div className="modal-backdrop" role="presentation" onClick={() => !busy && onCancel()}>
+  return inBody(
+    <div
+      className={closing ? 'modal-backdrop is-closing' : 'modal-backdrop'}
+      role="presentation"
+      onClick={() => !busy && requestCancel()}
+    >
       <div
         ref={dialogRef}
-        className="modal"
+        className={closing ? 'modal is-closing' : 'modal'}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -190,14 +146,18 @@ export function ConfirmationModal({
         </div>
         <div>{body}</div>
         <div className="modal-actions">
-          <Button variant="secondary" disabled={busy} onClick={onCancel}>
+          <Button variant="secondary" disabled={busy} onClick={requestCancel}>
             {cancelLabel}
           </Button>
-          <Button variant={tone === 'danger' ? 'danger' : 'gold'} loading={busy} onClick={onConfirm}>
+          <Button
+            variant={tone === 'danger' ? 'danger' : 'primary'}
+            loading={busy}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
   );
 }

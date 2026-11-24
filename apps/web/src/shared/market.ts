@@ -1,3 +1,4 @@
+import { normalizeUsername } from './names';
 import type { MessageKey, TranslateFn } from './i18n';
 import type { StatusTone } from './ui/primitives';
 
@@ -86,6 +87,7 @@ export interface MyOffer {
   typeClass: string;
   description: string;
   buyerUsername: string | null;
+  sellerUsername?: string | null;
   direction: 'incoming' | 'outgoing';
   side: 'buyer' | 'seller';
   proposedBy: 'buyer' | 'seller';
@@ -122,7 +124,6 @@ export interface ConsignmentChannel {
   requiresEvent: boolean;
   payoutDaysMin: number;
   payoutDaysMax: number;
-  partnerFeeNote: string;
 }
 
 export interface ConsignmentEvent {
@@ -131,17 +132,10 @@ export interface ConsignmentEvent {
   venue: string;
   city: string | null;
   startsAt: string;
+  endsAt: string | null;
   requestDeadline: string;
-  capacity: number;
 }
 
-const CHANNEL_KEY: Record<string, MessageKey> = {
-  card_show: 'consign.channel.card_show',
-  auction_house: 'consign.channel.auction_house',
-  ebay_partner: 'consign.channel.ebay_partner',
-};
-
-export function channelLabel(t: TranslateFn, key: string): string {
-  const messageKey = CHANNEL_KEY[key];
-  return messageKey ? t(messageKey) : key;
+export function typedUsername(raw: string): string {
+  return normalizeUsername(raw.replace(/^\s*@/, ''));
 }

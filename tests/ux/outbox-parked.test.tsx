@@ -81,8 +81,8 @@ describe('the parked messages', () => {
     const { OutboxSection } = await section();
     renderIn(<OutboxSection onMsg={onMsg} onError={() => {}} />);
 
-    const row = (await screen.findByText('item_donated')).closest('tr')!;
-    await user.click(within(row as HTMLElement).getByRole('button', { name: /^requeue/i }));
+    const entry = (await screen.findByText('item_donated')).closest('li')!;
+    await user.click(within(entry as HTMLElement).getByRole('button', { name: /^requeue/i }));
     expect(post).toHaveBeenCalledWith('/admin/outbox/m1/requeue');
     await waitFor(() => expect(screen.queryByText('item_donated')).not.toBeInTheDocument());
     expect(onMsg).toHaveBeenCalledWith(expect.stringMatching(/requeued/i));
@@ -96,10 +96,54 @@ describe('the parked messages', () => {
     const { OutboxSection } = await section();
     renderIn(<OutboxSection onMsg={() => {}} onError={onError} />);
 
-    const row = (await screen.findByText('item_donated')).closest('tr')!;
-    await user.click(within(row as HTMLElement).getByRole('button', { name: /^requeue/i }));
+    const entry = (await screen.findByText('item_donated')).closest('li')!;
+    await user.click(within(entry as HTMLElement).getByRole('button', { name: /^requeue/i }));
     await waitFor(() => expect(onError).toHaveBeenCalledWith(expect.stringMatching(/already requeued or delivered/i)));
     await waitFor(() => expect(screen.queryByText('item_donated')).not.toBeInTheDocument());
+  });
+
+  it('is a register in days: the newest first, each entry with when it was made, what it was, why it failed, and what it carried', async () => {
+    get.mockResolvedValue([
+      ...PARKED,
+      {
+        id: 'm3',
+        eventType: 'wallet_request_completed',
+        aggregateType: 'wallet_request',
+        attempts: 5,
+        lastError: 'timeout of 10000ms exceeded',
+        createdAt: '2026-10-12T16:10:00.000Z',
+        lastAttemptAt: null,
+        payloadKeys: ['userId', 'requestId'],
+      },
+    ]);
+    const { OutboxSection } = await section();
+    renderIn(<OutboxSection onMsg={() => {}} onError={() => {}} />);
+
+    const days = await screen.findAllByRole('heading', { level: 3 });
+    expect(days).toHaveLength(2);
+    const [recent, earlier] = days.map((h) => h.closest('.register-day-group') as HTMLElement) as [HTMLElement, HTMLElement];
+
+    const entries = within(recent).getAllByRole('listitem');
+    // The newest of the day first, whatever order the server listed them in.
+    expect(entries.map((e) => e.querySelector('.register-kind')?.textContent)).toEqual(['password_reset_requested', 'item_donated']);
+    expect(entries[1]).toHaveTextContent('connect ECONNREFUSED');
+    expect(entries[1]!.querySelector('.hint.date')).toHaveTextContent(/\d{1,2}:\d{2}/);
+    expect(entries[1]).toHaveTextContent('item · userId');
+    expect(entries[1]).toHaveTextContent('Attempts 5');
+    expect(entries[1]).toHaveTextContent('Last attempt');
+
+    const old = within(earlier).getByRole('listitem');
+    expect(old).toHaveTextContent('wallet_request_completed');
+    // One that was never attempted again says nothing about a last attempt.
+    expect(old).not.toHaveTextContent('Last attempt');
+  });
+
+  it('keeps the error, which is a machine\'s words, read left to right', async () => {
+    get.mockResolvedValue(PARKED);
+    const { OutboxSection } = await section();
+    renderIn(<OutboxSection onMsg={() => {}} onError={() => {}} />);
+    const error = (await screen.findByText(/ECONNREFUSED/)) as HTMLElement;
+    expect(error).toHaveAttribute('dir', 'ltr');
   });
 
   it('says plainly when nothing is parked', async () => {

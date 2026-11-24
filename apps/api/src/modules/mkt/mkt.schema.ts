@@ -1,12 +1,14 @@
-import { pgEnum, pgTable, text, boolean, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, boolean, jsonb, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
+import { item } from '../cst/cst.schema';
 
 export const listingStatus = pgEnum('listing_status', ['active', 'sold', 'removed']);
 
 export const listing = pgTable('listing', {
   id: pkId(),
-  itemId: text('item_id').notNull(),
-  sellerId: text('seller_id').notNull(),
+  itemId: uuid('item_id').notNull().references(() => item.id, { onDelete: 'restrict' }),
+  sellerId: uuid('seller_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   askingPrice: amountMinor('asking_price').notNull(),
   currency: currency().notNull(),
   status: listingStatus('status').notNull().default('active'),
@@ -21,8 +23,8 @@ export const transaction = pgTable('transaction', {
   code: text('code'),
   type: transactionType('type').notNull(),
   itemIds: jsonb('item_ids').notNull(),
-  buyerId: text('buyer_id'),
-  sellerId: text('seller_id'),
+  buyerId: uuid('buyer_id').references(() => userAccount.id, { onDelete: 'restrict' }),
+  sellerId: uuid('seller_id').references(() => userAccount.id, { onDelete: 'restrict' }),
   price: amountMinor('price'),
   fee: amountMinor('fee').notNull().default(0),
   frozenPricing: jsonb('frozen_pricing'),
@@ -35,12 +37,12 @@ export const offerStatus = pgEnum('offer_status', ['pending', 'accepted', 'rejec
 
 export const offer = pgTable('offer', {
   id: pkId(),
-  listingId: text('listing_id').notNull(),
-  buyerId: text('buyer_id').notNull(),
+  listingId: uuid('listing_id').notNull().references(() => listing.id, { onDelete: 'restrict' }),
+  buyerId: uuid('buyer_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   amount: amountMinor().notNull(),
   currency: currency().notNull(),
   status: offerStatus('status').notNull().default('pending'),
-  parentOfferId: text('parent_offer_id'),
+  parentOfferId: uuid('parent_offer_id').references((): AnyPgColumn => offer.id, { onDelete: 'restrict' }),
   proposedBy: text('proposed_by').$type<'buyer' | 'seller'>().notNull().default('buyer'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -50,8 +52,8 @@ export const swapStatus = pgEnum('swap_status', ['pending', 'accepted', 'rejecte
 
 export const swapProposal = pgTable('swap_proposal', {
   id: pkId(),
-  proposerId: text('proposer_id').notNull(),
-  responderId: text('responder_id').notNull(),
+  proposerId: uuid('proposer_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
+  responderId: uuid('responder_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   offeredItemIds: jsonb('offered_item_ids').notNull(),
   requestedItemIds: jsonb('requested_item_ids').notNull(),
   proposerApproved: boolean('proposer_approved').notNull().default(true),

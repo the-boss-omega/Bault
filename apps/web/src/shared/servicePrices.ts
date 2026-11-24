@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
-import { formatUsd } from './money';
+import { formatPercent, formatUsd } from './money';
+import { discountedMinor } from './tiers';
 
 export interface PriceEntry {
   actionType: string;
@@ -47,10 +48,14 @@ export function useServicePrices(): Map<string, PriceEntry> {
   return prices;
 }
 
-export function priceLabel(entry: PriceEntry | undefined): string | null {
-  if (!entry) return null;
-  if (entry.model === 'percentage') return `${(entry.value / 100).toFixed(entry.value % 100 === 0 ? 0 : 2)}%`;
-  return entry.value === 0 ? null : formatUsd(entry.value);
+export function formatEntryValue(entry: Pick<PriceEntry, 'model'>, value: number): string {
+  if (entry.model === 'percentage') return formatPercent(value);
+  return formatUsd(value);
+}
+
+export function priceLabel(entry: PriceEntry | undefined, discountBps = 0): string | null {
+  if (!entry || entry.value === 0) return null;
+  return formatEntryValue(entry, discountedMinor(entry.value, discountBps));
 }
 
 export const SERVICE_FEE_ACTION: Record<string, string> = {

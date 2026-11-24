@@ -4,12 +4,15 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { BILLING_PORT, type BillingPort } from '../../shared/billing/billing.port';
+import { ErrorCode } from '../../shared/errors/error-codes';
+import { OutboxService } from '../not/outbox/outbox.service';
 import { CustodyService } from '../cst/custody.service';
 import { StowService } from '../cst/stow.service';
 import { batch } from '../cst/cst.schema';
 import { userAccount } from '../acc/acc.schema';
 import { normalizeUsername } from '../../shared/names';
 import { makeItemBarcode, makeItemSerial } from './labels';
+import { assertFitsShelf } from './intake.service';
 import { isKnownItemClass, itemClass } from './item-classes';
 
 export interface SplitItemInput {
@@ -26,6 +29,7 @@ export class BatchService {
     private readonly custody: CustodyService,
     private readonly stow: StowService,
     @Inject(BILLING_PORT) private readonly billing: BillingPort,
+    private readonly outbox: OutboxService,
   ) {}
 
   async open(owner: { ownerUsername?: string; ownerIntakeId?: string }) {
@@ -69,13 +73,16 @@ export class BatchService {
       if (!target.active) {
         throw AppError.validation(`Bin ${target.barcode} is out of service — stow this somewhere else`);
       }
+      assertFitsShelf(target, cls.oversized);
       prepared.push({ spec, binId: target.id, oversized: cls.oversized });
     }
 
     return this.db.transaction(async (tx) => {
       const [b] = await tx.select().from(batch).where(eq(batch.id, batchId)).for('update').limit(1);
       if (!b) throw AppError.notFound('Batch not found');
-      if (b.status === 'split') throw AppError.validation('Batch already split');
+      if (b.status === 'split') {
+        throw new AppError(ErrorCode.CONFLICT, 'This batch has already been turned into items', 409);
+      }
 
       const created = [];
       for (const { spec, binId, oversized } of prepared) {
@@ -98,6 +105,12 @@ export class BatchService {
           actionType: 'intake',
           itemId: item.id,
           itemClass: spec.typeClass,
+        });
+        await this.outbox.emit(tx, {
+          aggregateType: 'item',
+          aggregateId: item.id,
+          eventType: 'item_received',
+          payload: { itemId: item.id, ownerId: b.ownerId, barcode: item.barcode },
         });
         created.push(item);
       }

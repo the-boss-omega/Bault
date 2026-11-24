@@ -6,6 +6,8 @@ import { reportJobFailure } from '../observability';
 import { notificationMessage } from './notification-message';
 import { defaultEmailEnabled, eventSubject } from './notification-events';
 import { PASSWORD_RESET_REQUESTED, sendPasswordReset } from './password-reset-mail';
+import { MFA_EMAIL_CODE_REQUESTED, sendMfaEmailCode } from './mfa-email-code-mail';
+import { OCR_REQUESTED } from './ocr-read';
 
 const SINGLE_RECIPIENT_KEYS = ['ownerId', 'userId', 'sellerId', 'buyerId', 'responderId', 'donorId'];
 
@@ -59,10 +61,42 @@ async function channelEnabled(
 export const MAX_ATTEMPTS = 5;
 const RUN_LIMIT = 1_000;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const uuidAt = (payload: Record<string, unknown>, key: string): string | null => {
+  const value = payload[key];
+  return typeof value === 'string' && UUID.test(value) ? value : null;
+};
+
+async function withCodes(
+  db: PoolClient,
+  payload: Record<string, unknown> | null,
+): Promise<Record<string, unknown> | null> {
+  if (!payload) return payload;
+  const out = { ...payload };
+  const transactionId = uuidAt(payload, 'transactionId');
+  if (transactionId && typeof payload.transactionCode !== 'string') {
+    const { rows } = await db.query<{ code: string | null }>(`SELECT code FROM transaction WHERE id = $1`, [
+      transactionId,
+    ]);
+    if (rows[0]?.code) out.transactionCode = rows[0].code;
+  }
+  const listingId = uuidAt(payload, 'listingId');
+  if (listingId && typeof payload.barcode !== 'string') {
+    const { rows } = await db.query<{ barcode: string }>(
+      `SELECT i.barcode FROM listing l JOIN item i ON i.id = l.item_id WHERE l.id = $1`,
+      [listingId],
+    );
+    if (rows[0]?.barcode) out.barcode = rows[0].barcode;
+  }
+  return out;
+}
+
 async function deliver(db: PoolClient, env: Env, row: OutboxRow) {
   const counts = { delivered: 0, mailed: 0, failed: 0 };
-  const message = notificationMessage(row.event_type, row.payload);
-  const content = JSON.stringify({ ...(row.payload ?? {}), message });
+  const payload = await withCodes(db, row.payload);
+  const message = notificationMessage(row.event_type, payload);
+  const content = JSON.stringify({ ...(payload ?? {}), message });
 
   for (const recipientId of recipientsOf(row.payload)) {
     if (await channelEnabled(db, recipientId, row.event_type, 'in_app')) {
@@ -132,10 +166,11 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
           WHERE dispatched_at IS NULL
             AND attempts < $1
             AND NOT (id = ANY($2::uuid[]))
+            AND event_type <> $3
           ORDER BY created_at
           LIMIT 1
           FOR UPDATE SKIP LOCKED`,
-        [MAX_ATTEMPTS, tried],
+        [MAX_ATTEMPTS, tried, OCR_REQUESTED],
       );
       claimed = rows[0];
       if (!claimed) {
@@ -147,7 +182,13 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
       const counts =
         claimed.event_type === PASSWORD_RESET_REQUESTED
           ? await sendPasswordReset(client, claimed.payload, emailAdapter()).then(() => ({ delivered: 0, mailed: 0, failed: 0 }))
-          : await deliver(client, env, claimed);
+          : claimed.event_type === MFA_EMAIL_CODE_REQUESTED
+            ? await sendMfaEmailCode(client, claimed.payload, emailAdapter()).then((sent) => ({
+                delivered: 0,
+                mailed: sent ? 1 : 0,
+                failed: 0,
+              }))
+            : await deliver(client, env, claimed);
       await client.query(
         `UPDATE outbox_message
             SET dispatched_at = now(), attempts = attempts + 1, last_attempt_at = now()

@@ -1,26 +1,17 @@
 import type { Pool } from 'pg';
 import { log } from '../log';
-import { renewMemberships } from './membership-renewal';
 
 const SWEEP_LOCK = 'job:storage-fee';
 
 const COVERED = `
   member_cap AS (
     SELECT m.user_id::text AS user_id,
-           COALESCE((pr.parameters ->> 'storedItems')::int, 0) AS stored_items
+           m.honoured_stored_items AS stored_items
       FROM membership m
-      JOIN LATERAL (
-        SELECT parameters
-          FROM pricing_rule
-         WHERE action_type = 'membership:' || m.tier
-           AND effective_from <= now()
-           AND (effective_to IS NULL OR effective_to > now())
-         ORDER BY effective_from DESC
-         LIMIT 1
-      ) pr ON TRUE
      WHERE m.status IN ('active', 'cancelling')
        AND now() >= m.current_period_start
        AND now() <  m.current_period_end
+       AND now() <  m.honoured_until
   ),
   member_covered AS (
     SELECT r.id
@@ -40,10 +31,6 @@ const COVERED = `
   )`;
 
 export async function runStorageFees(pool: Pool): Promise<void> {
-  await renewMemberships(pool).catch((err: Error) =>
-    log.warn('some memberships could not be renewed before billing', { job: 'storage-fee.run', error: err.message }),
-  );
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -116,6 +103,8 @@ export async function runStorageFees(pool: Pool): Promise<void> {
       oversized: boolean;
       periods_due: string;
       amount: string;
+      tier: string;
+      discount_bps: number;
     }>(
       `WITH policy AS (
          SELECT $1::int  AS std_free,  $2::int AS std_period,  $3::int AS std_bps,  $4::bigint AS std_flat,
@@ -129,7 +118,7 @@ export async function runStorageFees(pool: Pool): Promise<void> {
                 i.received_at,
                 sc.covered_until,
                 COALESCE(
-                  (SELECT c.amount FROM charge c
+                  (SELECT COALESCE((c.pricing_rule_snapshot ->> 'listMinor')::bigint, c.amount) FROM charge c
                     WHERE c.action_type = 'intake' AND c.reference_id = i.id::text
                     ORDER BY c.created_at DESC LIMIT 1),
                   CASE WHEN i.oversized THEN (SELECT ovr_flat FROM policy)
@@ -180,13 +169,17 @@ export async function runStorageFees(pool: Pool): Promise<void> {
            FROM anchored a
           WHERE now() >= a.clock_from
        )
-       SELECT id AS item_id,
-              owner_id,
-              oversized,
-              (periods_elapsed - periods_billed)::text AS periods_due,
-              GREATEST(1, ROUND(intake_minor * bps / 10000.0))::bigint::text AS amount
-         FROM elapsed
-        WHERE periods_elapsed > periods_billed`,
+       SELECT e.id AS item_id,
+              e.owner_id,
+              e.oversized,
+              (e.periods_elapsed - e.periods_billed)::text AS periods_due,
+              GREATEST(1, ROUND(e.intake_minor * e.bps / 10000.0))::bigint::text AS amount,
+              u.usage_tier::text AS tier,
+              COALESCE(r.discount_bps, 0) AS discount_bps
+         FROM elapsed e
+         JOIN user_account u ON u.id = e.owner_id
+         LEFT JOIN usage_tier_rule r ON r.tier = u.usage_tier
+        WHERE e.periods_elapsed > e.periods_billed`,
       [
         params.standard.freeDays,
         params.standard.periodDays,
@@ -206,7 +199,9 @@ export async function runStorageFees(pool: Pool): Promise<void> {
 
     for (const row of due.rows) {
       const periods = Number(row.periods_due);
-      const amount = Number(row.amount);
+      const listMinor = Number(row.amount);
+      const discountBps = Number(row.discount_bps);
+      const amount = discountBps > 0 ? listMinor - Math.round((listMinor * discountBps) / 10_000) : listMinor;
       if (periods <= 0 || amount <= 0) continue;
 
       const variant = row.oversized ? params.oversized : params.standard;
@@ -220,6 +215,10 @@ export async function runStorageFees(pool: Pool): Promise<void> {
         percentOfIntakeBps: variant.bps,
         currency: variant.currency,
         effectiveFrom: variant.effectiveFrom,
+        tier: row.tier,
+        discountBps,
+        listMinor,
+        chargedMinor: amount,
       };
 
       for (let i = 0; i < periods; i += 1) {

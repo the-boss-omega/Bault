@@ -47,7 +47,7 @@ describe('the sign-in form', () => {
     await user.clear(pw);
     await user.type(pw, 'a-real-password');
 
-    await user.click(screen.getByRole('button', { name: /sign in|התחבר/i }));
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => expect(post).toHaveBeenCalled());
     expect(post).toHaveBeenCalledWith('/auth/login', {
@@ -64,7 +64,7 @@ describe('the sign-in form', () => {
     renderIn(
       <SignInPage onSignedIn={vi.fn()} onGoToSignUp={() => {}} onGoToForgotPassword={() => {}} />,
     );
-    await user.click(screen.getByRole('button', { name: /sign in|התחבר/i }));
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     expect(await screen.findByText(/do not match an account/i)).toBeInTheDocument();
   });
@@ -76,7 +76,7 @@ describe('the sign-in form', () => {
       <SignInPage onSignedIn={vi.fn()} onGoToSignUp={() => {}} onGoToForgotPassword={() => {}} />,
     );
 
-    const submit = screen.getByRole('button', { name: /sign in|התחבר/i });
+    const submit = screen.getByRole('button', { name: /sign in/i });
     await user.click(submit);
     expect(await screen.findByText(/wrong password/i)).toBeInTheDocument();
 

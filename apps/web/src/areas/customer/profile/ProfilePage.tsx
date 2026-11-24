@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, apiErrorKey } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import {
@@ -8,8 +8,9 @@ import {
   isValidNamePart,
   normalizeNamePart,
 } from '../../../shared/names';
+import { isolate } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
-import { countryName, lacksRegion, regionRequired, useShippingCountries } from '../../../shared/countries';
+import { regionRequired, useShippingCountries } from '../../../shared/countries';
 import {
   Button,
   ContextTabs,
@@ -20,9 +21,21 @@ import {
   StatusBadge,
   SuccessNote,
   TabPanel,
+  SkeletonBlock,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
+import { Code } from '../../../shared/ui/Serial';
 import { TwoFactorPanel } from './TwoFactorPanel';
+import {
+  AddressFields,
+  AddressLabel,
+  EMPTY_ADDRESS,
+  addressOptionals,
+  missingAddressFields,
+  type Address,
+  type AddressDraft,
+} from './AddressFields';
 import { IconLocation, IconPlus, IconUser } from '../../../shared/ui/icons';
 
 interface Profile {
@@ -37,17 +50,6 @@ interface Profile {
   nameReviewRequired: boolean;
 }
 
-interface Address {
-  id: string;
-  label: string;
-  recipient: string;
-  line1: string;
-  city: string;
-  region: string | null;
-  country: string;
-  postalCode: string;
-  isDefault: boolean;
-}
 
 const ROLE_LABEL: Record<string, MessageKey> = {
   user: 'profile.role.user',
@@ -66,7 +68,7 @@ export function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [addresses, setAddresses] = useState<Address[] | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Address | null>(null);
@@ -151,82 +153,87 @@ export function ProfilePage() {
 
       {tab === 'details' && (
         <TabPanel tab="details">
-          <Panel title={t('profile.details.heading')}>
-            {profile && (
-              <dl className="detail-list" style={{ maxWidth: 560 }}>
-                <div className="detail-row">
-                  <dt className="detail-label">{t('profile.details.email')}</dt>
-                  <dd className="detail-value" dir="ltr">
-                    {profile.email}
-                  </dd>
-                </div>
-                <div className="detail-row">
-                  <dt className="detail-label">{t('profile.details.username')}</dt>
-                  <dd className="detail-value">
-                    <code dir="ltr">{profile.username}</code>
-                    <span className="detail-value-sub">{t('profile.details.usernameImmutable')}</span>
-                  </dd>
-                </div>
-                <div className="detail-row">
-                  <dt className="detail-label">{t('profile.details.fullName')}</dt>
-                  <dd className="detail-value">
-                    {fullName(profile.firstName, profile.lastName) || (
-                      <span className="muted">{t('profile.details.noName')}</span>
-                    )}
-                  </dd>
-                </div>
-                <div className="detail-row">
-                  <dt className="detail-label">{t('profile.details.role')}</dt>
-                  <dd className="detail-value">
-                    <StatusBadge tone="info">{roleKey ? t(roleKey) : profile.role}</StatusBadge>
-                  </dd>
-                </div>
-              </dl>
-            )}
-          </Panel>
-
           <Panel title={t('profile.nameLabel')} subtitle={t('profile.nameSubtitle')}>
-            <div className="stack stack--tight" style={{ maxWidth: 560 }}>
-              {profile?.nameReviewRequired && (
-                <SuccessNote tone="warning">{t('profile.nameReviewRequired')}</SuccessNote>
-              )}
+            <div className="request-form">
+              <div className="stack stack--tight request-form-fields">
+                {profile?.nameReviewRequired && (
+                  <SuccessNote tone="warning">{t('profile.nameReviewRequired')}</SuccessNote>
+                )}
 
-              <div className="form-grid">
-                <Field
-                  label={t('auth.firstName')}
-                  error={firstName.length > 0 && !firstOk ? t('auth.nameInvalid') : undefined}
-                >
-                  <input
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    autoComplete="given-name"
-                    maxLength={NAME_PART_MAX}
-                    aria-invalid={firstName.length > 0 && !firstOk}
-                  />
-                </Field>
+                <div className="form-grid">
+                  <Field
+                    label={t('auth.firstName')}
+                    error={firstName.length > 0 && !firstOk ? t('auth.nameInvalid') : undefined}
+                  >
+                    <input
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      autoComplete="given-name"
+                      maxLength={NAME_PART_MAX}
+                      aria-invalid={firstName.length > 0 && !firstOk}
+                      dir="auto"
+                    />
+                  </Field>
 
-                <Field
-                  label={t('auth.lastName')}
-                  error={lastName.length > 0 && !lastOk ? t('auth.nameInvalid') : undefined}
-                >
-                  <input
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    autoComplete="family-name"
-                    maxLength={NAME_PART_MAX}
-                    aria-invalid={lastName.length > 0 && !lastOk}
-                  />
-                </Field>
+                  <Field
+                    label={t('auth.lastName')}
+                    error={lastName.length > 0 && !lastOk ? t('auth.nameInvalid') : undefined}
+                  >
+                    <input
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      autoComplete="family-name"
+                      maxLength={NAME_PART_MAX}
+                      aria-invalid={lastName.length > 0 && !lastOk}
+                      dir="auto"
+                    />
+                  </Field>
+                </div>
               </div>
 
-              <p className="field-hint">
-                {t('profile.namePreview', {
-                  name: fullName(firstName, lastName) || t('profile.details.noName'),
-                })}
-              </p>
+              {/* The account as it is read: the name as it is being written, and what cannot be written here. */}
+              {profile && (
+                <aside className="request-slip">
+                  <DrawerTag
+                    kicker={t('profile.details.heading')}
+                    title={
+                      <>
+                        <span className="sr-only">{t('profile.details.fullName')} </span>
+                        {fullName(firstName, lastName) || (
+                          <span className="drawer-tag-quiet">{t('profile.details.noName')}</span>
+                        )}
+                      </>
+                    }
+                    lines={[
+                      {
+                        label: t('profile.details.email'),
+                        value: <span dir="ltr">{profile.email}</span>,
+                      },
+                      {
+                        label: t('profile.details.username'),
+                        value: (
+                          <>
+                            <Code value={`@${profile.username}`} />
+                            <small className="drawer-tag-sub">
+                              {t('profile.details.usernameImmutable')}
+                            </small>
+                          </>
+                        ),
+                      },
+                    ]}
+                    status={
+                      <StatusBadge tone="info">{roleKey ? t(roleKey) : profile.role}</StatusBadge>
+                    }
+                  />
+                </aside>
+              )}
 
-              <div className="row">
-                <Button variant="gold" disabled={!firstOk || !lastOk || !nameDirty} onClick={saveName}>
+              <div className="row request-form-actions">
+                <Button
+                  variant="primary"
+                  disabled={!firstOk || !lastOk || !nameDirty}
+                  onClick={saveName}
+                >
                   {t('profile.saveName')}
                 </Button>
               </div>
@@ -240,28 +247,29 @@ export function ProfilePage() {
           <Panel
             title={t('profile.addresses.heading')}
             subtitle={t('profile.addresses.subtitle')}
-            flush={addresses.length === 0}
+            flush={!addresses || addresses.length === 0}
           >
-            {addresses.length === 0 ? (
+            {addresses === null ? (
+              error ? null : <SkeletonBlock />
+            ) : addresses.length === 0 ? (
               <EmptyState
                 title={t('profile.addresses.empty')}
                 text={t('profile.addresses.emptyText')}
                 icon={<IconLocation />}
               />
             ) : (
-              <ul className="card-grid">
+              <ul className="tag-grid">
                 {addresses.map((address) => (
-                  <li key={address.id}>
-                    <AddressCard
-                      address={address}
-                      onDelete={() => setDeleting(address)}
-                      onSaved={async () => {
-                        setStatus(t('profile.address.updated'));
-                        await load();
-                      }}
-                      onError={setError}
-                    />
-                  </li>
+                  <AddressCard
+                    key={address.id}
+                    address={address}
+                    onDelete={() => setDeleting(address)}
+                    onSaved={async () => {
+                      setStatus(t('profile.address.updated'));
+                      await load();
+                    }}
+                    onError={setError}
+                  />
                 ))}
               </ul>
             )}
@@ -279,15 +287,17 @@ export function ProfilePage() {
 
       {tab === 'security' && (
         <TabPanel tab="security">
-          <PasswordPanel onStatus={setStatus} onError={setError} />
-          <TwoFactorPanel />
+          <div className="security-grid">
+            <PasswordPanel onStatus={setStatus} onError={setError} />
+            <TwoFactorPanel />
+          </div>
         </TabPanel>
       )}
 
       {deleting && (
         <ConfirmationModal
           title={t('profile.address.deleteTitle')}
-          body={<p>{t('profile.address.deleteBody', { label: deleting.label })}</p>}
+          body={<p>{t('profile.address.deleteBody', { label: isolate(deleting.label) })}</p>}
           confirmLabel={t('profile.addresses.delete')}
           cancelLabel={t('ui.cancel')}
           tone="danger"
@@ -338,56 +348,96 @@ function PasswordPanel({
     }
   }
 
+  // What a new password has to be, and whether what has been typed is that yet. Nothing typed is echoed on the slip.
+  const rules = [
+    {
+      key: 'length',
+      label: t('profile.password.rule.length', { min: PASSWORD_MIN }),
+      met: next.length >= PASSWORD_MIN,
+    },
+    {
+      key: 'different',
+      label: t('profile.password.rule.different'),
+      met: next.length > 0 && next !== current,
+    },
+    {
+      key: 'match',
+      label: t('profile.password.rule.match'),
+      met: confirm.length > 0 && confirm === next,
+    },
+  ];
+
   return (
     <Panel title={t('profile.password.heading')} subtitle={t('profile.password.subtitle')}>
-      <div className="stack stack--tight" style={{ maxWidth: 460 }}>
-        <Field label={t('profile.password.current')}>
-          <input
-            type="password"
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-            autoComplete="current-password"
-            dir="ltr"
+      <div className="request-form request-form--stacked">
+        <aside className="request-slip">
+          <DrawerTag
+            kicker={t('auth.newPassword')}
+            lines={rules.map((rule) => ({
+              label: rule.label,
+              value: (
+                <StatusBadge tone={rule.met ? 'success' : 'neutral'}>
+                  {t(rule.met ? 'profile.password.met' : 'profile.password.notYet')}
+                </StatusBadge>
+              ),
+            }))}
+            status={
+              ready ? (
+                <StatusBadge tone="success">{t('profile.password.ready')}</StatusBadge>
+              ) : undefined
+            }
           />
-        </Field>
+        </aside>
 
-        <Field
-          label={t('auth.newPassword')}
-          hint={t('auth.passwordHint')}
-          error={
-            unchanged
-              ? t('profile.password.sameAsCurrent')
-              : tooShort
-                ? t('auth.passwordTooShort', { min: PASSWORD_MIN })
-                : undefined
-          }
-        >
-          <input
-            type="password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-            autoComplete="new-password"
-            aria-invalid={tooShort || unchanged}
-            dir="ltr"
-          />
-        </Field>
+        <div className="stack stack--tight request-form-fields">
+          <Field label={t('profile.password.current')}>
+            <input
+              type="password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              autoComplete="current-password"
+              dir="ltr"
+            />
+          </Field>
 
-        <Field
-          label={t('auth.confirmPassword')}
-          error={mismatch ? t('auth.passwordMismatch') : undefined}
-        >
-          <input
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            autoComplete="new-password"
-            aria-invalid={mismatch}
-            dir="ltr"
-          />
-        </Field>
+          <Field
+            label={t('auth.newPassword')}
+            hint={t('auth.passwordHint')}
+            error={
+              unchanged
+                ? t('profile.password.sameAsCurrent')
+                : tooShort
+                  ? t('auth.passwordTooShort', { min: PASSWORD_MIN })
+                  : undefined
+            }
+          >
+            <input
+              type="password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              autoComplete="new-password"
+              aria-invalid={tooShort || unchanged}
+              dir="ltr"
+            />
+          </Field>
 
-        <div className="row">
-          <Button variant="gold" disabled={busy || !ready} onClick={() => void save()}>
+          <Field
+            label={t('auth.confirmPassword')}
+            error={mismatch ? t('auth.passwordMismatch') : undefined}
+          >
+            <input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              aria-invalid={mismatch}
+              dir="ltr"
+            />
+          </Field>
+        </div>
+
+        <div className="row request-form-actions">
+          <Button variant="primary" loading={busy} disabled={!ready} onClick={() => void save()}>
             {t('profile.password.submit')}
           </Button>
         </div>
@@ -431,6 +481,7 @@ function AddressCard({
         region: draft.region?.trim() || null,
         country: draft.country,
         postalCode: draft.postalCode,
+        ...addressOptionals(draft),
         isDefault: draft.isDefault,
       });
       setEditing(false);
@@ -442,26 +493,13 @@ function AddressCard({
 
   if (!editing) {
     return (
-      <div className="card">
-        <div className="card-meta">
-          <h3 className="card-title" style={{ flex: '1 1 auto' }}>
-            {address.label}
-          </h3>
-          {address.isDefault && <StatusBadge tone="gold">{t('profile.addresses.default')}</StatusBadge>}
-          {lacksRegion(address, countries) && (
-            <StatusBadge tone="warning">{t('profile.addresses.regionMissing')}</StatusBadge>
-          )}
-        </div>
-        <p className="card-desc">{address.recipient}</p>
-        <p className="card-desc">
-          {address.line1}, {address.city}
-          {address.region ? `, ${address.region}` : ''}, {countryName(address.country, countries)}{' '}
-          {address.postalCode}
-        </p>
+      <li className="tag-item">
+        <AddressLabel item address={address} kicker={address.label} />
         <div className="actions">
           <Button
             size="sm"
             variant="secondary"
+            aria-label={t('profile.address.editNamed', { label: address.label })}
             onClick={() => {
               setDraft(address);
               setEditing(true);
@@ -469,143 +507,38 @@ function AddressCard({
           >
             {t('profile.address.edit')}
           </Button>
-          <Button size="sm" variant="danger" onClick={onDelete}>
+          <Button
+            size="sm"
+            variant="danger"
+            aria-label={t('profile.address.deleteNamed', { label: address.label })}
+            onClick={onDelete}
+          >
             {t('profile.addresses.delete')}
           </Button>
         </div>
-      </div>
+      </li>
     );
   }
 
   return (
-    <div className="card">
-      <AddressFields draft={draft} onChange={(next) => setDraft({ ...draft, ...next })} />
-      <div className="actions">
-        <Button size="sm" variant="gold" disabled={!valid} onClick={save}>
-          {t('profile.address.save')}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-          {t('profile.address.cancel')}
-        </Button>
+    <li className="tag-item is-editing">
+      <div className="request-form">
+        <div className="request-form-fields">
+          <AddressFields draft={draft} onChange={(next) => setDraft({ ...draft, ...next })} />
+        </div>
+        <aside className="request-slip">
+          <AddressLabel address={draft} kicker={draft.label.trim() || t('profile.address.edit')} />
+        </aside>
+        <div className="actions request-form-actions">
+          <Button size="sm" variant="primary" disabled={!valid} onClick={save}>
+            {t('profile.address.save')}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            {t('profile.address.cancel')}
+          </Button>
+        </div>
       </div>
-    </div>
-  );
-}
-
-type AddressDraft = Omit<Address, 'id'>;
-
-function AddressFields({
-  draft,
-  onChange,
-}: {
-  draft: AddressDraft;
-  onChange: (next: AddressDraft) => void;
-}) {
-  const { t } = useI18n();
-  const countries = useShippingCountries();
-  const set = (patch: Partial<AddressDraft>) => onChange({ ...draft, ...patch });
-  const id = useId();
-  const country = countries.find((c) => c.code === draft.country);
-
-  return (
-    <div className="form-grid">
-      <Field label={t('profile.addressForm.label')} htmlFor={`${id}-label`}>
-        <input id={`${id}-label`} value={draft.label} onChange={(e) => set({ label: e.target.value })} />
-      </Field>
-      <Field label={t('profile.addressForm.recipient')} htmlFor={`${id}-recipient`}>
-        <input
-          id={`${id}-recipient`}
-          value={draft.recipient}
-          onChange={(e) => set({ recipient: e.target.value })}
-          autoComplete="name"
-        />
-      </Field>
-      <Field label={t('profile.addressForm.line1')} htmlFor={`${id}-line1`}>
-        <input
-          id={`${id}-line1`}
-          value={draft.line1}
-          onChange={(e) => set({ line1: e.target.value })}
-          autoComplete="address-line1"
-        />
-      </Field>
-      <Field label={t('profile.addressForm.city')} htmlFor={`${id}-city`}>
-        <input
-          id={`${id}-city`}
-          value={draft.city}
-          onChange={(e) => set({ city: e.target.value })}
-          autoComplete="address-level2"
-        />
-      </Field>
-      <Field
-        label={t('profile.addressForm.country')}
-        htmlFor={`${id}-country`}
-        hint={t('profile.addressForm.countryHint')}
-      >
-        <select
-          id={`${id}-country`}
-          value={draft.country}
-          onChange={(e) => set({ country: e.target.value, region: '' })}
-          autoComplete="country"
-        >
-          <option value="">{t('profile.addressForm.countryPlaceholder')}</option>
-          {countries.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field
-        label={t('profile.addressForm.region')}
-        htmlFor={`${id}-region`}
-        hint={
-          country?.regionRequired
-            ? t('profile.addressForm.regionRequiredHint', { country: country.name })
-            : t('profile.addressForm.regionOptionalHint')
-        }
-      >
-        {country?.regions ? (
-          <select
-            id={`${id}-region`}
-            value={draft.region ?? ''}
-            onChange={(e) => set({ region: e.target.value })}
-            autoComplete="address-level1"
-          >
-            <option value="">{t('profile.addressForm.regionPlaceholder')}</option>
-            {country.regions.map((r) => (
-              <option key={r.code} value={r.code}>
-                {r.code} — {r.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            id={`${id}-region`}
-            value={draft.region ?? ''}
-            maxLength={60}
-            onChange={(e) => set({ region: e.target.value })}
-            autoComplete="address-level1"
-          />
-        )}
-      </Field>
-      <Field label={t('profile.addressForm.postalCode')} htmlFor={`${id}-postal`}>
-        <input
-          id={`${id}-postal`}
-          value={draft.postalCode}
-          onChange={(e) => set({ postalCode: e.target.value })}
-          autoComplete="postal-code"
-          dir="ltr"
-        />
-      </Field>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={draft.isDefault}
-          onChange={(e) => set({ isDefault: e.target.checked })}
-        />
-        {t('profile.addressForm.isDefault')}
-      </label>
-    </div>
+    </li>
   );
 }
 
@@ -618,30 +551,14 @@ function AddressForm({
 }) {
   const { t } = useI18n();
   const countries = useShippingCountries();
-  const empty: AddressDraft = {
-    label: '',
-    recipient: '',
-    line1: '',
-    city: '',
-    region: '',
-    country: '',
-    postalCode: '',
-    isDefault: false,
-  };
+  const empty = EMPTY_ADDRESS;
   const [draft, setDraft] = useState<AddressDraft>(empty);
 
-  const valid =
-    draft.label &&
-    draft.recipient &&
-    draft.line1 &&
-    draft.city &&
-    draft.country &&
-    draft.postalCode &&
-    (draft.region || !regionRequired(draft.country, countries));
+  const valid = missingAddressFields(draft, countries).length === 0;
 
   async function add() {
     try {
-      await api.post('/me/addresses', { ...draft, region: draft.region?.trim() || null });
+      await api.post('/me/addresses', { ...draft, region: draft.region?.trim() || null, ...addressOptionals(draft) });
       setDraft(empty);
       await onAdded();
     } catch (e) {
@@ -651,10 +568,18 @@ function AddressForm({
 
   return (
     <Panel title={t('profile.addressForm.legend')}>
-      <div className="stack stack--tight">
-        <AddressFields draft={draft} onChange={setDraft} />
-        <div className="row">
-          <Button variant="gold" icon={<IconPlus />} disabled={!valid} onClick={add}>
+      <div className="request-form">
+        <div className="request-form-fields">
+          <AddressFields draft={draft} onChange={setDraft} />
+        </div>
+        <aside className="request-slip">
+          <AddressLabel
+            address={draft}
+            kicker={draft.label.trim() || t('profile.addressForm.legend')}
+          />
+        </aside>
+        <div className="row request-form-actions">
+          <Button variant="primary" icon={<IconPlus />} disabled={!valid} onClick={add}>
             {t('profile.addressForm.submit')}
           </Button>
         </div>

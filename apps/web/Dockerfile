@@ -18,6 +18,8 @@ COPY packages/ packages/
 COPY apps/web/ apps/web/
 COPY assets/ assets/
 
+ARG VITE_SENTRY_DSN=
+ARG VITE_RELEASE=
 RUN pnpm --filter @bault/web build
 
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 AS runtime
@@ -26,8 +28,11 @@ COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
 COPY apps/web/nginx-security-headers.conf /etc/nginx/templates/bault/security-headers.conf.template
 COPY --chmod=0755 apps/web/nginx-storage-origin.envsh /docker-entrypoint.d/15-bault-storage-origin.envsh
+COPY --chmod=0755 apps/web/nginx-error-reports-origin.envsh /docker-entrypoint.d/16-bault-error-reports-origin.envsh
+ARG VITE_SENTRY_DSN=
+ENV WEB_SENTRY_DSN=${VITE_SENTRY_DSN}
 ENV API_UPSTREAM=http://api:3000
-ENV NGINX_ENVSUBST_FILTER='^(API_UPSTREAM|STORAGE_PUBLIC_ORIGIN)$'
+ENV NGINX_ENVSUBST_FILTER='^(API_UPSTREAM|STORAGE_PUBLIC_ORIGIN|ERROR_REPORTS_ORIGIN)$'
 
 EXPOSE 8080
 

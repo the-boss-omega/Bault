@@ -1,5 +1,5 @@
 # =============================================================================
-# Bault — nightly backup, for the `deploy` user's crontab on the production host.
+# Bault — the nightly backup and the watchdog, for the `deploy` user's crontab on the production host.
 #
 #   sudo install -d -m 700 -o deploy -g deploy /var/backups/bault /var/log/bault
 #   sudo -u deploy crontab infra/ops/crontab.example      # REPLACES that user's crontab
@@ -24,6 +24,12 @@
 #   RCLONE_CONFIG_BACKUP_ACCESS_KEY_ID=...  # a key for the backup bucket only, PutObject only
 #   RCLONE_CONFIG_BACKUP_SECRET_ACCESS_KEY=...
 #
+# On Google Cloud, infra/gcp/configure.sh defines `backup` with rclone's own
+# Cloud Storage backend instead, signed in as the server, with no key:
+#   RCLONE_CONFIG_BACKUP_TYPE='google cloud storage'
+#   RCLONE_CONFIG_BACKUP_BUCKET_POLICY_ONLY=true   # no ACL, which uniform access refuses
+#   RCLONE_CONFIG_BACKUP_NO_CHECK_BUCKET=true
+#
 # rclone is what infra/production/bootstrap.sh installs. `BACKUP_UPLOAD=s3://…`
 # with AWS_* variables and BACKUP_S3_ENDPOINT also works, but needs the aws cli,
 # which Ubuntu 24.04 does not package; without the tool the job fails before
@@ -38,16 +44,27 @@
 # touch it. pg_dump reads one consistent snapshot and takes no locks that block
 # the API.
 #
-# A failed run must reach a person. The job's own output goes to the log, so
-# cron would have nothing to mail; the `|| echo` prints one line only when the
-# dump fails, and cron mails that line to MAILTO (the host must be able to send
-# mail). Better still, the commented variant pings a dead-man's-switch monitor
-# ONLY on success, so silence (a run that failed, or never started because the
-# host was down) is what raises the alarm.
+# A failed run must reach a person. backup.sh leaves BACKUP-FAILED in
+# BACKUP_DIR when a dump fails and removes it after the next good one, and the
+# watchdog below writes that line to /var/log/bault/watchdog.log the first time
+# it sees it. The job's own output goes to the log, so cron would have nothing
+# to mail; the `|| echo` prints one line only when the dump fails, and cron
+# mails that line to MAILTO. Replace CHANGE_ME below with an address this host
+# can deliver to (it needs a mail relay such as msmtp-mta set up), or with ""
+# to turn cron mail off. Better still, the commented variant pings a
+# dead-man's-switch monitor ONLY on success, so silence (a run that failed, or
+# never started because the host was down) is what raises the alarm.
 # =============================================================================
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-MAILTO=ops@example.com
+MAILTO=CHANGE_ME@your-ops-address
 
 17 1 * * * cd /opt/bault && set -a && . /etc/bault/backup.env && set +a && ./infra/ops/backup.sh dump >> /var/log/bault/backup.log 2>&1 || echo "Bault nightly backup FAILED on $(hostname); see /var/log/bault/backup.log"
 # 17 1 * * * cd /opt/bault && set -a && . /etc/bault/backup.env && set +a && ./infra/ops/backup.sh dump >> /var/log/bault/backup.log 2>&1 && curl -fsS -m 10 --retry 3 https://hc-ping.com/<check-uuid> > /dev/null
+
+# Every two minutes: restart api or web when Docker reports them unhealthy, and
+# the worker when it has stopped dispatching the outbox (infra/ops/watchdog.sh).
+# It logs only what it does, never restarts one service twice in 15 minutes,
+# and stops after three restarts in six hours, leaving it to a person. It also
+# logs, once, a BACKUP-FAILED marker the nightly job left.
+*/2 * * * * cd /opt/bault && ./infra/ops/watchdog.sh >> /var/log/bault/watchdog.log 2>&1

@@ -7,7 +7,8 @@ import { clampLimit } from '../../shared/query';
 import { STORAGE_ADAPTER } from '../../shared/adapters/adapters.module';
 import type { StorageAdapter } from '@bault/adapters';
 import { InventoryService, type TimelineEvent } from '../cst/inventory.service';
-import { bin, custodyEvent, item, itemImage } from '../cst/cst.schema';
+import { custodyEvent, item, itemImage } from '../cst/cst.schema';
+import { heldAt, holdingWindows } from '../cst/holding';
 import { charge } from '../pay/pay.schema';
 import { pricingRule } from '../prc/prc.schema';
 import { storageCover } from '../adm/adm.schema';
@@ -42,7 +43,16 @@ export interface VaultFilter {
   type?: string;
   condition?: string;
   limit?: number;
+  cursor?: string;
   scope?: VaultScope;
+}
+
+export const VAULT_PAGE_MAX = 500;
+const VAULT_PAGE_DEFAULT = 50;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function badCursor(): AppError {
+  return AppError.validation('cursor has to be the id of the last card of the page before.', { field: 'cursor' });
 }
 
 const TERMINAL: Array<'shipped' | 'donated' | 'consigned' | 'sold' | 'discarded'> = [
@@ -105,6 +115,31 @@ export function departureOf(event: {
   return { kind: byState ?? 'left', code: null };
 }
 
+function collectorItemView(it: typeof item.$inferSelect) {
+  return {
+    id: it.id,
+    serialNumber: it.serialNumber,
+    description: it.description,
+    typeClass: it.typeClass,
+    conditionGrade: it.conditionGrade,
+    lifecycleState: it.lifecycleState,
+    holdFlag: it.holdFlag,
+    oversized: it.oversized,
+    isLot: it.isLot,
+    lotSize: it.lotSize,
+    lotBroken: it.lotBroken,
+    receivedAt: it.receivedAt,
+  };
+}
+
+function collectorImageView(img: typeof itemImage.$inferSelect, url: string) {
+  return { id: img.id, type: img.type, version: img.version, url, createdAt: img.createdAt };
+}
+
+function collectorCustodyView(e: typeof custodyEvent.$inferSelect) {
+  return { eventType: e.eventType, occurredAt: e.occurredAt, prevState: e.prevState, newState: e.newState };
+}
+
 @Injectable()
 export class VaultService {
   constructor(
@@ -117,7 +152,7 @@ export class VaultService {
     if (!(await this.hasHeld(userId, itemId))) {
       throw AppError.notFound('Item not found in your vault');
     }
-    return this.inventory.itemTimeline(itemId);
+    return this.inventory.collectorTimeline(userId, itemId);
   }
 
   private async hasHeld(userId: string, itemId: string): Promise<boolean> {
@@ -144,6 +179,43 @@ export class VaultService {
     const scope = filter.scope ?? 'active';
     if (scope === 'history') return this.listHistory(userId, filter);
 
+    const conditions = this.ownedConditions(userId, scope, filter);
+    if (filter.cursor !== undefined) {
+      if (!UUID.test(filter.cursor)) throw badCursor();
+      const [after] = await this.db
+        .select({ id: item.id })
+        .from(item)
+        .where(and(eq(item.id, filter.cursor), eq(item.ownerId, userId)))
+        .limit(1);
+      if (!after) throw badCursor();
+      conditions.push(
+        sql`(${item.createdAt}, ${item.id}) < (SELECT c.created_at, c.id FROM item c WHERE c.id = ${after.id}::uuid)`,
+      );
+    }
+
+    return this.db
+      .select({
+        id: item.id,
+        serialNumber: item.serialNumber,
+        typeClass: item.typeClass,
+        description: item.description,
+        conditionGrade: item.conditionGrade,
+        lifecycleState: item.lifecycleState,
+        holdFlag: item.holdFlag,
+        isLot: item.isLot,
+        lotSize: item.lotSize,
+        lotBroken: item.lotBroken,
+        oversized: item.oversized,
+        receivedAt: item.receivedAt,
+        createdAt: item.createdAt,
+      })
+      .from(item)
+      .where(and(...conditions))
+      .orderBy(sql`${item.createdAt} desc`, sql`${item.id} desc`)
+      .limit(clampLimit(filter.limit, { max: VAULT_PAGE_MAX, fallback: VAULT_PAGE_DEFAULT }));
+  }
+
+  private ownedConditions(userId: string, scope: 'active' | 'hold', filter: VaultFilter) {
     const conditions = [eq(item.ownerId, userId)];
     if (scope === 'hold') {
       conditions.push(or(eq(item.holdFlag, true), eq(item.lifecycleState, 'on-hold')) ?? sql`true`);
@@ -154,36 +226,11 @@ export class VaultService {
     if (filter.type) conditions.push(eq(item.typeClass, filter.type));
     if (filter.condition) conditions.push(eq(item.conditionGrade, filter.condition));
     if (filter.q) conditions.push(this.searchClause(filter.q));
-
-    return this.db
-      .select({
-        id: item.id,
-        serialNumber: item.serialNumber,
-        barcode: item.barcode,
-        typeClass: item.typeClass,
-        description: item.description,
-        conditionGrade: item.conditionGrade,
-        lifecycleState: item.lifecycleState,
-        holdFlag: item.holdFlag,
-        binId: item.binId,
-        binBarcode: bin.barcode,
-        binZone: bin.zone,
-        isLot: item.isLot,
-        lotSize: item.lotSize,
-        lotBroken: item.lotBroken,
-        oversized: item.oversized,
-        receivedAt: item.receivedAt,
-        createdAt: item.createdAt,
-      })
-      .from(item)
-      .leftJoin(bin, sql`${bin.id}::text = ${item.binId}`)
-      .where(and(...conditions))
-      .orderBy(sql`${item.createdAt} desc`)
-      .limit(clampLimit(filter.limit, { max: 200, fallback: 50 }));
+    return conditions;
   }
 
   private searchClause(q: string) {
-    const pattern = `%${q}%`;
+    const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     return (
       or(
         ilike(item.description, pattern),
@@ -196,10 +243,8 @@ export class VaultService {
     );
   }
 
-  private async listHistory(userId: string, filter: VaultFilter, withReason = true) {
-    const limit = clampLimit(filter.limit, { max: 200, fallback: 50 });
-
-    const departure = this.db
+  private departures(userId: string) {
+    return this.db
       .select({
         itemId: custodyEvent.itemId,
         occurredAt: sql<Date>`max(${custodyEvent.occurredAt})`.as('departed_at'),
@@ -213,7 +258,9 @@ export class VaultService {
       )
       .groupBy(custodyEvent.itemId)
       .as('departure');
+  }
 
+  private historyConditions(userId: string, filter: VaultFilter) {
     const conditions = [
       or(
         and(eq(item.ownerId, userId), inArray(item.lifecycleState, TERMINAL)),
@@ -223,12 +270,29 @@ export class VaultService {
     if (filter.type) conditions.push(eq(item.typeClass, filter.type));
     if (filter.condition) conditions.push(eq(item.conditionGrade, filter.condition));
     if (filter.q) conditions.push(this.searchClause(filter.q));
+    return conditions;
+  }
+
+  private async listHistory(userId: string, filter: VaultFilter) {
+    const limit = clampLimit(filter.limit, { max: VAULT_PAGE_MAX, fallback: VAULT_PAGE_DEFAULT });
+    const departure = this.departures(userId);
+    const conditions = this.historyConditions(userId, filter);
+    if (filter.cursor !== undefined) {
+      if (!UUID.test(filter.cursor)) throw badCursor();
+      const [after] = await this.db
+        .select({ id: item.id, occurredAt: sql<string>`${departure.occurredAt}::text` })
+        .from(departure)
+        .innerJoin(item, eq(item.id, departure.itemId))
+        .where(and(eq(item.id, filter.cursor), ...this.historyConditions(userId, {})))
+        .limit(1);
+      if (!after) throw badCursor();
+      conditions.push(sql`(${departure.occurredAt}, ${item.id}) < (${after.occurredAt}::timestamptz, ${after.id}::uuid)`);
+    }
 
     const rows = await this.db
       .select({
         id: item.id,
         serialNumber: item.serialNumber,
-        barcode: item.barcode,
         typeClass: item.typeClass,
         description: item.description,
         conditionGrade: item.conditionGrade,
@@ -244,7 +308,7 @@ export class VaultService {
       .from(departure)
       .innerJoin(item, eq(item.id, departure.itemId))
       .where(and(...conditions))
-      .orderBy(sql`${departure.occurredAt} desc`)
+      .orderBy(sql`${departure.occurredAt} desc`, sql`${item.id} desc`)
       .limit(limit);
 
     return Promise.all(
@@ -252,11 +316,8 @@ export class VaultService {
         ...row,
         departedAt: toIso(row.departedAt),
         holdFlag: false,
-        binId: null,
-        binBarcode: null,
-        binZone: null,
         historical: true as const,
-        departure: withReason ? await this.departure(row.id, userId) : null,
+        departure: await this.departure(row.id, userId),
       })),
     );
   }
@@ -302,12 +363,17 @@ export class VaultService {
   }
 
   async counts(userId: string, q?: string) {
-    const [active, hold, history] = await Promise.all([
-      this.listOwned(userId, { q, scope: 'active', limit: 200 }),
-      this.listOwned(userId, { q, scope: 'hold', limit: 200 }),
-      this.listHistory(userId, { q, limit: 200 }, false),
+    const departure = this.departures(userId);
+    const [[active], [hold], [history]] = await Promise.all([
+      this.db.select({ n: sql<number>`count(*)::int` }).from(item).where(and(...this.ownedConditions(userId, 'active', { q }))),
+      this.db.select({ n: sql<number>`count(*)::int` }).from(item).where(and(...this.ownedConditions(userId, 'hold', { q }))),
+      this.db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(departure)
+        .innerJoin(item, eq(item.id, departure.itemId))
+        .where(and(...this.historyConditions(userId, { q }))),
     ]);
-    return { active: active.length, hold: hold.length, history: history.length };
+    return { active: active?.n ?? 0, hold: hold?.n ?? 0, history: history?.n ?? 0 };
   }
 
   async storageFor(userId: string, itemId: string) {
@@ -366,12 +432,13 @@ export class VaultService {
       : periodsBilled;
 
     const [intake] = await this.db
-      .select({ amount: charge.amount })
+      .select({ amount: charge.amount, snapshot: charge.pricingRuleSnapshot })
       .from(charge)
       .where(and(eq(charge.actionType, 'intake'), eq(charge.referenceId, itemId)))
       .orderBy(sql`${charge.createdAt} desc`)
       .limit(1);
-    const intakeMinor = intake?.amount ?? rule?.value ?? 0;
+    const listed = Number((intake?.snapshot as { listMinor?: unknown } | null)?.listMinor);
+    const intakeMinor = Number.isFinite(listed) && listed > 0 ? listed : (intake?.amount ?? rule?.value ?? 0);
 
     const received = it.receivedAt;
     const accruing = Boolean(received) && it.lifecycleState === 'stored' && !it.lotBroken && Boolean(standard);
@@ -398,21 +465,13 @@ export class VaultService {
   private async coveredByMembership(userId: string, itemId: string): Promise<boolean> {
     const result = await this.db.execute<{ covered: boolean }>(sql`
       WITH cap AS (
-        SELECT COALESCE((pr.parameters ->> 'storedItems')::int, 0) AS stored_items
+        SELECT m.honoured_stored_items AS stored_items
           FROM membership m
-          JOIN LATERAL (
-            SELECT parameters
-              FROM pricing_rule
-             WHERE action_type = 'membership:' || m.tier
-               AND effective_from <= now()
-               AND (effective_to IS NULL OR effective_to > now())
-             ORDER BY effective_from DESC
-             LIMIT 1
-          ) pr ON TRUE
          WHERE m.user_id = ${userId}::uuid
            AND m.status IN ('active', 'cancelling')
            AND now() >= m.current_period_start
            AND now() <  m.current_period_end
+           AND now() <  m.honoured_until
       ),
       ranked AS (
         SELECT i.id, row_number() OVER (ORDER BY i.received_at ASC, i.id ASC) AS rn
@@ -438,17 +497,22 @@ export class VaultService {
 
     const images = await this.db.select().from(itemImage).where(eq(itemImage.itemId, itemId));
     const signedImages = await Promise.all(
-      images.map(async (img) => ({
-        ...img,
-        url: await this.storage.getSignedUrl(img.objectKey),
-      })),
+      images.map(async (img) => collectorImageView(img, await this.storage.getSignedUrl(img.objectKey))),
     );
 
-    const history = await this.db
+    const custody = await this.db
       .select()
       .from(custodyEvent)
       .where(eq(custodyEvent.itemId, itemId))
       .orderBy(sql`${custodyEvent.occurredAt} desc`);
+    const windows = holdingWindows(custody, userId);
+    const history = custody
+      .filter(
+        (e) =>
+          e.eventType !== 'relocate' &&
+          (e.prevOwnerId === userId || e.newOwnerId === userId || heldAt(windows, e.occurredAt)),
+      )
+      .map(collectorCustodyView);
 
     const openRequests = await this.db
       .select({
@@ -467,6 +531,6 @@ export class VaultService {
       )
       .orderBy(sql`${serviceRequest.createdAt} desc`);
 
-    return { item: it, images: signedImages, history, openRequests };
+    return { item: collectorItemView(it), images: signedImages, history, openRequests };
   }
 }

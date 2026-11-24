@@ -1,5 +1,8 @@
-import { pgEnum, pgTable, text, boolean, integer, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, boolean, integer, jsonb, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
+import { consignmentEvent } from '../dis/consignment-event.schema';
+import { shipmentGroup } from './shipment-group.schema';
 
 export const shipmentStatus = pgEnum('shipment_status', [
   'requested',
@@ -15,10 +18,19 @@ export const shipmentStatus = pgEnum('shipment_status', [
   'cancelled',
 ]);
 
+export const OPEN_SHIPMENT_STATUSES = [
+  'requested',
+  'awaiting_payment',
+  'rates_selected',
+  'picking',
+  'packed',
+  'labeled',
+] as const;
+
 export const shipment = pgTable('shipment', {
   id: pkId(),
   code: text('code'),
-  userId: text('user_id').notNull(),
+  userId: uuid('user_id').notNull().references(() => userAccount.id, { onDelete: 'restrict' }),
   itemIds: jsonb('item_ids').notNull(),
   destinationAddress: text('destination_address').notNull(),
   recipientName: text('recipient_name'),
@@ -37,14 +49,14 @@ export const shipment = pgTable('shipment', {
   deliverTo: timestamp('deliver_to', { withTimezone: true }),
   quoteMinor: integer('quote_minor'),
   quoteNotes: text('quote_notes'),
-  quotedBy: text('quoted_by'),
+  quotedBy: uuid('quoted_by').references(() => userAccount.id, { onDelete: 'restrict' }),
   quotedAt: timestamp('quoted_at', { withTimezone: true }),
 
-  pickupEventId: text('pickup_event_id'),
+  pickupEventId: uuid('pickup_event_id').references(() => consignmentEvent.id, { onDelete: 'restrict' }),
 
   handedToName: text('handed_to_name'),
   handedOverAt: timestamp('handed_over_at', { withTimezone: true }),
-  handedOverBy: text('handed_over_by'),
+  handedOverBy: uuid('handed_over_by').references(() => userAccount.id, { onDelete: 'restrict' }),
   serviceMode: text('service_mode').notNull().default('personalised'),
   rushFlag: boolean('rush_flag').notNull().default(false),
 
@@ -56,8 +68,8 @@ export const shipment = pgTable('shipment', {
   customsLines: jsonb('customs_lines'),
   customerNotes: text('customer_notes'),
 
-  mergedIntoShipmentId: text('merged_into_shipment_id'),
-  groupId: text('group_id'),
+  mergedIntoShipmentId: uuid('merged_into_shipment_id').references((): AnyPgColumn => shipment.id, { onDelete: 'restrict' }),
+  groupId: uuid('group_id').references(() => shipmentGroup.id, { onDelete: 'restrict' }),
   paymentDueAt: timestamp('payment_due_at', { withTimezone: true }),
   cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
   cancelReason: text('cancel_reason'),
@@ -75,7 +87,7 @@ export const shipment = pgTable('shipment', {
   packageWeightGrams: integer('package_weight_grams'),
   fulfillmentNotes: text('fulfillment_notes'),
   fulfillment: jsonb('fulfillment'),
-  fulfilledBy: text('fulfilled_by'),
+  fulfilledBy: uuid('fulfilled_by').references(() => userAccount.id, { onDelete: 'restrict' }),
   fulfilledAt: timestamp('fulfilled_at', { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

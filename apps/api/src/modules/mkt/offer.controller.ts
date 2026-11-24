@@ -1,6 +1,6 @@
 import { Body, Controller, Headers, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsInt, IsIn, IsOptional, IsPositive, IsString } from 'class-validator';
+import { IsInt, IsIn, IsOptional, IsPositive } from 'class-validator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { OfferService } from './offer.service';

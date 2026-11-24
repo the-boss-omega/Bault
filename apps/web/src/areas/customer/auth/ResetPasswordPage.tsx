@@ -4,6 +4,7 @@ import { useT } from '../../../shared/i18n';
 import { navigate } from '../../../shared/routing';
 import { PASSWORD_MIN } from '../../../shared/names';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
+import { AuthCard } from './AuthCard';
 
 export function ResetPasswordPage({ token }: { token: string | null }) {
   const t = useT();
@@ -12,13 +13,18 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [expired, setExpired] = useState(false);
 
   const tooShort = password.length > 0 && password.length < PASSWORD_MIN;
   const mismatch = confirm.length > 0 && confirm !== password;
   const ready = password.length >= 8 && confirm === password;
 
   function goToSignIn() {
-    navigate({ section: '' }, { replace: true });
+    navigate({ section: 'signin' }, { replace: true });
+  }
+
+  function askAgain() {
+    navigate({ section: 'forgot' }, { replace: true });
   }
 
   async function submit(e: FormEvent) {
@@ -30,7 +36,9 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
       await api.post('/auth/password/reset', { token, newPassword: password });
       setDone(true);
     } catch (err) {
-      const key = err instanceof ApiError && err.status === 410 ? 'auth.resetLinkInvalid' : apiErrorKey(err);
+      const gone = err instanceof ApiError && err.status === 410;
+      setExpired(gone);
+      const key = gone ? 'auth.resetLinkInvalid' : apiErrorKey(err);
       setError(key ? t(key) : (err as Error).message);
     } finally {
       setBusy(false);
@@ -39,31 +47,42 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
 
   if (!token) {
     return (
-      <section className="auth-card">
-        <h2>{t('auth.resetTitle')}</h2>
+      <AuthCard as="section" kicker={t('auth.kicker.reset')} title={t('auth.resetTitle')}>
         <ErrorState message={t('auth.resetNoToken')} />
-        <Button variant="gold" block onClick={goToSignIn}>
-          {t('auth.goToSignIn')}
+        <Button variant="primary" block onClick={askAgain}>
+          {t('auth.resetAskAgain')}
         </Button>
-      </section>
+        <Button variant="link" onClick={goToSignIn}>
+          {t('auth.backToSignIn')}
+        </Button>
+      </AuthCard>
     );
   }
 
   if (done) {
     return (
-      <section className="auth-card">
-        <h2>{t('auth.resetTitle')}</h2>
+      <AuthCard as="section" kicker={t('auth.kicker.reset')} title={t('auth.resetTitle')}>
         <SuccessNote>{t('auth.resetDone')}</SuccessNote>
-        <Button variant="gold" block onClick={goToSignIn}>
+        <Button variant="primary" block onClick={goToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
-      </section>
+      </AuthCard>
     );
   }
 
   return (
-    <form className="auth-card" onSubmit={submit}>
-      <h2>{t('auth.resetTitle')}</h2>
+    <AuthCard
+      kicker={t('auth.kicker.reset')}
+      title={t('auth.resetTitle')}
+      onSubmit={submit}
+      stub={
+        <p className="auth-switch">
+          <Button variant="link" onClick={goToSignIn}>
+            {t('auth.backToSignIn')}
+          </Button>
+        </p>
+      }
+    >
       <p className="field-hint">{t('auth.resetIntro')}</p>
 
       <Field
@@ -98,15 +117,15 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
 
       {error && <ErrorState message={error} />}
 
-      <Button variant="gold" type="submit" block disabled={busy || !ready}>
+      {expired && (
+        <Button variant="secondary" block onClick={askAgain}>
+          {t('auth.resetAskAgain')}
+        </Button>
+      )}
+
+      <Button variant="primary" type="submit" block disabled={busy || !ready}>
         {t('auth.resetSubmit')}
       </Button>
-
-      <p className="auth-switch">
-        <button className="btn--link" type="button" onClick={goToSignIn}>
-          {t('auth.backToSignIn')}
-        </button>
-      </p>
-    </form>
+    </AuthCard>
   );
 }

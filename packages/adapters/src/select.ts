@@ -13,6 +13,7 @@ export type PaymentSelection = Runtime & {
   PAYPAL_CLIENT_SECRET: string;
   PAYPAL_ENVIRONMENT: 'sandbox' | 'live';
   PAYPAL_WEBHOOK_ID: string;
+  PAYPAL_PAYOUT_NOTE?: string;
 };
 
 export type ShippingSelection = Runtime & {
@@ -48,6 +49,7 @@ export function createPaymentAdapter(env: PaymentSelection): PaymentAdapter {
       clientSecret: env.PAYPAL_CLIENT_SECRET,
       environment: env.PAYPAL_ENVIRONMENT,
       webhookId: env.PAYPAL_WEBHOOK_ID,
+      payoutNote: env.PAYPAL_PAYOUT_NOTE,
     });
   }
 

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { generateToken, hashToken } from '../../shared/tokens';
@@ -47,16 +47,22 @@ export class SessionService {
         revokedAt: loginSession.revokedAt,
         role: userAccount.role,
         status: userAccount.status,
-        mfaEnabledAt: mfaFactor.enabledAt,
+        mfaMethod: mfaFactor.method,
       })
       .from(loginSession)
       .innerJoin(userAccount, eq(userAccount.id, loginSession.userId))
-      .leftJoin(mfaFactor, eq(mfaFactor.userId, loginSession.userId))
+      .leftJoin(mfaFactor, and(eq(mfaFactor.userId, loginSession.userId), isNotNull(mfaFactor.enabledAt)))
       .where(and(eq(loginSession.tokenHash, hashToken(rawToken)), isNull(loginSession.revokedAt)))
       .limit(1);
 
     if (!row || row.expiresAt.getTime() < Date.now()) return null;
-    return { id: row.userId, role: row.role, status: row.status, mfaEnabled: row.mfaEnabledAt !== null };
+    return {
+      id: row.userId,
+      role: row.role,
+      status: row.status,
+      mfaEnabled: row.mfaMethod !== null,
+      mfaMethod: row.mfaMethod,
+    };
   }
 
   async revoke(rawToken: string): Promise<void> {

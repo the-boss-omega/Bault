@@ -93,7 +93,7 @@ done
 ufw --force enable
 ufw status verbose
 
-step "SSH: keys only"
+step "SSH: keys only, and nothing forwarded"
 if [ ! -s "$keys" ] && [ ! -s /root/.ssh/authorized_keys ]; then
   die "no SSH key is installed for ${DEPLOY_USER} or root; refusing to disable password login (pass a key file)"
 fi
@@ -102,6 +102,13 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin prohibit-password
 PubkeyAuthentication yes
+AllowAgentForwarding no
+AllowTcpForwarding no
+AllowStreamLocalForwarding no
+X11Forwarding no
+PermitTunnel no
+MaxAuthTries 3
+LoginGraceTime 30
 EOF
 sshd -t
 systemctl reload ssh 2>/dev/null || systemctl restart ssh

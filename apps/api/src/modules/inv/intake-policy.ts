@@ -38,7 +38,7 @@ const REFUSAL_REASON: Record<string, string> = {
   liquid_or_glass:
     'A broken container in a parcel damages every other item travelling with it, including other collectors’ property.',
   flammable: 'Flammable goods are dangerous goods, and cannot be stored or forwarded.',
-  medical: 'Medicines and supplements are regulated goods that Bault is not licensed to hold.',
+  medical: 'Medicines and supplements are regulated goods that Card Embassy is not licensed to hold.',
   cosmetics: 'Cosmetics and perfume are commonly flammable and are restricted in air freight.',
   adult_material: 'Not accepted for storage or forwarding.',
   other_prohibited:
@@ -58,7 +58,7 @@ const RULES: IntakePolicy['rules'] = [
     id: 'trackers',
     heading: 'Do not put a tracker in a parcel you send us',
     body:
-      'A GPS tracker or AirTag found in an arriving parcel is removed and destroyed, and you are told that it was. This is the same rule the carriers apply to us, and it holds even though Bault will sell you a tracker on the way out: an outbound tracker travels in a parcel Bault packed, declared and insured, and is handed to you on delivery. An inbound one arrives undeclared in somebody else’s freight.',
+      'A GPS tracker or AirTag found in an arriving parcel is removed and destroyed, and you are told that it was. This is the same rule the carriers apply to us, and it holds even though Card Embassy will sell you a tracker on the way out: an outbound tracker travels in a parcel Card Embassy packed, declared and insured, and is handed to you on delivery. An inbound one arrives undeclared in somebody else’s freight.',
   },
   {
     id: 'refusal-record',

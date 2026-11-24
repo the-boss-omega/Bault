@@ -3,8 +3,19 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { Client, SEED, signIn } from './helpers/http';
-import { closeDb } from './helpers/db';
-import { MFA_PASSWORD, activeAccount, challenge, codeAt, enrol, type Account } from './helpers/mfa';
+import { closeDb, sql } from './helpers/db';
+import {
+  MFA_PASSWORD,
+  activeAccount,
+  challenge,
+  codeAt,
+  deliverCodes,
+  emailChallenge,
+  enrol,
+  enrolByEmail,
+  mailedCode,
+  type Account,
+} from './helpers/mfa';
 
 let child: ChildProcess | null = null;
 let base = '';
@@ -135,5 +146,63 @@ describe('the same API', () => {
       new Client(base).post('/auth/login/mfa', { challengeToken: there, code }),
     ]);
     expect(results.map((r) => r.status).sort()).toEqual([200, 401]);
+  });
+
+  it('lets one emailed code open one session even when two API processes are asked at once', async () => {
+    const account = await activeAccount('emxproc');
+    await enrolByEmail(await signedInThere(account).then((s) => s.client), account);
+    const here = await emailChallenge(account);
+    const there = await emailChallenge(account, base);
+    const code = await mailedCode(account);
+    const results = await Promise.all([
+      new Client().post('/auth/login/mfa', { challengeToken: here.token, code }),
+      new Client(base).post('/auth/login/mfa', { challengeToken: there.token, code }),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 401]);
+  });
+});
+
+describe('email codes and a role that must use an authenticator', () => {
+  it('are not offered to staff, and are refused if asked for', async () => {
+    const operator = await staff('emop', 'warehouse_operator');
+    const { client } = await signedInThere(operator);
+    expect((await client.get('/auth/mfa')).body).toMatchObject({ required: true, methods: ['totp'] });
+    const res = await client.post('/auth/mfa/setup', { method: 'email' });
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('mfa_method_not_allowed');
+    expect(await deliverCodes(operator)).toEqual([]);
+  });
+
+  it('do not count for a collector made staff: they are held to set up the app, which then replaces the email codes', async () => {
+    const account = await activeAccount('empromo');
+    await enrolByEmail(await signedInThere(account).then((s) => s.client), account);
+    const admin = await signIn(SEED.admin);
+    expect((await admin.patch(`/admin/users/${account.id}`, { role: 'warehouse_operator' })).status).toBe(200);
+    promoted.push(account.id);
+
+    const { token } = await emailChallenge(account, base);
+    const client = new Client(base);
+    const signedIn = await client.post('/auth/login/mfa', { challengeToken: token, code: await mailedCode(account) });
+    expect(signedIn.status, JSON.stringify(signedIn.body)).toBe(200);
+    expect(signedIn.body).toMatchObject({ role: 'warehouse_operator', mfaEnrollmentRequired: true });
+
+    const blocked = await client.get('/custody/bins');
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.error.code).toBe('mfa_enrollment_required');
+    expect((await client.get('/me/profile')).body).toMatchObject({ mfaEnabled: true, mfaMethod: 'email', mfaRequired: true });
+    expect((await client.get('/auth/mfa')).body).toMatchObject({ enabled: true, method: 'email', methods: ['totp'] });
+
+    const off = await client.post('/auth/mfa/disable', { password: MFA_PASSWORD, code: '000000' });
+    expect(off.status).toBe(403);
+
+    const { secret } = await enrol(client);
+    expect((await client.get('/custody/bins')).status).toBe(200);
+    const factors = await sql<{ method: string }>(`SELECT method FROM mfa_factor WHERE user_id = $1`, [account.id]);
+    expect(factors).toEqual([{ method: 'totp' }]);
+
+    const again = await new Client(base).post('/auth/login', { identifier: account.username, password: MFA_PASSWORD });
+    expect(again.body).toMatchObject({ status: 'mfa_required', method: 'totp' });
+    const ok = await new Client(base).post('/auth/login/mfa', { challengeToken: again.body.challengeToken, code: codeAt(secret, 1) });
+    expect(ok.body).toMatchObject({ mfaEnrollmentRequired: false });
   });
 });

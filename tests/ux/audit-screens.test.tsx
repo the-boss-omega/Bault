@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const post = vi.fn();
@@ -156,7 +156,9 @@ describe('the sign-up form explains every field it blocks on', () => {
     await fill(user, { Email: 'nope' });
 
     expect(screen.getByText(/does not look like an email address/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign up' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Sign up' }));
+    expect(post).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByLabelText('Email', { exact: true }));
   });
 
   it('says the password is too short, and how short is too short', async () => {
@@ -165,7 +167,8 @@ describe('the sign-up form explains every field it blocks on', () => {
     await fill(user, { Password: 'abc' });
 
     expect(screen.getByText(/at least 8 characters/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign up' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Sign up' }));
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('cannot be submitted twice by pressing it twice', async () => {
@@ -197,11 +200,12 @@ describe('the sign-up form asks for consent to the terms', () => {
     const submit = screen.getByRole('button', { name: 'Sign up' });
     expect(consentBox()).not.toBeChecked();
     expect(consentBox()).toBeRequired();
-    expect(submit).toBeDisabled();
     expect(screen.getByText(/the version you accept, and when, is recorded/i)).toBeInTheDocument();
+    await user.click(submit);
+    expect(post).not.toHaveBeenCalled();
+    expect(screen.getByText('Tick the box to agree to the terms before you sign up.')).toBeInTheDocument();
 
     await user.click(consentBox());
-    expect(submit).toBeEnabled();
     await user.click(submit);
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
@@ -316,23 +320,22 @@ describe('a button that charges the wallet names the charge', () => {
 });
 
 describe('visual weight', () => {
-  it('gives the primitive one primary variant, not nine', () => {
+  it('gives the primitive one primary variant, and the rest are lines', () => {
     renderIn(
       <>
-        <Button variant="gold">Primary</Button>
+        <Button variant="primary">Primary</Button>
         <Button variant="secondary">Ordinary</Button>
         <Button variant="danger">Irreversible</Button>
       </>,
     );
-    expect(screen.getByRole('button', { name: 'Primary' })).toHaveClass('btn--gold');
+    expect(screen.getByRole('button', { name: 'Primary' })).toHaveClass('btn--primary');
     expect(screen.getByRole('button', { name: 'Ordinary' })).toHaveClass('btn--secondary');
     expect(screen.getByRole('button', { name: 'Irreversible' })).toHaveClass('btn--danger');
   });
 });
 
-describe('changing language before signing in', () => {
-  it('is an icon with a menu, not the name of the other language', async () => {
-    const user = userEvent.setup();
+describe('the page before signing in', () => {
+  it('offers no choice of language: the product has one', async () => {
     const { AuthShell } = await import('../../apps/web/src/areas/customer/auth/AuthPage');
     renderIn(
       <AuthShell>
@@ -340,16 +343,8 @@ describe('changing language before signing in', () => {
       </AuthShell>,
     );
 
-    expect(screen.queryByRole('button', { name: 'עברית' })).toBeNull();
-
-    const trigger = screen.getByRole('button', { name: /switch language/i });
-    expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
-
-    await user.click(trigger);
-    const menu = await screen.findByRole('menu');
-    expect(within(menu).getByRole('menuitemradio', { name: /English/ })).toBeInTheDocument();
-    expect(within(menu).getByRole('menuitemradio', { name: /עברית/ })).toBeInTheDocument();
-    expect(within(menu).getByRole('menuitemradio', { checked: true })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /language/i })).toBeNull();
+    expect(screen.queryByRole('menuitemradio')).toBeNull();
   });
 });
 
@@ -361,15 +356,16 @@ describe('the words the product uses', () => {
     const allowed = new Set([
       'money.route.card',
       'money.routeDesc.card',
+      'money.routeDescPaypal.card',
       'wallet.request.funding.card',
       'itemClass.trading_card',
       'itemClass.oversized_card',
-      'consign.channel.card_show',
       'landing.price.intake',
     ]);
 
+    // The product's own name has the word in it, and calls nothing a card.
     const strays = Object.entries(en)
-      .filter(([key, value]) => !allowed.has(key) && /\bcards?\b/i.test(value))
+      .filter(([key, value]) => !allowed.has(key) && /\bcards?\b/i.test(value.replace(/Card Embassy/g, '')))
       .map(([key]) => key);
     expect(strays).toEqual([]);
   });

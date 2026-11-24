@@ -1,14 +1,16 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -29,6 +31,8 @@ class IntakeItemDto {
   @IsOptional() @IsString() conditionGrade?: string;
   @IsOptional() @IsString() binId?: string;
   @IsOptional() @IsBoolean() autoStow?: boolean;
+  @IsOptional() @IsIn(['shelf', 'later']) placement?: 'shelf' | 'later';
+  @IsOptional() @IsString() @MaxLength(200) placementReason?: string;
   @IsOptional() @IsInt() @Min(1) @Max(100000) weightGrams?: number;
   @IsOptional() @IsString() serialNumber?: string;
   @IsOptional() @IsString() barcode?: string;
@@ -49,11 +53,16 @@ class IntakeUnitsDto {
 }
 
 class CorrectionPatch {
-  @IsString() field!: string;
-  @IsString() value!: string;
+  @IsString() @MaxLength(40) field!: string;
+  @IsString() @MaxLength(500) value!: string;
 }
 class CorrectDto {
-  @IsArray() @ValidateNested({ each: true }) @Type(() => CorrectionPatch) patches!: CorrectionPatch[];
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => CorrectionPatch)
+  patches!: CorrectionPatch[];
 }
 
 class OpenBatchDto {
@@ -61,13 +70,18 @@ class OpenBatchDto {
   @IsOptional() @IsString() ownerIntakeId?: string;
 }
 class SplitItemDto {
-  @IsString() typeClass!: string;
-  @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() conditionGrade?: string;
-  @IsOptional() @IsString() binId?: string;
+  @IsString() @MaxLength(40) typeClass!: string;
+  @IsOptional() @IsString() @MaxLength(500) description?: string;
+  @IsOptional() @IsString() @MaxLength(60) conditionGrade?: string;
+  @IsOptional() @IsString() @MaxLength(120) binId?: string;
 }
 class SplitDto {
-  @IsArray() @ValidateNested({ each: true }) @Type(() => SplitItemDto) items!: SplitItemDto[];
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => SplitItemDto)
+  items!: SplitItemDto[];
 }
 
 @ApiTags('INV')
@@ -81,13 +95,21 @@ export class InvController {
   ) {}
 
   @Post('items')
-  createItem(@Body() dto: IntakeItemDto, @CurrentUser() user: AuthUser) {
-    return this.intake.intakeItem(user.id, dto);
+  createItem(
+    @Body() dto: IntakeItemDto,
+    @CurrentUser() user: AuthUser,
+    @Headers('idempotency-key') key?: string,
+  ) {
+    return this.intake.intakeOne(user.id, dto, key);
   }
 
   @Post('items/batch')
-  createUnits(@Body() dto: IntakeUnitsDto, @CurrentUser() user: AuthUser) {
-    return this.intake.intakeUnits(user.id, dto.units);
+  createUnits(
+    @Body() dto: IntakeUnitsDto,
+    @CurrentUser() user: AuthUser,
+    @Headers('idempotency-key') key?: string,
+  ) {
+    return this.intake.intakeUnits(user.id, dto.units, key);
   }
 
   @Get('lots')

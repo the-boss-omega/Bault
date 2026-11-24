@@ -1,3 +1,4 @@
+import type { TierKey } from './tiers';
 import type { MessageKey, TranslateFn } from './i18n';
 
 export interface CarrierServiceInfo {
@@ -71,6 +72,9 @@ export interface QuotedRate {
   } | null;
   coveredMinor?: number;
   totalMinor: number;
+  tier?: TierKey;
+  discountBps?: number;
+  listTotalMinor?: number;
   recommended: boolean;
 }
 
@@ -104,6 +108,26 @@ export function serviceLabel(
 ): string {
   const key = SERVICE_KEY[service.key ?? service.serviceKey ?? ''];
   return key ? t(key) : `${service.carrier} ${service.serviceLevel}`;
+}
+
+const SERVICE_BY_NAME: Record<string, MessageKey> = {
+  'USPS|Ground Advantage': 'ship.svc.usps_ground',
+  'USPS|Priority Mail': 'ship.svc.usps_priority',
+  'FedEx|2Day': 'ship.svc.fedex_2day',
+  'USPS|First-Class International': 'ship.svc.epacket',
+  'USPS|Priority Mail International': 'ship.svc.epost',
+  'ePacket|International': 'ship.svc.epacket',
+  'ePost|International': 'ship.svc.epost',
+  'FedEx|International Priority': 'ship.svc.fedex_intl_priority',
+  'FedEx|Direct Overnight': 'ship.svc.direct_overnight',
+};
+
+export function shipmentServiceLabel(
+  t: TranslateFn,
+  shipment: { carrier: string | null; serviceLevel: string | null },
+): string {
+  const key = SERVICE_BY_NAME[`${shipment.carrier ?? ''}|${shipment.serviceLevel ?? ''}`];
+  return key ? t(key) : (shipment.carrier ?? '');
 }
 
 const BOX_KEY: Record<string, MessageKey> = {
@@ -143,4 +167,18 @@ export function ruleLabel(t: TranslateFn, problem: RateProblem): string {
 export function formatWeight(grams: number): string {
   if (grams < 1000) return `${grams} g`;
   return `${(grams / 1000).toFixed(grams < 10_000 ? 2 : 1)} kg`;
+}
+
+const TRACKING_PAGES: Record<string, (number: string) => string> = {
+  usps: (n) => `https://tools.usps.com/go/TrackConfirmAction?tLabels=${n}`,
+  ups: (n) => `https://www.ups.com/track?tracknum=${n}`,
+  fedex: (n) => `https://www.fedex.com/fedextrack/?trknbr=${n}`,
+  dhl: (n) => `https://www.dhl.com/global-en/home/tracking/tracking-express.html?submit=1&tracking-id=${n}`,
+};
+
+export function trackingUrl(carrier: string | null | undefined, trackingNumber: string | null | undefined): string | null {
+  const number = trackingNumber?.trim();
+  if (!carrier || !number) return null;
+  const page = TRACKING_PAGES[carrier.trim().toLowerCase()];
+  return page ? page(encodeURIComponent(number)) : null;
 }

@@ -5,6 +5,7 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
+import { formatMinor } from '../../shared/money';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { IdempotencyService } from '../../shared/idempotency/idempotency.service';
 import { CustodyService } from '../cst/custody.service';
@@ -14,6 +15,7 @@ import { userAccount } from '../acc/acc.schema';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { MediaService } from '../med/media.service';
+import { PricingService } from '../prc/pricing.service';
 import { isKnownItemClass, itemClass } from '../inv/item-classes';
 import { makeItemBarcode, makeItemSerial } from '../inv/labels';
 import { transaction } from './mkt.schema';
@@ -34,9 +36,7 @@ export interface HousePurchaseResult {
   orderCode: string;
   itemId: string;
   serialNumber: string;
-  barcode: string;
   price: number;
-  transactionId: string;
   replayed?: boolean;
 }
 
@@ -50,6 +50,7 @@ export class HouseStoreService {
     private readonly outbox: OutboxService,
     private readonly idempotency: IdempotencyService,
     private readonly media: MediaService,
+    private readonly pricing: PricingService,
   ) {}
 
   listForSale() {
@@ -154,11 +155,16 @@ export class HouseStoreService {
         throw new AppError(ErrorCode.SELF_DEALING_FORBIDDEN, 'The store cannot buy from itself', 403);
       }
 
-      const price = product.askingPrice;
+      const quote = await this.pricing.quoteFor(buyerId, product.askingPrice, tx as Database);
+      const price = quote.chargedMinor;
       const currency = product.currency;
       const balance = await this.ledger.balanceOf(buyerId, tx);
       if (balance.amount < price) {
-        throw new AppError(ErrorCode.INSUFFICIENT_BALANCE, 'Insufficient wallet balance', 409);
+        throw new AppError(
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `Your balance is ${formatMinor(balance.amount)} and this card costs ${formatMinor(price)}. Add money first, then buy it.`,
+          409,
+        );
       }
 
       const serialNumber = makeItemSerial();
@@ -188,7 +194,8 @@ export class HouseStoreService {
             source: 'house_store',
             houseListingId: product.id,
             houseListingCode: product.code,
-            askingPrice: price,
+            askingPrice: product.askingPrice,
+            ...quote,
           },
           currency,
         })
@@ -224,9 +231,7 @@ export class HouseStoreService {
         orderCode,
         itemId: created.id,
         serialNumber: created.serialNumber,
-        barcode: created.barcode,
         price,
-        transactionId: txn.id,
       };
       await this.idempotency.complete(tx as Database, key, endpoint, 201, result);
       return result;

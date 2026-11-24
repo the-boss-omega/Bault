@@ -23,10 +23,12 @@ export class AppError extends HttpException {
   static emailUnverified(message: string): AppError {
     return new AppError(ErrorCode.EMAIL_UNVERIFIED, message, HttpStatus.FORBIDDEN);
   }
-  static accountSuspended(): AppError {
+  static accountSuspended(status?: string | null): AppError {
     return new AppError(
       ErrorCode.ACCOUNT_SUSPENDED,
-      'This account is suspended or closed.',
+      status === 'suspended'
+        ? 'Your account is suspended. You can still open a support ticket.'
+        : 'This account is closed.',
       HttpStatus.FORBIDDEN,
     );
   }

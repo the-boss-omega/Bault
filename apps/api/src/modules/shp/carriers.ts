@@ -1,12 +1,15 @@
 import { DIM_DIVISOR, type BillingIncrement, type Rate } from '@bault/adapters';
+import { usdAmount } from './shipping-options';
 
 export interface Destination {
   country: string;
   postalCode: string;
   name?: string;
   street1?: string;
+  street2?: string;
   city?: string;
   region?: string;
+  phone?: string;
 }
 
 export function destinationOf(s: {
@@ -116,8 +119,8 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
   },
   {
     key: 'epacket',
-    carrier: 'ePacket',
-    serviceLevel: 'International',
+    carrier: 'USPS',
+    serviceLevel: 'First-Class International',
     scope: 'international',
     countries: EPACKET_COUNTRIES,
     maxWeightGrams: 1_814,
@@ -129,11 +132,12 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     billingIncrement: 'ounce',
     maxLongestSideCm: 60.96,
     maxDimensionSumCm: 91.44,
+    easypost: { carrier: 'USPS', services: ['FirstClassPackageInternationalService'] },
   },
   {
     key: 'epost',
-    carrier: 'ePost',
-    serviceLevel: 'International',
+    carrier: 'USPS',
+    serviceLevel: 'Priority Mail International',
     scope: 'international',
     countries: [],
     maxWeightGrams: 9_072,
@@ -145,6 +149,7 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     billingIncrement: 'pound',
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
+    easypost: { carrier: 'USPS', services: ['PriorityMailInternational'] },
   },
   {
     key: 'fedex_intl_priority',
@@ -235,10 +240,6 @@ export interface ServiceProblem {
   limit?: string;
 }
 
-function usd(minor: number): string {
-  return `$${(minor / 100).toFixed(2)}`;
-}
-
 function inches(cm: number): string {
   return `${Math.round(cm / 2.54)} in`;
 }
@@ -280,8 +281,8 @@ export function checkService(service: CarrierService, parcel: ParcelProfile): Se
   if (service.maxCustomsValueMinor > 0 && parcel.customsValueMinor > service.maxCustomsValueMinor) {
     problems.push({
       rule: 'customs_value',
-      message: `${service.carrier} ${service.serviceLevel} carries up to ${usd(service.maxCustomsValueMinor)} of declared value.`,
-      limit: usd(service.maxCustomsValueMinor),
+      message: `${service.carrier} ${service.serviceLevel} carries up to ${usdAmount(service.maxCustomsValueMinor)} of declared value.`,
+      limit: usdAmount(service.maxCustomsValueMinor),
     });
   }
   if (parcel.insuredValueMinor > 0 && parcel.insuredValueMinor > service.maxInsuredValueMinor) {
@@ -290,8 +291,8 @@ export function checkService(service: CarrierService, parcel: ParcelProfile): Se
       message:
         service.maxInsuredValueMinor === 0
           ? `${service.carrier} ${service.serviceLevel} cannot be insured.`
-          : `${service.carrier} ${service.serviceLevel} insures up to ${usd(service.maxInsuredValueMinor)}.`,
-      limit: service.maxInsuredValueMinor === 0 ? '—' : usd(service.maxInsuredValueMinor),
+          : `${service.carrier} ${service.serviceLevel} insures up to ${usdAmount(service.maxInsuredValueMinor)}.`,
+      limit: service.maxInsuredValueMinor === 0 ? '—' : usdAmount(service.maxInsuredValueMinor),
     });
   }
   if (parcel.signatureRequired && !service.signatureAvailable) {
@@ -333,8 +334,4 @@ export function checkService(service: CarrierService, parcel: ParcelProfile): Se
     });
   }
   return problems;
-}
-
-export function eligibleServices(parcel: ParcelProfile): CarrierService[] {
-  return CARRIER_SERVICES.filter((s) => checkService(s, parcel).length === 0);
 }

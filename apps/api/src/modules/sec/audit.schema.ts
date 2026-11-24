@@ -1,9 +1,10 @@
-import { pgTable, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, text, jsonb, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../db/schema/_helpers';
+import { userAccount } from '../acc/acc.schema';
 
 export const auditRecord = pgTable('audit_record', {
   id: pkId(),
-  actorId: text('actor_id'),
+  actorId: uuid('actor_id').references(() => userAccount.id, { onDelete: 'restrict' }),
   action: text('action').notNull(),
   targetEntity: text('target_entity'),
   targetId: text('target_id'),

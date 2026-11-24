@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -168,5 +168,73 @@ describe('the landing page', () => {
     expect(screen.getAllByRole('region').length).toBeGreaterThanOrEqual(5);
 
     await screen.findByText('$5.00');
+  });
+
+  it('has one main landmark and one labelled navigation, so a screen reader can tell them apart', async () => {
+    answer();
+    renderPage();
+
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+    expect(screen.getAllByRole('navigation')).toHaveLength(1);
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument();
+
+    await screen.findByText('$5.00');
+  });
+
+  describe('the links to its sections', () => {
+    const scrollIntoView = vi.fn();
+    let original: typeof Element.prototype.scrollIntoView;
+
+    beforeEach(() => {
+      original = Element.prototype.scrollIntoView;
+      scrollIntoView.mockReset();
+      Element.prototype.scrollIntoView = scrollIntoView;
+    });
+
+    afterEach(() => {
+      Element.prototype.scrollIntoView = original;
+    });
+
+    function reduceMotion(reduced: boolean) {
+      window.matchMedia = ((query: string) => ({
+        matches: reduced && query.includes('prefers-reduced-motion'),
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+    }
+
+    it('scroll smoothly, and put focus on the heading they land on', async () => {
+      const user = userEvent.setup();
+      reduceMotion(false);
+      answer();
+      renderPage();
+
+      await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: 'What it costs' }));
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+      expect(screen.getByRole('heading', { level: 2, name: 'What it costs' })).toHaveFocus();
+      expect(window.location.hash).toBe('');
+
+      await screen.findByText('$5.00');
+    });
+
+    it('jump instead of gliding for someone who has asked for less motion', async () => {
+      const user = userEvent.setup();
+      reduceMotion(true);
+      answer();
+      renderPage();
+
+      await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: 'How an item moves' }));
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+      expect(screen.getByRole('heading', { level: 2, name: 'How an item moves' })).toHaveFocus();
+
+      await screen.findByText('$5.00');
+    });
   });
 });
