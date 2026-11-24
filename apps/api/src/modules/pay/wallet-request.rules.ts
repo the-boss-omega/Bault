@@ -142,6 +142,14 @@ export function validateWalletRequestDraft(draft: WalletRequestDraft): WalletReq
     }
   }
 
+  if (draft.type === 'cash_out' && draft.documentKey) {
+    problems.push({
+      field: 'documentKey',
+      code: 'receipt_cash_in_only',
+      message: 'A receipt goes on a cash-in request, not on a cash-out.',
+    });
+  }
+
   if ((draft.notes?.length ?? 0) > MAX_NOTE_LENGTH) {
     problems.push({ field: 'notes', code: 'notes_too_long', message: `Notes are limited to ${MAX_NOTE_LENGTH} characters.` });
   }

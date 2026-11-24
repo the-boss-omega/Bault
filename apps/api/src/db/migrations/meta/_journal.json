@@ -351,6 +351,13 @@
       "when": 1785076500000,
       "tag": "0049_fees_that_are_not_use_and_ticket_assignees",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1785076800000,
+      "tag": "0052_a_receipt_for_a_cash_in",
+      "breakpoints": true
     }
   ]
 }

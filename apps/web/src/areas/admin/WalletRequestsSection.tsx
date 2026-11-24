@@ -719,10 +719,23 @@ function WalletRequestDrawer({
         label: t('wallet.request.reference'),
         value: <bdi dir="auto">{request.reference}</bdi>,
       });
-    if (request.documentKey)
+    if (request.receipt)
       lines.push({
-        label: t('wallet.request.document'),
-        value: <Code value={request.documentKey} />,
+        label: t('wallet.requests.receipt'),
+        value: request.receipt.url ? (
+          <span>
+            <a href={request.receipt.url} target="_blank" rel="noopener noreferrer">
+              {t('wallet.requests.receiptOpen')}
+            </a>{' '}
+            <span className="field-hint">
+              {t('wallet.requests.receiptLinkNote', {
+                minutes: Math.round(request.receipt.expiresInSeconds / 60),
+              })}
+            </span>
+          </span>
+        ) : (
+          t('wallet.requests.receiptAttached')
+        ),
       });
     lines.push({
       label: t('wallet.requests.col.created'),
