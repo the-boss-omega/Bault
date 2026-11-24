@@ -904,7 +904,7 @@ export class ShipmentService {
       if (balance.amount < differenceMinor) {
         throw new AppError(
           ErrorCode.INSUFFICIENT_BALANCE,
-          `That service costs ${usdAmount(differenceMinor)} more than the one already paid for, and the wallet holds ${usdAmount(balance.amount)}. Top up, or choose a cheaper service.`,
+          `That service costs ${usdAmount(differenceMinor)} more than the one already paid for, and the wallet holds ${usdAmount(balance.amount)}. Cash in to your wallet, or choose a cheaper service.`,
           409,
           { shortfallMinor: differenceMinor - balance.amount },
         );
@@ -1025,8 +1025,8 @@ export class ShipmentService {
       const balance = await this.ledger.balanceOf(s.userId, tx);
       if (balance.amount < s.cost) {
         throw new AppError(
-          ErrorCode.CONFLICT,
-          `Short by ${usdAmount(s.cost - balance.amount)}. Top up the wallet and try again.`,
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `Short by ${usdAmount(s.cost - balance.amount)}. Cash in to your wallet and try again.`,
           409,
         );
       }

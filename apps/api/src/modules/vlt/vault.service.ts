@@ -43,7 +43,16 @@ export interface VaultFilter {
   type?: string;
   condition?: string;
   limit?: number;
+  cursor?: string;
   scope?: VaultScope;
+}
+
+export const VAULT_PAGE_MAX = 500;
+const VAULT_PAGE_DEFAULT = 50;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function badCursor(): AppError {
+  return AppError.validation('cursor has to be the id of the last card of the page before.', { field: 'cursor' });
 }
 
 const TERMINAL: Array<'shipped' | 'donated' | 'consigned' | 'sold' | 'discarded'> = [
@@ -170,16 +179,19 @@ export class VaultService {
     const scope = filter.scope ?? 'active';
     if (scope === 'history') return this.listHistory(userId, filter);
 
-    const conditions = [eq(item.ownerId, userId)];
-    if (scope === 'hold') {
-      conditions.push(or(eq(item.holdFlag, true), eq(item.lifecycleState, 'on-hold')) ?? sql`true`);
-    } else {
-      conditions.push(inArray(item.lifecycleState, LIVE));
-      conditions.push(eq(item.holdFlag, false));
+    const conditions = this.ownedConditions(userId, scope, filter);
+    if (filter.cursor !== undefined) {
+      if (!UUID.test(filter.cursor)) throw badCursor();
+      const [after] = await this.db
+        .select({ id: item.id })
+        .from(item)
+        .where(and(eq(item.id, filter.cursor), eq(item.ownerId, userId)))
+        .limit(1);
+      if (!after) throw badCursor();
+      conditions.push(
+        sql`(${item.createdAt}, ${item.id}) < (SELECT c.created_at, c.id FROM item c WHERE c.id = ${after.id}::uuid)`,
+      );
     }
-    if (filter.type) conditions.push(eq(item.typeClass, filter.type));
-    if (filter.condition) conditions.push(eq(item.conditionGrade, filter.condition));
-    if (filter.q) conditions.push(this.searchClause(filter.q));
 
     return this.db
       .select({
@@ -199,8 +211,22 @@ export class VaultService {
       })
       .from(item)
       .where(and(...conditions))
-      .orderBy(sql`${item.createdAt} desc`)
-      .limit(clampLimit(filter.limit, { max: 200, fallback: 50 }));
+      .orderBy(sql`${item.createdAt} desc`, sql`${item.id} desc`)
+      .limit(clampLimit(filter.limit, { max: VAULT_PAGE_MAX, fallback: VAULT_PAGE_DEFAULT }));
+  }
+
+  private ownedConditions(userId: string, scope: 'active' | 'hold', filter: VaultFilter) {
+    const conditions = [eq(item.ownerId, userId)];
+    if (scope === 'hold') {
+      conditions.push(or(eq(item.holdFlag, true), eq(item.lifecycleState, 'on-hold')) ?? sql`true`);
+    } else {
+      conditions.push(inArray(item.lifecycleState, LIVE));
+      conditions.push(eq(item.holdFlag, false));
+    }
+    if (filter.type) conditions.push(eq(item.typeClass, filter.type));
+    if (filter.condition) conditions.push(eq(item.conditionGrade, filter.condition));
+    if (filter.q) conditions.push(this.searchClause(filter.q));
+    return conditions;
   }
 
   private searchClause(q: string) {
@@ -217,10 +243,8 @@ export class VaultService {
     );
   }
 
-  private async listHistory(userId: string, filter: VaultFilter, withReason = true) {
-    const limit = clampLimit(filter.limit, { max: 200, fallback: 50 });
-
-    const departure = this.db
+  private departures(userId: string) {
+    return this.db
       .select({
         itemId: custodyEvent.itemId,
         occurredAt: sql<Date>`max(${custodyEvent.occurredAt})`.as('departed_at'),
@@ -234,7 +258,9 @@ export class VaultService {
       )
       .groupBy(custodyEvent.itemId)
       .as('departure');
+  }
 
+  private historyConditions(userId: string, filter: VaultFilter) {
     const conditions = [
       or(
         and(eq(item.ownerId, userId), inArray(item.lifecycleState, TERMINAL)),
@@ -244,6 +270,24 @@ export class VaultService {
     if (filter.type) conditions.push(eq(item.typeClass, filter.type));
     if (filter.condition) conditions.push(eq(item.conditionGrade, filter.condition));
     if (filter.q) conditions.push(this.searchClause(filter.q));
+    return conditions;
+  }
+
+  private async listHistory(userId: string, filter: VaultFilter) {
+    const limit = clampLimit(filter.limit, { max: VAULT_PAGE_MAX, fallback: VAULT_PAGE_DEFAULT });
+    const departure = this.departures(userId);
+    const conditions = this.historyConditions(userId, filter);
+    if (filter.cursor !== undefined) {
+      if (!UUID.test(filter.cursor)) throw badCursor();
+      const [after] = await this.db
+        .select({ id: item.id, occurredAt: sql<string>`${departure.occurredAt}::text` })
+        .from(departure)
+        .innerJoin(item, eq(item.id, departure.itemId))
+        .where(and(eq(item.id, filter.cursor), ...this.historyConditions(userId, {})))
+        .limit(1);
+      if (!after) throw badCursor();
+      conditions.push(sql`(${departure.occurredAt}, ${item.id}) < (${after.occurredAt}::timestamptz, ${after.id}::uuid)`);
+    }
 
     const rows = await this.db
       .select({
@@ -264,7 +308,7 @@ export class VaultService {
       .from(departure)
       .innerJoin(item, eq(item.id, departure.itemId))
       .where(and(...conditions))
-      .orderBy(sql`${departure.occurredAt} desc`)
+      .orderBy(sql`${departure.occurredAt} desc`, sql`${item.id} desc`)
       .limit(limit);
 
     return Promise.all(
@@ -273,7 +317,7 @@ export class VaultService {
         departedAt: toIso(row.departedAt),
         holdFlag: false,
         historical: true as const,
-        departure: withReason ? await this.departure(row.id, userId) : null,
+        departure: await this.departure(row.id, userId),
       })),
     );
   }
@@ -319,12 +363,17 @@ export class VaultService {
   }
 
   async counts(userId: string, q?: string) {
-    const [active, hold, history] = await Promise.all([
-      this.listOwned(userId, { q, scope: 'active', limit: 200 }),
-      this.listOwned(userId, { q, scope: 'hold', limit: 200 }),
-      this.listHistory(userId, { q, limit: 200 }, false),
+    const departure = this.departures(userId);
+    const [[active], [hold], [history]] = await Promise.all([
+      this.db.select({ n: sql<number>`count(*)::int` }).from(item).where(and(...this.ownedConditions(userId, 'active', { q }))),
+      this.db.select({ n: sql<number>`count(*)::int` }).from(item).where(and(...this.ownedConditions(userId, 'hold', { q }))),
+      this.db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(departure)
+        .innerJoin(item, eq(item.id, departure.itemId))
+        .where(and(...this.historyConditions(userId, { q }))),
     ]);
-    return { active: active.length, hold: hold.length, history: history.length };
+    return { active: active?.n ?? 0, hold: hold?.n ?? 0, history: history?.n ?? 0 };
   }
 
   async storageFor(userId: string, itemId: string) {

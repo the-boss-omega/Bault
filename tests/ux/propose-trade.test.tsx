@@ -35,7 +35,7 @@ const ITEMS = [
 
 async function renderPanel() {
   get.mockImplementation((path: string) => {
-    if (path === '/vault/items') return Promise.resolve(ITEMS);
+    if (path.startsWith('/vault/items?')) return Promise.resolve(ITEMS);
     if (path === '/marketplace/collectors/blue') {
       return Promise.resolve({ username: 'blue' });
     }

@@ -126,8 +126,8 @@ export class DirectShipService {
       const balance = await this.ledger.balanceOf(userId, tx);
       if (balance.amount < total) {
         throw new AppError(
-          ErrorCode.CONFLICT,
-          `Direct overnight is ${usdAmount(total)} and your balance is ${usdAmount(balance.amount)}. Top up first — this one cannot wait, the parcel is sitting at the dock.`,
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `Direct overnight is ${usdAmount(total)} and your balance is ${usdAmount(balance.amount)}. Cash in to your wallet first, this one cannot wait while the parcel is at the dock.`,
           409,
         );
       }

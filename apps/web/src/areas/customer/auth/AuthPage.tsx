@@ -108,9 +108,11 @@ const AUTH_SECTION: Record<AuthMode, string> = { signIn: 'signin', signUp: 'sign
 export function AuthPage({
   onSignedIn,
   initialMode = 'signIn',
+  notice = null,
 }: {
   onSignedIn: (user: SessionUser) => void;
   initialMode?: AuthMode;
+  notice?: string | null;
 }) {
   const mode = initialMode;
   const setMode = (next: AuthMode) => navigate({ section: AUTH_SECTION[next] });
@@ -119,6 +121,7 @@ export function AuthPage({
     <AuthShell>
       {mode === 'signIn' && (
         <SignInPage
+          notice={notice}
           onSignedIn={onSignedIn}
           onGoToSignUp={() => setMode('signUp')}
           onGoToForgotPassword={() => setMode('forgot')}

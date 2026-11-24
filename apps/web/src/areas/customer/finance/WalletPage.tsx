@@ -110,6 +110,7 @@ const REF_LABEL: Record<string, MessageKey> = {
   service_request: 'wallet.ref.service_request',
   shipment: 'wallet.ref.shipment',
   wallet_request: 'wallet.ref.wallet_request',
+  interest: 'wallet.ref.interest',
 };
 
 function refLabel(t: TranslateFn, referenceType: string): string {

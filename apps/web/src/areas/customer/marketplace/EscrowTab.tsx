@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
-import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
+import { bpsToPercent, dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import {
   ESCROW_TONE,
   escrowEventLabel,
@@ -117,7 +117,6 @@ export function EscrowTab() {
     !belowFloor &&
     (external ? outsideName.trim() !== '' && outsideEmail.trim() !== '' : username.trim() !== '');
 
-  // What has not been typed yet is a dash, never a value made up.
   const quiet = <span className="drawer-tag-quiet">—</span>;
   const otherSide = external ? (
     outsideName.trim() || outsideEmail.trim() ? (
@@ -174,7 +173,7 @@ export function EscrowTab() {
         {terms && (
           <p className="field-hint">
             {t('esc.terms', {
-              percent: (terms.feeBps / 100).toFixed(2),
+              percent: bpsToPercent(terms.feeBps),
               min: formatUsd(terms.minimumFeeMinor),
               floor: formatUsd(terms.minimumValueMinor),
             })}
@@ -287,7 +286,6 @@ export function EscrowTab() {
             </Field>
           </div>
 
-          {/* The deal as the other side will read it: the price, who is who, what it is for, what it costs and how it ends. */}
           <aside className="request-slip">
             <DrawerTag
               kicker={t('esc.value')}

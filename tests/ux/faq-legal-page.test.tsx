@@ -68,13 +68,13 @@ describe('FAQ & Legal', () => {
     renderAt('#/faq/legal');
     expect(await screen.findByText('14 days')).toBeInTheDocument();
     expect(screen.getByText('0.05% a day, compounding')).toBeInTheDocument();
-    expect(screen.getByText('-$20.00')).toBeInTheDocument();
+    expect(screen.getByText('\u2212$20.00')).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith('/content/account-terms');
   });
 
   it('draws the suspension threshold as an amount, as every amount is drawn', async () => {
     renderAt('#/faq/legal');
-    const threshold = await screen.findByText('-$20.00');
+    const threshold = await screen.findByText('\u2212$20.00');
     expect(threshold).toHaveClass('amount');
   });
 });

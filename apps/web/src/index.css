@@ -3072,6 +3072,24 @@ input[type='search'] {
   gap: var(--sp-3);
 }
 
+.time-window .field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+}
+
+.time-window .field-row > .field,
+.time-window .field-row input {
+  min-inline-size: 0;
+  inline-size: 100%;
+}
+
+@media (max-width: 360px) {
+  .time-window .field-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .check-list {
   display: flex;
   flex-direction: column;
@@ -4133,6 +4151,45 @@ input[type='search'] {
   color: var(--text-2);
 }
 
+.legal-prose {
+  font-size: var(--fs-base);
+  line-height: 1.6;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.legal-prose p,
+.legal-prose ul,
+.legal-prose dl {
+  margin: 0 0 var(--sp-3);
+}
+
+.legal-prose ul {
+  padding-inline-start: var(--sp-5);
+}
+
+.legal-prose dl > div {
+  display: grid;
+  grid-template-columns: minmax(8em, 12em) minmax(0, 1fr);
+  gap: var(--sp-1) var(--sp-4);
+  padding-block: var(--sp-1);
+}
+
+.legal-prose dt {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.legal-prose dd {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .legal-prose dl > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 900px) {
   .legal-body {
     grid-template-columns: minmax(0, 1fr);
@@ -4213,7 +4270,9 @@ input[type='search'] {
     break-inside: avoid;
   }
 
-  .legal-pre {
+  .legal-pre,
+  .legal-prose,
+  .legal-prose dt {
     /* design-lint-allow: print. Ink on paper is black, whatever the reader had
        their screen set to. */
     color: #000;

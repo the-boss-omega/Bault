@@ -155,7 +155,7 @@ export class ServiceRequestService {
       if (balance.amount < 0) {
         throw new AppError(
           ErrorCode.INSUFFICIENT_BALANCE,
-          `${SERVICE_LABEL[input.type]} costs ${usdAmount(outcome.amountMinor)}, and the wallet holds ${usdAmount(balance.amount + outcome.amountMinor)}. Top up first, then ask again.`,
+          `${SERVICE_LABEL[input.type]} costs ${usdAmount(outcome.amountMinor)}, and the wallet holds ${usdAmount(balance.amount + outcome.amountMinor)}. Cash in to your wallet first, then ask again.`,
           409,
           { shortfallMinor: -balance.amount },
         );

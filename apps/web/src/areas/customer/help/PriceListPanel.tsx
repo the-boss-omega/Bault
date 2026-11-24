@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { bpsToPercent, formatUsd } from '../../../shared/money';
+import { bpsToPercent, formatPercent, formatUsd } from '../../../shared/money';
 import { itemClassLabel } from '../../../shared/itemClasses';
 import { percentOff, useViewerTier } from '../../../shared/tiers';
 import { TierPrice } from '../../../shared/ui/TierPrice';
@@ -34,7 +34,7 @@ function param(entry: PriceEntry, key: string): number | null {
 }
 
 function asPercent(bps: number): string {
-  return `${bpsToPercent(bps)}%`;
+  return formatPercent(bps);
 }
 
 function storagePeriod(entry: PriceEntry) {

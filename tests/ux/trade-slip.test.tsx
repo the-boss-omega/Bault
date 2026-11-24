@@ -24,7 +24,7 @@ beforeEach(() => {
   post.mockReset();
   localStorage.clear();
   get.mockImplementation(async (path: string) => {
-    if (path === '/vault/items') return MINE;
+    if (path.startsWith('/vault/items?')) return MINE;
     if (path === '/marketplace/collectors/golden') return { username: 'golden' };
     if (path.startsWith('/marketplace/collectors/golden/items/')) return THEIRS;
     return [];

@@ -93,6 +93,8 @@ function vaultApi(items: unknown[], extra: (path: string) => unknown = () => und
   });
 }
 
+const SERIAL_0004 = 'SN-TEST-0004';
+
 const serialsOnScreen = () =>
   Array.from(document.querySelectorAll('.card-grid .card-title')).map((el) => el.textContent);
 
@@ -186,6 +188,32 @@ describe('the item drawer', () => {
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(await within(dialog).findByRole('button', { name: 'Ship this item' }));
     expect(window.location.hash).toContain('shipping-services/shipping?items=0002');
+  });
+
+  it('offers to sell a stored item, opening Sell with that item chosen', async () => {
+    window.location.hash = '#/vault?item=0002';
+    vaultApi([ALPHA]);
+    renderIn(<VaultPage />);
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Sell this item' }));
+    expect(window.location.hash).toBe('#/marketplace/sell?item=0002');
+  });
+
+  it('does not offer to sell a listed item or one on hold', async () => {
+    window.location.hash = '#/vault?item=0003';
+    vaultApi([LISTED]);
+    const { unmount } = renderIn(<VaultPage />);
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByRole('button', { name: 'Video review' });
+    expect(within(dialog).queryByRole('button', { name: 'Sell this item' })).toBeNull();
+    unmount();
+
+    window.location.hash = '#/vault/hold?item=0004';
+    vaultApi([item('0004', { holdFlag: true })]);
+    renderIn(<VaultPage />);
+    const held = await screen.findByRole('dialog');
+    await within(held).findByText(SERIAL_0004);
+    expect(within(held).queryByRole('button', { name: 'Sell this item' })).toBeNull();
   });
 
   it('does not offer shipping for a listed item', async () => {

@@ -91,7 +91,6 @@ export function SharedParcelsTab({
     }
   }
 
-  // What has not been chosen or typed yet is a dash, never a value made up.
   const quiet = <span className="drawer-tag-quiet">—</span>;
   const free = shipments ?? [];
   const opening = free.find((x) => x.id === openShipmentId);
@@ -185,12 +184,12 @@ export function SharedParcelsTab({
                             <span className="group-member-meta" dir="ltr">
                               {mine ? (
                                 <>
-                                  {m.shipmentCode} · {t('grp.memberItems', { count: m.itemCount })}
+                                  {m.shipmentCode} · {m.itemCount === 1 ? t('grp.memberItemsOne') : t('grp.memberItems', { count: m.itemCount })}
                                   {m.weightGrams !== undefined ? ` · ${formatWeight(m.weightGrams)}` : ''}
                                   {m.insuredValueMinor ? ` · ${formatUsd(m.insuredValueMinor)}` : ''}
                                 </>
                               ) : (
-                                t('grp.memberItems', { count: m.itemCount })
+                                m.itemCount === 1 ? t('grp.memberItemsOne') : t('grp.memberItems', { count: m.itemCount })
                               )}
                             </span>
                           </li>
@@ -300,7 +299,6 @@ export function SharedParcelsTab({
               </Field>
             </div>
 
-            {/* The parcel as it will be opened: where it goes, whose request starts it, who pays, and where it stands. */}
             <aside className="request-slip">
               <DrawerTag
                 kicker={t('grp.start')}
@@ -375,7 +373,6 @@ export function SharedParcelsTab({
               </Field>
             </div>
 
-            {/* The joining as it will be read: which parcel, with which of your requests, to what address. */}
             <aside className="request-slip">
               <DrawerTag
                 kicker={t('grp.join')}

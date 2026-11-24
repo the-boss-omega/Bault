@@ -169,7 +169,7 @@ export function RemoveCommonsPanel({
               disabled={busy || selected.length === 0}
               onClick={() => setConfirming(true)}
             >
-              {t('cull.submit', { count: selected.length })}
+              {selected.length === 1 ? t('cull.submitOne') : t('cull.submit', { count: selected.length })}
             </Button>
             {eligible.length === 0 ? (
               <span className="field-hint">{t('cull.noneEligible')}</span>

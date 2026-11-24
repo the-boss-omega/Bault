@@ -165,7 +165,7 @@ export function ShelfYieldPanel() {
         />
         <MetricCard
           label={t('yield.metric.slotDays')}
-          value={data ? data.totals.slotDays.toLocaleString() : '—'}
+          value={data ? data.totals.slotDays.toLocaleString('en-US') : '—'}
           icon={<IconBox />}
           tone="violet"
           footer={t('yield.metric.slotDaysNote')}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
+import { getAllPages } from '../../../shared/paging';
 import { SERVICE_FEE_ACTION, priceLabel, useServicePrices, type PriceEntry } from '../../../shared/servicePrices';
 import { EntryPrice } from '../../../shared/ui/TierPrice';
 import { useViewerTier } from '../../../shared/tiers';
@@ -17,7 +18,7 @@ import {
   type Departure,
   type TimelineEvent,
 } from '../../../shared/itemTimeline';
-import { formatDate, formatUsd, isolate } from '../../../shared/money';
+import { bpsToPercent, formatDate, formatUsd, isolate } from '../../../shared/money';
 import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
@@ -304,7 +305,7 @@ export function VaultPage() {
     if (q) query.set('q', q);
     try {
       const [list, totals] = await Promise.all([
-        api.get<VaultItem[]>(`/vault/items?${query.toString()}`),
+        getAllPages<VaultItem>(`/vault/items?${query.toString()}`),
         api.get<VaultCounts>(`/vault/counts${q ? `?q=${encodeURIComponent(q)}` : ''}`),
       ]);
       setItems(list);
@@ -434,7 +435,7 @@ export function VaultPage() {
 
         {items !== null && (
           <span className="vault-count" role="status">
-            {t('vault.assetsCount', { count: items.length })}
+            {items.length === 1 ? t('vault.assetsCountOne') : t('vault.assetsCount', { count: items.length })}
           </span>
         )}
         {scope === 'active' && (
@@ -777,7 +778,7 @@ function StoragePanel({
           <dd className="detail-value">
             {t('vault.storage.termsValue', {
               days: storage.freeDays,
-              percent: (storage.percentOfIntakeBps / 100).toFixed(0),
+              percent: bpsToPercent(storage.percentOfIntakeBps),
               period: storage.periodDays,
             })}
           </dd>
@@ -1085,6 +1086,31 @@ function ItemDrawer({
                     </span>
                     <span className="btn-row-desc" id="svc-ship-desc">
                       {t('vault.drawer.shipDesc')}
+                    </span>
+                  </Button>
+                </li>
+              )}
+              {item.lifecycleState === 'stored' && (
+                <li>
+                  <Button
+                    className="btn--row"
+                    variant="secondary"
+                    icon={<IconTag />}
+                    data-action="sell"
+                    aria-labelledby="svc-sell-name"
+                    aria-describedby="svc-sell-desc"
+                    onClick={() => navigate({ section: 'marketplace', tab: 'sell', params: { item: item.id } })}
+                  >
+                    <span className="btn-row-line">
+                      <span className="btn-row-name" id="svc-sell-name">
+                        {t('vault.drawer.sell')}
+                      </span>
+                      <span className="btn-row-end">
+                        <IconChevronRight />
+                      </span>
+                    </span>
+                    <span className="btn-row-desc" id="svc-sell-desc">
+                      {t('vault.drawer.sellDesc')}
                     </span>
                   </Button>
                 </li>
