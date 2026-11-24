@@ -330,6 +330,13 @@
       "when": 1785076200000,
       "tag": "0046_memberships_become_usage_tiers",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1785076300000,
+      "tag": "0047_a_tier_recompute_waits_for_the_account",
+      "breakpoints": true
     }
   ]
 }
