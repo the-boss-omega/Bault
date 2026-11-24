@@ -64,6 +64,7 @@ export interface WalletRequest {
   beneficiaryName: string | null;
   reference: string | null;
   notes: string | null;
+  receiptAttached?: boolean;
   rejectionReason: string | null;
   completedAt: string | null;
   createdAt: string;
@@ -113,9 +114,16 @@ export interface WalletRequestPayout {
   externalRef: string | null;
 }
 
+export interface WalletRequestReceipt {
+  url: string | null;
+  contentType: string;
+  expiresInSeconds: number;
+}
+
 export interface StaffWalletRequestDetail extends StaffWalletRequest {
   history: StaffWalletRequestEvent[];
   payout?: WalletRequestPayout | null;
+  receipt?: WalletRequestReceipt | null;
 }
 
 export function statusLabel(t: TranslateFn, status: string): string {

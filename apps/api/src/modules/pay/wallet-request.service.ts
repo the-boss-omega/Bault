@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { and, desc, eq, gte, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import { loadEnv } from '@bault/config';
 import { DRIZZLE } from '../../db/db.module';
@@ -26,6 +26,7 @@ import {
   type WalletRequestType,
 } from './wallet-request.rules';
 import { MembershipService } from '../mem/membership.service';
+import { MediaService, RECEIPT_URL_SECONDS } from '../med/media.service';
 
 export type RequestActor = Pick<AuthUser, 'id' | 'role'>;
 
@@ -83,6 +84,8 @@ const CLOSED_FOR_COMPLETION: Partial<Record<WalletRequestStatus, string>> = {
 
 const STAFF_ROLES = new Set(['admin', 'warehouse_operator']);
 
+const RECEIPT_OPEN_STATUSES: readonly WalletRequestStatus[] = ['submitted', 'pending_review'];
+
 const PAYOUT_FAILED_FOR_COLLECTOR = 'The payout could not be sent, and the money is back in your wallet.';
 const PAYOUT_RETURNED_FOR_COLLECTOR = 'The payout was returned after it was sent, and the money is back in your wallet.';
 
@@ -99,6 +102,7 @@ export function collectorWalletRequestView(row: typeof walletRequest.$inferSelec
     beneficiaryName: row.beneficiaryName,
     reference: row.reference,
     notes: row.notes,
+    receiptAttached: row.documentKey !== null,
     rejectionReason: row.rejectionReason,
     completedAt: row.completedAt,
     createdAt: row.createdAt,
@@ -137,6 +141,7 @@ export class WalletRequestService {
     private readonly audit: AuditService,
     @Inject(PAYMENT_ADAPTER) private readonly payment: PaymentAdapter,
     private readonly memberships: MembershipService,
+    private readonly media: MediaService,
   ) {}
 
   private static isReviewer(actor: RequestActor): boolean {
@@ -193,6 +198,7 @@ export class WalletRequestService {
     }
 
     return this.db.transaction(async (tx) => {
+      if (normalized.documentKey) await this.assertReceiptUsable(tx, normalized.documentKey, userId, null);
       const [created] = await tx
         .insert(walletRequest)
         .values({
@@ -282,6 +288,94 @@ export class WalletRequestService {
     return { ...collectorWalletRequestView(request), history: history.map(collectorHistoryView) };
   }
 
+  private async assertReceiptUsable(tx: Database, documentKey: string, userId: string, requestId: string | null) {
+    await this.media.assertAttachable(tx, [documentKey], { purpose: 'cash_in_receipt', actorId: userId });
+    const [taken] = await tx
+      .select({ id: walletRequest.id, code: walletRequest.code })
+      .from(walletRequest)
+      .where(
+        and(
+          eq(walletRequest.documentKey, documentKey),
+          requestId === null ? undefined : ne(walletRequest.id, requestId),
+        ),
+      )
+      .limit(1);
+    if (taken) {
+      throw AppError.conflict(
+        ErrorCode.CONFLICT,
+        `That receipt is already on request ${taken.code}. Upload the receipt for this payment.`,
+      );
+    }
+  }
+
+  async attachReceipt(requestId: string, actor: RequestActor, documentKey: string) {
+    return this.db.transaction(async (tx) => {
+      const [request] = await tx
+        .select()
+        .from(walletRequest)
+        .where(eq(walletRequest.id, requestId))
+        .for('update')
+        .limit(1);
+      if (!request || request.userId !== actor.id) throw AppError.notFound('Wallet request not found');
+      if (request.type !== 'cash_in') {
+        throw AppError.validation('A receipt goes on a cash-in request, not on a cash-out.');
+      }
+      if (!RECEIPT_OPEN_STATUSES.includes(request.status)) {
+        throw AppError.conflict(
+          ErrorCode.CONFLICT,
+          `A receipt can be changed only while the request is waiting for review. This one is ${request.status}.`,
+          { status: request.status },
+        );
+      }
+      await this.assertReceiptUsable(tx, documentKey, actor.id, request.id);
+
+      const [updated] = await tx
+        .update(walletRequest)
+        .set({ documentKey, updatedAt: new Date() })
+        .where(eq(walletRequest.id, request.id))
+        .returning();
+      if (!updated) throw new Error('Failed to update the request');
+
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'wallet_request.receipt',
+          targetEntity: 'wallet_request',
+          targetId: request.id,
+          metadata: { replaced: request.documentKey !== null, status: request.status },
+        },
+        tx,
+      );
+      return updated;
+    });
+  }
+
+  private async signedReceipt(documentKey: string) {
+    return {
+      url: await this.media.signed(documentKey, RECEIPT_URL_SECONDS),
+      contentType: (await this.media.contentTypeOf(documentKey)) ?? 'application/octet-stream',
+      expiresInSeconds: RECEIPT_URL_SECONDS,
+    };
+  }
+
+  async receiptFor(requestId: string, userId: string) {
+    const [request] = await this.db
+      .select({ documentKey: walletRequest.documentKey })
+      .from(walletRequest)
+      .where(and(eq(walletRequest.id, requestId), eq(walletRequest.userId, userId)))
+      .limit(1);
+    if (!request?.documentKey) throw AppError.notFound('This request has no receipt.');
+    const receipt = await this.signedReceipt(request.documentKey);
+    if (!receipt.url) {
+      throw new AppError(
+        ErrorCode.STORAGE_UNAVAILABLE,
+        'File storage cannot be reached right now, so the receipt cannot be opened. Try again in a few minutes.',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    return receipt;
+  }
+
   async listForReview(actor: RequestActor, filters: WalletRequestFilters = {}) {
     this.assertReviewer(actor);
 
@@ -359,6 +453,7 @@ export class WalletRequestService {
       email: owner?.email ?? null,
       customerName: fullName(owner?.firstName, owner?.lastName),
       payout: payout ?? null,
+      receipt: request.documentKey ? await this.signedReceipt(request.documentKey) : null,
       history,
     };
   }

@@ -3702,6 +3702,20 @@ input[type='search'] {
   display: block;
 }
 
+.upload-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+  block-size: 100%;
+  padding: var(--sp-1);
+  font-size: var(--fs-caption);
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+}
+
 .upload-thumb--pending .skel {
   display: block;
   inline-size: 100%;

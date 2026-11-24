@@ -16,6 +16,7 @@ import {
 import { Button, ErrorState, Field } from '../../../shared/ui/primitives';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { IconArrowDown, IconUpload } from '../../../shared/ui/icons';
+import { PhotoInput, RECEIPT_TYPES, type PhotoRef } from '../../../shared/ui/PhotoInput';
 
 export interface SubmittedRequest {
   code: string;
@@ -40,6 +41,7 @@ export function WalletRequestForm({
   const [beneficiaryName, setBeneficiaryName] = useState('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
+  const [receipt, setReceipt] = useState<PhotoRef[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -107,7 +109,7 @@ export function WalletRequestForm({
         amountMinor: cents,
         currency: 'USD',
         ...(type === 'cash_in'
-          ? { fundingSource }
+          ? { fundingSource, ...(receipt[0] ? { documentKey: receipt[0].objectKey } : {}) }
           : {
               destinationAccount: destinationAccount.trim(),
               beneficiaryName: beneficiaryName.trim(),
@@ -118,6 +120,8 @@ export function WalletRequestForm({
       setAmount('');
       setReference('');
       setNotes('');
+      for (const file of receipt) URL.revokeObjectURL(file.previewUrl);
+      setReceipt([]);
       setSubmitted(false);
       await onSubmitted({ code: created.code, amountMinor: cents });
     } catch (e) {
@@ -265,6 +269,21 @@ export function WalletRequestForm({
             onChange={(e) => setReference(e.target.value)}
           />
         </Field>
+
+        {type === 'cash_in' && (
+          <PhotoInput
+            purpose="cash_in_receipt"
+            value={receipt}
+            onChange={setReceipt}
+            label={t('wallet.request.receipt')}
+            hint={t('wallet.request.receiptHint')}
+            addLabel={t('wallet.request.receiptAdd')}
+            accept={RECEIPT_TYPES}
+            camera={false}
+            max={1}
+            disabled={busy}
+          />
+        )}
 
         <Field
           label={t('wallet.request.notes')}
