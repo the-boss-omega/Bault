@@ -6,7 +6,7 @@ import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { binTransfer, custodyEvent, item } from './cst.schema';
-import { assertTransition, type LifecycleState } from './lifecycle';
+import { IN_THE_BUILDING, assertTransition, type LifecycleState } from './lifecycle';
 
 type Tx = Database;
 
@@ -105,6 +105,7 @@ export class CustodyService {
       actorId: string;
       eventType?: 'intake' | 'batch_split';
       lifecycleState?: 'stored' | 'received';
+      receivedAt?: Date;
     },
   ) {
     const [created] = await tx
@@ -126,7 +127,7 @@ export class CustodyService {
         isLot: input.isLot ?? false,
         lotSize: input.lotSize ?? 1,
         lifecycleState: input.lifecycleState ?? 'stored',
-        receivedAt: new Date(),
+        receivedAt: input.receivedAt ?? new Date(),
       })
       .returning();
     if (!created) throw AppError.validation('Failed to create item');
@@ -158,6 +159,15 @@ export class CustodyService {
   async relocate(tx: Tx, itemId: string, newBinId: string, actorId: string) {
     const current = await this.lockItem(tx, itemId);
     if (current.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
+    if (!(IN_THE_BUILDING as readonly string[]).includes(current.lifecycleState)) {
+      throw new AppError(
+        ErrorCode.CONFLICT,
+        `This item is ${current.lifecycleState}, so it is not on a shelf here to move`,
+        409,
+        { itemId, state: current.lifecycleState },
+      );
+    }
+    CustodyService.assertNotSplitLot(current);
 
     await tx
       .update(item)

@@ -46,6 +46,9 @@ export class CstController {
   ) {
     const target = await this.stow.resolveItem(itemId);
     const destination = await this.stow.resolveBin(dto.binId);
+    if (!destination.active) {
+      throw AppError.validation(`Bin ${destination.barcode} is out of service — move this somewhere else`);
+    }
     await this.relocate.relocate(target.id, destination.id, user.id);
     return { status: 'relocated', itemId: target.id, binId: destination.id };
   }
@@ -74,14 +77,16 @@ export class CstController {
 
   @Roles('warehouse_operator', 'admin')
   @Get('items/:itemId/history')
-  history(@Param('itemId') itemId: string) {
-    return this.inventory.history(itemId);
+  async history(@Param('itemId') itemId: string) {
+    const target = await this.stow.resolveItem(itemId);
+    return this.inventory.history(target.id);
   }
 
   @Roles('warehouse_operator', 'admin')
   @Get('items/:itemId/timeline')
-  timeline(@Param('itemId') itemId: string) {
-    return this.inventory.itemTimeline(itemId);
+  async timeline(@Param('itemId') itemId: string) {
+    const target = await this.stow.resolveItem(itemId);
+    return this.inventory.itemTimeline(target.id);
   }
 
   @Roles('warehouse_operator', 'admin')

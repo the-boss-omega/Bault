@@ -204,7 +204,7 @@ export class VaultService {
   }
 
   private searchClause(q: string) {
-    const pattern = `%${q}%`;
+    const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     return (
       or(
         ilike(item.description, pattern),
