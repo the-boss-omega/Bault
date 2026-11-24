@@ -190,6 +190,15 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
     for (const key of ['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'PAYPAL_WEBHOOK_ID'] as const) {
       require(key, 'PAYMENT_PROVIDER=paypal');
     }
+    if (env.PAYPAL_ENVIRONMENT === 'live' && env.NODE_ENV !== 'production') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['PAYPAL_ENVIRONMENT'],
+        message:
+          'PAYPAL_ENVIRONMENT=live moves real money, so it needs NODE_ENV=production, which refuses the development ' +
+          'key, console mail and the sandbox providers. Use PAYPAL_ENVIRONMENT=sandbox anywhere else.',
+      });
+    }
   }
 
   if (env.CRYPTO_PROVIDER === 'coinbase_commerce') {

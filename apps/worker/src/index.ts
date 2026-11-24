@@ -3,6 +3,7 @@ import { loadEnv } from '@bault/config';
 import { createOcrProvider, createStorageAdapter, flushReportsOnExit, flushWithin } from '@bault/adapters';
 import { createPool } from './db';
 import { runScheduledJob } from './heartbeat';
+import { drainWithin } from './shutdown';
 import { log } from './log';
 import { flushErrorReporting, initErrorReporting } from './observability';
 import { JobName } from './jobs/registry';
@@ -56,18 +57,17 @@ async function main(): Promise<void> {
     stopping = true;
     log.info('worker stopping', { signal, drain_ms: DRAIN_MS });
     if (ocrTimer) clearInterval(ocrTimer);
-    if (ocr) {
-      await Promise.race([
-        (ocrBusy ?? Promise.resolve()).catch(() => undefined),
-        new Promise((resolve) => setTimeout(resolve, DRAIN_MS)),
-      ]);
-      await ocr.ocr.close().catch((err: unknown) => log.warn('the OCR reader did not close cleanly', { error: err }));
-    }
-    try {
-      await boss.stop({ graceful: true, timeout: DRAIN_MS });
-    } catch (err) {
-      log.error('pg-boss did not stop cleanly', { error: err });
-    }
+    await drainWithin(DRAIN_MS, [
+      async () => {
+        if (!ocr) return;
+        await (ocrBusy ?? Promise.resolve()).catch(() => undefined);
+        await ocr.ocr.close().catch((err: unknown) => log.warn('the OCR reader did not close cleanly', { error: err }));
+      },
+      (msLeft) =>
+        boss
+          .stop({ graceful: true, timeout: msLeft })
+          .catch((err: unknown) => log.error('pg-boss did not stop cleanly', { error: err })),
+    ]);
     try {
       await Promise.race([pool.end(), new Promise((resolve) => setTimeout(resolve, 5_000))]);
     } catch (err) {

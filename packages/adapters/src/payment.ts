@@ -12,7 +12,6 @@ export interface ChargeRequest {
 export class PaymentProviderError extends Error {
   readonly status: number | null;
   readonly refused: boolean;
-  /** The provider's own name for why it refused, PayPal's `details[0].issue`, when it gave one. */
   readonly issue: string | null;
 
   constructor(message: string, options: { status?: number | null; refused?: boolean; issue?: string | null } = {}) {
@@ -54,44 +53,32 @@ export interface WebhookDelivery {
   headers: Record<string, string | undefined>;
 }
 
-/** A checkout order for a cash-in: Bault fixes the amount, the payer approves it on PayPal's page. */
 export interface CheckoutOrderRequest {
   amountMinor: number;
   currency: string;
-  /** Sent as PayPal-Request-Id, so a resend returns the same order instead of a second one. */
   requestId: string;
-  /** Bault's own payment id. PayPal echoes it on the capture and in its webhooks. */
   customId: string;
   description: string;
   returnUrl: string;
   cancelUrl: string;
-  /** `card` opens PayPal's page on the debit or credit card form, `paypal` on the PayPal sign-in. */
   landing: 'card' | 'paypal';
   signal?: AbortSignal;
 }
 
 export interface CheckoutOrder {
   orderId: string;
-  /** Where the payer approves the order. Always PayPal's own page for the configured environment. */
   approveUrl: string;
 }
 
-/**
- * What became of a checkout order's capture. `succeeded` means PayPal completed the capture and holds
- * the money; `pending` that it holds it under review or the payer has not approved yet; `failed` that
- * nothing was taken; `reversed` that a completed capture was refunded or reversed afterwards.
- */
 export interface CheckoutCapture {
   orderId: string;
   status: 'succeeded' | 'pending' | 'failed' | 'reversed';
   captureId: string | null;
   amountMinor: number | null;
   currency: string | null;
-  /** PayPal's fee on the capture (`seller_receivable_breakdown.paypal_fee`), when it reported one. */
   feeMinor: number | null;
   feeCurrency: string | null;
   customId: string | null;
-  /** PayPal's reason, `status_details.reason`, when it gave one. */
   detail: string | null;
 }
 
@@ -126,7 +113,6 @@ const PAYPAL_BASE = {
   live: 'https://api-m.paypal.com',
 } as const;
 
-/** Where PayPal sends a payer to approve an order. An approval link anywhere else is refused. */
 const PAYPAL_APPROVE_HOST = {
   sandbox: 'www.sandbox.paypal.com',
   live: 'www.paypal.com',
@@ -169,7 +155,6 @@ interface PayPalOrderResource {
   links?: { href?: string; rel?: string }[];
 }
 
-/** An exact number of cents from PayPal's decimal string, or null for anything that is not one. */
 function exactMinor(money: PayPalMoney | undefined): { minor: number | null; currency: string | null } {
   const m = /^(\d{1,12})(?:\.(\d{1,2}))?$/.exec(money?.value?.trim() ?? '');
   const currency = typeof money?.currency_code === 'string' ? money.currency_code : null;
@@ -218,7 +203,6 @@ function readCapture(
   };
 }
 
-/** What an Orders v2 order says about its capture. The last capture on the first purchase unit counts. */
 export function checkoutFromOrder(body: PayPalOrderResource, orderIdAsked: string): CheckoutCapture {
   const orderId = nonEmpty(body.id) ?? orderIdAsked;
   const unit = body.purchase_units?.[0];
@@ -239,18 +223,12 @@ export function checkoutFromOrder(body: PayPalOrderResource, orderIdAsked: strin
   };
 }
 
-/** A capture as one webhook reports it. The order may be unnamed (a refund names only its capture). */
 export type CheckoutCaptureReport = Omit<CheckoutCapture, 'orderId'> & { orderId: string | null };
 
 export type CheckoutEvent =
   | { kind: 'capture'; capture: CheckoutCaptureReport }
   | { kind: 'approved'; orderId: string; customId: string | null };
 
-/**
- * The webhook events of a cash-in by checkout, and what each says became of the capture. The outcome is
- * the event type's, never the body's status. REVERSED and REFUNDED are read here so that whoever records
- * a cash-in taken back has them, but nothing credits or debits on them yet.
- */
 export const CHECKOUT_CAPTURE_EVENTS: Readonly<Record<string, CheckoutCapture['status']>> = {
   'PAYMENT.CAPTURE.COMPLETED': 'succeeded',
   'PAYMENT.CAPTURE.PENDING': 'pending',
@@ -274,7 +252,6 @@ export function checkoutCaptureFromEvent(event: WebhookEvent): CheckoutEvent | n
   const status = CHECKOUT_CAPTURE_EVENTS[type];
   if (!status) return null;
   const orderId = nonEmpty(data.supplementary_data?.related_ids?.order_id);
-  // A refund or a reversal is reported as its own resource, which names the capture it undid by its "up" link.
   const up = (data.links ?? []).find((l) => l.rel === 'up' && /\/captures\/[^/?#]+/.test(l.href ?? ''));
   const capturedBy = status === 'reversed' && up ? decodeURIComponent(/\/captures\/([^/?#]+)/.exec(up.href!)![1]!) : null;
   const capture = readCapture(capturedBy ? { ...data, id: capturedBy } : data, status, orderId, null);
@@ -282,7 +259,6 @@ export function checkoutCaptureFromEvent(event: WebhookEvent): CheckoutEvent | n
   return { kind: 'capture', capture };
 }
 
-/** PayPal's own name for a refusal: the first `details[].issue`, else the error `name`. */
 function paypalIssue(body: string): string | null {
   try {
     const parsed = JSON.parse(body) as { name?: unknown; details?: { issue?: unknown }[] };
@@ -439,7 +415,6 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
       });
       return checkoutFromOrder(body, id);
     } catch (e) {
-      // Captured already, by an earlier attempt whose answer was lost: what PayPal holds is the answer.
       if (e instanceof PaymentProviderError && e.issue === 'ORDER_ALREADY_CAPTURED') {
         return this.getCheckoutOrder(id, { signal: options.signal });
       }
@@ -512,7 +487,10 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
       throw new Error('A payout needs a destination.');
     }
 
-    const body = await this.call<{ batch_header: { payout_batch_id: string; batch_status: string } }>(
+    const body = await this.call<{
+      batch_header: { payout_batch_id: string; batch_status: string };
+      items?: { transaction_status?: string }[];
+    }>(
       '/v1/payments/payouts',
       {
         method: 'POST',
@@ -536,10 +514,15 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
       },
     );
 
-    const status = body.batch_header.batch_status;
+    const item = body.items?.[0];
+    const batch = (body.batch_header.batch_status ?? '').toUpperCase();
     return {
       providerRef: body.batch_header.payout_batch_id,
-      status: status === 'SUCCESS' ? 'succeeded' : status === 'DENIED' ? 'failed' : 'pending',
+      status: item
+        ? paypalPayoutItemOutcome(item.transaction_status)
+        : batch === 'DENIED' || batch === 'CANCELED'
+          ? 'failed'
+          : 'pending',
     };
   }
 
@@ -649,12 +632,6 @@ export class SandboxPaymentAdapter implements PaymentAdapter {
   }
   private readonly answered = new Set<string>();
 
-  /**
-   * A checkout order here is approved the moment it exists: the approval link is the return link with
-   * the order's token, as PayPal would add it. The order id carries what was ordered, so a capture after
-   * an API restart still settles the right amount. The cents of the amount choose the outcome, the way
-   * PayPal's own sandbox uses set amounts for its negative tests (see SANDBOX_CHECKOUT_CENTS).
-   */
   async createCheckoutOrder(req: CheckoutOrderRequest): Promise<CheckoutOrder> {
     assertCheckoutAmount(req.amountMinor);
     const order: SandboxOrder = {
@@ -705,11 +682,6 @@ export class SandboxPaymentAdapter implements PaymentAdapter {
   }
 }
 
-/**
- * The cents that make the sandbox's checkout capture go wrong, for tests and for trying the screens:
- * an amount of $50.91 is declined, $50.92 is held pending, $50.93 settles a dollar short, $50.94 was
- * never approved by the payer, and $50.95 loses the first answer to a capture that did happen.
- */
 export const SANDBOX_CHECKOUT_CENTS = {
   declined: 91,
   pending: 92,
@@ -735,7 +707,6 @@ function sandboxOrder(orderId: string): SandboxOrder {
         return order as SandboxOrder;
       }
     } catch {
-      // not one of ours; refused below
     }
   }
   throw new PaymentProviderError(`sandbox: there is no checkout order ${orderId.slice(0, 40)}`, { status: 404 });

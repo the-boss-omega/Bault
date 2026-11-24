@@ -25,9 +25,9 @@ function recipientsOf(payload: Record<string, unknown> | null): string[] {
   return [];
 }
 
-let mailer: EmailAdapter | undefined;
+let configuredMailer: EmailAdapter | undefined;
 function emailAdapter(): EmailAdapter {
-  return (mailer ??= createEmailAdapter(loadEnv()));
+  return (configuredMailer ??= createEmailAdapter(loadEnv()));
 }
 
 interface Recipient {
@@ -60,6 +60,7 @@ async function channelEnabled(
 }
 
 export const MAX_ATTEMPTS = 5;
+const CLAIM_IDLE_LIMIT = '5min';
 const RUN_LIMIT = 1_000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -93,7 +94,7 @@ async function withCodes(
   return out;
 }
 
-async function deliver(db: PoolClient, env: Env, row: OutboxRow) {
+async function deliver(db: PoolClient, env: Env, row: OutboxRow, mailer: EmailAdapter) {
   const counts = { delivered: 0, mailed: 0, failed: 0 };
   const payload = await withCodes(db, row.payload);
   const message = notificationMessage(row.event_type, payload);
@@ -119,7 +120,7 @@ async function deliver(db: PoolClient, env: Env, row: OutboxRow) {
     if (!person || person.status !== 'active' || !person.email) continue;
 
     try {
-      const result = await emailAdapter().send({
+      const result = await mailer.send({
         to: person.email,
         subject: eventSubject(row.event_type),
         template: 'notification_event',
@@ -147,7 +148,7 @@ async function deliver(db: PoolClient, env: Env, row: OutboxRow) {
   return counts;
 }
 
-export async function dispatchOutbox(pool: Pool): Promise<void> {
+export async function dispatchOutbox(pool: Pool, mailer: EmailAdapter = emailAdapter()): Promise<void> {
   const env = loadEnv();
   const tried: string[] = [];
   let dispatched = 0;
@@ -161,6 +162,7 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
     let claimed: OutboxRow | undefined;
     try {
       await client.query('BEGIN');
+      await client.query(`SET LOCAL idle_in_transaction_session_timeout = '${CLAIM_IDLE_LIMIT}'`);
       const { rows } = await client.query<OutboxRow>(
         `SELECT id, event_type, payload
            FROM outbox_message
@@ -182,9 +184,9 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
 
       const counts =
         claimed.event_type === PASSWORD_RESET_REQUESTED
-          ? await sendPasswordReset(client, claimed.payload, emailAdapter()).then(() => ({ delivered: 0, mailed: 0, failed: 0 }))
+          ? await sendPasswordReset(client, claimed.payload, mailer).then(() => ({ delivered: 0, mailed: 0, failed: 0 }))
           : claimed.event_type === MFA_EMAIL_CODE_REQUESTED
-            ? await sendMfaEmailCode(client, claimed.payload, emailAdapter()).then((sent) => ({
+            ? await sendMfaEmailCode(client, claimed.payload, mailer).then((sent) => ({
                 delivered: 0,
                 mailed: sent ? 1 : 0,
                 failed: 0,
@@ -193,9 +195,9 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
               ? await (claimed.event_type === EMAIL_CHANGE_REQUESTED ? sendEmailChangeLink : sendEmailChangedNotice)(
                   client,
                   claimed.payload,
-                  emailAdapter(),
+                  mailer,
                 ).then((sent) => ({ delivered: 0, mailed: sent ? 1 : 0, failed: 0 }))
-              : await deliver(client, env, claimed);
+              : await deliver(client, env, claimed, mailer);
       await client.query(
         `UPDATE outbox_message
             SET dispatched_at = now(), attempts = attempts + 1, last_attempt_at = now()

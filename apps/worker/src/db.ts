@@ -6,5 +6,10 @@ export function createPool(connectionString: string, max?: number): Pool {
   pool.on('error', (err) => {
     log.error('idle database connection lost', { error: err.message });
   });
+  pool.on('connect', (client) => {
+    client.on('error', (err) => {
+      log.error('database connection lost while in use', { error: err.message });
+    });
+  });
   return pool;
 }

@@ -41,6 +41,17 @@ const PROD = {
 };
 
 describe('environment schema', () => {
+  it('refuses live PayPal outside production, where the development key and console mail are allowed', async () => {
+    const live = { PAYMENT_PROVIDER: 'paypal', PAYPAL_CLIENT_ID: 'id', PAYPAL_CLIENT_SECRET: 'secret', PAYPAL_WEBHOOK_ID: 'wh' };
+    for (const NODE_ENV of ['development', 'test']) {
+      await expect(load({ ...DEV, ...live, NODE_ENV, PAYPAL_ENVIRONMENT: 'live' }), NODE_ENV).rejects.toThrow(
+        /PAYPAL_ENVIRONMENT: PAYPAL_ENVIRONMENT=live moves real money/,
+      );
+      expect((await load({ ...DEV, ...live, NODE_ENV, PAYPAL_ENVIRONMENT: 'sandbox' })).PAYPAL_ENVIRONMENT).toBe('sandbox');
+    }
+    expect((await load({ ...PROD, PAYPAL_ENVIRONMENT: 'live' })).PAYPAL_ENVIRONMENT).toBe('live');
+  });
+
   it('reads EXPOSE_API_DOCS=false as false', async () => {
     expect((await load({ ...DEV, EXPOSE_API_DOCS: 'false' })).EXPOSE_API_DOCS).toBe(false);
     expect((await load({ ...DEV, EXPOSE_API_DOCS: 'true' })).EXPOSE_API_DOCS).toBe(true);
