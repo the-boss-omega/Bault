@@ -8,13 +8,13 @@ import { AuditService } from '../sec/audit.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
 import { charge, externalPayment, ledgerRecord, walletRequest } from './pay.schema';
-import { CHARGEBACK_FEE_MINOR } from './money-terms';
+import { CHARGEBACK_FEE_ACTION, CHARGEBACK_FEE_MINOR } from './money-terms';
 
 type ChargebackInput = { reason: string; providerCaseRef?: string; chargeFee?: boolean };
 
 type ReversedCredit = {
   kind: 'external_payment' | 'wallet_request';
-  means: 'payment' | 'bank_transfer';
+  means: string;
   id: string;
   userId: string;
   amount: number;
@@ -30,12 +30,8 @@ export class ChargebackService {
     private readonly outbox: OutboxService,
   ) {}
 
-  terms() {
-    return { feeMinor: CHARGEBACK_FEE_MINOR };
-  }
-
   async record(operatorId: string, paymentId: string, input: ChargebackInput) {
-    if (!input.reason?.trim()) throw AppError.validation('Record why it was reversed');
+    if (!input.reason?.trim()) throw AppError.validation('Record why the payment was reversed.', { field: 'reason' });
 
     return this.db.transaction(async (tx) => {
       const [payment] = await tx
@@ -46,16 +42,17 @@ export class ChargebackService {
         .limit(1);
       if (!payment) throw AppError.notFound('Payment not found');
       if (payment.purpose !== 'topup') {
-        throw AppError.validation('Only a cash-in can be charged back');
+        throw AppError.validation('Only a cash-in can be charged back.');
       }
       if (payment.status === 'reversed') {
-        throw new AppError(ErrorCode.CONFLICT, 'That payment has already been reversed', 409);
+        throw new AppError(ErrorCode.CONFLICT, 'That payment has already been reversed.', 409);
       }
       if (payment.status !== 'succeeded') {
         throw new AppError(
           ErrorCode.CONFLICT,
-          `That payment is ${payment.status} — only a settled payment can be reversed`,
+          `That payment ${PAYMENT_STATUS_WORDS[payment.status] ?? 'has not settled'}, so there is nothing to reverse. Only a settled payment can be reversed.`,
           409,
+          { status: payment.status },
         );
       }
 
@@ -66,7 +63,7 @@ export class ChargebackService {
         operatorId,
         {
           kind: 'external_payment',
-          means: payment.provider === 'bank_transfer' ? 'bank_transfer' : 'payment',
+          means: 'payment',
           id: payment.id,
           userId: payment.userId,
           amount: payment.amount,
@@ -85,7 +82,7 @@ export class ChargebackService {
   }
 
   async recordCashInRecall(operatorId: string, requestId: string, input: ChargebackInput) {
-    if (!input.reason?.trim()) throw AppError.validation('Record why it was reversed');
+    if (!input.reason?.trim()) throw AppError.validation('Record why the cash-in was taken back.', { field: 'reason' });
 
     return this.db.transaction(async (tx) => {
       const [request] = await tx
@@ -96,13 +93,14 @@ export class ChargebackService {
         .limit(1);
       if (!request) throw AppError.notFound('Wallet request not found');
       if (request.type !== 'cash_in') {
-        throw AppError.validation('Only a cash-in request can be taken back');
+        throw AppError.validation('Only a cash-in request can be taken back.');
       }
       if (request.status !== 'completed' || !request.settledLedgerId) {
         throw new AppError(
           ErrorCode.CONFLICT,
-          `That request is ${request.status} — only a completed cash-in can be taken back`,
+          'That request has not been completed, so nothing was credited to take back. Only a completed cash-in can be taken back.',
           409,
+          { status: request.status },
         );
       }
 
@@ -121,7 +119,7 @@ export class ChargebackService {
         credit.referenceType !== 'wallet_request' ||
         credit.referenceId !== request.id
       ) {
-        throw new AppError(ErrorCode.CONFLICT, 'The credit for that request could not be found on the ledger', 409);
+        throw new AppError(ErrorCode.CONFLICT, 'The credit for that request could not be found on the ledger.', 409);
       }
 
       const [earlier] = await tx
@@ -136,7 +134,7 @@ export class ChargebackService {
         )
         .limit(1);
       if (earlier) {
-        throw new AppError(ErrorCode.CONFLICT, 'That cash-in has already been taken back', 409);
+        throw new AppError(ErrorCode.CONFLICT, 'That cash-in has already been taken back.', 409);
       }
 
       return this.takeBack(
@@ -144,7 +142,7 @@ export class ChargebackService {
         operatorId,
         {
           kind: 'wallet_request',
-          means: 'bank_transfer',
+          means: request.fundingSource ?? 'bank_transfer',
           id: request.id,
           userId: request.userId,
           amount: credit.amount,
@@ -175,7 +173,7 @@ export class ChargebackService {
         .insert(charge)
         .values({
           userId: credit.userId,
-          actionType: 'service',
+          actionType: CHARGEBACK_FEE_ACTION,
           pricingRuleSnapshot: {
             chargebackFee: true,
             ...(credit.kind === 'external_payment'
@@ -191,7 +189,7 @@ export class ChargebackService {
           referenceId: credit.id,
         })
         .returning({ id: charge.id });
-      if (!c) throw AppError.validation('Failed to charge the chargeback fee');
+      if (!c) throw new Error('Failed to charge the chargeback fee');
       await this.ledger.record(
         {
           userId: credit.userId,
@@ -284,6 +282,13 @@ export class ChargebackService {
       .slice(0, 100);
   }
 }
+
+const PAYMENT_STATUS_WORDS: Readonly<Record<string, string>> = {
+  pending: 'is still waiting for the provider',
+  failed: 'failed',
+  refused: 'was refused and never credited',
+  cancelled: 'was cancelled',
+};
 
 function settledAt(row: { createdAt: Date; completedAt?: Date | null }): number {
   return (row.completedAt ?? row.createdAt).getTime();

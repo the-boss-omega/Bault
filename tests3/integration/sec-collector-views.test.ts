@@ -280,6 +280,28 @@ describe('A4 wallet requests as a collector reads them', () => {
   });
 });
 
+describe('A4b cash-ins by provider as a collector reads them', () => {
+  it('names the route in words and carries no provider references, user id or webhook ids', async () => {
+    const golden = await signIn(SEED.collector2);
+    const idempotencyKey = `views-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    expect((await golden.post('/finance/checkout', { amountMinor: 1_000, route: 'card', idempotencyKey })).status).toBe(201);
+    const paypal = await golden.post('/finance/checkout/paypal', { amountMinor: 1_100, route: 'paypal_gs', idempotencyKey });
+    expect(paypal.status).toBe(201);
+
+    const res = await golden.get('/finance/payments');
+    expect(res.status).toBe(200);
+    const rows = res.body as Record<string, unknown>[];
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expectWithout(res.body, ['userId', 'provider', 'providerRef', 'externalRef', 'captureRef', 'webhookEventId', 'providerFeeMinor', 'purpose', 'updatedAt']);
+    for (const row of rows) expect(Object.keys(row).sort()).toEqual(['amount', 'createdAt', 'currency', 'id', 'route', 'status']);
+    const routes = rows.map((r) => r.route);
+    expect(routes).toContain('Card');
+    expect(routes).toContain('PayPal');
+    const other = (await (await signIn(SEED.collector)).get('/finance/payments')).body as { id: string }[];
+    expect(other.some((r) => r.id === paypal.body.paymentId)).toBe(false);
+  });
+});
+
 describe('A5 the notification feed a collector reads', () => {
   it('shows only in-app rows, with the message, codes and amounts and no ids or delivery internals', async () => {
     const red = await signIn(SEED.collector);
@@ -585,10 +607,57 @@ describe('A10 inbound parcels, addresses and show calendars as a collector reads
       trackingNumber: `VIEWS-${Date.now()}`,
     });
     expect(registered.status).toBe(201);
+    expectWithout(registered.body, ['facilityCode', 'facilityId', 'ownerId', 'receivedBy', 'openedBy', 'charges', 'notes']);
+    expectWith(registered.body, ['id', 'code', 'status']);
 
     const parcels = await red.get('/me/parcels');
     expectWithout(parcels.body, ['facilityCode', 'facilityId', 'ownerId']);
     expectWith(parcels.body, ['code', 'status', 'facilityName']);
+
+    const photo = await operator.post('/media/uploads', {
+      contentType: 'image/png',
+      dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      purpose: 'parcel',
+    });
+    expect(photo.status).toBe(201);
+    const arrived = await operator.post('/parcels/receive', {
+      facilityCode: (addresses.body as { code: string }[])[0]!.code,
+      addressedTo: 'red',
+      trackingNumber: `VIEWS-IN-${Date.now()}`,
+      notes: 'internal staff note',
+      photoKeys: [photo.body.objectKey as string],
+    });
+    expect(arrived.status).toBe(201);
+    const parcelId = arrived.body.id as string;
+    expect((await operator.post(`/parcels/${parcelId}/open`, { condition: 'sound', conditionNotes: 'Box intact.' })).status).toBe(201);
+    const PARCEL_DROPPED = [
+      'receivedBy',
+      'openedBy',
+      'actorId',
+      'facilityId',
+      'forwardedFromFacilityId',
+      'ownerId',
+      'objectKey',
+      'uploadedBy',
+      'notes',
+      'charges',
+      'metadata',
+    ];
+    const detail = await red.get(`/parcels/${parcelId}`);
+    expect(detail.status).toBe(200);
+    expectWithout(detail.body, PARCEL_DROPPED);
+    expect(JSON.stringify(detail.body)).not.toContain('internal staff note');
+    expectWith(detail.body, ['parcel', 'events', 'items', 'code', 'status', 'conditionNotes', 'eventType', 'occurredAt']);
+    const staffDetail = await operator.get(`/parcels/${parcelId}`);
+    expectWith(staffDetail.body, ['receivedBy', 'notes', 'actorId']);
+    const photos = await red.get(`/parcels/${parcelId}/photos`);
+    expect(photos.status).toBe(200);
+    expect(photos.body).toHaveLength(1);
+    expectWithout(photos.body, PARCEL_DROPPED);
+    expectWith(photos.body, ['id', 'kind', 'url', 'createdAt']);
+    const disposals = await red.get('/me/disposals');
+    expect(disposals.status).toBe(200);
+    expectWithout(disposals.body, ['ownerId', 'recordedBy', 'actorId']);
 
     const SHOW_DROPPED = ['capacity', 'booked', 'notes', 'active', 'pickupEnabled', 'pickupCapacity', 'partnerFeeNote', 'updatedAt'];
     const shows = await red.get('/shipping/pickup/shows');

@@ -12,7 +12,6 @@ import { facility } from './facility.schema';
 
 type FacilityRow = typeof facility.$inferSelect;
 
-/** A facility as the administrator sees it: the row, where it forwards to by code, and whether its address is still the seed's. */
 export interface AdminFacility {
   id: string;
   code: string;
@@ -50,7 +49,6 @@ export interface NewFacility {
   active?: boolean;
 }
 
-/** What may change once a facility exists. Its code and its role are what parcels, shelves and forwarding legs were written against. */
 export type FacilityChanges = Partial<Omit<NewFacility, 'code' | 'role'>>;
 
 const text = (value: string | null | undefined) => (value ?? '').trim();
@@ -230,7 +228,6 @@ function present(row: FacilityRow, all: readonly FacilityRow[]): AdminFacility {
   };
 }
 
-/** The primary facility a forwarding one hands its parcels to: named, existing, and primary (a leg is not forwarded twice). */
 function primaryNamed(all: readonly FacilityRow[], id: string | null | undefined): FacilityRow {
   if (!id)
     throw AppError.validation('Say which primary facility this one forwards its parcels to.');

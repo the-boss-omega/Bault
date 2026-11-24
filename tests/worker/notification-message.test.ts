@@ -151,6 +151,25 @@ describe('the sentence a collector reads for each event', () => {
         amountMinor: 5_000,
       }),
     ).toBe('Cash-out request WR-AAAA1111 could not be paid, so the $50.00 is back in your wallet.');
+    expect(
+      notificationMessage('wallet_request_completed', {
+        ...base,
+        type: 'cash_out',
+        amountMinor: 5_000,
+        feeMinor: 300,
+        netMinor: 4_700,
+      }),
+    ).toBe(
+      'Cash-out request WR-AAAA1111 has been paid: $50.00 has left your wallet, and $47.00 is on its way to your account after the $3.00 cash-out fee.',
+    );
+    expect(
+      notificationMessage('wallet_request_payout_failed', {
+        ...base,
+        type: 'cash_out',
+        amountMinor: 5_000,
+        afterPaid: true,
+      }),
+    ).toBe('Cash-out request WR-AAAA1111 was returned after it was sent, so the $50.00 is back in your wallet.');
     for (const event of [
       'wallet_request_submitted',
       'wallet_request_cancelled',
@@ -176,6 +195,10 @@ describe('the sentence a collector reads for each event', () => {
     });
     expect(card).toMatch(/^A payment of \$50\.00 into your wallet was reversed/);
     expect(card).not.toMatch(/friendly fraud|cardholder/);
+    expect(card).not.toMatch(/paying bank/);
+    const paypal = notificationMessage('payment_reversed', { amountMinor: 5_000, feeMinor: 0, kind: 'paypal' });
+    expect(paypal).toMatch(/^A PayPal payment of \$50\.00 into your wallet was reversed through PayPal,/);
+    expect(paypal).not.toMatch(/paying bank/);
   });
 
   it('names PayPal only when the collector paid with PayPal', () => {

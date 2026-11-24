@@ -233,9 +233,11 @@ export function notificationMessage(eventType: string, payload: Payload | null):
       const amt = num(p, 'amountMinor');
       const fee = num(p, 'feeMinor') ?? 0;
       const tail = fee > 0 ? ` A ${usd(fee)} handling fee was also charged.` : '';
-      const what = str(p, 'kind') === 'bank_transfer' ? 'bank transfer' : 'payment';
+      const kind = str(p, 'kind');
+      const what = kind === 'bank_transfer' ? 'bank transfer' : kind === 'paypal' ? 'PayPal payment' : 'payment';
+      const by = kind === 'bank_transfer' ? ' by the paying bank' : kind === 'paypal' ? ' through PayPal' : '';
       return amt != null
-        ? `A ${what} of ${usd(amt)} into your wallet was reversed by the paying bank, so it has been taken back off your balance.${tail} If you think this is wrong, open a support ticket.`
+        ? `A ${what} of ${usd(amt)} into your wallet was reversed${by}, so it has been taken back off your balance.${tail} If you think this is wrong, open a support ticket.`
         : `A ${what} into your wallet was reversed.${tail}`;
     }
     case 'escrow_proposed': {
@@ -343,12 +345,22 @@ export function notificationMessage(eventType: string, payload: Payload | null):
       const amt = num(p, 'amountMinor');
       const cashOut = str(p, 'type') === 'cash_out';
       if (amt == null) return `${cap(walletRequestNamed(p))} has been settled.`;
-      return cashOut
-        ? `${cap(walletRequestNamed(p))} has been paid: ${usd(amt)} has left your wallet for your account.`
-        : `${cap(walletRequestNamed(p))} has been settled: ${usd(amt)} is in your wallet.`;
+      if (!cashOut) return `${cap(walletRequestNamed(p))} has been settled: ${usd(amt)} is in your wallet.`;
+      const fee = num(p, 'feeMinor') ?? 0;
+      const net = num(p, 'netMinor');
+      if (fee > 0 && net != null) {
+        return `${cap(walletRequestNamed(p))} has been paid: ${usd(amt)} has left your wallet, and ${usd(net)} is on its way to your account after the ${usd(fee)} cash-out fee.`;
+      }
+      return `${cap(walletRequestNamed(p))} has been paid: ${usd(amt)} has left your wallet for your account.`;
     }
     case 'wallet_request_payout_failed': {
       const amt = num(p, 'amountMinor');
+      const returned = p.afterPaid === true;
+      if (returned) {
+        return amt != null
+          ? `${cap(walletRequestNamed(p))} was returned after it was sent, so the ${usd(amt)} is back in your wallet.`
+          : `${cap(walletRequestNamed(p))} was returned after it was sent, and the money is back in your wallet.`;
+      }
       return amt != null
         ? `${cap(walletRequestNamed(p))} could not be paid, so the ${usd(amt)} is back in your wallet.`
         : `${cap(walletRequestNamed(p))} could not be paid, and the money is back in your wallet.`;
