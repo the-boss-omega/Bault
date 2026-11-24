@@ -8,7 +8,7 @@ import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { item, itemChangeHistory } from '../cst/cst.schema';
-import { parcel, parcelEvent } from './parcel.schema';
+import { OPEN_PARCEL_STATUSES, parcel, parcelEvent } from './parcel.schema';
 import { ocrSuggestion, type OcrSubjectKind } from './ocr.schema';
 import {
   GRADING_BODIES,
@@ -168,7 +168,7 @@ export class OcrService {
           and(
             eq(parcel.trackingNumber, trackingNumber),
             ne(parcel.id, parcelId),
-            inArray(parcel.status, ['expected', 'received', 'opened', 'unclaimed']),
+            inArray(parcel.status, [...OPEN_PARCEL_STATUSES]),
           ),
         )
         .limit(1);

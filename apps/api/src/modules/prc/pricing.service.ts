@@ -3,11 +3,16 @@ import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
-import { applyBasisPoints, money, type Money } from '../../shared/money';
+import { applyBasisPoints, formatMinor, money, type Money } from '../../shared/money';
 import { userAccount } from '../acc/acc.schema';
 import { discountedMinor, tierRule, type TierKey } from '../mem/tiers';
 import { pricingRule } from './prc.schema';
 import { billableActions } from './billable-actions';
+
+export const MAX_ACTION_TYPE_LENGTH = 80;
+export const MAX_ITEM_CLASS_LENGTH = 80;
+export const MAX_RULE_DESCRIPTION_LENGTH = 300;
+export const MAX_FIXED_PRICE_MINOR = 1_000_000;
 
 export type BillingTrigger = 'per_event' | 'daily' | 'weekly' | 'monthly';
 
@@ -53,6 +58,12 @@ export class PricingService {
     if (input.model === 'percentage' && input.value > 10_000) {
       throw AppError.validation('A percentage rule is at most 10000 basis points (100%)', { field: 'value' });
     }
+    if (input.model === 'fixed' && input.value > MAX_FIXED_PRICE_MINOR) {
+      throw AppError.validation(
+        `A fixed price is at most ${formatMinor(MAX_FIXED_PRICE_MINOR)}. Check for an extra zero; the value is in cents.`,
+        { field: 'value' },
+      );
+    }
     const [row] = await this.db
       .insert(pricingRule)
       .values({
@@ -68,7 +79,7 @@ export class PricingService {
         updatedBy: adminId,
       })
       .returning();
-    if (!row) throw AppError.validation('Failed to create pricing rule');
+    if (!row) throw new Error('Failed to create pricing rule');
     return row;
   }
 

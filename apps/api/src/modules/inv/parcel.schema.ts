@@ -12,6 +12,8 @@ export const parcelStatus = pgEnum('parcel_status', [
   'disposed',
 ]);
 
+export const OPEN_PARCEL_STATUSES = ['expected', 'received', 'opened', 'unclaimed'] as const;
+
 export const parcelCondition = pgEnum('parcel_condition', [
   'sound',
   'packaging_damaged',

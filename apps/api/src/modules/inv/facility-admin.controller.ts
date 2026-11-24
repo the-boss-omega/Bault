@@ -43,7 +43,6 @@ class NewFacilityDto {
   @IsOptional() @IsBoolean() active?: boolean;
 }
 
-/** A facility's code and role are not here: parcels, shelves and forwarding legs were written against them. */
 class FacilityChangesDto {
   @IsOptional()
   @IsString()
@@ -75,7 +74,6 @@ class FacilityChangesDto {
   @IsOptional() @IsBoolean() active?: boolean;
 }
 
-/** The places parcels are sent to and shipped from, kept by an administrator. Customers see the active ones as their receiving addresses. */
 @ApiTags('INV')
 @Roles('admin')
 @Controller('admin/facilities')

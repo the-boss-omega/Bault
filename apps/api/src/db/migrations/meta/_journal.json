@@ -337,6 +337,13 @@
       "when": 1785076300000,
       "tag": "0047_a_tier_recompute_waits_for_the_account",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1785076400000,
+      "tag": "0048_moving_money_is_not_use",
+      "breakpoints": true
     }
   ]
 }

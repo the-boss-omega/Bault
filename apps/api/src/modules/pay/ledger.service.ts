@@ -82,6 +82,6 @@ export class LedgerService {
         ),
       )
       .where(eq(ledgerRecord.userId, userId))
-      .orderBy(sql`${ledgerRecord.occurredAt} desc`);
+      .orderBy(sql`${ledgerRecord.occurredAt} desc`, sql`${ledgerRecord.id} desc`);
   }
 }

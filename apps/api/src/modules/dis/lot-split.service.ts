@@ -8,6 +8,7 @@ import { CustodyService } from '../cst/custody.service';
 import { IntakeService } from '../inv/intake.service';
 import { item } from '../cst/cst.schema';
 import { ServiceRequestService } from './service.service';
+import { itemStateWords } from '../../shared/item-state-words';
 
 export interface LotSplitFulfillment {
   itemVerified: boolean;
@@ -30,7 +31,7 @@ export class LotSplitService {
       if (!it.isLot) throw AppError.validation('That item is not a lot');
       if (it.lotBroken) throw AppError.validation('That lot has already been split');
       if (it.lifecycleState !== 'stored') {
-        throw new AppError(ErrorCode.CONFLICT, `Item must be stored (it is ${it.lifecycleState})`, 409);
+        throw new AppError(ErrorCode.CONFLICT, `This card is ${itemStateWords(it.lifecycleState)}. It has to be in the vault first.`, 409);
       }
       if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
 
@@ -38,6 +39,7 @@ export class LotSplitService {
         type: 'batch_split',
         requesterId: ownerId,
         itemId,
+        commits: 'split',
         typeFields: {
           lotSize: it.lotSize,
           willCreate: it.lotSize,
