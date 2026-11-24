@@ -214,8 +214,8 @@ export class DisController {
   }
   @Roles('warehouse_operator', 'admin')
   @Post('requests/:id/deny')
-  deny(@Param('id') id: string) {
-    return this.requests.deny(id);
+  deny(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.requests.deny(user.id, id);
   }
 
   @Post('photography')

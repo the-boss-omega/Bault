@@ -64,6 +64,8 @@ export function billableActions(): BillableAction[] {
       'the agreed value',
     ),
 
+    action('custom', 'code_constant', 'dis/custom-request.service.ts', 'A custom request. The charge is the quote an operator writes and the collector accepts; no rule prices it.'),
+
     action('shipping', 'required', 'shp/shipment.service.ts', 'Handling added on top of the carrier rate. Every carrier quote needs it.'),
     action('shipping_rush', 'free_if_unpriced', 'shp/shipment.service.ts', 'Same-day picking and packing.'),
     ...SHIPMENT_ADD_ONS.map((addOn) =>

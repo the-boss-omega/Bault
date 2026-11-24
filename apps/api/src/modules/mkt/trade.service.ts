@@ -12,6 +12,7 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { item } from '../cst/cst.schema';
 import { swapProposal, transaction } from './mkt.schema';
 import { DEFAULT_CURRENCY } from '../pay/ledger.service';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
 
 @Injectable()
 export class TradeService {
@@ -34,6 +35,7 @@ export class TradeService {
     }
     await this.assertOwnedStoredUnheld(proposerId, offeredItemIds);
     await this.assertOwnedStoredUnheld(responderId, requestedItemIds);
+    await assertItemsUncommitted(this.db, [...offeredItemIds, ...requestedItemIds], 'offered in a swap');
 
     return this.db.transaction(async (tx) => {
       const [s] = await tx
@@ -56,6 +58,7 @@ export class TradeService {
       throw new AppError(ErrorCode.SELF_DEALING_FORBIDDEN, 'Cannot transfer to yourself', 403);
     }
     await this.assertOwnedStoredUnheld(fromUserId, [itemId]);
+    await assertItemsUncommitted(this.db, [itemId], 'given away');
     return this.confirmation.issue(fromUserId, 'transfer', { itemId, toUserId });
   }
 
@@ -65,6 +68,8 @@ export class TradeService {
       'transfer',
       confirmationToken,
     );
+    await this.assertOwnedStoredUnheld(fromUserId, [itemId]);
+    await assertItemsUncommitted(this.db, [itemId], 'given away');
     const [s] = await this.db
       .insert(swapProposal)
       .values({ proposerId: fromUserId, responderId: toUserId, offeredItemIds: [itemId], requestedItemIds: [], proposerApproved: true, responderApproved: false })
@@ -93,6 +98,7 @@ export class TradeService {
       const isTransfer = requested.length === 0;
 
       await this.custody.lockItems(tx, [...offered, ...requested]);
+      await assertItemsUncommitted(tx, [...offered, ...requested], isTransfer ? 'given away' : 'swapped', { swapId });
       for (const id of offered) {
         await this.custody.transferOwnership(tx, id, s.responderId, actorId, isTransfer ? 'gift transfer' : 'swap', {
           ownerId: s.proposerId,
