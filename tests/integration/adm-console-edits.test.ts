@@ -72,6 +72,29 @@ describe('saving a user the debt sweep suspended', () => {
   });
 });
 
+describe('an administrator editing their own account', () => {
+  it('refuses to suspend, close or demote them however the id is written', async () => {
+    const admin = await signIn(SEED.admin);
+    const [me] = await sql<{ id: string; role: string; status: string }>(
+      `SELECT id, role, status FROM user_account WHERE email = $1`,
+      [SEED.admin],
+    );
+    try {
+      for (const id of [me!.id, me!.id.toUpperCase()]) {
+        for (const body of [{ status: 'suspended' }, { status: 'closed' }, { role: 'user' }]) {
+          const res = await admin.patch(`/admin/users/${id}`, body);
+          expect(res.status, `${id} ${JSON.stringify(body)} ${JSON.stringify(res.body)}`).toBe(400);
+        }
+      }
+      expect((await admin.patch('/admin/users/not-a-uuid', { firstName: 'Nobody' })).status).toBe(400);
+    } finally {
+      await sql(`UPDATE user_account SET role = $2, status = $3 WHERE id = $1`, [me!.id, me!.role, me!.status]);
+    }
+    const [after] = await sql<{ role: string; status: string }>(`SELECT role, status FROM user_account WHERE id = $1`, [me!.id]);
+    expect(after).toEqual({ role: me!.role, status: me!.status });
+  });
+});
+
 describe("changing the owner of a listed card", () => {
   async function listedCard() {
     const operator = await signIn(SEED.operator);
@@ -124,3 +147,104 @@ describe("changing the owner of a listed card", () => {
     expect(await ownerAndState(itemId)).toEqual({ owner_id: to, lifecycle_state: 'on-hold' });
   });
 });
+
+describe('moving a card to another owner from the console', () => {
+  async function storedCard() {
+    const operator = await signIn(SEED.operator);
+    return (await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' })).id as string;
+  }
+  const ownerOf = async (itemId: string) =>
+    (await sql<{ owner_id: string }>(`SELECT owner_id FROM item WHERE id = $1`, [itemId]))[0]!.owner_id;
+
+  it('refuses an owner id that names no account, with a plain 400', async () => {
+    const admin = await signIn(SEED.admin);
+    const itemId = await storedCard();
+    const before = await ownerOf(itemId);
+
+    const res = await admin.patch(`/admin/items/${itemId}`, { ownerId: '00000000-0000-0000-0000-000000000001' });
+    expect(res.status, JSON.stringify(res.body)).toBe(400);
+    expect(res.body.error.message).toBe('No account has that id.');
+    expect((await admin.patch(`/admin/items/${itemId}`, { ownerId: 'nobody' })).status).toBe(400);
+    expect(await ownerOf(itemId)).toBe(before);
+  });
+
+  it('refuses a closed or pending account as the new owner, and takes an active or suspended one', async () => {
+    const admin = await signIn(SEED.admin);
+    const itemId = await storedCard();
+    const before = await ownerOf(itemId);
+    const target = await activeAccount('newowner');
+
+    for (const status of ['closed', 'pending'] as const) {
+      await sql(`UPDATE user_account SET status = $2 WHERE id = $1`, [target.id, status]);
+      const res = await admin.patch(`/admin/items/${itemId}`, { ownerId: target.id });
+      expect(res.status, status).toBe(400);
+      expect(res.body.error.message).toBe('The new owner has to be an active or suspended account.');
+      expect(await ownerOf(itemId)).toBe(before);
+    }
+    await sql(`UPDATE user_account SET status = 'suspended' WHERE id = $1`, [target.id]);
+    expect((await admin.patch(`/admin/items/${itemId}`, { ownerId: target.id.toUpperCase() })).status).toBe(200);
+    expect(await ownerOf(itemId)).toBe(target.id);
+  });
+});
+
+describe('a dispute moving through its steps', () => {
+  async function openDispute() {
+    const admin = await signIn(SEED.admin);
+    const txns = (await admin.get('/admin/transactions')).body as { id: string }[];
+    const opened = await admin.post('/admin/disputes', { transactionId: txns[0]!.id, note: 'Steps test' });
+    expect(opened.status, JSON.stringify(opened.body)).toBe(201);
+    return { admin, id: opened.body.id as string };
+  }
+
+  it('only moves forward, needs a ruling to be ruled, and stays closed', async () => {
+    const { admin, id } = await openDispute();
+    const to = (body: Record<string, unknown>) => admin.patch(`/admin/disputes/${id}`, body);
+
+    expect((await to({ status: 'investigating' })).status).toBe(200);
+    const back = await to({ status: 'open' });
+    expect(back.status).toBe(400);
+    expect(back.body.error.message).toBe('A dispute that is investigating cannot go back to open.');
+
+    const noRuling = await to({ status: 'ruled' });
+    expect(noRuling.status).toBe(400);
+    expect(noRuling.body.error.message).toBe('Write the ruling before marking the dispute ruled.');
+    const blank = await to({ status: 'ruled', ruling: '   ' });
+    expect(blank.status).toBe(400);
+    const long = await to({ status: 'ruled', ruling: 'x'.repeat(2001) });
+    expect(long.status).toBe(400);
+    expect(long.body.error.message).toBe('The ruling can be at most 2000 characters.');
+
+    const ruled = await to({ status: 'ruled', ruling: '  Refund the buyer.  ' });
+    expect(ruled.status, JSON.stringify(ruled.body)).toBe(200);
+    expect(ruled.body).toMatchObject({ status: 'ruled', ruling: 'Refund the buyer.' });
+    expect((await to({ status: 'ruled', ruling: 'Refund the buyer in full.' })).status).toBe(200);
+    expect((await to({ status: 'investigating' })).status).toBe(400);
+
+    expect((await to({ status: 'closed' })).status).toBe(200);
+    const reopened = await to({ status: 'closed', ruling: 'Changed my mind.' });
+    expect(reopened.status).toBe(400);
+    expect(reopened.body.error.message).toBe('This dispute is closed and cannot be changed.');
+    expect((await admin.patch('/admin/disputes/not-a-uuid', { status: 'closed' })).status).toBe(400);
+  });
+});
+
+describe("the console's sign-in log", () => {
+  it('counts as failures only what the lockout counts: a wrong password or a wrong code', async () => {
+    const stamp = Date.now();
+    const refusedOnly = `refused-${stamp}`;
+    const guessed = `guessed-${stamp}`;
+    for (let i = 0; i < 5; i += 1) {
+      await sql(
+        `INSERT INTO login_attempt (identifier, outcome, ip) VALUES ($1, 'refused', '10.9.0.1'), ($1, 'unverified', '10.9.0.1'),
+                ($2, $3, '10.9.0.2')`,
+        [refusedOnly, guessed, i % 2 === 0 ? 'bad_credentials' : 'mfa_failed'],
+      );
+    }
+    const log = await (await signIn(SEED.admin)).get('/admin/logins');
+    expect(log.status).toBe(200);
+    const flagged = (log.body.suspicious as { identifier: string }[]).map((s) => s.identifier);
+    expect(flagged).toContain(guessed);
+    expect(flagged).not.toContain(refusedOnly);
+  });
+});
+
