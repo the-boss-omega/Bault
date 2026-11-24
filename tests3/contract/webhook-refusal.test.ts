@@ -19,7 +19,7 @@ const GARBLED: WebhookDelivery = { rawBody: 'not json', headers: {} };
 function service() {
   const reported: unknown[] = [];
   const nothing = {} as never;
-  const svc = new topups.TopupService(nothing, new SandboxPaymentAdapter(), nothing, nothing, nothing, (error: unknown) => {
+  const svc = new topups.TopupService(nothing, new SandboxPaymentAdapter(), nothing, nothing, (error: unknown) => {
     reported.push(error);
   });
   const log = (svc as unknown as { logger: { error: (...a: unknown[]) => void; warn: (...a: unknown[]) => void } }).logger;

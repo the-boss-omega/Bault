@@ -7,19 +7,22 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { IsObjectKey } from '../../shared/object-key';
-import { WalletRequestService, collectorWalletRequestView } from './wallet-request.service';
+import { REVIEW_QUEUE_MAX_LIMIT, WalletRequestService, collectorWalletRequestView } from './wallet-request.service';
 import {
   FUNDING_SOURCES,
+  MAX_DESTINATION_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_REFERENCE_LENGTH,
   MAX_REJECTION_REASON_LENGTH,
@@ -34,7 +37,7 @@ class SubmitWalletRequestDto {
   @IsInt() @IsPositive() amountMinor!: number;
   @IsOptional() @IsIn([...SUPPORTED_CURRENCIES]) currency?: string;
   @IsOptional() @IsIn([...FUNDING_SOURCES]) fundingSource?: string;
-  @IsOptional() @IsString() @MaxLength(140) destinationAccount?: string;
+  @IsOptional() @IsString() @MaxLength(MAX_DESTINATION_LENGTH) destinationAccount?: string;
   @IsOptional() @IsString() @MaxLength(140) beneficiaryName?: string;
   @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) reference?: string;
   @IsOptional() @IsString() @MaxLength(400) @IsObjectKey() documentKey?: string;
@@ -66,6 +69,8 @@ class ReviewQueueQuery {
   @IsOptional() @IsString() @MaxLength(64) userId?: string;
   @IsOptional() @Matches(QUEUE_DATE, queueDate('from')) @IsISO8601({ strict: true }, queueDate('from')) from?: string;
   @IsOptional() @Matches(QUEUE_DATE, queueDate('to')) @IsISO8601({ strict: true }, queueDate('to')) to?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(REVIEW_QUEUE_MAX_LIMIT) limit?: number;
+  @IsOptional() @IsUUID('all', { message: 'before has to be the id of a request from an earlier page.' }) before?: string;
 }
 
 class ReconcileDto {
@@ -112,7 +117,15 @@ export class WalletRequestController {
   @Roles('admin')
   @Get('admin/wallet-requests')
   queue(@CurrentUser() user: AuthUser, @Query() q: ReviewQueueQuery) {
-    return this.requests.listForReview(user, { type: q.type, status: q.status, userId: q.userId, from: q.from, to: q.to });
+    return this.requests.listForReview(user, {
+      type: q.type,
+      status: q.status,
+      userId: q.userId,
+      from: q.from,
+      to: q.to,
+      limit: q.limit,
+      before: q.before,
+    });
   }
 
   @Roles('admin')

@@ -6,7 +6,7 @@ import { AppError } from '../../shared/errors/app-error';
 import { userAccount } from '../acc/acc.schema';
 import { usageTierRule } from './mem.schema';
 import { MembershipService } from './membership.service';
-import { TIER_RULES, TIER_WINDOW_DAYS, nextTier, tierRule, type TierKey } from './tiers';
+import { TIER_RULES, TIER_WINDOW_DAYS, nextTier, tierRule } from './tiers';
 
 @Injectable()
 export class UsageTierService implements OnModuleInit {
@@ -49,14 +49,6 @@ export class UsageTierService implements OnModuleInit {
     );
     const row = result.rows[0];
     return { actions: Number(row?.actions ?? 0), spentMinor: Number(row?.spent_minor ?? 0) };
-  }
-
-  async recompute(userId: string, reason: string, tx?: Database): Promise<TierKey> {
-    const exec = tx ?? this.db;
-    const result = await exec.execute<{ tier: TierKey | null }>(
-      sql`SELECT recompute_usage_tier(${userId}::uuid, ${reason}) AS tier`,
-    );
-    return tierRule(result.rows[0]?.tier).key;
   }
 
   async standing(userId: string) {

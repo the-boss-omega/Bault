@@ -234,6 +234,40 @@ describe('PAY cash-in by crypto: crediting it once', () => {
     expect(await balanceOf(red)).toBe(before);
   });
 
+  it('logs a charge:delayed for an administrator and credits nothing, then credits once on the charge:confirmed that follows', async () => {
+    const red = await signIn(SEED.collector, undefined, base);
+    const before = await balanceOf(red);
+    const started = await start(red, 4_150);
+
+    const delayed = await webhook(chargeEvent('charge:delayed', started));
+    expect(delayed.status).toBe(201);
+    expect(delayed.body?.outcome).toBe('ignored');
+    expect((await payment(started.paymentId)).status).toBe('pending');
+    expect(await credits(started.paymentId)).toEqual({ count: 0, totalMinor: 0 });
+    expect(await balanceOf(red)).toBe(before);
+
+    expect((await webhook(chargeEvent('charge:confirmed', started))).body?.outcome).toBe('applied');
+    expect((await payment(started.paymentId)).status).toBe('succeeded');
+    expect(await credits(started.paymentId)).toEqual({ count: 1, totalMinor: 4_150 });
+    expect(await balanceOf(red)).toBe(before + 4_150);
+  });
+
+  it('credits a charge marked failed when the network confirms it later, because the money arrived', async () => {
+    const red = await signIn(SEED.collector, undefined, base);
+    const before = await balanceOf(red);
+    const started = await start(red, 4_250);
+    expect((await webhook(chargeEvent('charge:failed', started))).body?.outcome).toBe('applied');
+    expect((await payment(started.paymentId)).status).toBe('failed');
+
+    const confirmed = chargeEvent('charge:confirmed', started);
+    expect((await webhook(confirmed)).body?.outcome).toBe('applied');
+    expect((await webhook(confirmed)).status).toBe(201);
+    expect((await payment(started.paymentId)).status).toBe('succeeded');
+    expect(await credits(started.paymentId)).toEqual({ count: 1, totalMinor: 4_250 });
+    expect(await settledEvents(started.paymentId)).toBe(1);
+    expect(await balanceOf(red)).toBe(before + 4_250);
+  });
+
   it('credits nothing when the processor reports another amount than was asked', async () => {
     const red = await signIn(SEED.collector, undefined, base);
     const before = await balanceOf(red);
