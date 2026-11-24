@@ -280,6 +280,28 @@ describe('A4 wallet requests as a collector reads them', () => {
   });
 });
 
+describe('A4b cash-ins by provider as a collector reads them', () => {
+  it('names the route in words and carries no provider references, user id or webhook ids', async () => {
+    const golden = await signIn(SEED.collector2);
+    const idempotencyKey = `views-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    expect((await golden.post('/finance/checkout', { amountMinor: 1_000, route: 'card', idempotencyKey })).status).toBe(201);
+    const paypal = await golden.post('/finance/checkout/paypal', { amountMinor: 1_100, route: 'paypal_gs', idempotencyKey });
+    expect(paypal.status).toBe(201);
+
+    const res = await golden.get('/finance/payments');
+    expect(res.status).toBe(200);
+    const rows = res.body as Record<string, unknown>[];
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expectWithout(res.body, ['userId', 'provider', 'providerRef', 'externalRef', 'captureRef', 'webhookEventId', 'providerFeeMinor', 'purpose', 'updatedAt']);
+    for (const row of rows) expect(Object.keys(row).sort()).toEqual(['amount', 'createdAt', 'currency', 'id', 'route', 'status']);
+    const routes = rows.map((r) => r.route);
+    expect(routes).toContain('Card');
+    expect(routes).toContain('PayPal');
+    const other = (await (await signIn(SEED.collector)).get('/finance/payments')).body as { id: string }[];
+    expect(other.some((r) => r.id === paypal.body.paymentId)).toBe(false);
+  });
+});
+
 describe('A5 the notification feed a collector reads', () => {
   it('shows only in-app rows, with the message, codes and amounts and no ids or delivery internals', async () => {
     const red = await signIn(SEED.collector);
@@ -451,6 +473,11 @@ describe('A7 shipping as a collector reads it', () => {
     expectWithout(created.body, SHIPMENT_DROPPED);
     expectWith(created.body, ['id', 'code', 'status', 'itemIds']);
 
+    const patched = await red.patch(`/shipping/shipments/${created.body.id}`, { recipientName: 'Red A. Ashwood' });
+    expect(patched.status).toBe(200);
+    expectWithout(patched.body, SHIPMENT_DROPPED);
+    expectWith(patched.body, ['id', 'code', 'status', 'itemIds', 'recipientName']);
+
     const rates = await red.get(`/shipping/shipments/${created.body.id}/rates`);
     expectWithout(rates.body, ['providerShipmentId', 'providerRateId']);
 
@@ -509,6 +536,43 @@ describe('A8 marketplace reads as a collector receives them', () => {
   });
 });
 
+describe('A8b marketplace answers a collector receives', () => {
+  it('answers an offer, a counter and a swap proposal without either party’s account id', async () => {
+    const operator = await signIn(SEED.operator);
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+    const item = await intakeFor(operator, SEED.collector, { description: 'Countered view card' });
+    const listed = await red.post('/marketplace/listings', { itemId: item.id, askingPrice: 90_00 });
+    expect(listed.status).toBe(201);
+    await fundWallet(SEED.collector2, 20_000);
+
+    const offered = await golden.post(`/marketplace/listings/${listed.body.id}/offers`, { amount: 60_00 });
+    expect(offered.status).toBe(201);
+    expectWithout(offered.body, ['buyerId', 'sellerId', 'parentOfferId']);
+    expectWith(offered.body, ['id', 'amount', 'currency', 'status', 'proposedBy', 'createdAt']);
+
+    const countered = await red.post(`/marketplace/offers/${offered.body.id}/respond`, { action: 'counter', amount: 80_00 });
+    expect(countered.status).toBe(201);
+    expectWithout(countered.body, ['buyerId', 'sellerId', 'parentOfferId']);
+    expectWith(countered.body, ['id', 'amount', 'currency', 'status', 'proposedBy', 'createdAt']);
+    expect(countered.body.proposedBy).toBe('seller');
+
+    const mine = await intakeFor(operator, SEED.collector2, { description: 'Swap view card offered' });
+    const theirs = await intakeFor(operator, SEED.collector, { description: 'Swap view card requested' });
+    const proposed = await golden.post('/marketplace/swaps', {
+      responderUsername: 'red',
+      offeredItemIds: [mine.id],
+      requestedItemIds: [theirs.id],
+    });
+    expect(proposed.status).toBe(201);
+    expectWithout(proposed.body, ['proposerId', 'responderId', 'ownerId']);
+    expect(proposed.body.proposerUsername).toBe('golden');
+    expect(proposed.body.responderUsername).toBe('red');
+    expect(proposed.body.offeredItems.map((i: { id: string }) => i.id)).toEqual([mine.id]);
+    expect(proposed.body.requestedItems.map((i: { id: string }) => i.id)).toEqual([theirs.id]);
+  });
+});
+
 describe('A9 the pricing rule table', () => {
   it('is for admins only, while the public price list stays open', async () => {
     const red = await signIn(SEED.collector);
@@ -543,10 +607,57 @@ describe('A10 inbound parcels, addresses and show calendars as a collector reads
       trackingNumber: `VIEWS-${Date.now()}`,
     });
     expect(registered.status).toBe(201);
+    expectWithout(registered.body, ['facilityCode', 'facilityId', 'ownerId', 'receivedBy', 'openedBy', 'charges', 'notes']);
+    expectWith(registered.body, ['id', 'code', 'status']);
 
     const parcels = await red.get('/me/parcels');
     expectWithout(parcels.body, ['facilityCode', 'facilityId', 'ownerId']);
     expectWith(parcels.body, ['code', 'status', 'facilityName']);
+
+    const photo = await operator.post('/media/uploads', {
+      contentType: 'image/png',
+      dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      purpose: 'parcel',
+    });
+    expect(photo.status).toBe(201);
+    const arrived = await operator.post('/parcels/receive', {
+      facilityCode: (addresses.body as { code: string }[])[0]!.code,
+      addressedTo: 'red',
+      trackingNumber: `VIEWS-IN-${Date.now()}`,
+      notes: 'internal staff note',
+      photoKeys: [photo.body.objectKey as string],
+    });
+    expect(arrived.status).toBe(201);
+    const parcelId = arrived.body.id as string;
+    expect((await operator.post(`/parcels/${parcelId}/open`, { condition: 'sound', conditionNotes: 'Box intact.' })).status).toBe(201);
+    const PARCEL_DROPPED = [
+      'receivedBy',
+      'openedBy',
+      'actorId',
+      'facilityId',
+      'forwardedFromFacilityId',
+      'ownerId',
+      'objectKey',
+      'uploadedBy',
+      'notes',
+      'charges',
+      'metadata',
+    ];
+    const detail = await red.get(`/parcels/${parcelId}`);
+    expect(detail.status).toBe(200);
+    expectWithout(detail.body, PARCEL_DROPPED);
+    expect(JSON.stringify(detail.body)).not.toContain('internal staff note');
+    expectWith(detail.body, ['parcel', 'events', 'items', 'code', 'status', 'conditionNotes', 'eventType', 'occurredAt']);
+    const staffDetail = await operator.get(`/parcels/${parcelId}`);
+    expectWith(staffDetail.body, ['receivedBy', 'notes', 'actorId']);
+    const photos = await red.get(`/parcels/${parcelId}/photos`);
+    expect(photos.status).toBe(200);
+    expect(photos.body).toHaveLength(1);
+    expectWithout(photos.body, PARCEL_DROPPED);
+    expectWith(photos.body, ['id', 'kind', 'url', 'createdAt']);
+    const disposals = await red.get('/me/disposals');
+    expect(disposals.status).toBe(200);
+    expectWithout(disposals.body, ['ownerId', 'recordedBy', 'actorId']);
 
     const SHOW_DROPPED = ['capacity', 'booked', 'notes', 'active', 'pickupEnabled', 'pickupCapacity', 'partnerFeeNote', 'updatedAt'];
     const shows = await red.get('/shipping/pickup/shows');
@@ -593,6 +704,26 @@ describe('A11 support tickets as a collector reads them', () => {
     const staff = await operator.get(`/support/tickets/${opened.body.id}`);
     expectWith(staff.body, ['userId', 'assignedTo', 'authorUsername']);
     expect(JSON.stringify(staff.body)).toMatch(/hermon/);
+  });
+});
+
+describe('A11b notification preferences as a collector reads them', () => {
+  it('sends the matrix of choices and answers a change with the choice alone', async () => {
+    const red = await signIn(SEED.collector);
+    const saved = await red.request('PUT', '/notifications/preferences', {
+      eventType: 'item_sold',
+      channel: 'email',
+      enabled: false,
+    });
+    expect(saved.status).toBeLessThan(300);
+    expect(saved.body).toEqual({ eventType: 'item_sold', channel: 'email', enabled: false });
+
+    const prefs = await red.get('/notifications/preferences');
+    expect(prefs.status).toBe(200);
+    expectWithout(prefs.body, ['rows', 'id', 'userId', 'createdAt', 'updatedAt']);
+    expectWith(prefs.body, ['categories', 'channels', 'events', 'eventType', 'enabled', 'isDefault', 'mandatory']);
+
+    await red.request('PUT', '/notifications/preferences', { eventType: 'item_sold', channel: 'email', enabled: true });
   });
 });
 

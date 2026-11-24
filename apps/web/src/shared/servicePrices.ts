@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
-import { formatUsd } from './money';
+import { formatPercent, formatUsd } from './money';
 import { discountedMinor } from './tiers';
 
 export interface PriceEntry {
@@ -49,7 +49,7 @@ export function useServicePrices(): Map<string, PriceEntry> {
 }
 
 export function formatEntryValue(entry: Pick<PriceEntry, 'model'>, value: number): string {
-  if (entry.model === 'percentage') return `${(value / 100).toFixed(value % 100 === 0 ? 0 : 2)}%`;
+  if (entry.model === 'percentage') return formatPercent(value);
   return formatUsd(value);
 }
 

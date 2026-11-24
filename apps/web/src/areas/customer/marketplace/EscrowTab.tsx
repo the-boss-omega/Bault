@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
-import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
+import { bpsToPercent, dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import {
   ESCROW_TONE,
   escrowEventLabel,
@@ -117,7 +117,6 @@ export function EscrowTab() {
     !belowFloor &&
     (external ? outsideName.trim() !== '' && outsideEmail.trim() !== '' : username.trim() !== '');
 
-  // What has not been typed yet is a dash, never a value made up.
   const quiet = <span className="drawer-tag-quiet">—</span>;
   const otherSide = external ? (
     outsideName.trim() || outsideEmail.trim() ? (
@@ -174,7 +173,7 @@ export function EscrowTab() {
         {terms && (
           <p className="field-hint">
             {t('esc.terms', {
-              percent: (terms.feeBps / 100).toFixed(2),
+              percent: bpsToPercent(terms.feeBps),
               min: formatUsd(terms.minimumFeeMinor),
               floor: formatUsd(terms.minimumValueMinor),
             })}
@@ -287,7 +286,6 @@ export function EscrowTab() {
             </Field>
           </div>
 
-          {/* The deal as the other side will read it: the price, who is who, what it is for, what it costs and how it ends. */}
           <aside className="request-slip">
             <DrawerTag
               kicker={t('esc.value')}
@@ -500,6 +498,7 @@ function DealDrawer({
   const { deal, events } = detail;
   const iAmBuyer = deal.myRole === 'buyer';
   const iAmSeller = deal.myRole === 'seller';
+  const fundMinor = deal.valueMinor + (deal.raiserRole === 'buyer' ? deal.feeMinor : 0);
   const mismatch = deal.inspectionMatches === 'no';
   const myRelease = iAmBuyer ? deal.buyerReleasedAt : deal.sellerReleasedAt;
 
@@ -589,7 +588,7 @@ function DealDrawer({
             disabled={busy}
             onClick={() => setConfirming('fund')}
           >
-            {t('esc.fund', { amount: formatUsd(deal.valueMinor) })}
+            {t('esc.fund', { amount: formatUsd(fundMinor) })}
           </Button>
           <span className="field-hint">{t('esc.fundHint')}</span>
         </div>
@@ -669,7 +668,7 @@ function DealDrawer({
                 : confirming === 'release'
                   ? 'escrow.confirm.releaseBody'
                   : 'escrow.confirm.returnBody',
-              { amount: formatUsd(deal.valueMinor), code: deal.code },
+              { amount: formatUsd(confirming === 'release' ? deal.valueMinor : fundMinor), code: deal.code },
             )}
           </p>
         }

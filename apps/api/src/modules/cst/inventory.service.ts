@@ -109,8 +109,8 @@ export class InventoryService {
   async reportPdf(cut: Cut): Promise<Buffer> {
     const report = await this.report(cut);
     return renderReportPdf({
-      title: 'Card Embassy — Inventory Report',
-      subtitle: `${report.label} · generated ${report.generatedAt.slice(0, 19).replace('T', ' ')} UTC`,
+      title: 'Card Embassy - Inventory Report',
+      subtitle: `${report.label} - generated ${report.generatedAt.slice(0, 19).replace('T', ' ')} UTC`,
       columns: [report.label, 'Items'],
       rows: report.rows.map((r) => ({ label: r.label, count: r.count })),
       total: report.total,
@@ -385,10 +385,6 @@ export class InventoryService {
     return this.stow.listWithCounts();
   }
 
-  /**
-   * What is on one shelf, read only: each item by the number it carries and what it is, and where it stands.
-   * The shelf's count (listBins) and this list are the same rows, counted and read.
-   */
   async binItems(binId: string) {
     const [shelf] = await this.db
       .select({
@@ -414,7 +410,6 @@ export class InventoryService {
         holdFlag: item.holdFlag,
       })
       .from(item)
-      // A lot that has been split is not on the shelf any more (its pieces are): the count leaves it out, and so does this.
       .where(and(eq(item.binId, binId), eq(item.lotBroken, false)))
       .orderBy(item.serialNumber);
     return { bin: shelf, items };

@@ -459,7 +459,7 @@ describe('SHP outbound shipping', () => {
     const operator = await signIn(SEED.operator);
     const cases = [];
     for (let i = 0; i < 3; i += 1) {
-      cases.push(await intakeFor(operator, SEED.collector3, { typeClass: 'sealed_case' }));
+      cases.push(await intakeFor(operator, SEED.collector3, { typeClass: 'sealed_case', binId: undefined, autoStow: true }));
     }
     const broke = await signIn(SEED.collector3);
     const au = await addressFor(broke, {

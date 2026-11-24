@@ -11,10 +11,10 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
 import { externalPayment } from './pay.schema';
 import { WALLET_REQUEST_LIMITS } from './wallet-request.rules';
-import { FUNDING_ROUTES, isInstantRoute } from './money-terms';
+import { FUNDING_ROUTES, fundingRoute, isInstantRoute } from './money-terms';
 import { formatMinor } from '../../shared/money';
-import { CHECKOUT_LANDING, paypalCheckoutOffered } from './paypal-checkout.service';
-import { cryptoCheckoutOffered } from './crypto-checkout.service';
+import { CHECKOUT_LANDING, PAYPAL_CHECKOUT_REF_PREFIX, paypalCheckoutOffered } from './paypal-checkout.service';
+import { CRYPTO_CHECKOUT_REF_PREFIX, cryptoCheckoutOffered } from './crypto-checkout.service';
 
 const CRYPTO_ROUTE = {
   key: 'crypto',
@@ -28,7 +28,6 @@ const CRYPTO_ROUTE = {
   instructions: null,
 };
 
-/** What an instant route says when PayPal checkout takes it. */
 const PAYPAL_CHECKOUT_DESCRIPTION: Readonly<Record<string, string>> = {
   card: "Pay by debit or credit card on PayPal's secure page; no PayPal account is needed. The balance moves as soon as PayPal confirms the payment.",
   paypal_gs: "Pay from your PayPal account on PayPal's own page, with PayPal buyer protection. The balance moves as soon as PayPal confirms the payment.",
@@ -43,10 +42,6 @@ export class CheckoutService {
     private readonly outbox: OutboxService,
   ) {}
 
-  /**
-   * The direct top-up of `checkout`, which settles with no approved order at all. Only the sandbox
-   * provider takes it: with PayPal it would capture whatever order id it was handed, anybody's.
-   */
   private instantAvailable(): boolean {
     return loadEnv().PAYMENT_PROVIDER === 'sandbox';
   }
@@ -113,7 +108,7 @@ export class CheckoutService {
     if (!this.instantAvailable()) {
       throw AppError.conflict(
         ErrorCode.CONFLICT,
-        `${route.label} top-ups are not available yet. Raise a cash-in request by bank transfer or PayPal Friends & Family and it will be reviewed.`,
+        `Cashing in by ${route.label} is not available yet. Raise a cash-in request by bank transfer or PayPal Friends & Family and it will be reviewed.`,
       );
     }
 
@@ -147,8 +142,8 @@ export class CheckoutService {
         .from(externalPayment)
         .where(and(eq(externalPayment.userId, userId), eq(externalPayment.providerRef, providerRef)))
         .limit(1);
-      if (!existing) {
-        throw AppError.conflict(ErrorCode.IDEMPOTENCY_KEY_REUSED, 'That idempotency key has already been used.');
+      if (!existing || existing.amount !== input.amountMinor || existing.provider !== input.route) {
+        throw AppError.conflict(ErrorCode.IDEMPOTENCY_KEY_REUSED, 'That idempotency key was used for a different cash-in.');
       }
       return { status: existing.status, paymentId: existing.id, amountMinor: existing.amount, replayed: true };
     }
@@ -202,9 +197,10 @@ export class CheckoutService {
         .set({ status: result.status, updatedAt: new Date() })
         .where(and(eq(externalPayment.id, pending.id), eq(externalPayment.status, 'pending')))
         .returning();
-      if (!ep) throw AppError.validation('Failed to record the payment');
+      if (!ep) throw new Error('Failed to record the payment');
 
       if (result.status === 'succeeded') {
+        await this.ledger.lockWallet(userId, tx as Database);
         await this.ledger.record(
           {
             userId,
@@ -229,25 +225,48 @@ export class CheckoutService {
     });
   }
 
-  listMine(userId: string) {
-    return this.db
+  async listMine(userId: string) {
+    const rows = await this.db
       .select({
         id: externalPayment.id,
-        userId: externalPayment.userId,
         provider: externalPayment.provider,
         providerRef: externalPayment.providerRef,
-        purpose: externalPayment.purpose,
         status: externalPayment.status,
         amount: externalPayment.amount,
         currency: externalPayment.currency,
-        externalRef: externalPayment.externalRef,
-        captureRef: externalPayment.captureRef,
-        webhookEventId: externalPayment.webhookEventId,
         createdAt: externalPayment.createdAt,
-        updatedAt: externalPayment.updatedAt,
       })
       .from(externalPayment)
       .where(and(eq(externalPayment.userId, userId), eq(externalPayment.purpose, 'topup')))
-      .orderBy(externalPayment.createdAt);
+      .orderBy(externalPayment.createdAt, externalPayment.id);
+    return rows.map(collectorPaymentView);
   }
+}
+
+export function cashInRouteLabel(row: { provider: string; providerRef: string }): string {
+  if (row.providerRef.startsWith(PAYPAL_CHECKOUT_REF_PREFIX)) {
+    const key = row.providerRef.slice(PAYPAL_CHECKOUT_REF_PREFIX.length).split(':')[0] ?? '';
+    return key === 'card' ? 'Card through PayPal' : 'PayPal';
+  }
+  if (row.providerRef.startsWith(CRYPTO_CHECKOUT_REF_PREFIX)) return CRYPTO_ROUTE.label;
+  return fundingRoute(row.provider)?.label ?? 'Cash-in';
+}
+
+export function collectorPaymentView(row: {
+  id: string;
+  provider: string;
+  providerRef: string;
+  status: string;
+  amount: number;
+  currency: string;
+  createdAt: Date;
+}) {
+  return {
+    id: row.id,
+    route: cashInRouteLabel(row),
+    status: row.status,
+    amount: row.amount,
+    currency: row.currency,
+    createdAt: row.createdAt,
+  };
 }

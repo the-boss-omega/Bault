@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Database } from '../../db/client';
 import type { BillableAction, BillingPort, ChargeOutcome } from '../../shared/billing/billing.port';
-import { AppError } from '../../shared/errors/app-error';
 import { PricingService } from '../prc/pricing.service';
 import { MembershipService } from '../mem/membership.service';
 import { allowanceFor } from '../mem/tiers';
@@ -43,7 +42,7 @@ export class BillingService implements BillingPort {
         referenceId: action.itemId,
       })
       .returning({ id: charge.id });
-    if (!row) throw AppError.validation('Failed to create charge');
+    if (!row) throw new Error('Failed to create charge');
 
     await this.ledger.record(
       {

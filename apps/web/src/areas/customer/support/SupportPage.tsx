@@ -10,6 +10,7 @@ import {
   TICKET_TONE,
   ticketCategoryLabel,
   ticketStatusLabel,
+  type SupportMessage,
   type SupportThread,
   type SupportTicket,
 } from '../../../shared/support';
@@ -310,7 +311,6 @@ function NewTicketForm({
           </Field>
         </div>
 
-        {/* The ticket as it will be filed: its subject, its kind, how it begins, where it will stand. */}
         <aside className="request-slip">
           <DrawerTag
             kicker={t('support.newTitle')}
@@ -339,6 +339,15 @@ function NewTicketForm({
       </div>
     </Panel>
   );
+}
+
+function authorLabel(t: TranslateFn, message: SupportMessage, staff: boolean): string {
+  const fromStaff = messageFromStaff(message);
+  if (!staff) return fromStaff ? t('support.fromStaff') : t('support.fromYou');
+  if (fromStaff) {
+    return message.authorUsername ? t('support.fromStaffNamed', { username: message.authorUsername }) : t('support.fromStaff');
+  }
+  return message.authorUsername ?? t('support.fromCustomer');
 }
 
 export function ThreadDrawer({
@@ -451,7 +460,7 @@ export function ThreadDrawer({
               <li key={m.id} className="detail-row" style={{ display: 'block' }}>
                 <div className="row" style={{ gap: 'var(--sp-2)' }}>
                   <StatusBadge tone={messageFromStaff(m) ? 'gold' : 'info'} plain>
-                    {messageFromStaff(m) ? t('support.fromStaff') : t('support.fromYou')}
+                    {authorLabel(t, m, staff)}
                   </StatusBadge>
                   <span className="hint date">{formatDateTime(m.createdAt, locale)}</span>
                 </div>

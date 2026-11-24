@@ -1,3 +1,5 @@
+import { formatMinor } from '../../shared/money';
+
 export type WalletRequestType = 'cash_in' | 'cash_out';
 
 export type WalletRequestStatus =
@@ -30,15 +32,9 @@ export const OPEN_WALLET_REQUEST_STATUSES: readonly WalletRequestStatus[] = [
   'processing',
 ];
 
-export function isOpenStatus(status: WalletRequestStatus): boolean {
-  return OPEN_WALLET_REQUEST_STATUSES.includes(status);
-}
-
 export function canTransition(from: WalletRequestStatus, to: WalletRequestStatus): boolean {
   return (WALLET_REQUEST_TRANSITIONS[from] ?? []).includes(to);
 }
-
-export const REQUESTER_TRANSITIONS: readonly WalletRequestStatus[] = ['cancelled'];
 
 export const WALLET_REQUEST_LIMITS: Readonly<
   Record<WalletRequestType, { minMinor: number; maxMinor: number }>
@@ -57,6 +53,9 @@ export const FUNDING_SOURCES: readonly string[] = [
   'other',
 ];
 
+const FUNDING_SOURCE_LABELS = 'a bank transfer, a card, PayPal, crypto or another way';
+
+export const MAX_DESTINATION_LENGTH = 140;
 export const MAX_NOTE_LENGTH = 500;
 export const MAX_REFERENCE_LENGTH = 120;
 export const MAX_REJECTION_REASON_LENGTH = 500;
@@ -83,23 +82,24 @@ export function validateWalletRequestDraft(draft: WalletRequestDraft): WalletReq
   const problems: WalletRequestViolation[] = [];
   const limits = WALLET_REQUEST_LIMITS[draft.type];
 
+  const what = draft.type === 'cash_out' ? 'cash-out' : 'cash-in';
   if (!Number.isInteger(draft.amountMinor) || draft.amountMinor <= 0) {
     problems.push({
       field: 'amountMinor',
       code: 'amount_not_positive',
-      message: 'Amount must be a positive whole number of cents.',
+      message: 'Enter an amount above $0.00, to the cent.',
     });
   } else if (draft.amountMinor < limits.minMinor) {
     problems.push({
       field: 'amountMinor',
       code: 'amount_below_minimum',
-      message: `Amount is below the ${limits.minMinor / 100} minimum for this request type.`,
+      message: `The smallest ${what} is ${formatMinor(limits.minMinor)}.`,
     });
   } else if (draft.amountMinor > limits.maxMinor) {
     problems.push({
       field: 'amountMinor',
       code: 'amount_above_maximum',
-      message: `Amount is above the ${limits.maxMinor / 100} maximum for this request type.`,
+      message: `The largest ${what} is ${formatMinor(limits.maxMinor)}.`,
     });
   }
 
@@ -116,7 +116,7 @@ export function validateWalletRequestDraft(draft: WalletRequestDraft): WalletReq
       problems.push({
         field: 'fundingSource',
         code: 'funding_source_required',
-        message: `Funding source must be one of: ${FUNDING_SOURCES.join(', ')}.`,
+        message: `Say how the money was sent: ${FUNDING_SOURCE_LABELS}.`,
       });
     }
   } else {
@@ -125,6 +125,12 @@ export function validateWalletRequestDraft(draft: WalletRequestDraft): WalletReq
         field: 'destinationAccount',
         code: 'destination_required',
         message: 'A destination account is required for a cash-out.',
+      });
+    } else if (draft.destinationAccount.length > MAX_DESTINATION_LENGTH) {
+      problems.push({
+        field: 'destinationAccount',
+        code: 'destination_too_long',
+        message: `The destination account is limited to ${MAX_DESTINATION_LENGTH} characters.`,
       });
     }
     if (!draft.beneficiaryName || draft.beneficiaryName.trim().length < 2) {
@@ -148,16 +154,4 @@ export function validateWalletRequestDraft(draft: WalletRequestDraft): WalletReq
   }
 
   return problems;
-}
-
-export function isDuplicateOf(
-  a: WalletRequestDraft,
-  b: { type: string; amount: number; currency: string; reference: string | null },
-): boolean {
-  return (
-    a.type === b.type &&
-    a.amountMinor === b.amount &&
-    a.currency.toUpperCase() === b.currency.toUpperCase() &&
-    (a.reference ?? null) === (b.reference ?? null)
-  );
 }

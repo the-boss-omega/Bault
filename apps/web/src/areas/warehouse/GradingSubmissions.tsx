@@ -243,7 +243,11 @@ function OpenSubmission({
         `/services/grading/submissions/${submission!.id}/ship`,
         { trackingNumber: tracking.trim(), externalReference: reference.trim(), notes: notes.trim() },
       );
-      onDone(t('grade.subs.shipped', { count: result.itemCount }));
+      onDone(
+        result.itemCount === 1
+          ? t('grade.subs.shippedOne')
+          : t('grade.subs.shipped', { count: result.itemCount }),
+      );
     } catch (e) {
       onError((e as Error).message);
     } finally {

@@ -1,4 +1,4 @@
-import { formatMinor } from '../../shared/money';
+import { usdAmount } from '../shp/shipping-options';
 
 export interface ConsignmentChannel {
   key: string;
@@ -70,10 +70,6 @@ export function consignmentChannel(key: string): ConsignmentChannel | undefined 
   return BY_KEY.get(key);
 }
 
-export function isKnownChannel(key: string): boolean {
-  return BY_KEY.has(key);
-}
-
 export function channelFeeAction(key: string): string {
   return `consignment_fee:${key}`;
 }
@@ -102,7 +98,7 @@ export function checkEligibility(
   if (channel.minAskingMinor > 0 && input.askingMinor < channel.minAskingMinor) {
     problems.push({
       field: 'askingPrice',
-      message: `${channel.label} has a minimum of ${formatMinor(channel.minAskingMinor)}.`,
+      message: `${channel.label} has a minimum of ${usdAmount(channel.minAskingMinor)}.`,
     });
   }
 

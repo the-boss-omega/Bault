@@ -1,14 +1,13 @@
-import { randomInt } from 'node:crypto';
 import { AppError } from '../../shared/errors/app-error';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { assemblePdf, escapeText } from '../cst/report-pdf';
 
 export function makeItemSerial(): string {
-  return `${ID_PREFIX.item}-${Date.now().toString(36).toUpperCase()}-${randomInt(1000, 9999)}`;
+  return prefixedId(`${ID_PREFIX.item}-${Date.now().toString(36).toUpperCase()}`, 6);
 }
 
 export function makeLotSerial(): string {
-  return `LOT-${Date.now().toString(36).toUpperCase()}-${randomInt(1000, 9999)}`;
+  return prefixedId(`${ID_PREFIX.lot}-${Date.now().toString(36).toUpperCase()}`, 6);
 }
 
 export function makeItemBarcode(serial: string): string {

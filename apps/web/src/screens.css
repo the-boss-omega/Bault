@@ -216,8 +216,8 @@
 }
 
 .statement-wordmark::before {
-  content: 'BAULT';
-  content: 'BAULT' / '';
+  content: 'CARD EMBASSY';
+  content: 'CARD EMBASSY' / '';
   display: block;
   writing-mode: vertical-rl;
   font: 700 11px/1 var(--font-display);
@@ -1969,6 +1969,18 @@ li.is-clickable {
   grid-column: 1 / -1;
   color: var(--paper-ink-3);
   font-size: var(--fs-caption);
+}
+
+.fee-run-items {
+  grid-column: 1 / -1;
+  margin-block-start: var(--sp-2);
+  font-size: var(--fs-caption);
+  color: var(--paper-ink-2);
+}
+
+.fee-run-items ul {
+  margin: var(--sp-1) 0 0;
+  padding-inline-start: var(--sp-4);
 }
 
 /* ---- A dispute as a case file: the ruling, the transaction, the note, and under it the controls that move it on ---- */

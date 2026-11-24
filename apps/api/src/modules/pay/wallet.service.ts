@@ -11,6 +11,7 @@ import {
 import { ErrorCode } from '../../shared/errors/error-codes';
 import { isNegative } from '../../shared/money';
 import { LedgerService } from './ledger.service';
+import { WALLET_REQUEST_LIMITS } from './wallet-request.rules';
 import type { Database } from '../../db/client';
 
 @Injectable()
@@ -23,10 +24,13 @@ export class WalletService {
 
   cashOutQuote(amountMinor: number) {
     const { feeMinor, netMinor } = cashOutSettlement(amountMinor);
+    const limits = WALLET_REQUEST_LIMITS.cash_out;
     return {
       amountMinor,
       feeMinor,
       netMinor,
+      withinLimits: amountMinor >= limits.minMinor && amountMinor <= limits.maxMinor,
+      limits,
       schedule: {
         bandMinor: CASHOUT_BAND_MINOR,
         smallBps: CASHOUT_SMALL_BPS,

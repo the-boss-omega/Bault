@@ -84,7 +84,5 @@ export function otpauthUri({ issuer, account, secret }: { issuer: string; accoun
     digits: String(TOTP_DIGITS),
     period: String(TOTP_STEP_SECONDS),
   });
-  // URLSearchParams writes a space as "+", which the key URI format does not read as a space: an issuer of two
-  // words ("Card Embassy") is percent-encoded, as the label is, so an authenticator shows it as it is spelt.
   return `otpauth://totp/${label}?${params.toString().replace(/\+/g, '%20')}`;
 }

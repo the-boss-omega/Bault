@@ -14,7 +14,7 @@ export function IsShippableCountry(options?: ValidationOptions) {
         },
         defaultMessage() {
           const total = shippingCountries().length;
-          return `Choose a destination country from the list — Card Embassy ships to ${total} of them, and the address has to name one by its two-letter code (US, GB, IL).`;
+          return `Choose a destination country from the list — Card Embassy ships to ${total} of them, and the address has to name one by its English name or its two-letter code (United States, US).`;
         },
       },
     });

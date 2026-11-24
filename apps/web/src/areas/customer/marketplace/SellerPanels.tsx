@@ -195,8 +195,14 @@ export function MyListingsPanel({
                     <Button
                       size="sm"
                       variant="ghost"
-                      aria-label={t('market.mine.seeOffers', { count: row.pendingOffers })}
-                      onClick={() => navigate({ section: 'marketplace', tab: 'offers' })}
+                      aria-label={
+                        row.pendingOffers === 1
+                          ? t('market.mine.seeOffersOne')
+                          : t('market.mine.seeOffers', { count: row.pendingOffers })
+                      }
+                      onClick={() =>
+                        navigate({ section: 'marketplace', tab: 'offers', params: { search: row.serialNumber } })
+                      }
                     >
                       <StatusBadge tone="warning">{row.pendingOffers}</StatusBadge>
                     </Button>
@@ -267,7 +273,9 @@ export function MyListingsPanel({
             <>
               <p>{t('market.mine.delistBody', { item: isolate(itemName(t, removing)) })}</p>
               {removing.pendingOffers > 0 && (
-                <p className="field-hint">{t('market.mine.delistOffers', { count: removing.pendingOffers })}</p>
+                <p className="field-hint">{removing.pendingOffers === 1
+                    ? t('market.mine.delistOffersOne')
+                    : t('market.mine.delistOffers', { count: removing.pendingOffers })}</p>
               )}
               {removeError && <ErrorState message={removeError} />}
             </>
@@ -289,8 +297,10 @@ export function MyListingsPanel({
 
 export function OffersPanel({
   onChanged,
+  initialQuery,
 }: {
   onChanged: (message: string) => Promise<void> | void;
+  initialQuery?: string;
   onError?: (m: string) => void;
 }) {
   const { t, locale } = useI18n();
@@ -306,7 +316,7 @@ export function OffersPanel({
     () => (rows && direction !== 'all' ? rows.filter((r) => r.direction === direction) : rows),
     [rows, direction],
   );
-  const view = useListView(scoped, offerText(t), OFFER_SORTS);
+  const view = useListView(scoped, offerText(t), OFFER_SORTS, initialQuery);
 
   const load = useCallback(async () => {
     try {

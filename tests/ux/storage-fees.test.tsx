@@ -85,6 +85,27 @@ describe('the storage sweep, a statement', () => {
       expect(total).toHaveAttribute('dir', 'ltr');
   });
 
+  it('lists the items a run charged, by serial, description and owner, under the run', async () => {
+    await storage([
+      {
+        ...RUNS[0],
+        chargedItems: [
+          { id: 'a', serialNumber: 'BLT-0001', description: 'Rayquaza holo', ownerUsername: 'misty' },
+          { id: 'b', serialNumber: 'BLT-0002', description: '', ownerUsername: 'brock' },
+        ],
+      },
+      { ...RUNS[1], chargedItems: [] },
+      { ...RUNS[1], id: 's3', chargedItemIds: ['c'], chargedItems: [{ id: 'c', serialNumber: 'BLT-0003', description: 'Rayquaza VMAX', ownerUsername: 'ash' }] },
+    ]);
+    const lines = within(document.querySelector('.fee-sheet') as HTMLElement).getAllByRole('listitem');
+    const first = lines[0]!.querySelector('details') as HTMLElement;
+    expect(within(first).getByText('The 2 items it charged')).toBeInTheDocument();
+    expect(first).toHaveTextContent('BLT-0001 Rayquaza holo · @misty');
+    expect(first).toHaveTextContent('BLT-0002 No description · @brock');
+    expect(document.querySelectorAll('.fee-run-items')).toHaveLength(2);
+    expect(screen.getByText('The item it charged')).toBeInTheDocument();
+  });
+
   it('says there have been no runs, and still says billing is automatic, when there have not', async () => {
     await storage([]);
     expect(screen.getByText('No runs yet.')).toBeInTheDocument();

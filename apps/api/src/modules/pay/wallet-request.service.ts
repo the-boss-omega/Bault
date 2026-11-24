@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, desc, eq, gte, inArray, isNull, lte, ne, or } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import { loadEnv } from '@bault/config';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
@@ -16,7 +16,7 @@ import { PAYMENT_ADAPTER } from '../../shared/adapters/adapters.module';
 import { PaymentProviderError, paypalPayoutItemOutcome, type PaymentAdapter } from '@bault/adapters';
 import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
 import { charge, externalPayment, ledgerRecord, walletRequest, walletRequestEvent } from './pay.schema';
-import { cashOutSettlement } from './money-terms';
+import { CASHOUT_FEE_ACTION, cashOutSettlement } from './money-terms';
 import {
   canTransition,
   OPEN_WALLET_REQUEST_STATUSES,
@@ -56,11 +56,35 @@ export interface WalletRequestFilters {
   userId?: string;
   from?: string;
   to?: string;
+  limit?: number;
+  before?: string;
 }
+
+export const REVIEW_QUEUE_MAX_LIMIT = 500;
+export const REVIEW_QUEUE_DEFAULT_LIMIT = 100;
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+function queueEnd(to: string): { at: Date; inclusive: boolean } {
+  if (DATE_ONLY.test(to)) {
+    const at = new Date(`${to}T00:00:00.000Z`);
+    at.setUTCDate(at.getUTCDate() + 1);
+    return { at, inclusive: false };
+  }
+  return { at: new Date(to), inclusive: true };
+}
+
+const CLOSED_FOR_COMPLETION: Partial<Record<WalletRequestStatus, string>> = {
+  rejected: 'This request was rejected, so it cannot be completed.',
+  cancelled: 'This request was cancelled, so it cannot be completed.',
+  payout_failed:
+    'This payout failed and the money went back to the wallet, so the request cannot be completed. The collector can raise a new one.',
+};
 
 const STAFF_ROLES = new Set(['admin', 'warehouse_operator']);
 
 const PAYOUT_FAILED_FOR_COLLECTOR = 'The payout could not be sent, and the money is back in your wallet.';
+const PAYOUT_RETURNED_FOR_COLLECTOR = 'The payout was returned after it was sent, and the money is back in your wallet.';
 
 export function collectorWalletRequestView(row: typeof walletRequest.$inferSelect) {
   return {
@@ -85,7 +109,10 @@ export function collectorWalletRequestView(row: typeof walletRequest.$inferSelec
 function collectorHistoryReason(event: typeof walletRequestEvent.$inferSelect): string | null {
   if (event.toStatus === 'rejected') return event.reason;
   if (event.toStatus === 'cancelled' && event.actorRole === 'user') return event.reason;
-  if (event.toStatus === 'payout_failed') return PAYOUT_FAILED_FOR_COLLECTOR;
+  if (event.toStatus === 'payout_failed') {
+    const afterPaid = (event.metadata as Record<string, unknown> | null)?.afterPaid === true;
+    return afterPaid ? PAYOUT_RETURNED_FOR_COLLECTOR : PAYOUT_FAILED_FOR_COLLECTOR;
+  }
   return null;
 }
 
@@ -122,7 +149,7 @@ export class WalletRequestService {
     }
   }
 
-  async submit(userId: string, draft: WalletRequestDraft) {
+  async submit(userId: string, draft: WalletRequestDraft, origin?: string) {
     const currency = (draft.currency || DEFAULT_CURRENCY).toUpperCase();
     const normalized: WalletRequestDraft = { ...draft, currency };
 
@@ -183,7 +210,7 @@ export class WalletRequestService {
           notes: normalized.notes ?? null,
         })
         .returning();
-      if (!created) throw AppError.validation('Failed to create the wallet request');
+      if (!created) throw new Error('Failed to create the wallet request');
 
       await this.appendEvent(tx, {
         requestId: created.id,
@@ -208,7 +235,7 @@ export class WalletRequestService {
           action: 'wallet_request.submit',
           targetEntity: 'wallet_request',
           targetId: created.id,
-          metadata: { type: created.type, amountMinor: created.amount, currency },
+          metadata: { type: created.type, amountMinor: created.amount, currency, ...(origin ? { origin } : {}) },
         },
         tx,
       );
@@ -263,9 +290,22 @@ export class WalletRequestService {
     if (filters.status) conditions.push(eq(walletRequest.status, filters.status));
     if (filters.userId) conditions.push(eq(walletRequest.userId, filters.userId));
     if (filters.from) conditions.push(gte(walletRequest.createdAt, new Date(filters.from)));
-    if (filters.to) conditions.push(lte(walletRequest.createdAt, new Date(filters.to)));
-
-    const rows = await this.db
+    if (filters.to) {
+      const end = queueEnd(filters.to);
+      conditions.push(end.inclusive ? lte(walletRequest.createdAt, end.at) : lt(walletRequest.createdAt, end.at));
+    }
+    if (filters.before) {
+      const [cursor] = await this.db
+        .select({ id: walletRequest.id })
+        .from(walletRequest)
+        .where(eq(walletRequest.id, filters.before))
+        .limit(1);
+      if (!cursor) throw AppError.validation('before has to be the id of a request from an earlier page.', { field: 'before' });
+      conditions.push(
+        sql`(${walletRequest.createdAt}, ${walletRequest.id}) < (SELECT w.created_at, w.id FROM wallet_request w WHERE w.id = ${cursor.id}::uuid)`,
+      );
+    }
+    const query = this.db
       .select({
         request: walletRequest,
         username: userAccount.username,
@@ -276,7 +316,10 @@ export class WalletRequestService {
       .from(walletRequest)
       .leftJoin(userAccount, eq(userAccount.id, walletRequest.userId))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(walletRequest.createdAt));
+      .orderBy(desc(walletRequest.createdAt), desc(walletRequest.id));
+    const rows = await query.limit(
+      Math.min(Math.max(1, filters.limit ?? REVIEW_QUEUE_DEFAULT_LIMIT), REVIEW_QUEUE_MAX_LIMIT),
+    );
 
     return rows.map((row) => ({
       ...row.request,
@@ -420,7 +463,7 @@ export class WalletRequestService {
     if (!canTransition(request.status, to)) {
       throw AppError.conflict(
         ErrorCode.CONFLICT,
-        `A request that is ${request.status} cannot be completed; approve it first.`,
+        CLOSED_FOR_COMPLETION[request.status] ?? 'This request has not been approved yet. Approve it first, then complete it.',
       );
     }
     if (request.settledLedgerId) {
@@ -460,14 +503,14 @@ export class WalletRequestService {
         referenceId: request.id,
       })
       .returning({ id: ledgerRecord.id });
-    if (!ledgerRow) throw AppError.validation('Failed to record the money movement');
+    if (!ledgerRow) throw new Error('Failed to record the money movement');
 
     if (settlement.feeMinor > 0) {
       const [c] = await tx
         .insert(charge)
         .values({
           userId: request.userId,
-          actionType: 'service',
+          actionType: CASHOUT_FEE_ACTION,
           pricingRuleSnapshot: {
             cashOutFee: true,
             grossMinor: settlement.grossMinor,
@@ -482,7 +525,7 @@ export class WalletRequestService {
           referenceId: request.id,
         })
         .returning({ id: charge.id });
-      if (!c) throw AppError.validation('Failed to charge the cash-out fee');
+      if (!c) throw new Error('Failed to charge the cash-out fee');
       await this.ledger.record(
         {
           userId: request.userId,
@@ -549,9 +592,10 @@ export class WalletRequestService {
           }
           throw e;
         }
-        if (!ep) throw AppError.validation('Failed to record the payout');
+        if (!ep) throw new Error('Failed to record the payout');
         paymentId = ep.id;
       } else {
+        await this.ledger.lockWallet(request.userId, tx as Database);
         const [ledgerRow] = await tx
           .insert(ledgerRecord)
           .values({
@@ -564,7 +608,7 @@ export class WalletRequestService {
             referenceId: request.id,
           })
           .returning({ id: ledgerRecord.id });
-        if (!ledgerRow) throw AppError.validation('Failed to record the money movement');
+        if (!ledgerRow) throw new Error('Failed to record the money movement');
         ledgerRowId = ledgerRow.id;
       }
 
@@ -581,7 +625,7 @@ export class WalletRequestService {
         })
         .where(eq(walletRequest.id, request.id))
         .returning();
-      if (!updated) throw AppError.validation('Failed to complete the request');
+      if (!updated) throw new Error('Failed to complete the request');
 
       await this.appendEvent(tx as Database, {
         requestId: request.id,
@@ -637,7 +681,7 @@ export class WalletRequestService {
           currency: debit.currency,
         })
         .returning();
-      if (!payment) throw AppError.validation('Failed to record the payout');
+      if (!payment) throw new Error('Failed to record the payout');
 
       const now = new Date();
       const [updated] = await tx
@@ -645,7 +689,7 @@ export class WalletRequestService {
         .set({ status: 'paying', settledLedgerId: debit.ledgerRowId, payoutPaymentId: payment.id, updatedAt: now })
         .where(eq(walletRequest.id, request.id))
         .returning();
-      if (!updated) throw AppError.validation('Failed to start the payout');
+      if (!updated) throw new Error('Failed to start the payout');
 
       await this.appendEvent(tx as Database, {
         requestId: request.id,
@@ -789,7 +833,7 @@ export class WalletRequestService {
           .set({ status: 'completed', payoutReference: externalRef, completedAt: now, updatedAt: now })
           .where(eq(walletRequest.id, request.id))
           .returning();
-        if (!updated) throw AppError.validation('Failed to complete the request');
+        if (!updated) throw new Error('Failed to complete the request');
         await this.appendEvent(tx as Database, {
           requestId: request.id,
           actorId,
@@ -829,12 +873,13 @@ export class WalletRequestService {
       if (typeof meta.waiverPeriodId === 'string' && Number(meta.waivedMinor ?? 0) > 0) {
         await this.memberships.restoreCounted(tx as Database, meta.waiverPeriodId, 'cash_out_fee');
       }
+      await this.refundCashOutFee(tx as Database, request.id);
       const [updated] = await tx
         .update(walletRequest)
         .set({ status: 'payout_failed', payoutReference: externalRef, updatedAt: now })
         .where(eq(walletRequest.id, request.id))
         .returning();
-      if (!updated) throw AppError.validation('Failed to record the failed payout');
+      if (!updated) throw new Error('Failed to record the failed payout');
       await this.appendEvent(tx as Database, {
         requestId: request.id,
         actorId,
@@ -861,6 +906,7 @@ export class WalletRequestService {
           status: 'payout_failed',
           userId: request.userId,
           amountMinor: request.amount,
+          afterPaid: false,
         },
       });
       await this.audit.record(
@@ -915,6 +961,7 @@ export class WalletRequestService {
     if (typeof meta.waiverPeriodId === 'string' && Number(meta.waivedMinor ?? 0) > 0) {
       await this.memberships.restoreCounted(tx, meta.waiverPeriodId, 'cash_out_fee');
     }
+    await this.refundCashOutFee(tx, request.id);
     await tx
       .update(externalPayment)
       .set({
@@ -929,7 +976,7 @@ export class WalletRequestService {
       .set({ status: 'payout_failed', updatedAt: now })
       .where(eq(walletRequest.id, request.id))
       .returning();
-    if (!updated) throw AppError.validation('Failed to record the reversed payout');
+    if (!updated) throw new Error('Failed to record the reversed payout');
     await this.appendEvent(tx, {
       requestId: request.id,
       actorId,
@@ -957,6 +1004,7 @@ export class WalletRequestService {
         status: 'payout_failed',
         userId: request.userId,
         amountMinor: request.amount,
+        afterPaid: true,
       },
     });
     await this.audit.record(
@@ -977,6 +1025,19 @@ export class WalletRequestService {
     );
     this.logger.warn(`Payout ${payment.id} (${request.code}) came back after it was paid; ${request.amount} credited back`);
     return updated;
+  }
+
+  private async refundCashOutFee(tx: Database, requestId: string): Promise<void> {
+    await tx
+      .update(charge)
+      .set({ status: 'refunded', updatedAt: new Date() })
+      .where(
+        and(
+          eq(charge.referenceId, requestId),
+          eq(charge.status, 'settled'),
+          sql`${charge.pricingRuleSnapshot} ->> 'cashOutFee' = 'true'`,
+        ),
+      );
   }
 
   async reconcilePayouts(actor: RequestActor, options: { olderThanMinutes?: number; limit?: number } = {}) {
@@ -1134,7 +1195,7 @@ export class WalletRequestService {
         })
         .where(eq(walletRequest.id, requestId))
         .returning();
-      if (!updated) throw AppError.validation('Failed to update the request');
+      if (!updated) throw new Error('Failed to update the request');
 
       await this.appendEvent(tx, {
         requestId,

@@ -21,15 +21,6 @@ async function ensureBalance(email: string, min: number): Promise<number> {
 
 const owns = async (c: Client, itemId: string) => (await c.get(`/vault/items/${itemId}`)).status === 200;
 
-async function listAndSell(seller: Client, itemId: string, buyerEmail: string, price = 5_000) {
-  const listing = await seller.post('/marketplace/listings', { itemId, askingPrice: price });
-  expect(listing.status).toBe(201);
-  await ensureBalance(buyerEmail, price);
-  const buyer = await signIn(buyerEmail);
-  expect((await buyer.post(`/marketplace/listings/${listing.body.id}/purchase`)).status).toBe(201);
-  return buyer;
-}
-
 async function reassignBehindTheirBack(seller: Client, itemId: string, toEmail: string) {
   const refused = await seller.post('/marketplace/listings', { itemId, askingPrice: 5_000 });
   expect(refused.status).toBe(409);
@@ -88,7 +79,7 @@ const HAND_OVER = (itemId: string) => ({
 });
 
 describe('concurrency: stale ownership', () => {
-  it('a gift transfer approved after the card was sold is refused', async () => {
+  it('a card waiting on a gift cannot be listed, and a gift approved after the card changed hands is refused', async () => {
     const operator = await signIn(SEED.operator);
     const owner = await signIn(SEED.collector);
     const item = await intakeFor(operator, SEED.collector, { description: 'E4' });
@@ -97,7 +88,7 @@ describe('concurrency: stale ownership', () => {
     const c = await owner.post('/marketplace/transfers/confirm', { confirmationToken: t.body.confirmationToken });
     expect(c.status).toBe(201);
 
-    const buyer = await listAndSell(owner, item.id, SEED.collector2, 100);
+    const buyer = await reassignBehindTheirBack(owner, item.id, SEED.collector2);
 
     const recipient = await signIn(SEED.collector3);
     const approved = await recipient.post(`/marketplace/swaps/${c.body.swapId}/approve`);
@@ -166,14 +157,13 @@ describe('concurrency: stale ownership', () => {
     });
   }, 60_000);
 
-  it('a lot listed for sale after its split was accepted is not split', async () => {
+  it('a lot waiting on its split cannot be listed, and one that changed hands after the split was accepted is not split', async () => {
     const tag = `F117-${Date.now().toString(36)}`;
     const { operator, owner, lot, requestId } = await lotWithAcceptedSplit(tag);
-    const listing = await owner.post('/marketplace/listings', { itemId: lot.id, askingPrice: 10_000 });
-    expect(listing.status).toBe(201);
+    await reassignBehindTheirBack(owner, lot.id, SEED.collector2);
 
     const done = await operator.post(`/services/lot-split/${requestId}/complete`, SPLIT_FORM);
-    const parent = (await owner.get(`/vault/items/${lot.id}`)).body as { item: { lotBroken: boolean } };
+    const parent = (await (await signIn(SEED.collector2)).get(`/vault/items/${lot.id}`)).body as { item: { lotBroken: boolean } };
     expect({ status: done.status, children: await childrenOf(owner, tag), lotBroken: parent.item?.lotBroken }).toEqual({
       status: 409,
       children: 0,

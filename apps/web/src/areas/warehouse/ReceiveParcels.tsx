@@ -25,15 +25,12 @@ interface ReceivedParcel {
   status: string;
 }
 
-/**
- * Receive what arrived at the door. The docket is the parcel as it will be recorded: the name on it exactly as it
- * was written (that is the only clue there is to whose it is), who brought it, how it can be traced, and how many
- * photographs of the box there are. After it is recorded the docket says what it was recorded as.
- */
 export function ReceiveParcels({
   onReceived,
+  onRead,
 }: {
   onReceived: (fn: () => Promise<unknown>, ok: string) => Promise<void>;
+  onRead?: () => void;
 }) {
   const { t, locale } = useI18n();
   const precisePointer = useMediaQuery('(pointer: fine)');
@@ -89,7 +86,6 @@ export function ReceiveParcels({
 
   async function receive() {
     setBusy(true);
-    // What the server made of it: the bench tells whoever pressed the button, and clears itself only for a parcel that is in.
     const result: { rows: ReceivedParcel[] | null } = { rows: null };
     try {
       await onReceived(async () => {
@@ -265,7 +261,7 @@ export function ReceiveParcels({
             },
             {
               label: t('bench.photos'),
-              value: photos.length > 0 ? photos.length.toLocaleString() : quiet,
+              value: photos.length > 0 ? photos.length.toLocaleString('en-US') : quiet,
             },
             ...(notes.trim()
               ? [{ label: t('warehouse.notes'), value: <bdi dir="auto">{notes.trim()}</bdi> }]
@@ -293,7 +289,7 @@ export function ReceiveParcels({
           {next && <span className="field-hint" role="status">{next}</span>}
         </div>
       </div>
-      {toRead && <OcrReview key={toRead} subject="parcel" id={toRead} />}
+      {toRead && <OcrReview key={toRead} subject="parcel" id={toRead} onSaved={onRead} />}
     </Panel>
   );
 }

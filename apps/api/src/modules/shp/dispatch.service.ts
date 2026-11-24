@@ -100,7 +100,7 @@ export class DispatchService {
         .set({
           status: 'labeled',
           packageWeightGrams: form.packageWeightGrams,
-          fulfillment: { ...DispatchService.record(form, verified), labelPurchase: purchase },
+          fulfillment: { ...DispatchService.record(s, form, verified), labelPurchase: purchase },
           updatedAt: new Date(),
         })
         .where(eq(shipment.id, s.id))
@@ -290,7 +290,7 @@ export class DispatchService {
             await this.custody.lockExpecting(sp, itemId, { ownerId: s.userId });
           }
           for (const itemId of verified.itemIds) {
-            await this.custody.changeState(sp, itemId, 'shipped', operatorId, `dispatched via ${form.carrier}`);
+            await this.custody.changeState(sp, itemId, 'shipped', operatorId, `dispatched via ${s.carrier ?? form.carrier}`);
           }
 
           if (ShipmentService.isDirect(s)) {
@@ -303,7 +303,7 @@ export class DispatchService {
                 toStatus: booked.status,
                 actorId: operatorId,
                 facilityId: booked.facilityId,
-                notes: `Left overnight via ${form.carrier}, tracking ${trackingNumber}`,
+                notes: `Left overnight via ${s.carrier ?? form.carrier}, tracking ${trackingNumber}`,
                 metadata: { shipmentId: s.id, shipmentCode: s.code, trackingNumber },
               });
             }
@@ -315,7 +315,7 @@ export class DispatchService {
               status: 'shipped',
               packageWeightGrams: form.packageWeightGrams,
               fulfillmentNotes: form.fulfillmentNotes,
-              fulfillment: { ...fulfillment, ...DispatchService.record(form, verified) },
+              fulfillment: { ...fulfillment, ...DispatchService.record(s, form, verified) },
               fulfilledBy: operatorId,
               fulfilledAt: new Date(),
               updatedAt: new Date(),
@@ -354,9 +354,9 @@ export class DispatchService {
     return f?.labelPurchase ?? null;
   }
 
-  private static record(form: DispatchForm, verified: { itemIds: string[]; parcelCode: string | null }) {
+  private static record(s: Shipment, form: DispatchForm, verified: { itemIds: string[]; parcelCode: string | null }) {
     return {
-      carrier: form.carrier,
+      carrier: s.carrier ?? form.carrier,
       packageWeightGrams: form.packageWeightGrams,
       verifiedItemIds: verified.itemIds,
       ...(verified.parcelCode ? { verifiedParcelCode: verified.parcelCode } : {}),

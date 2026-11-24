@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../shared/api';
 import { useI18n } from '../../shared/i18n';
 import { ITEM_CLASSES, itemClassOption } from '../../shared/itemClasses';
@@ -84,6 +84,7 @@ export function IntakeBench({
   const [openParcels, setOpenParcels] = useState<ParcelQueueRow[]>([]);
   const [emptyReason, setEmptyReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const attempt = useRef<{ key: string; body: string } | null>(null);
   const [closing, setClosing] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
@@ -211,14 +212,19 @@ export function IntakeBench({
         lotSize: single && isLot && lotAllowed ? lotSize : undefined,
       }));
 
-      const created = await api.post<{ id: string; barcode: string }[]>('/intake/items/batch', {
-        units: payload,
-      });
+      const body = JSON.stringify(payload);
+      if (attempt.current?.body !== body) attempt.current = { key: crypto.randomUUID(), body };
+      const created = await api.post<{ id: string; barcode: string }[]>(
+        '/intake/items/batch',
+        { units: payload },
+        { 'Idempotency-Key': attempt.current.key },
+      );
+      attempt.current = null;
       setLabels(
         created.map((made, index) => ({ ...made, description: filled[index]?.description })),
       );
       setToRead(created.filter((_, index) => (filled[index]?.photos.length ?? 0) > 0).map((made) => made.id));
-      onLog(t('intake.bulkDone', { count: created.length }));
+      onLog(created.length === 1 ? t('intake.bulkDoneOne') : t('intake.bulkDone', { count: created.length }));
       setOutcome({
         tone: 'success',
         label: t('bench.bookedIn'),

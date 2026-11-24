@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { bpsToPercent } from './money';
 
 export type TierKey = 'bronze' | 'silver' | 'gold';
 
@@ -52,7 +53,7 @@ export function discountedMinor(listMinor: number, discountBps: number): number 
 }
 
 export function percentOff(discountBps: number): string {
-  return (discountBps / 100).toFixed(discountBps % 100 === 0 ? 0 : 2);
+  return bpsToPercent(discountBps);
 }
 
 let cached: Promise<ViewerTier> | null = null;

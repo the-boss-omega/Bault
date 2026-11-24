@@ -5,13 +5,12 @@ import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { FIXTURE_EMAIL_DOMAIN } from '../../shared/fixtures';
 import { loginAttempt, userAccount } from '../acc/acc.schema';
+import { FAILED_SIGN_IN_OUTCOMES } from '../acc/login-attempts.service';
 import { item, custodyEvent, itemChangeHistory } from '../cst/cst.schema';
-import { charge } from '../pay/pay.schema';
 import { listing, offer, transaction } from '../mkt/mkt.schema';
-import { PricingService } from '../prc/pricing.service';
-import { LedgerService } from '../pay/ledger.service';
 import { prefixedId, ID_PREFIX } from '../../shared/ids';
 import { isValidNamePart, normalizeNamePart } from '../../shared/names';
+import { sameId } from '../../shared/uuid-param';
 import { isKnownItemClass } from '../inv/item-classes';
 import { dispute, storageFeeRun } from './adm.schema';
 
@@ -34,13 +33,12 @@ export interface ItemPatch {
 
 export type DisputeStatus = 'open' | 'investigating' | 'ruled' | 'closed';
 
+const DISPUTE_STEPS: readonly DisputeStatus[] = ['open', 'investigating', 'ruled', 'closed'];
+export const DISPUTE_TEXT_MAX = 2000;
+
 @Injectable()
 export class AdmService {
-  constructor(
-    @Inject(DRIZZLE) private readonly db: Database,
-    private readonly pricing: PricingService,
-    private readonly ledger: LedgerService,
-  ) {}
+  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
   listUsers() {
     return this.db
@@ -54,8 +52,8 @@ export class AdmService {
         role: userAccount.role,
         status: userAccount.status,
         intakeId: userAccount.intakeId,
-        mfaEnabled: sql<boolean>`exists (select 1 from mfa_factor f where f.user_id = ${userAccount.id}::text and f.enabled_at is not null)`,
-        mfaMethod: sql<'totp' | 'email' | null>`(select f.method from mfa_factor f where f.user_id = ${userAccount.id}::text and f.enabled_at is not null)`,
+        mfaEnabled: sql<boolean>`exists (select 1 from mfa_factor f where f.user_id = ${userAccount.id} and f.enabled_at is not null)`,
+        mfaMethod: sql<'totp' | 'email' | null>`(select f.method from mfa_factor f where f.user_id = ${userAccount.id} and f.enabled_at is not null)`,
         autoSuspended: sql<boolean>`${userAccount.autoSuspendedAt} is not null`,
       })
       .from(userAccount)
@@ -64,7 +62,7 @@ export class AdmService {
   }
 
   async updateUser(actorId: string, id: string, patch: UserPatch) {
-    if (actorId === id) {
+    if (sameId(actorId, id)) {
       if (patch.status && patch.status !== 'active') {
         throw AppError.validation(
           'You cannot suspend or close your own account here — you would lock yourself out of this console and no route in the product could let you back in. Ask another administrator to do it.',
@@ -86,7 +84,9 @@ export class AdmService {
     for (const f of ['firstName', 'lastName'] as const) {
       if (patch[f] === undefined) continue;
       const value = normalizeNamePart(patch[f]);
-      if (!isValidNamePart(value)) throw AppError.validation(`${f} is not a valid name`);
+      if (!isValidNamePart(value)) {
+        throw AppError.validation(f === 'firstName' ? 'The first name is not valid.' : 'The last name is not valid.');
+      }
       set[f] = value;
       set.nameReviewRequired = false;
     }
@@ -154,7 +154,18 @@ export class AdmService {
         }
       }
 
+      if (patch.ownerId) patch = { ...patch, ownerId: patch.ownerId.toLowerCase() };
       if (patch.ownerId && patch.ownerId !== cur.ownerId) {
+        const [owner] = await tx
+          .select({ status: userAccount.status })
+          .from(userAccount)
+          .where(eq(userAccount.id, patch.ownerId))
+          .for('share')
+          .limit(1);
+        if (!owner) throw AppError.validation('No account has that id.');
+        if (owner.status !== 'active' && owner.status !== 'suspended') {
+          throw AppError.validation('The new owner has to be an active or suspended account.');
+        }
         set.ownerId = patch.ownerId;
         await tx.insert(custodyEvent).values({ itemId: id, eventType: 'ownership_transfer', prevOwnerId: cur.ownerId, newOwnerId: patch.ownerId, actorId, reason: 'admin edit' });
 
@@ -217,7 +228,7 @@ export class AdmService {
         createdAt: transaction.createdAt,
       })
       .from(transaction)
-      .orderBy(sql`${transaction.executedAt} desc`);
+      .orderBy(sql`${transaction.createdAt} desc`);
   }
 
   async openDispute(adminId: string, input: { transactionId: string; note?: string }) {
@@ -235,7 +246,7 @@ export class AdmService {
         transactionId: input.transactionId,
         openedBy: adminId,
         assignedAdminId: adminId,
-        note: input.note ?? null,
+        note: input.note?.trim() || null,
       })
       .returning();
     if (!row) throw AppError.validation('Failed to open dispute');
@@ -243,93 +254,60 @@ export class AdmService {
   }
 
   async updateDispute(id: string, patch: { status: DisputeStatus; ruling?: string }) {
-    const allowed: DisputeStatus[] = ['open', 'investigating', 'ruled', 'closed'];
-    if (!allowed.includes(patch.status)) throw AppError.validation('Invalid dispute status');
-
-    const set: Record<string, unknown> = { status: patch.status, updatedAt: new Date() };
-    if (patch.ruling !== undefined) set.ruling = patch.ruling;
-
-    await this.db.update(dispute).set(set as never).where(eq(dispute.id, id));
-    const [row] = await this.db.select().from(dispute).where(eq(dispute.id, id)).limit(1);
-    if (!row) throw AppError.notFound('Dispute not found');
-    return row;
-  }
-
-  async runStorageFees(adminId: string, thresholdDays: number) {
-    if (!Number.isInteger(thresholdDays) || thresholdDays < 0) {
-      throw AppError.validation('thresholdDays must be a non-negative integer');
+    const next = DISPUTE_STEPS.indexOf(patch.status);
+    if (next < 0) throw AppError.validation('Invalid dispute status');
+    const ruling = patch.ruling === undefined ? undefined : patch.ruling.trim();
+    if (ruling !== undefined && ruling.length > DISPUTE_TEXT_MAX) {
+      throw AppError.validation(`The ruling can be at most ${DISPUTE_TEXT_MAX} characters.`);
     }
 
     return this.db.transaction(async (tx) => {
-      const listed = await this.pricing.price('storage', {}, tx);
-      const items = await tx
-        .select({ id: item.id, ownerId: item.ownerId })
-        .from(item)
-        .where(
-          and(
-            eq(item.lifecycleState, 'stored'),
-            sql`${item.receivedAt} < now() - make_interval(days => ${thresholdDays}::int)`,
-          ),
-        );
-
-      let totalAmount = 0;
-      const chargedItemIds: string[] = [];
-      const chargedAccountIds = new Set<string>();
-
-      for (const it of items) {
-        const { amount, snapshot } = await this.pricing.price('storage', { userId: it.ownerId }, tx);
-        const [ch] = await tx
-          .insert(charge)
-          .values({
-            userId: it.ownerId,
-            actionType: 'storage',
-            pricingRuleSnapshot: snapshot,
-            amount: amount.amount,
-            currency: amount.currency,
-            paymentMeans: 'wallet',
-            status: 'settled',
-            referenceId: it.id,
-          })
-          .returning({ id: charge.id });
-        if (!ch) throw AppError.validation('Failed to create storage charge');
-
-        await this.ledger.record(
-          {
-            userId: it.ownerId,
-            type: 'service_charge',
-            amount: amount.amount,
-            direction: 'debit',
-            currency: amount.currency,
-            referenceType: 'charge',
-            referenceId: ch.id,
-          },
-          tx,
-        );
-
-        totalAmount += amount.amount;
-        chargedItemIds.push(it.id);
-        chargedAccountIds.add(it.ownerId);
+      const [cur] = await tx.select().from(dispute).where(eq(dispute.id, id)).for('update').limit(1);
+      if (!cur) throw AppError.notFound('Dispute not found');
+      const at = DISPUTE_STEPS.indexOf(cur.status as DisputeStatus);
+      if (cur.status === 'closed') throw AppError.validation('This dispute is closed and cannot be changed.');
+      if (next < at) {
+        throw AppError.validation(`A dispute that is ${cur.status} cannot go back to ${patch.status}.`);
+      }
+      const finalRuling = ruling === undefined ? cur.ruling : ruling || null;
+      if (patch.status === 'ruled' && !finalRuling) {
+        throw AppError.validation('Write the ruling before marking the dispute ruled.');
       }
 
-      const [run] = await tx
-        .insert(storageFeeRun)
-        .values({
-          thresholdDays,
-          triggeredBy: adminId,
-          chargedItemIds,
-          chargedAccountIds: [...chargedAccountIds],
-          totalAmount,
-          currency: listed.amount.currency,
-        })
-        .returning({ id: storageFeeRun.id });
-      if (!run) throw AppError.validation('Failed to record storage-fee run');
-
-      return { runId: run.id, chargedCount: chargedItemIds.length, totalAmount };
+      const [row] = await tx
+        .update(dispute)
+        .set({ status: patch.status, ruling: finalRuling, updatedAt: new Date() })
+        .where(eq(dispute.id, id))
+        .returning();
+      return row;
     });
   }
 
-  listStorageFeeRuns() {
-    return this.db.select().from(storageFeeRun).orderBy(sql`${storageFeeRun.runAt} desc`);
+  async listStorageFeeRuns() {
+    const runs = await this.db.select().from(storageFeeRun).orderBy(sql`${storageFeeRun.runAt} desc`);
+    const idsOf = (ids: unknown): string[] => (Array.isArray(ids) ? ids.filter((v): v is string => typeof v === 'string') : []);
+    const ids = [...new Set(runs.flatMap((r) => idsOf(r.chargedItemIds)))];
+    const items =
+      ids.length === 0
+        ? []
+        : await this.db
+            .select({
+              id: item.id,
+              serialNumber: item.serialNumber,
+              description: item.description,
+              ownerUsername: userAccount.username,
+            })
+            .from(item)
+            .innerJoin(userAccount, eq(userAccount.id, item.ownerId))
+            .where(inArray(item.id, ids));
+    const byId = new Map(items.map((it) => [it.id, it]));
+    return runs.map((r) => ({
+      ...r,
+      chargedItems: idsOf(r.chargedItemIds).flatMap((id) => {
+        const it = byId.get(id);
+        return it ? [it] : [];
+      }),
+    }));
   }
   async recentLogins(limit = 200) {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -348,11 +326,11 @@ export class AdmService {
         role: userAccount.role,
       })
       .from(loginAttempt)
-      .leftJoin(userAccount, eq(sql`${userAccount.id}::text`, loginAttempt.userId))
+      .leftJoin(userAccount, eq(userAccount.id, loginAttempt.userId))
       .orderBy(desc(loginAttempt.occurredAt))
       .limit(Math.min(Math.max(limit, 1), 500));
 
-    const failed = sql`${loginAttempt.outcome} NOT IN ('success', 'mfa_challenged')`;
+    const failed = inArray(loginAttempt.outcome, [...FAILED_SIGN_IN_OUTCOMES]);
 
     const [totals] = await this.db
       .select({

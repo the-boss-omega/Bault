@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -8,6 +8,8 @@ import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { charge, ledgerRecord } from '../pay/pay.schema';
 import { parcel, parcelEvent } from '../inv/parcel.schema';
+import { item } from '../cst/cst.schema';
+import { PricingService } from '../prc/pricing.service';
 import { shipment } from './shp.schema';
 import { ParcelProfileService } from './parcel-profile.service';
 import { shippingBox } from './boxes';
@@ -20,7 +22,9 @@ import {
   checkOptions,
   needsCustoms,
   signatureForced,
+  usdAmount,
 } from './shipping-options';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
 
 @Injectable()
 export class ShipmentEditService {
@@ -31,6 +35,7 @@ export class ShipmentEditService {
     private readonly ledger: LedgerService,
     private readonly outbox: OutboxService,
     private readonly memberships: MembershipService,
+    private readonly pricing: PricingService,
   ) {}
 
   private async loadEditable(shipmentId: string, actor: ShipmentActor) {
@@ -106,6 +111,9 @@ export class ShipmentEditService {
           customerNotes:
             patch.customerNotes === undefined ? s.customerNotes : patch.customerNotes.trim() || null,
           recipientName: patch.recipientName?.trim() || s.recipientName,
+          ...(patch.recipientName?.trim() && cur.destinationDetail
+            ? { destinationDetail: { ...(cur.destinationDetail as Record<string, unknown>), name: patch.recipientName.trim() } }
+            : {}),
           updatedAt: new Date(),
         })
         .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested')))
@@ -120,58 +128,71 @@ export class ShipmentEditService {
 
   async merge(targetId: string, sourceId: string, actor: ShipmentActor) {
     if (targetId === sourceId) throw AppError.validation('That is the same request');
-    const target = await this.loadEditable(targetId, actor);
-    const source = await this.loadEditable(sourceId, actor);
-
-    if (target.userId !== source.userId) throw AppError.forbidden('Those requests belong to different people');
-    if (
-      target.destinationAddress !== source.destinationAddress ||
-      target.destinationCountry !== source.destinationCountry ||
-      target.destinationPostalCode !== source.destinationPostalCode
-    ) {
-      throw AppError.validation('Those two requests are going to different addresses');
-    }
-
-    const merged = [...new Set([...((target.itemIds as string[]) ?? []), ...((source.itemIds as string[]) ?? [])])];
-    const items = await this.profiles.loadShippableItems(target.userId, merged);
-    const measurements = this.profiles.measure(items);
-
-    const declaredValueMinor = target.declaredValueMinor + source.declaredValueMinor;
-    const insuredValueMinor = Math.min(
-      target.insuredValueMinor + source.insuredValueMinor,
-      MAX_INSURED_VALUE_MINOR,
-    );
-    const signatureRequired =
-      target.signatureRequired || source.signatureRequired || signatureForced(insuredValueMinor);
-    const addOns = [
-      ...new Set([
-        ...((target.addOns as { key: string }[]) ?? []).map((a) => a.key),
-        ...((source.addOns as { key: string }[]) ?? []).map((a) => a.key),
-      ]),
-    ];
-
-    const customsLines = needsCustoms(target.destinationCountry)
-      ? this.profiles.buildCustomsLines(measurements, declaredValueMinor)
-      : null;
-
-    const volume = (key: string | null) => {
-      const d = shippingBox(key)?.dimensionsCm;
-      return d ? d.length * d.width * d.height : 0;
-    };
-    const biggerBox = volume(source.boxSize) > volume(target.boxSize) ? source.boxSize : target.boxSize;
-    const mergedBox = this.profiles.boxFor(biggerBox, items, measurements);
-    const boxSize = mergedBox.problems.length === 0 ? (mergedBox.box?.key ?? null) : null;
-
-    const notes = [target.customerNotes, source.customerNotes].filter(Boolean).join(' · ') || null;
-    const now = new Date();
+    await this.loadEditable(targetId, actor);
+    await this.loadEditable(sourceId, actor);
 
     return this.db.transaction(async (tx) => {
+      const locked: Record<string, typeof shipment.$inferSelect> = {};
       for (const id of [targetId, sourceId].sort()) {
         const [row] = await tx.select().from(shipment).where(eq(shipment.id, id)).for('update').limit(1);
         if (!row || row.status !== 'requested' || row.mergedIntoShipmentId) {
           throw new AppError(ErrorCode.CONFLICT, 'One of those requests has moved on and can no longer be merged.', 409);
         }
+        locked[id] = row;
       }
+      const target = locked[targetId]!;
+      const source = locked[sourceId]!;
+
+      if (target.userId !== source.userId) throw AppError.forbidden('Those requests belong to different people');
+      if (
+        target.destinationAddress !== source.destinationAddress ||
+        target.destinationCountry !== source.destinationCountry ||
+        target.destinationPostalCode !== source.destinationPostalCode
+      ) {
+        throw AppError.validation('Those two requests are going to different addresses');
+      }
+
+      const merged = [...new Set([...((target.itemIds as string[]) ?? []), ...((source.itemIds as string[]) ?? [])])];
+      const items = await this.profiles.loadShippableItems(target.userId, merged, tx as Database);
+      await assertItemsUncommitted(tx as Database, (target.itemIds as string[]) ?? [], 'shipped', {
+        shipmentId: target.id,
+        shipToBuyer: true,
+      });
+      await assertItemsUncommitted(tx as Database, (source.itemIds as string[]) ?? [], 'shipped', {
+        shipmentId: source.id,
+        shipToBuyer: true,
+      });
+      const measurements = this.profiles.measure(items);
+
+      const declaredValueMinor = target.declaredValueMinor + source.declaredValueMinor;
+      const insuredValueMinor = Math.min(
+        target.insuredValueMinor + source.insuredValueMinor,
+        MAX_INSURED_VALUE_MINOR,
+      );
+      const signatureRequired =
+        target.signatureRequired || source.signatureRequired || signatureForced(insuredValueMinor);
+      const addOns = [
+        ...new Set([
+          ...((target.addOns as { key: string }[]) ?? []).map((a) => a.key),
+          ...((source.addOns as { key: string }[]) ?? []).map((a) => a.key),
+        ]),
+      ];
+
+      const customsLines = needsCustoms(target.destinationCountry)
+        ? this.profiles.buildCustomsLines(measurements, declaredValueMinor)
+        : null;
+
+      const volume = (key: string | null) => {
+        const d = shippingBox(key)?.dimensionsCm;
+        return d ? d.length * d.width * d.height : 0;
+      };
+      const biggerBox = volume(source.boxSize) > volume(target.boxSize) ? source.boxSize : target.boxSize;
+      const mergedBox = this.profiles.boxFor(biggerBox, items, measurements);
+      const boxSize = mergedBox.problems.length === 0 ? (mergedBox.box?.key ?? null) : null;
+
+      const notes = [target.customerNotes, source.customerNotes].filter(Boolean).join(' · ') || null;
+      const now = new Date();
+
       await tx
         .update(shipment)
         .set({
@@ -207,6 +228,11 @@ export class ShipmentEditService {
 
   private async restockingFee(tx: Database, cur: typeof shipment.$inferSelect, now: Date): Promise<number> {
     if (ShipmentService.labelRefusal(cur)) return 0;
+    const itemIds = (cur.itemIds as string[]) ?? [];
+    if (itemIds.length > 0) {
+      const held = await tx.select({ ownerId: item.ownerId }).from(item).where(inArray(item.id, itemIds));
+      if (held.length !== itemIds.length || held.some((h) => h.ownerId !== cur.userId)) return 0;
+    }
     if (cur.fulfilmentMethod === 'show_pickup') {
       if (!cur.pickupEventId) return 0;
       const [show] = await tx
@@ -303,12 +329,29 @@ export class ShipmentEditService {
       }
 
       if (feeMinor > 0) {
+        const balance = await this.ledger.balanceOf(s.userId, tx as Database);
+        if (balance.amount < feeMinor) {
+          throw new AppError(
+            ErrorCode.INSUFFICIENT_BALANCE,
+            `Cancelling now costs the ${usdAmount(feeMinor)} restocking fee, and after the refund the wallet would hold ${usdAmount(balance.amount)}. Cash in to your wallet first, or let the shipment go.`,
+            409,
+            { shortfallMinor: feeMinor - balance.amount },
+          );
+        }
+        const tier = await this.pricing.tierOf(s.userId, tx as Database);
         const [c] = await tx
           .insert(charge)
           .values({
             userId: s.userId,
-            actionType: 'shipping',
-            pricingRuleSnapshot: { restockingFee: feeMinor, cancelledFrom: cur.status },
+            actionType: 'shipping_restocking_fee',
+            pricingRuleSnapshot: {
+              restockingFee: feeMinor,
+              cancelledFrom: cur.status,
+              tier,
+              discountBps: 0,
+              listMinor: feeMinor,
+              chargedMinor: feeMinor,
+            },
             amount: feeMinor,
             currency: s.currency ?? DEFAULT_CURRENCY,
             paymentMeans: 'wallet',

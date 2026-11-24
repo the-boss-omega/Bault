@@ -105,6 +105,7 @@ const CONSTRAINED: ReadonlyArray<readonly [table: string, column: string, refere
   ['escrow_event', 'actor_id', 'user_account'],
   ['support_ticket', 'user_id', 'user_account'],
   ['support_ticket', 'resolved_by', 'user_account'],
+  ['support_ticket', 'assigned_to', 'user_account'],
   ['support_message', 'ticket_id', 'support_ticket'],
   ['support_message', 'author_id', 'user_account'],
 

@@ -172,7 +172,7 @@ export function WarehouseConsole() {
           <div className="metric-grid">
             <MetricCard
               label={t('warehouse.metric.itemsInStock')}
-              value={shelfRows === null ? '—' : stats.total.toLocaleString()}
+              value={shelfRows === null ? '—' : stats.total.toLocaleString('en-US')}
               icon={<IconBox />}
               tone="green"
               footer={t('warehouse.metric.itemsNote')}
@@ -262,7 +262,7 @@ export function WarehouseConsole() {
               { id: 'house-orders', label: t('warehouse.jump.storeSales') },
             ]}
           />
-          <ReceiveParcels onReceived={receiveParcels} />
+          <ReceiveParcels onReceived={receiveParcels} onRead={() => setQueueVersion((v) => v + 1)} />
 
           <ParcelQueue
             key={queueVersion}
@@ -507,7 +507,7 @@ function InventoryRows({
                 </td>
                 {isShelf && <td data-label={t('warehouse.bins.colZone')}>{bin?.zone ?? '—'}</td>}
                 <td data-label={t('warehouse.report.colCount')} className="td-end num">
-                  {used.toLocaleString()}
+                  {used.toLocaleString('en-US')}
                 </td>
                 {isShelf && (
                   <td data-label={t('warehouse.bins.kind')}>
@@ -773,7 +773,7 @@ function BinsPanel({
                       {t(b.oversized ? 'warehouse.bins.kind.oversized' : 'warehouse.bins.kind.standard')}
                     </td>
                     <td data-label={t('warehouse.bins.colItems')} className="td-end num">
-                      {b.itemCount.toLocaleString()}
+                      {b.itemCount.toLocaleString('en-US')}
                     </td>
                     <td data-label={t('admin.col.status')}>
                       {!b.active ? (

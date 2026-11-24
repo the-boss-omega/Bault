@@ -36,8 +36,8 @@ import {
   type StatusTone,
 } from '../../../shared/ui/primitives';
 import { CountUp } from '../../../shared/ui/CountUp';
-import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import { serviceLabel, shipmentServiceLabel, type QuotedRate } from '../../../shared/carriers';
+import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { serviceLabel, shipmentServiceLabel, trackingUrl, type QuotedRate } from '../../../shared/carriers';
 import { ShipmentComposer } from './ShipmentComposer';
 import { SharedParcelsTab } from './SharedParcelsTab';
 import { ShowPickupPanel, WhiteGlovePanel, WhiteGloveQuotes } from './HumanFulfilmentPanels';
@@ -469,7 +469,7 @@ function TrackingTab({
   );
 
   const selected = useMemo(
-    () => (shipments ?? []).find((shipment) => shipment.id === openId) ?? null,
+    () => (shipments ?? []).find((shipment) => shipment.id === openId || shipment.code === openId) ?? null,
     [shipments, openId],
   );
   const missing = Boolean(openId && shipments !== null && !selected);
@@ -558,7 +558,7 @@ function TrackingTab({
                 {rows.map((shipment) => (
                   <tr
                     key={shipment.id}
-                    className={'is-clickable' + (shipment.id === openId ? ' is-selected' : '')}
+                    className={'is-clickable' + (shipment.id === selected?.id ? ' is-selected' : '')}
                     onClick={() => onOpen(shipment.id)}
                   >
                     <td data-label={t('ss.tracking.col.recipient')} className="dt-primary">
@@ -653,6 +653,7 @@ export function ShipmentDrawer({
   onStatus: (m: string | null) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [short, setShort] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -676,10 +677,12 @@ export function ShipmentDrawer({
       await fn();
       onStatus(ok);
       setError(null);
+      setShort(false);
       onChanged();
       onClose();
     } catch (e) {
       setError((e as Error).message);
+      setShort((e as { code?: string }).code === 'insufficient_balance');
     } finally {
       setBusy(false);
       setConfirming(false);
@@ -698,6 +701,13 @@ export function ShipmentDrawer({
       }
     >
       {error && <ErrorState message={error} />}
+      {error && short && (
+        <p className="field-hint">
+          <Button variant="link" onClick={() => navigate({ section: 'wallet', tab: 'cash-in' })}>
+            {t('ship.cashInLink')}
+          </Button>
+        </p>
+      )}
 
       <p className="drawer-note drawer-note--archive" role="note">
         <span>
@@ -716,7 +726,21 @@ export function ShipmentDrawer({
         </DetailRow>
         <DetailRow label={t('ss.tracking.trackingNumber')}>
           {shipment.trackingNumber ? (
-            <code dir="ltr">{shipment.trackingNumber}</code>
+            <>
+              <code dir="ltr">{shipment.trackingNumber}</code>
+              {trackingUrl(shipment.carrier, shipment.trackingNumber) && (
+                <>
+                  {' '}
+                  <a
+                    href={trackingUrl(shipment.carrier, shipment.trackingNumber)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t('ss.tracking.trackOn', { carrier: shipment.carrier ?? '' })}
+                  </a>
+                </>
+              )}
+            </>
           ) : (
             <span className="hint">{t('ss.tracking.noTrackingYet')}</span>
           )}
@@ -980,6 +1004,7 @@ function RequestTable({
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<RequestSort>('newest');
+  const [confirming, setConfirming] = useState<MyRequest | null>(null);
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -989,7 +1014,7 @@ function RequestTable({
         : [
             request.code ?? '',
             serviceTypeLabel(t, request.type),
-            serviceStatusLabel(t, request.status),
+            serviceStatusLabel(t, request.status, request.type),
             request.itemId ? (serials.get(request.itemId) ?? '') : '',
             String((request.typeFields as { summary?: string } | null)?.summary ?? ''),
           ]
@@ -1120,7 +1145,7 @@ function RequestTable({
                   </td>
                   <td data-label={t('services.colStatus')}>
                     <StatusBadge tone={STATUS_TONE[request.status] ?? 'neutral'}>
-                      {serviceStatusLabel(t, request.status)}
+                      {serviceStatusLabel(t, request.status, request.type)}
                     </StatusBadge>
                     {awaitingAnswer(request) && <span className="dt-sub">{t('ship.requests.waitingOnYou')}</span>}
                   </td>
@@ -1138,7 +1163,7 @@ function RequestTable({
                             size="sm"
                             variant="primary"
                             disabled={busy}
-                            onClick={() => void answerCustomQuote(request, 'accept')}
+                            onClick={() => setConfirming(request)}
                           >
                             {t('custom.acceptQuoteAmount', {
                               amount: formatUsd(
@@ -1171,9 +1196,13 @@ function RequestTable({
                             size="sm"
                             variant="primary"
                             disabled={busy}
-                            onClick={() => void answerQuote(request, 'accept')}
+                            onClick={() => setConfirming(request)}
                           >
-                            {t('services.buyout.accept')}
+                            {t('services.buyout.acceptAmount', {
+                              amount: formatUsd(
+                                Number((request.typeFields as { offerMinor?: number })?.offerMinor ?? 0),
+                              ),
+                            })}
                           </Button>
                           <Button
                             size="sm"
@@ -1192,7 +1221,65 @@ function RequestTable({
           </table>
         </div>
       )}
+      {confirming && (
+        <QuoteConfirmation
+          request={confirming}
+          serial={confirming.itemId ? serials.get(confirming.itemId) : undefined}
+          busy={busy}
+          onCancel={() => setConfirming(null)}
+          onConfirm={async () => {
+            const request = confirming;
+            if (request.type === 'buyout') await answerQuote(request, 'accept');
+            else await answerCustomQuote(request, 'accept');
+            setConfirming(null);
+          }}
+        />
+      )}
     </Panel>
+  );
+}
+
+function QuoteConfirmation({
+  request,
+  serial,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  request: MyRequest;
+  serial: string | undefined;
+  busy: boolean;
+  onConfirm: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  const { t } = useI18n();
+  const fields = (request.typeFields ?? {}) as { offerMinor?: number; priceMinor?: number };
+  const card = serial ?? request.code ?? '';
+  if (request.type === 'buyout') {
+    const amount = formatUsd(Number(fields.offerMinor ?? 0));
+    return (
+      <ConfirmationModal
+        title={t('services.buyout.confirmTitle', { amount })}
+        body={<p>{t('services.buyout.confirmBody', { amount, item: card })}</p>}
+        confirmLabel={t('services.buyout.acceptAmount', { amount })}
+        cancelLabel={t('ui.cancel')}
+        busy={busy}
+        onConfirm={() => void onConfirm()}
+        onCancel={onCancel}
+      />
+    );
+  }
+  const amount = formatUsd(Number(fields.priceMinor ?? 0));
+  return (
+    <ConfirmationModal
+      title={t('custom.confirmTitle', { amount })}
+      body={<p>{t('custom.confirmBody', { amount, code: request.code ?? '' })}</p>}
+      confirmLabel={t('custom.acceptQuoteAmount', { amount })}
+      cancelLabel={t('ui.cancel')}
+      busy={busy}
+      onConfirm={() => void onConfirm()}
+      onCancel={onCancel}
+    />
   );
 }
 

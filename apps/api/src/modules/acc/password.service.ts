@@ -6,7 +6,7 @@ import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { hashToken } from '../../shared/tokens';
 import { OutboxService } from '../not/outbox/outbox.service';
-import { userAccount, verificationToken } from './acc.schema';
+import { mfaChallenge, userAccount, verificationToken } from './acc.schema';
 import { SessionService } from './session.service';
 
 export const PASSWORD_RESET_REQUESTED = 'password_reset_requested';
@@ -33,12 +33,11 @@ export class PasswordService {
     if (!u || !(await argon2.verify(u.passwordHash, currentPassword))) {
       throw AppError.validation('Current password is incorrect');
     }
-    await this.db
-      .update(userAccount)
-      .set({ passwordHash: await argon2.hash(newPassword) })
-      .where(eq(userAccount.id, userId));
-
-    const otherSessionsEnded = await this.sessions.revokeAllFor(userId, currentSessionToken);
+    const passwordHash = await argon2.hash(newPassword);
+    const otherSessionsEnded = await this.db.transaction(async (tx) => {
+      await this.writePassword(tx as Database, userId, passwordHash);
+      return this.sessions.revokeAllFor(userId, currentSessionToken, tx as Database);
+    });
     return { otherSessionsEnded };
   }
 
@@ -77,9 +76,27 @@ export class PasswordService {
         .where(and(eq(verificationToken.id, tok.id), isNull(verificationToken.consumedAt)))
         .returning({ id: verificationToken.id });
       if (!consumed) throw AppError.tokenExpired('Reset link expired or already used');
-      await tx.update(userAccount).set({ passwordHash }).where(eq(userAccount.id, tok.userId));
+      await this.writePassword(tx as Database, tok.userId, passwordHash);
+      await this.sessions.revokeAllFor(tok.userId, undefined, tx as Database);
     });
+  }
 
-    await this.sessions.revokeAllFor(tok.userId);
+  private async writePassword(tx: Database, userId: string, passwordHash: string): Promise<void> {
+    const now = new Date();
+    await tx.update(userAccount).set({ passwordHash }).where(eq(userAccount.id, userId));
+    await tx
+      .update(verificationToken)
+      .set({ consumedAt: now })
+      .where(
+        and(
+          eq(verificationToken.userId, userId),
+          eq(verificationToken.type, 'password_reset'),
+          isNull(verificationToken.consumedAt),
+        ),
+      );
+    await tx
+      .update(mfaChallenge)
+      .set({ consumedAt: now })
+      .where(and(eq(mfaChallenge.userId, userId), isNull(mfaChallenge.consumedAt)));
   }
 }

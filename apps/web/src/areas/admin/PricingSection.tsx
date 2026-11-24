@@ -14,6 +14,7 @@ import { LoadFailure } from './RollTools';
 import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { Code } from '../../shared/ui/Serial';
 import { IconPlus, IconReceipt } from '../../shared/ui/icons';
+import { pricingActionName } from '../../shared/pricingActions';
 import { PricingCoveragePanel, type PricingCoverage } from './PricingCoveragePanel';
 
 interface PricingRule {
@@ -35,14 +36,6 @@ const BILLING_LABEL: Record<string, MessageKey> = {
   daily: 'admin.pricing.billing.daily',
   weekly: 'admin.pricing.billing.weekly',
   monthly: 'admin.pricing.billing.monthly',
-};
-
-const ACTION_LABEL: Record<string, MessageKey> = {
-  intake: 'admin.pricing.action.intake',
-  storage: 'admin.pricing.action.storage',
-  service: 'admin.pricing.action.service',
-  shipping: 'admin.pricing.action.shipping',
-  marketplace_fee: 'admin.pricing.action.marketplaceFee',
 };
 
 const MODEL_LABEL: Record<string, MessageKey> = {
@@ -140,13 +133,8 @@ export function PricingSection({
     }
   }
 
-  const actionText = (type: string) => {
-    const key = ACTION_LABEL[type];
-    return key ? t(key) : type;
-  };
-  // An action the product has no word for is its code, as the coverage table above shows it.
-  const actionLabel = (type: string) =>
-    ACTION_LABEL[type] ? actionText(type) : <Code value={type} />;
+  const actionText = (type: string) => pricingActionName(t, type) ?? type;
+  const actionLabel = (type: string) => pricingActionName(t, type) ?? <Code value={type} />;
   const billingKey = BILLING_LABEL[billingTrigger];
 
   return (
@@ -396,7 +384,7 @@ function RateCard({
     <div className="ledger-sheet rate-card">
       <div className="rate-columns">
         {groups.map((group) => {
-          const labelKey = ACTION_LABEL[group.type];
+          const name = pricingActionName(t, group.type);
           const id = `rate-${group.type.replace(/[^a-z0-9]+/gi, '-')}`;
           return (
             <section
@@ -406,7 +394,7 @@ function RateCard({
               data-action={group.type}
             >
               <h3 className="rate-group-title" id={id}>
-                {labelKey ? t(labelKey) : <Code value={group.type} />}
+                {name ?? <Code value={group.type} />}
               </h3>
               <ul className="rate-lines">
                 {group.rules.map(({ rule, state }) => {

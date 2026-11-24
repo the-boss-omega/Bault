@@ -8,6 +8,8 @@ const trimmed = () =>
 // eslint-disable-next-line no-control-regex -- control characters are exactly what this rejects
 const NAME_PART_RULE = /^[^<>\u0000-\u001f]+$/;
 
+const PASSWORD_MAX = 256;
+
 export class RegisterDto {
   @IsEmail()
   email!: string;
@@ -17,7 +19,7 @@ export class RegisterDto {
   @MinLength(USERNAME_MIN)
   @MaxLength(USERNAME_MAX)
   @Matches(/^[A-Za-z0-9_.-]+$/, {
-    message: 'username may only contain letters, digits, dot, dash and underscore',
+    message: 'The username may only contain letters, digits, dots, dashes and underscores.',
   })
   username!: string;
 
@@ -25,23 +27,24 @@ export class RegisterDto {
   @IsString()
   @MinLength(1)
   @MaxLength(NAME_PART_MAX)
-  @Matches(NAME_PART_RULE, { message: 'firstName contains invalid characters' })
+  @Matches(NAME_PART_RULE, { message: 'The first name cannot contain < or > or control characters.' })
   firstName!: string;
 
   @trimmed()
   @IsString()
   @MinLength(1)
   @MaxLength(NAME_PART_MAX)
-  @Matches(NAME_PART_RULE, { message: 'lastName contains invalid characters' })
+  @Matches(NAME_PART_RULE, { message: 'The last name cannot contain < or > or control characters.' })
   lastName!: string;
 
   @IsString()
   @MinLength(8)
+  @MaxLength(PASSWORD_MAX, { message: `The password can be at most ${PASSWORD_MAX} characters.` })
   password!: string;
 
   @trimmed()
-  @IsString({ message: 'acceptedTermsVersion is required: accept the terms to create an account' })
-  @MinLength(1, { message: 'acceptedTermsVersion is required: accept the terms to create an account' })
+  @IsString({ message: 'Accept the terms to create an account.' })
+  @MinLength(1, { message: 'Accept the terms to create an account.' })
   @MaxLength(64)
   acceptedTermsVersion!: string;
 }
@@ -87,7 +90,6 @@ export class MfaCodeDto {
 
 const MFA_METHODS = ['totp', 'email'] as const;
 
-/** No method is the authenticator app, as it was before emailed codes, for the clients that name none. */
 export class SetupMfaDto {
   @IsOptional()
   @IsIn(MFA_METHODS)
@@ -132,6 +134,7 @@ export class ResetPasswordDto {
 
   @IsString()
   @MinLength(8)
+  @MaxLength(PASSWORD_MAX, { message: `The new password can be at most ${PASSWORD_MAX} characters.` })
   newPassword!: string;
 }
 
@@ -141,6 +144,7 @@ export class ChangePasswordDto {
 
   @IsString()
   @MinLength(8)
+  @MaxLength(PASSWORD_MAX, { message: `The new password can be at most ${PASSWORD_MAX} characters.` })
   newPassword!: string;
 }
 
@@ -149,13 +153,13 @@ export class UpdateProfileDto {
   @IsString()
   @MinLength(1)
   @MaxLength(NAME_PART_MAX)
-  @Matches(NAME_PART_RULE, { message: 'firstName contains invalid characters' })
+  @Matches(NAME_PART_RULE, { message: 'The first name cannot contain < or > or control characters.' })
   firstName!: string;
 
   @trimmed()
   @IsString()
   @MinLength(1)
   @MaxLength(NAME_PART_MAX)
-  @Matches(NAME_PART_RULE, { message: 'lastName contains invalid characters' })
+  @Matches(NAME_PART_RULE, { message: 'The last name cannot contain < or > or control characters.' })
   lastName!: string;
 }

@@ -272,7 +272,7 @@ function ParcelsTab({
   const [q, setQ] = useState('');
   const [registering, setRegistering] = useState(false);
   const selected = useMemo(
-    () => (parcels ?? []).find((p) => p.id === openId) ?? null,
+    () => (parcels ?? []).find((p) => p.id === openId || p.code === openId) ?? null,
     [parcels, openId],
   );
   const shown = useMemo(() => {
@@ -362,7 +362,7 @@ function ParcelsTab({
               return (
                 <li
                   key={p.id}
-                  className={'label-card' + (p.id === openId ? ' is-selected' : '')}
+                  className={'label-card' + (p.id === selected?.id ? ' is-selected' : '')}
                   onClick={() => onOpen(p.id)}
                 >
                   <div className="label-main">

@@ -8,6 +8,7 @@ import {
   fund,
   openPage,
   panel,
+  pressAndSettle,
   says,
   shows,
   signInAs,
@@ -23,6 +24,7 @@ let s: Stack;
 let admin: Client;
 let collector: Collector;
 let cashIn: string;
+let cashInCode: string;
 let cashOut: { id: string; code: string };
 let card: { id: string; description: string };
 let videoReviewBefore: { model: string; value: number; billingTrigger: string; description: string } | undefined;
@@ -44,6 +46,7 @@ beforeAll(async () => {
   collector = await activeCollector('silver');
   cashIn = await fund(collector, 30_000);
   await fund(collector, 50_000);
+  cashInCode = (await admin.get(`/admin/wallet-requests/${cashIn}`)).body.code as string;
   const operator = await signIn(SEED.operator);
   const [bin] = await binIds(operator);
   const ten = await operator.post('/intake/items', {
@@ -95,7 +98,7 @@ async function monthlySummary(page: Page): Promise<{ reversedFees: number; rever
   const month = new Date().toISOString().slice(0, 7);
   const form = panel(page, 'Monthly summary');
   await form.getByRole('textbox', { name: 'Month' }).fill(month);
-  await form.getByRole('button', { name: 'Show summary' }).click();
+  await pressAndSettle(page, form.getByRole('button', { name: 'Show summary' }), '/admin/accounting/summary');
   const summary = form.getByRole('region', { name: 'Monthly summary' });
   await says(summary, 'Card Embassy revenue');
   await says(summary, 'Customer balances held');
@@ -138,10 +141,20 @@ describe('journey: an administrator, from the payout desk to the price list', ()
     await drawer.getByRole('button', { name: 'Close' }).first().click();
 
     const before = await monthlySummary(page);
-    const recall = await page.request.post(`/api/v1/finance/chargebacks/wallet-requests/${cashIn}`, {
-      data: { reason: 'The bank recalled the transfer.', providerCaseRef: `CASE-${collector.username}` },
-    });
-    expect(recall.status(), await recall.text()).toBe(201);
+    const reversals = panel(page, 'Reversed payments');
+    await reversals.getByRole('button', { name: 'Show payments' }).click();
+    await reversals
+      .getByRole('row', { name: new RegExp(`Cash-in ${cashInCode}`) })
+      .getByRole('button', { name: 'Record a chargeback' })
+      .click();
+    const recall = reversals.getByRole('form', { name: `Chargeback on Cash-in ${cashInCode}` });
+    await recall.getByRole('textbox', { name: 'Reason' }).fill('The bank recalled the transfer.');
+    await recall.getByRole('textbox', { name: 'Case reference' }).fill(`CASE-${collector.username}`);
+    await recall.getByRole('button', { name: 'Record the chargeback' }).click();
+    await says(
+      reversals.getByRole('status'),
+      `Chargeback recorded on Cash-in ${cashInCode}: $300.00 taken back and a $25.00 handling fee charged.`,
+    );
     const after = await monthlySummary(page);
     expect(after.reversedFees - before.reversedFees).toBe(2_500);
     expect(after.reversedByPayer - before.reversedByPayer).toBe(30_000);

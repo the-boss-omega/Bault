@@ -18,7 +18,7 @@ import { parcel, parcelEvent } from '../inv/parcel.schema';
 import { item } from '../cst/cst.schema';
 import { newShipmentCode } from '../../shared/ids';
 import { fullName } from '../../shared/names';
-import { shipment } from './shp.schema';
+import { OPEN_SHIPMENT_STATUSES, shipment } from './shp.schema';
 import type { AuthUser } from '../sec/auth-context';
 import { ParcelProfileService, customsDeclarationFor, type CustomsLine } from './parcel-profile.service';
 import { SHIPPING_BOXES } from './boxes';
@@ -55,6 +55,7 @@ import {
   type AppliedShippingCover,
   type ShippingCover,
 } from '../mem/membership.service';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
 
 export type ShipmentActor = Pick<AuthUser, 'id' | 'role'>;
 
@@ -211,37 +212,10 @@ export class ShipmentService {
     private readonly memberships: MembershipService,
   ) {}
 
-  static readonly OPEN_STATUSES = [
-    'requested',
-    'awaiting_payment',
-    'rates_selected',
-    'picking',
-    'packed',
-    'labeled',
-  ] as const;
+  static readonly OPEN_STATUSES = OPEN_SHIPMENT_STATUSES;
 
-  async assertItemsFree(userId: string, itemIds: string[], exceptShipmentId?: string, tx?: Database) {
-    const open = await (tx ?? this.db)
-      .select({ id: shipment.id, code: shipment.code, itemIds: shipment.itemIds })
-      .from(shipment)
-      .where(
-        and(
-          eq(shipment.userId, userId),
-          inArray(shipment.status, [...ShipmentService.OPEN_STATUSES]),
-        ),
-      );
-
-    const claimed = new Map<string, string>();
-    for (const s of open) {
-      if (s.id === exceptShipmentId) continue;
-      for (const id of (s.itemIds as string[]) ?? []) claimed.set(id, s.code ?? s.id);
-    }
-    for (const id of itemIds) {
-      const owner = claimed.get(id);
-      if (owner) {
-        throw new AppError(ErrorCode.CONFLICT, `That item is already on shipment ${owner}`, 409);
-      }
-    }
+  async assertItemsFree(_userId: string, itemIds: string[], exceptShipmentId?: string, tx?: Database) {
+    await assertItemsUncommitted(tx ?? this.db, itemIds, 'shipped', { shipmentId: exceptShipmentId, shipToBuyer: true });
   }
 
   services() {
@@ -427,12 +401,7 @@ export class ShipmentService {
       .sort((a, b) => Number(b.eligible) - Number(a.eligible) || a.totalMinor - b.totalMinor);
   }
 
-  /**
-   * Where a label says the parcel comes from: the named facility, or else the oldest active primary one that has a
-   * real address (a facility still carrying the seed's placeholder is passed over, and so the order is a fixed one
-   * now that an administrator can add more than the seed's two).
-   */
-  private async originAddress(code?: string) {
+  async originSite(code?: string) {
     const sites = await this.db
       .select()
       .from(facility)
@@ -440,7 +409,11 @@ export class ShipmentService {
         and(code ? eq(facility.code, code) : eq(facility.role, 'primary'), eq(facility.active, true)),
       )
       .orderBy(asc(facility.createdAt), asc(facility.code));
-    const site = sites.find((s) => !isPlaceholderAddress(s.line1));
+    return sites.find((s) => !isPlaceholderAddress(s.line1));
+  }
+
+  private async originAddress(code?: string) {
+    const site = await this.originSite(code);
     if (!site) return undefined;
     return {
       name: site.name,
@@ -779,7 +752,7 @@ export class ShipmentService {
 
     const quoted = await this.rates(shipmentId, actor);
     const rate = quoted.find((r) => r.serviceKey === service.key);
-    if (!rate) throw AppError.validation('Selected carrier/service not available');
+    if (!rate) throw AppError.validation('That carrier service is not offered for this parcel.');
     if (!rate.eligible) {
       throw AppError.validation(rate.problems[0]!.message, { problems: rate.problems });
     }
@@ -858,6 +831,11 @@ export class ShipmentService {
       const [cur] = await tx.select().from(shipment).where(eq(shipment.id, s.id)).for('update').limit(1);
       if (!cur) throw AppError.notFound('Shipment not found');
       ShipmentService.assertRateSelectable(cur);
+      const itemIds = (cur.itemIds as string[]) ?? [];
+      if (itemIds.length > 0) {
+        await this.profiles.loadShippableItems(cur.userId, itemIds, tx);
+        await this.assertItemsFree(cur.userId, itemIds, cur.id, tx);
+      }
       if (cur.status === 'rates_selected') return this.reRate(tx, cur, rate, common, estimatedDeliveryAt);
 
       const balance = await this.ledger.balanceOf(s.userId, tx);
@@ -926,7 +904,7 @@ export class ShipmentService {
       if (balance.amount < differenceMinor) {
         throw new AppError(
           ErrorCode.INSUFFICIENT_BALANCE,
-          `That service costs ${usdAmount(differenceMinor)} more than the one already paid for, and the wallet holds ${usdAmount(balance.amount)}. Top up, or choose a cheaper service.`,
+          `That service costs ${usdAmount(differenceMinor)} more than the one already paid for, and the wallet holds ${usdAmount(balance.amount)}. Cash in to your wallet, or choose a cheaper service.`,
           409,
           { shortfallMinor: differenceMinor - balance.amount },
         );
@@ -947,7 +925,11 @@ export class ShipmentService {
             insurancePremium: rate.insurancePremiumMinor,
             addOns: rate.addOnsMinor,
             membershipCover: rate.membershipCover ?? null,
-            ...tierSnapshot(rate),
+            newListTotal: rate.listTotalMinor,
+            tier: rate.tier,
+            discountBps: rate.discountBps,
+            listMinor: differenceMinor,
+            chargedMinor: differenceMinor,
           },
           amount: differenceMinor,
           currency,
@@ -1038,11 +1020,13 @@ export class ShipmentService {
         throw AppError.validation('This shipment has no agreed price');
       }
       await this.profiles.loadShippableItems(s.userId, (s.itemIds as string[]) ?? [], tx);
+      await this.assertItemsFree(s.userId, (s.itemIds as string[]) ?? [], s.id, tx);
+      await this.ledger.lockWallet(s.userId, tx);
       const balance = await this.ledger.balanceOf(s.userId, tx);
       if (balance.amount < s.cost) {
         throw new AppError(
-          ErrorCode.CONFLICT,
-          `Short by ${usdAmount(s.cost - balance.amount)}. Top up the wallet and try again.`,
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `Short by ${usdAmount(s.cost - balance.amount)}. Cash in to your wallet and try again.`,
           409,
         );
       }

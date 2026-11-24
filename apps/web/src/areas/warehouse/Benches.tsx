@@ -10,7 +10,6 @@ import { Docket, type BenchOutcome } from '../../shared/ui/Docket';
 import { Button, EmptyState, ErrorState, ScanField, SkeletonTable, StatusBadge } from '../../shared/ui/primitives';
 import { IconAlert, IconPlus, IconScan, IconShipping } from '../../shared/ui/icons';
 
-/** What a bench needs to know of a shelf to say where something is going: the console's own list of them. */
 export interface BenchShelf {
   id: string;
   serialNumber: string;
@@ -23,7 +22,6 @@ export interface BenchShelf {
   facilityCode: string | null;
 }
 
-/** A shelf as it was scanned or typed: its barcode, its serial or its number, whichever was read. */
 export function shelfFor(shelves: readonly BenchShelf[], scanned: string): BenchShelf | undefined {
   const code = scanned.trim().toUpperCase();
   if (!code) return undefined;
@@ -35,22 +33,15 @@ export function shelfFor(shelves: readonly BenchShelf[], scanned: string): Bench
   );
 }
 
-/** A code, read left to right whatever the page reads. */
 export const code = (value: string) => <bdi dir="ltr">{value}</bdi>;
 
-/** What has not been scanned or typed yet is a dash, never a value made up. */
 export const quiet = <span className="drawer-tag-quiet">—</span>;
 
-/** The result of the last press of a bench's button, with the time of day it came to. */
 export function stamped(detail: string, locale: string): string {
   const time = formatTime(new Date().toISOString(), locale);
   return detail ? `${detail} · ${time}` : time;
 }
 
-/**
- * Move one item to another shelf: scan the item, scan the shelf, and the shelf is read back (its zone, its kind, what is on it
- * now) before anything is moved. A scanner ends with Enter: the first goes to the shelf, the second does it.
- */
 export function RelocateBench({
   shelves,
   onLog,
@@ -157,7 +148,7 @@ export function RelocateBench({
                       : 'warehouse.bins.kind.standard',
                   ),
                 },
-                { label: t('bench.onItNow'), value: shelf.itemCount.toLocaleString() },
+                { label: t('bench.onItNow'), value: shelf.itemCount.toLocaleString('en-US') },
                 ...(shelf.active
                   ? []
                   : [
@@ -191,7 +182,6 @@ export function RelocateBench({
   );
 }
 
-/** Put an item on hold, or take it off: one scan and either button. Enter, from a scanner, places the hold. */
 export function HoldBench({
   onLog,
   onDone,
@@ -289,11 +279,6 @@ export function HoldBench({
   );
 }
 
-/**
- * An arrival that did not go into a vault: who it was for, why it was not taken, what became of it, and what it
- * was, written as the record will be kept. The collector is told the moment it is filed, so the slip says what
- * will be filed.
- */
 export function DisposalBench({ onLog }: { onLog: (line: string) => void }) {
   const { t, locale } = useI18n();
   const [ownerUsername, setOwnerUsername] = useState('');
@@ -446,7 +431,6 @@ export function DisposalBench({ onLog }: { onLog: (line: string) => void }) {
   );
 }
 
-/** A new shelf: the zone it is in, what kind it is and where it stands; its serial is minted, so it is not asked for. */
 export function NewShelfBench({
   onLog,
   onCreated,
@@ -470,7 +454,6 @@ export function NewShelfBench({
         setFacilities(storing);
         if (storing[0]) setFacilityCode(storing[0].code);
       } catch {
-        // A bench with no list of buildings makes the shelf in the one it is in.
       }
     })();
   }, []);
@@ -614,11 +597,6 @@ export const readyToPack = (rows: readonly PackRow[]) =>
 const sameCode = (a: string | null | undefined, b: string) =>
   Boolean(a) && a!.trim().toUpperCase() === b.trim().toUpperCase();
 
-/**
- * Pack a shipment: load it, and the docket is its pick list. Each card that is scanned is ticked on it, a code that
- * is not in the shipment is shown on it as wrong with a way to take it back, and the figure is how many are done of
- * how many. The shipment goes only when every card has been scanned and nothing else has.
- */
 export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
   const { t, locale } = useI18n();
   const [shipmentId, setShipmentId] = useState('');
@@ -717,8 +695,6 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
   }
 
   async function completeShipment() {
-    // A second press (or a second Enter from a scanner) while the first is on its way would send it twice, and the
-    // refusal of the second would replace the docket's word that the first went.
     if (!detail || !complete || busy) return;
     setBusy(true);
     try {
@@ -754,7 +730,6 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
     }
   }
 
-  // The pick list: a line for each thing to be scanned, and for anything scanned that should not have been.
   const pickLines: { label: ReactNode; value: ReactNode }[] = [];
   if (detail) {
     if (direct) {
@@ -835,7 +810,7 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
                     {code(w.code ?? w.id.slice(0, 8))}
                     <span className="hint">
                       {' '}
-                      {t('warehouse.pack.row', {
+                      {t(w.itemIds.length === 1 ? 'warehouse.pack.rowOne' : 'warehouse.pack.row', {
                         owner: w.username ? `@${w.username}` : '—',
                         count: w.itemIds.length,
                       })}

@@ -6,6 +6,8 @@ export const ESCROW_MINIMUM_FEE_MINOR = 2_500;
 
 export const ESCROW_MINIMUM_VALUE_MINOR = 50_000;
 
+export const ESCROW_MAXIMUM_VALUE_MINOR = 2_000_000_000;
+
 export const ESCROW_FEE_ACTION = 'escrow_fee';
 
 export function escrowFeeMinor(valueMinor: number): number {
@@ -35,6 +37,11 @@ export function checkDeal(input: {
     problems.push({
       field: 'valueMinor',
       message: `Escrow starts at ${formatMinor(ESCROW_MINIMUM_VALUE_MINOR)}. Below that the fee costs more than the protection is worth to you.`,
+    });
+  } else if (input.valueMinor > ESCROW_MAXIMUM_VALUE_MINOR) {
+    problems.push({
+      field: 'valueMinor',
+      message: `One deal can hold at most ${formatMinor(ESCROW_MAXIMUM_VALUE_MINOR)}. Split a larger sale into several deals.`,
     });
   }
 
@@ -68,8 +75,4 @@ export function checkDeal(input: {
   }
 
   return problems;
-}
-
-export function feePayer(deal: { raisedBy: string }): string {
-  return deal.raisedBy;
 }
