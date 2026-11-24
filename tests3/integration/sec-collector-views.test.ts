@@ -1,5 +1,6 @@
 import { afterAll, describe, it, expect } from 'vitest';
-import { Client, SEED, fundWallet, signIn, intakeFor } from '../../tests/integration/helpers/http';
+import { Client, SEED, fixtureEmail, fundWallet, signIn, intakeFor } from '../../tests/integration/helpers/http';
+import { MFA_PASSWORD, activeAccount, passwordOnly } from '../../tests/integration/helpers/mfa';
 import { closeDb, sql } from '../../tests/integration/helpers/db';
 
 afterAll(closeDb);
@@ -855,5 +856,28 @@ describe('A13 a shared parcel as a member reads it', () => {
     for (const m of staff.body.members as Member[]) {
       expect(Object.keys(m)).toEqual(expect.arrayContaining(['name', 'weightGrams', 'insuredValueMinor']));
     }
+  });
+});
+
+describe('A14 the profile a collector reads while an email change waits', () => {
+  it('names the pending address and nothing about its link', async () => {
+    const account = await activeAccount('views');
+    const c = await passwordOnly(account);
+    const next = fixtureEmail('views-next');
+    const asked = await c.post('/me/email', { email: next, currentPassword: MFA_PASSWORD });
+    expect(asked.status).toBe(202);
+    expectWithout(asked.body, ['pendingEmailTokenHash', 'pendingEmailExpiresAt', 'token', 'tokenHash', 'expiresAt']);
+    await sql(
+      `UPDATE user_account SET pending_email_token_hash = md5(random()::text), pending_email_expires_at = now() + interval '1 day'
+        WHERE id = $1`,
+      [account.id],
+    );
+    const me = await c.get('/me/profile');
+    expect(me.status).toBe(200);
+    expect(me.body.pendingEmail).toBe(next);
+    expectWithout(me.body, ['pendingEmailTokenHash', 'pendingEmailExpiresAt', 'passwordHash', 'token', 'tokenHash', 'expiresAt']);
+    const resent = await c.post('/me/email/resend');
+    expectWithout(resent.body, ['pendingEmailTokenHash', 'pendingEmailExpiresAt', 'token', 'tokenHash', 'expiresAt']);
+    expect((await c.del('/me/email')).status).toBe(200);
   });
 });

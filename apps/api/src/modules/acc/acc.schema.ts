@@ -32,15 +32,25 @@ export const userAccount = pgTable(
     termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
     usageTier: usageTier('usage_tier').notNull().default('bronze'),
     usageTierComputedAt: timestamp('usage_tier_computed_at', { withTimezone: true }),
+    pendingEmail: text('pending_email'),
+    pendingEmailTokenHash: text('pending_email_token_hash'),
+    pendingEmailExpiresAt: timestamp('pending_email_expires_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => ({
     emailUnique: uniqueIndex('user_account_email_unique').on(t.email),
     usernameUnique: uniqueIndex('user_account_username_unique').on(t.username),
     intakeIdUnique: uniqueIndex('user_account_intake_id_unique').on(t.intakeId),
+    pendingEmailTokenUnique: uniqueIndex('user_account_pending_email_token_unique')
+      .on(t.pendingEmailTokenHash)
+      .where(sql`${t.pendingEmailTokenHash} IS NOT NULL`),
     termsAcceptanceComplete: check(
       'user_account_terms_acceptance_complete',
       sql`(${t.termsVersion} IS NULL) = (${t.termsAcceptedAt} IS NULL)`,
+    ),
+    pendingEmailLinkComplete: check(
+      'user_account_pending_email_link_complete',
+      sql`(${t.pendingEmailTokenHash} IS NULL) = (${t.pendingEmailExpiresAt} IS NULL) AND (${t.pendingEmailTokenHash} IS NULL OR ${t.pendingEmail} IS NOT NULL)`,
     ),
   }),
 );

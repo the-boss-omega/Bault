@@ -353,6 +353,13 @@
       "breakpoints": true
     },
     {
+      "idx": 51,
+      "version": "7",
+      "when": 1785076700000,
+      "tag": "0051_an_account_email_can_change",
+      "breakpoints": true
+    },
+    {
       "idx": 52,
       "version": "7",
       "when": 1785076800000,

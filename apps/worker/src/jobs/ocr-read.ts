@@ -6,6 +6,7 @@ import { reportJobFailure } from '../observability';
 
 export const OCR_REQUESTED = 'ocr_requested';
 export const OCR_MAX_ATTEMPTS = 3;
+const CLAIM_IDLE_LIMIT = '5min';
 const RUN_LIMIT = 50;
 
 export interface OcrJobDeps {
@@ -81,6 +82,7 @@ export async function readRequestedPhotos(pool: Pool, deps: OcrJobDeps): Promise
     let claimed: Request | undefined;
     try {
       await client.query('BEGIN');
+      await client.query(`SET LOCAL idle_in_transaction_session_timeout = '${CLAIM_IDLE_LIMIT}'`);
       const { rows } = await client.query<Request>(
         `SELECT id, payload
            FROM outbox_message

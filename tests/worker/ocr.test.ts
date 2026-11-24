@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Pool } from 'pg';
+import { Pool } from 'pg';
+import { loadEnv } from '@bault/config';
 import {
   SANDBOX_OCR_TEXT,
   SandboxOcrProvider,
@@ -162,5 +163,35 @@ describe('reading a photograph that was attached at intake', () => {
     const row = await outboxRow(message);
     expect(row.dispatched_at).toBeNull();
     expect(row.attempts).toBe(0);
+  });
+});
+
+describe('a read slower than the worker role allows a transaction to sit idle', () => {
+  it('lands, without the session being ended under it', async () => {
+    const strict = new Pool({
+      connectionString: loadEnv().DIRECT_DATABASE_URL,
+      options: '-c idle_in_transaction_session_timeout=1000',
+    });
+    strict.on('error', () => undefined);
+    const storage = new SandboxStorageAdapter();
+    const photo = await stored(storage, 'parcels');
+    const parcel = await createParcel();
+    const id = await requestRead('parcel', parcel, photo.key);
+    const inner = new SandboxOcrProvider();
+    const slow: OcrProvider = {
+      name: 'sandbox',
+      async read(bytes, kind) {
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+        return inner.read(bytes, kind);
+      },
+      async close() {},
+    };
+    try {
+      await readRequestedPhotos(strict, { storage, ocr: slow });
+    } finally {
+      await strict.end();
+    }
+    expect((await suggestions(parcel)).rows).toHaveLength(1);
+    expect((await outboxRow(id)).dispatched_at).not.toBeNull();
   });
 });

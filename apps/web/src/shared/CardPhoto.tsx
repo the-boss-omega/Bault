@@ -203,7 +203,11 @@ export function CardPhotoThumb({
         type="button"
         className="photo-thumb"
         title={t('photo.show')}
-        aria-label={t('photo.showOf', { title })}
+        aria-label={
+          photo.exhausted
+            ? `${t('photo.showOf', { title })}. ${t('photo.none')}`
+            : t('photo.showOf', { title })
+        }
         onClick={() => setOpen(true)}
         onPointerMove={slabMove}
         onPointerLeave={slabLeave}

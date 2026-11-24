@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Pool } from 'pg';
+import { Pool } from 'pg';
+import { loadEnv } from '@bault/config';
+import type { EmailAdapter, EmailMessage } from '@bault/adapters';
 import { dispatchOutbox } from '../../apps/worker/src/jobs/outbox-dispatch';
 import { count, createItem, createUser, testPool } from './helpers/db';
 
@@ -72,6 +74,38 @@ describe('dispatching the outbox', () => {
   });
 });
 
+describe('a mail slower than the worker role allows a transaction to sit idle', () => {
+  it('is sent once and the message dispatched, without the session being ended under it', async () => {
+    const strict = new Pool({
+      connectionString: loadEnv().DIRECT_DATABASE_URL,
+      options: '-c idle_in_transaction_session_timeout=1000',
+    });
+    strict.on('error', () => undefined);
+    const user = await createUser(pool);
+    const address = (await pool.query<{ email: string }>(`SELECT email FROM user_account WHERE id = $1`, [user]))
+      .rows[0]!.email;
+    const sent: EmailMessage[] = [];
+    const slow: EmailAdapter = {
+      async send(message) {
+        if (message.to === address) await new Promise((resolve) => setTimeout(resolve, 1_500));
+        sent.push(message);
+        return { providerRef: `slow-${sent.length}` };
+      },
+    };
+    const id = await emit(pool, 'item_received', { userId: user });
+    try {
+      await dispatchOutbox(strict, slow);
+    } finally {
+      await strict.end();
+    }
+    expect(await undispatched(pool, [id])).toBe(0);
+    expect(sent.filter((m) => m.to === address)).toHaveLength(1);
+    expect(
+      await count(pool, `SELECT 1 FROM notification WHERE user_id = $1 AND channel = 'email' AND status = 'sent'`, [user]),
+    ).toBe(1);
+  });
+});
+
 describe('dispatching a password reset', () => {
   const emailOf = async (pool: Pool, userId: string) =>
     (await pool.query<{ email: string }>(`SELECT email FROM user_account WHERE id = $1`, [userId])).rows[0]!.email;
@@ -114,6 +148,33 @@ describe('dispatching a password reset', () => {
       await pool.query(`DROP SEQUENCE IF EXISTS wk_reset_dispatch_failure`);
     }
 
+    expect(await validTokens(pool, user)).toBe(1);
+  });
+
+  it('tries a reset mail again when the send fails, and leaves one valid link once it goes', async () => {
+    const user = await createUser(pool);
+    const email = await emailOf(pool, user);
+    let down = true;
+    const mailer: EmailAdapter = {
+      async send(message) {
+        if (down && message.to === email) throw new Error('smtp: the server is not answering');
+        return { providerRef: 'sent' };
+      },
+    };
+    const id = await emit(pool, 'password_reset_requested', { email });
+
+    await dispatchOutbox(pool, mailer);
+    expect(await undispatched(pool, [id])).toBe(1);
+    expect(await validTokens(pool, user)).toBe(0);
+    const { rows } = await pool.query<{ attempts: number; last_error: string | null }>(
+      `SELECT attempts, last_error FROM outbox_message WHERE id = $1`,
+      [id],
+    );
+    expect(rows[0]).toEqual({ attempts: 1, last_error: 'smtp: the server is not answering' });
+
+    down = false;
+    await dispatchOutbox(pool, mailer);
+    expect(await undispatched(pool, [id])).toBe(0);
     expect(await validTokens(pool, user)).toBe(1);
   });
 

@@ -15,6 +15,7 @@ import { AuthService } from './auth.service';
 import { VerificationService } from './verification.service';
 import { PasswordService } from './password.service';
 import { SessionService } from './session.service';
+import { EmailChangeService } from './email-change.service';
 import {
   ChangePasswordDto,
   EmailDto,
@@ -28,7 +29,7 @@ import {
 
 export const CREDENTIAL_ROUTE = loadEnv().AUTH_RATE_LIMIT_PER_MINUTE;
 
-const MAIL_ROUTE = 5;
+export const MAIL_ROUTE = 5;
 
 const env = loadEnv();
 
@@ -41,6 +42,7 @@ export class AuthController {
     private readonly passwords: PasswordService,
     private readonly sessions: SessionService,
     private readonly mfa: MfaService,
+    private readonly emailChange: EmailChangeService,
   ) {}
 
   @Public()
@@ -147,6 +149,15 @@ export class AuthController {
   async reset(@Body() dto: ResetPasswordDto) {
     await this.passwords.reset(dto.token, dto.newPassword);
     return { status: 'password_changed' };
+  }
+
+  @Public()
+  @AuthBucket(CREDENTIAL_ROUTE)
+  @Post('email/confirm')
+  @HttpCode(200)
+  async confirmEmail(@Body() dto: TokenDto, @Req() req: Request) {
+    const { otherSessionsEnded } = await this.emailChange.confirm(dto.token, this.rawSessionToken(req));
+    return { status: 'email_changed', otherSessionsEnded };
   }
 
   @AuthBucket(CREDENTIAL_ROUTE)

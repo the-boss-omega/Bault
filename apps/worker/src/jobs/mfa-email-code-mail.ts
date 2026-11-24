@@ -4,17 +4,12 @@ import { loadEnv } from '@bault/config';
 import type { EmailAdapter } from '@bault/adapters';
 import { log } from '../log';
 
-/** The outbox event the API writes when a code is asked for (MfaService.requestCode). */
 export const MFA_EMAIL_CODE_REQUESTED = 'mfa_email_code_requested';
 
 export const EMAIL_CODE_TTL_MINUTES = 10;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/*
- * These two repeat apps/api/src/modules/acc/mfa/email-codes.ts and secret-box.ts `deriveSubkey`, which check what
- * this file writes; tests/worker/mfa-email-code.test.ts holds the two to the same answer.
- */
 let derived: Buffer | undefined;
 export function emailCodeKey(): Buffer {
   if (derived) return derived;
@@ -37,13 +32,6 @@ interface Waiting {
   boundTo: string | null;
 }
 
-/**
- * Mints and mails one two-factor code. It runs inside the dispatch's transaction, which holds the outbox row, so
- * the code's hash and the mail stand or fall together: a mail that fails throws, nothing is kept, and the message
- * is tried again on the next run. A code is mailed only while its row still waits (not replaced, withdrawn or
- * already sent, and asked for within the ten minutes it would last), to an account that can still sign in, whose
- * email factor is still there and, once enabled, still bound to the account's address. Says whether it mailed.
- */
 export async function sendMfaEmailCode(
   db: Pick<PoolClient, 'query'>,
   payload: Record<string, unknown> | null,
