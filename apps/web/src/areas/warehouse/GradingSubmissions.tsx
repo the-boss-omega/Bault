@@ -60,10 +60,10 @@ export function GradingSubmissions() {
     void load();
   }, [load]);
 
-  async function act(fn: () => Promise<unknown>, ok: string) {
+  async function act<R>(fn: () => Promise<R>, ok: (result: R) => string) {
     try {
-      await fn();
-      setMessage(ok);
+      const result = await fn();
+      setMessage(ok(result));
       setError(null);
       await load();
     } catch (e) {
@@ -95,8 +95,8 @@ export function GradingSubmissions() {
           disabled={body.trim() === ''}
           onClick={() =>
             void act(
-              () => api.post('/services/grading/submissions', { gradingBody: body.trim() }),
-              t('grade.subs.opened'),
+              () => api.post<Submission>('/services/grading/submissions', { gradingBody: body.trim() }),
+              (opened) => t('grade.subs.opened', { code: opened.code, body: opened.gradingBody }),
             )
           }
         >
@@ -133,10 +133,12 @@ export function GradingSubmissions() {
                     <StatusBadge tone={SUBMISSION_TONE[s.status] ?? 'neutral'}>
                       {submissionStatusLabel(t, s.status)}
                     </StatusBadge>
-                    {s.shippedAt && (
+                    {(s.returnedAt ?? s.shippedAt) && (
                       <span className="hint date">
                         {' '}
-                        {formatDate(s.shippedAt, locale)}
+                        {s.returnedAt
+                          ? t('grade.subs.returnedOn', { date: formatDate(s.returnedAt, locale) })
+                          : t('grade.subs.shippedOn', { date: formatDate(s.shippedAt!, locale) })}
                       </span>
                     )}
                   </td>
@@ -145,17 +147,22 @@ export function GradingSubmissions() {
                   </td>
                   <td data-label={t('grade.subs.col.actions')}>
                     {s.status === 'open' && (
-                      <Button size="sm" onClick={() => setOpenId(openId === s.id ? null : s.id)}>
+                      <Button
+                        size="sm"
+                        aria-label={openId === s.id ? undefined : t('grade.subs.manageOne', { code: s.code })}
+                        onClick={() => setOpenId(openId === s.id ? null : s.id)}
+                      >
                         {openId === s.id ? t('ui.close') : t('grade.subs.manage')}
                       </Button>
                     )}
                     {s.status === 'shipped' && (
                       <Button
                         size="sm"
+                        aria-label={t('grade.subs.closeOne', { code: s.code })}
                         onClick={() =>
                           void act(
                             () => api.post(`/services/grading/submissions/${s.id}/close`),
-                            t('grade.subs.closed'),
+                            () => t('grade.subs.closed', { code: s.code, body: s.gradingBody }),
                           )
                         }
                       >
@@ -170,16 +177,18 @@ export function GradingSubmissions() {
         </div>
       )}
 
+      {submissions?.some((s) => s.status === 'shipped') && <p className="field-hint">{t('grade.subs.closeHint')}</p>}
+
       {openId && (
         <OpenSubmission
           submission={submissions?.find((s) => s.id === openId) ?? null}
           onChanged={() => void load()}
           onDone={(m) => {
             setMessage(m);
+            setError(null);
             setOpenId(null);
             void load();
           }}
-          onError={setError}
         />
       )}
     </Panel>
@@ -190,12 +199,10 @@ function OpenSubmission({
   submission,
   onChanged,
   onDone,
-  onError,
 }: {
   submission: Submission | null;
   onChanged: () => void;
   onDone: (m: string) => void;
-  onError: (m: string) => void;
 }) {
   const t = useT();
   const [ready, setReady] = useState<ReadyRequest[] | null>(null);
@@ -203,6 +210,8 @@ function OpenSubmission({
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [added, setAdded] = useState<string | null>(null);
 
   const body = submission?.gradingBody;
 
@@ -215,10 +224,10 @@ function OpenSubmission({
         ),
       );
     } catch (e) {
-      onError((e as Error).message);
+      setError((e as Error).message);
       setReady([]);
     }
-  }, [body, onError]);
+  }, [body]);
 
   useEffect(() => {
     void loadReady();
@@ -226,30 +235,31 @@ function OpenSubmission({
 
   if (!submission) return null;
 
-  async function add(requestId: string) {
+  async function add(request: ReadyRequest) {
+    setError(null);
+    setAdded(null);
     try {
-      await api.post(`/services/grading/submissions/${submission!.id}/add`, { requestId });
+      await api.post(`/services/grading/submissions/${submission!.id}/add`, { requestId: request.id });
+      setAdded(t('grade.subs.added', { serial: request.serialNumber ?? request.code ?? '—', code: submission!.code }));
       await loadReady();
       onChanged();
     } catch (e) {
-      onError((e as Error).message);
+      setError((e as Error).message);
     }
   }
 
   async function ship() {
     setBusy(true);
+    setError(null);
     try {
       const result = await api.post<{ itemCount: number }>(
         `/services/grading/submissions/${submission!.id}/ship`,
         { trackingNumber: tracking.trim(), externalReference: reference.trim(), notes: notes.trim() },
       );
-      onDone(
-        result.itemCount === 1
-          ? t('grade.subs.shippedOne')
-          : t('grade.subs.shipped', { count: result.itemCount }),
-      );
+      const words = { code: submission!.code, body: submission!.gradingBody, count: result.itemCount };
+      onDone(result.itemCount === 1 ? t('grade.subs.shippedOne', words) : t('grade.subs.shipped', words));
     } catch (e) {
-      onError((e as Error).message);
+      setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -258,11 +268,12 @@ function OpenSubmission({
   return (
     <div className="stack stack--tight stack-top">
       <h3 className="drawer-heading">{t('grade.subs.waiting', { body: submission.gradingBody })}</h3>
+      {added && <SuccessNote>{added}</SuccessNote>}
 
       {ready === null ? (
         <SkeletonTable rows={2} columns={3} />
       ) : ready.length === 0 ? (
-        <p className="hint">{t('grade.subs.noneWaiting')}</p>
+        <p className="hint">{t('grade.subs.noneWaiting', { body: submission.gradingBody })}</p>
       ) : (
         <ul className="check-list list-unbounded">
           {ready.map((r) => {
@@ -277,7 +288,11 @@ function OpenSubmission({
                     {declared > 0 ? ` · ${formatUsd(declared)}` : ''}
                   </span>
                 </span>
-                <Button size="sm" onClick={() => void add(r.id)}>
+                <Button
+                  size="sm"
+                  aria-label={t('grade.subs.addOne', { serial: r.serialNumber ?? r.code ?? '—', code: submission.code })}
+                  onClick={() => void add(r)}
+                >
                   {t('grade.subs.add')}
                 </Button>
               </li>
@@ -307,6 +322,7 @@ function OpenSubmission({
       </div>
 
       <p className="field-hint">{t('grade.subs.shipNote')}</p>
+      {error && <ErrorState message={error} />}
 
       <div className="actions">
         <Button

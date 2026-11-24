@@ -73,7 +73,12 @@ export function HouseStorePanel({
       onBought(
         result.replayed
           ? t('market.alreadyBought')
-          : t('house.bought', { serial: result.serialNumber, order: result.orderCode }),
+          : t('house.bought', {
+              item: isolate(buying.product.description),
+              amount: formatUsd(discountedMinor(buying.product.askingPrice, viewer.discountBps)),
+              serial: result.serialNumber,
+              order: result.orderCode,
+            }),
       );
       onError(null);
       setBuying(null);
@@ -89,7 +94,7 @@ export function HouseStorePanel({
     <Panel title={t('house.title')} subtitle={t('house.subtitle')} flush>
       {loadError ? (
         <ErrorState
-          title={t('market.loadFailed')}
+          title={t('store.loadFailed')}
           message={loadError}
           onRetry={() => {
             setProducts(null);
@@ -164,7 +169,7 @@ export function HouseStorePanel({
           body={
             <>
               <p>
-                {t('market.buy.confirmBody', {
+                {t('store.buy.confirmBody', {
                   item: isolate(buying.product.description),
                   amount: formatUsd(discountedMinor(buying.product.askingPrice, viewer.discountBps)),
                 })}
