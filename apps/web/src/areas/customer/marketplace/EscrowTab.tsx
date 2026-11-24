@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
-import { bpsToPercent, dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
+import { bpsToPercent, dollarsToCents, formatDate, formatUsd, isolate } from '../../../shared/money';
 import {
   ESCROW_TONE,
   escrowEventLabel,
   escrowStatusLabel,
   nextStep,
+  otherSideName,
   type EscrowDeal,
   type EscrowEvent,
 } from '../../../shared/escrow';
@@ -265,14 +266,14 @@ export function EscrowTab() {
               value={value}
               onChange={setValue}
               onBlur={() => touch('value')}
-              error={touched.value && valueBad ? t('market.sell.priceBad') : undefined}
-              hint={
-                belowFloor && terms
-                  ? t('esc.belowFloor', { floor: formatUsd(terms.minimumValueMinor) })
-                  : feePreview !== null
-                    ? t('esc.feePreview', { amount: formatUsd(feePreview) })
+              error={
+                touched.value && valueBad
+                  ? t('market.sell.priceBad')
+                  : touched.value && belowFloor && terms
+                    ? t('esc.belowFloor', { floor: formatUsd(terms.minimumValueMinor) })
                     : undefined
               }
+              hint={feePreview !== null && !belowFloor ? t('esc.feePreview', { amount: formatUsd(feePreview) }) : undefined}
             />
 
             <Field label={t('esc.settlement')} hint={t('esc.settlementHint')}>
@@ -501,6 +502,12 @@ function DealDrawer({
   const fundMinor = deal.valueMinor + (deal.raiserRole === 'buyer' ? deal.feeMinor : 0);
   const mismatch = deal.inspectionMatches === 'no';
   const myRelease = iAmBuyer ? deal.buyerReleasedAt : deal.sellerReleasedAt;
+  const words = {
+    code: deal.code,
+    item: isolate(deal.description),
+    who: otherSideName(t, deal),
+    amount: formatUsd(fundMinor),
+  };
 
   return (
     <>
@@ -573,7 +580,12 @@ function DealDrawer({
             variant="primary"
             size="sm"
             disabled={busy}
-            onClick={() => void act(() => api.post(`/escrow/${dealId}/agree`, {}), t('esc.agreed'))}
+            onClick={() =>
+              void act(
+                () => api.post(`/escrow/${dealId}/agree`, {}),
+                t(iAmBuyer ? 'escrow.agreedBuyer' : 'esc.agreed', words),
+              )
+            }
           >
             {t('esc.agree')}
           </Button>
@@ -668,7 +680,7 @@ function DealDrawer({
                 : confirming === 'release'
                   ? 'escrow.confirm.releaseBody'
                   : 'escrow.confirm.returnBody',
-              { amount: formatUsd(confirming === 'release' ? deal.valueMinor : fundMinor), code: deal.code },
+              { ...words, amount: formatUsd(confirming === 'release' ? deal.valueMinor : fundMinor) },
             )}
           </p>
         }
@@ -688,7 +700,10 @@ function DealDrawer({
               confirming === 'return'
                 ? api.post(`/escrow/${dealId}/return`, { reason })
                 : api.post(`/escrow/${dealId}/${confirming}`, {}),
-            t(confirming === 'fund' ? 'esc.funded' : confirming === 'release' ? 'esc.released' : 'esc.returned'),
+            t(confirming === 'fund' ? 'esc.funded' : confirming === 'release' ? 'esc.released' : 'esc.returned', {
+              ...words,
+              amount: formatUsd(confirming === 'release' ? deal.valueMinor : fundMinor),
+            }),
           )
         }
         onCancel={() => setConfirming(null)}

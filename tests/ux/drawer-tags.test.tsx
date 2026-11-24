@@ -123,12 +123,12 @@ describe('a drawer opens on the sum it is about', () => {
     const tag = within(dialog).getByRole('region', { name: 'Value' });
     expect(within(tag).getByText('$1,450.00')).toBeInTheDocument();
     expect(within(tag).getByText('Being inspected')).toBeInTheDocument();
-    expect(within(tag).getByText('Fee $25.00')).toBeInTheDocument();
+    expect(within(tag).getByText('Escrow fee $25.00')).toBeInTheDocument();
 
     const trail = within(dialog).getByRole('heading', { name: 'What happened' }).nextElementSibling as HTMLElement;
     const entries = within(trail).getAllByRole('listitem');
     expect(entries.map((e) => e.querySelector('.register-kind')!.textContent)).toEqual([
-      'Card Embassy has it and will inspect it next.',
+      'Card Embassy has the collectible and is inspecting it.',
       'Funds held',
       'Terms agreed',
       'Proposed',

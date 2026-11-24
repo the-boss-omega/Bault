@@ -24,6 +24,7 @@ const { ReceiveParcels } = await import('../../apps/web/src/areas/warehouse/Rece
 const { FulfillmentBench, DisposalBench } = await import('../../apps/web/src/areas/warehouse/Benches');
 const { LabelSheet } = await import('../../apps/web/src/areas/warehouse/LabelSheet');
 const { OcrReview } = await import('../../apps/web/src/areas/warehouse/OcrReview');
+const { GradingSubmissions } = await import('../../apps/web/src/areas/warehouse/GradingSubmissions');
 const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 
 const wrap = (ui: React.ReactNode) => <I18nProvider>{ui}</I18nProvider>;
@@ -484,5 +485,82 @@ describe('a reading that did not come in time', () => {
     await user.click(screen.getByRole('button', { name: 'Look for a reading again' }));
     await screen.findByDisplayValue('1Z999');
     expect(get.mock.calls.length).toBeGreaterThan(before);
+  });
+});
+
+describe('grading batches', () => {
+  const OPEN = {
+    id: 'g1',
+    code: 'GS-0001',
+    gradingBody: 'PSA',
+    status: 'open',
+    trackingNumber: null,
+    externalReference: null,
+    shippedAt: null,
+    returnedAt: null,
+    createdAt: '2026-11-01T10:00:00.000Z',
+  };
+  const READY = {
+    id: 'r1',
+    code: 'SR-0001',
+    itemId: 'i1',
+    typeFields: { declaredMinor: 25_000 },
+    requesterUsername: 'red',
+    itemDescription: 'Rayquaza VMAX',
+    serialNumber: 'SN-RAYQ-0001',
+  };
+
+  it('says what to do when there is no batch, and names the batch it opens', async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValue({ ...OPEN });
+    render(wrap(<GradingSubmissions />));
+    expect(await screen.findByText('No grading batches yet')).toBeInTheDocument();
+    expect(screen.getByText(/Type the grader, for instance PSA, and press Open a batch/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Open a batch' }));
+    expect(
+      await screen.findByText('Batch GS-0001 is open for PSA. Press Manage on it to add the approved requests waiting for PSA.'),
+    ).toBeInTheDocument();
+  });
+
+  it('names what it adds and what it ships, says "1 item" for one, and shows a refusal beside the button', async () => {
+    const user = userEvent.setup();
+    table['/services/grading/submissions'] = [OPEN];
+    table['/services/grading/submissions/ready'] = [READY];
+    render(wrap(<GradingSubmissions />));
+    await user.click(await screen.findByRole('button', { name: 'Manage batch GS-0001' }));
+    expect(screen.getByText('$250.00', { exact: false })).toBeInTheDocument();
+
+    post.mockResolvedValueOnce({});
+    await user.click(await screen.findByRole('button', { name: 'Add SN-RAYQ-0001 to batch GS-0001' }));
+    expect(await screen.findByText('SN-RAYQ-0001 is in batch GS-0001. Add any others, then ship the batch.')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Tracking number'), '1Z1');
+    await user.type(screen.getByLabelText('Notes'), 'One card');
+    post.mockRejectedValueOnce(new Error('Nothing in this submission is waiting to be graded'));
+    await user.click(screen.getByRole('button', { name: 'Ship' }));
+    const refusal = await screen.findByText('Nothing in this submission is waiting to be graded');
+    expect(refusal.closest('.stack-top')).toContainElement(screen.getByRole('button', { name: 'Ship' }));
+
+    post.mockResolvedValueOnce({ status: 'shipped', itemCount: 1 });
+    await user.click(screen.getByRole('button', { name: 'Ship' }));
+    expect(
+      await screen.findByText(
+        'Batch GS-0001 is on its way to PSA with 1 item. When it comes back, record each grade in the service queue, then mark the batch returned.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/1 items/)).toBeNull();
+  });
+
+  it('names the batch it marks returned, and says how to get there', async () => {
+    const user = userEvent.setup();
+    table['/services/grading/submissions'] = [
+      { ...OPEN, status: 'shipped', trackingNumber: '1Z1', shippedAt: '2026-11-02T10:00:00.000Z' },
+    ];
+    post.mockResolvedValue({ status: 'returned' });
+    render(wrap(<GradingSubmissions />));
+    expect(await screen.findByText(/Record the grade of every item in the batch in the service queue/)).toBeInTheDocument();
+    expect(screen.getByText(/^shipped /)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Mark batch GS-0001 returned' }));
+    expect(await screen.findByText('Batch GS-0001 is back from PSA and closed. Every item in it has its grade.')).toBeInTheDocument();
   });
 });

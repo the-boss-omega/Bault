@@ -142,6 +142,6 @@ The tabs on a phone scroll sideways and cut the last tab ("Storef…") with no s
 
 Server messages write money without a thousands separator ("$2750.00"), because the API's shared `formatMinor` in `apps/api/src/shared/money.ts` has none. Needs another area (API shared money).
 
-The escrow form and drawer still use `esc.*` sentences (only new sentences were added under `escrow.*`), and the store's `house.*` sentences were left as they are. Needs another area (owner of those prefixes, to fold them into `escrow.*` and `store.*`).
+The escrow form and drawer still use `esc.*` sentences (only new sentences were added under `escrow.*`), and the store's `house.*` sentences were left as they are. Needs another area (owner of those prefixes, to fold them into `escrow.*` and `store.*`). Done later, in the wording pass "Plain words on the grading, escrow and store screens": the collector-facing `esc.*` and `house.*` sentences were rewritten in the same voice, with new sentences under `escrow.*` and `store.*`; every confirmation and success note names the deal or product, the other side and the amount, the list says whose move it is, and a price under the escrow minimum is said beside the field. A member on the other side of a deal is named "the seller" or "the buyer", because the collector's deal view carries no username; naming them would need the `esc` module to return it.
 
 Notifications about offers and swaps do not link to the offer or swap. Needs another area (notification payloads), as the vault review also found.

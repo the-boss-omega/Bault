@@ -150,7 +150,7 @@ On a phone the batches table scrolled sideways. Fix: each batch becomes a card. 
 
 Ship the batch was greyed out with no reason. Fix: a line says it needs the tracking number and a note. Done.
 
-The `grade.subs.*` words (for instance the empty state) are outside this area's i18n prefixes. Needs another area.
+The `grade.subs.*` words (for instance the empty state) are outside this area's i18n prefixes. Needs another area. Done later, in the wording pass "Plain words on the grading, escrow and store screens": every note names the batch and the grader and says what comes next, shipping one item says "1 item", a refused add or ship is shown beside the Ship button, and the Manage, Add and Mark returned buttons name their batch or item.
 
 ## Support queue (`support`, `support-ticket`)
 

@@ -399,6 +399,22 @@ describe('the house store', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Buy' }));
     expect(await within(dialog).findByText('Not enough in your wallet')).toBeInTheDocument();
   });
+
+  it('names the item, Card Embassy and the price in the confirmation and in what it says after', async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValue({ orderCode: 'HO-0001', serialNumber: 'SN-HS01-0001' });
+    store({ '/marketplace/house/listings': [PRODUCT] });
+    expect(await screen.findByText(/3 in stock/)).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Buy' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm purchase' });
+    expect(within(dialog).getByText(/^Buy .Booster pack. from Card Embassy for \$10\.00\? The amount is charged to your wallet now\.$/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Buy' }));
+    expect(
+      await screen.findByText(
+        /^You bought .Booster pack. from Card Embassy for \$10\.00\. It is in your vault as SN-HS01-0001, order HO-0001\. You can sell or ship it once the warehouse has put it on a shelf\.$/,
+      ),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('escrow', () => {
@@ -463,5 +479,69 @@ describe('escrow', () => {
     await user.click(within(confirm).getByRole('button', { name: 'I am satisfied' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/escrow/d1/release', {}));
     expect(await within(screen.getByRole('dialog', { name: 'ESC-1' })).findByText('The deal moved on')).toBeInTheDocument();
+  });
+
+  it('says whose move it is in the list, and names the item, the other side and the amount when you confirm', async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValue({});
+    escrow({ '/escrow/mine': [DEAL], '/escrow/d1': { deal: DEAL, events: [] } });
+    expect(await screen.findByText('Your move: confirm you are satisfied.')).toBeInTheDocument();
+    await user.click(screen.getByRole('row', { name: 'Open deal ESC-1' }));
+    const drawer = await screen.findByRole('dialog', { name: 'ESC-1' });
+    expect(within(drawer).getByText('Paid from the buyer\'s wallet and held by Card Embassy.')).toBeInTheDocument();
+    await user.click(within(drawer).getByRole('button', { name: 'I am satisfied' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Confirm you are satisfied' });
+    expect(
+      within(confirm).getByText(
+        /^Confirm deal ESC-1, .A card. with the seller\? When both sides have confirmed, \$1,000\.00 and the collectible change hands at once\. This cannot be undone\.$/,
+      ),
+    ).toBeInTheDocument();
+    await user.click(within(confirm).getByRole('button', { name: 'I am satisfied' }));
+    expect(
+      (await screen.findAllByText(/^You confirmed deal ESC-1\. When the seller confirms too, \$1,000\.00 and .A card. change hands at once\.$/)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('names the outside seller and the amount before the money goes in, and says what happens next', async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValue({});
+    const agreed = {
+      ...DEAL,
+      status: 'agreed',
+      raiserRole: 'buyer',
+      raisedByMe: true,
+      counterpartyIsMember: false,
+      counterpartyName: 'Dana Lee',
+      counterpartyEmail: 'dana@example.com',
+      fundedAt: null,
+      fundingSource: null,
+    };
+    escrow({ '/escrow/mine': [agreed], '/escrow/d1': { deal: agreed, events: [] } });
+    expect(await screen.findByText('Your move: put the money in.')).toBeInTheDocument();
+    await user.click(screen.getByRole('row', { name: 'Open deal ESC-1' }));
+    const drawer = await screen.findByRole('dialog', { name: 'ESC-1' });
+    await user.click(within(drawer).getByRole('button', { name: 'Put $1,025.00 into escrow' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Put the money into escrow' });
+    expect(
+      within(confirm).getByText(
+        /^Put \$1,025\.00 into escrow for .A card., bought from .Dana Lee. in deal ESC-1\? It leaves your balance now and is held until the deal settles or is returned\.$/,
+      ),
+    ).toBeInTheDocument();
+    await user.click(within(confirm).getByRole('button', { name: 'Put the money in' }));
+    expect(
+      (await screen.findAllByText(/^\$1,025\.00 is held for deal ESC-1\. Next, .Dana Lee. sends .A card. to Card Embassy, and we inspect it when it arrives\.$/)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('says beside the price when it is under the escrow minimum', async () => {
+    const user = userEvent.setup();
+    escrow({});
+    const price = await screen.findByRole('textbox', { name: 'Agreed price' });
+    await user.type(price, '100');
+    await user.tab();
+    expect(price).toHaveAttribute('aria-invalid', 'true');
+    expect(price).toHaveAccessibleDescription(
+      'Escrow starts at $500.00. Below that, the fee would cost more than the protection is worth.',
+    );
   });
 });

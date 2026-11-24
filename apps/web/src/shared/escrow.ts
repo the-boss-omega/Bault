@@ -1,5 +1,6 @@
 import type { MessageKey, TranslateFn } from './i18n';
 import type { StatusTone } from './ui/primitives';
+import { isolate } from './money';
 
 export interface EscrowDeal {
   id: string;
@@ -68,7 +69,7 @@ export function nextStep(t: TranslateFn, deal: EscrowDeal): string {
   const viewerIsBuyer = deal.myRole === 'buyer';
   switch (deal.status) {
     case 'proposed':
-      return t('esc.next.proposed');
+      return deal.raisedByMe ? t('esc.next.proposed') : t('escrow.next.agreeYours');
     case 'agreed':
       return viewerIsBuyer ? t('esc.next.agreedBuyer') : t('esc.next.agreedSeller');
     case 'funded':
@@ -82,6 +83,15 @@ export function nextStep(t: TranslateFn, deal: EscrowDeal): string {
     default:
       return '';
   }
+}
+
+export function otherSideName(
+  t: TranslateFn,
+  deal: Pick<EscrowDeal, 'myRole' | 'counterpartyIsMember' | 'counterpartyName' | 'counterpartyEmail'>,
+): string {
+  const outside = deal.counterpartyIsMember ? null : deal.counterpartyName ?? deal.counterpartyEmail;
+  if (outside) return isolate(outside);
+  return deal.myRole === 'buyer' ? t('escrow.theSeller') : t('escrow.theBuyer');
 }
 
 export const FULFILMENT_METHODS = ['carrier', 'hand_delivery', 'show_pickup'] as const;
