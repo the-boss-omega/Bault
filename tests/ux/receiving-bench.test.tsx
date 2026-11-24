@@ -156,7 +156,7 @@ describe('booking in a box of different units', () => {
     post.mockResolvedValue([{ id: 'i1', barcode: 'SN-1' }, { id: 'i2', barcode: 'SN-2' }]);
     await user.click(within(bench).getByRole('button', { name: /book in 2 units/i }));
 
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/intake/items/batch', expect.anything()));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/intake/items/batch', expect.anything(), expect.anything()));
     const [, body] = post.mock.calls.find(([p]) => p === '/intake/items/batch')!;
     const sent = (body as { units: Record<string, unknown>[] }).units;
     expect(sent).toHaveLength(2);
@@ -180,6 +180,38 @@ describe('booking in a box of different units', () => {
 
     const [, body] = post.mock.calls.find(([p]) => p === '/intake/items/batch')!;
     expect((body as { units: unknown[] }).units).toHaveLength(1);
+  });
+
+  it('sends one idempotency key per booking, the same key again on a retry, and a fresh one after a success', async () => {
+    const user = userEvent.setup();
+    renderConsole();
+
+    const bench = await waitFor(() => panel(/receive bench/i));
+    await user.type(within(bench).getByLabelText(/owner username/i), 'red');
+    await user.type(within(bench).getByLabelText(/description/i), 'Loose stock');
+
+    const keys = () =>
+      post.mock.calls
+        .filter(([p]) => p === '/intake/items/batch')
+        .map(([, , headers]) => (headers as Record<string, string> | undefined)?.['Idempotency-Key']);
+
+    post.mockRejectedValueOnce(new Error('The network dropped.'));
+    await user.click(within(bench).getByRole('button', { name: /^intake$/i }));
+    await waitFor(() => expect(keys()).toHaveLength(1));
+    expect(keys()[0]).toMatch(/^[0-9a-f-]{36}$/);
+
+    post.mockResolvedValueOnce([{ id: 'i1', barcode: 'SN-1' }]);
+    await user.click(within(bench).getByRole('button', { name: /^intake$/i }));
+    await waitFor(() => expect(keys()).toHaveLength(2));
+    expect(keys()[1]).toBe(keys()[0]);
+
+    await waitFor(() => expect(within(bench).getByLabelText(/description/i)).toHaveValue(''));
+    await user.type(within(bench).getByLabelText(/description/i), 'Loose stock');
+    post.mockResolvedValueOnce([{ id: 'i2', barcode: 'SN-2' }]);
+    await user.click(within(bench).getByRole('button', { name: /^intake$/i }));
+    await waitFor(() => expect(keys()).toHaveLength(3));
+    expect(keys()[2]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keys()[2]).not.toBe(keys()[0]);
   });
 
   it('will not submit with nothing described', async () => {
@@ -236,6 +268,45 @@ describe('photographs', () => {
     }
   });
 
+
+  it('refreshes the parcel table once the label reading of a received parcel is saved', async () => {
+    const user = userEvent.setup();
+    get.mockImplementation((path: string) =>
+      path === '/parcels/p9/ocr'
+        ? Promise.resolve({
+            ready: true,
+            consumedAt: null,
+            fields: { senderName: 'SAM SENDER' },
+            confidence: { senderName: 0.9 },
+          })
+        : apiFor()(path),
+    );
+    post.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === '/media/uploads'
+          ? { objectKey: 'parcels/2026/09/abc.png' }
+          : path === '/parcels/receive/batch'
+            ? [{ id: 'p9', code: 'PKG-NEW', status: 'received' }]
+            : { status: 'saved' },
+      ),
+    );
+    renderConsole();
+
+    const receiving = await waitFor(() => panel(/receive an arrival/i));
+    await user.upload(receiving.querySelector('input[type="file"]') as HTMLInputElement, file());
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/media/uploads', expect.anything()));
+    await user.type(within(receiving).getByLabelText(/username on the parcel/i), 'red');
+    await user.click(within(receiving).getByRole('button', { name: /^receive parcel$/i }));
+
+    await screen.findByRole('heading', { name: 'Read from the label photo' });
+    const queueLoads = () => get.mock.calls.filter(([p]) => p === '/parcels' || String(p).startsWith('/parcels?')).length;
+    const before = queueLoads();
+    await user.click(screen.getByRole('checkbox', { name: /matches the photo/i }));
+    await user.click(screen.getByRole('button', { name: 'Save the checked details' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/parcels/p9/ocr/confirm', expect.anything()));
+    await waitFor(() => expect(queueLoads()).toBeGreaterThan(before));
+  });
   it('uploads on selection and holds the key, never the bytes', async () => {
     const user = userEvent.setup();
     post.mockResolvedValue({ objectKey: 'parcels/2026/09/abc.png' });
@@ -321,7 +392,7 @@ describe('photographs', () => {
     await user.type(within(bench).getByLabelText(/description/i), 'Photographed');
     await user.click(within(bench).getByRole('button', { name: /^intake$/i }));
 
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/intake/items/batch', expect.anything()));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/intake/items/batch', expect.anything(), expect.anything()));
     const [, body] = post.mock.calls.find(([p]) => p === '/intake/items/batch')!;
     const units = (body as { units: { photoKeys: string[] }[] }).units;
     expect(units[0]!.photoKeys).toEqual(['intake/2026/09/xyz.png']);
@@ -329,7 +400,7 @@ describe('photographs', () => {
 });
 
 describe('the labels an intake produces', () => {
-  it('shows a label per unit, with one control that prints the whole run', async () => {
+  it('shows a label per unit, with one control that opens the whole run as one label PDF', async () => {
     const user = userEvent.setup();
     renderConsole();
 
@@ -347,15 +418,19 @@ describe('the labels an intake produces', () => {
     await user.click(within(bench).getByRole('button', { name: /book in 2 units/i }));
 
     await waitFor(() => expect(screen.getByText(/labels for what you just booked in/i)).toBeInTheDocument());
-    expect(within(bench).getAllByRole('button', { name: /print the barcode/i })).toHaveLength(2);
+    expect(within(bench).getAllByRole('img', { name: /^barcode SN-/i })).toHaveLength(2);
 
-    expect(within(bench).getByRole('button', { name: /print all 2 labels/i })).toBeInTheDocument();
+    expect(within(bench).getAllByRole('link', { name: /open the label pdf \(2\)/i })).toHaveLength(1);
+    expect(within(bench).getByRole('link', { name: /open the label pdf/i })).toHaveAttribute(
+      'href',
+      '/api/v1/custody/labels.pdf?ids=i1,i2#zoom=100',
+    );
   });
 
   it('offers nothing to print before anything has been booked in', async () => {
     renderConsole();
     const bench = await waitFor(() => panel(/receive bench/i));
-    expect(within(bench).queryByRole('button', { name: /print all/i })).toBeNull();
+    expect(within(bench).queryByRole('link', { name: /open the label pdf/i })).toBeNull();
     expect(screen.queryByText(/labels for what you just booked in/i)).toBeNull();
   });
 });
@@ -397,5 +472,90 @@ describe('when there is nowhere to put it', () => {
     const bench = await waitFor(() => panel(/receive bench/i));
     await within(bench).findByText('BIN-QJLTDJH4');
     expect(within(bench).queryByRole('button', { name: /create a shelf here/i })).toBeNull();
+  });
+});
+
+describe('a shelf can be decided later', () => {
+  it('offers "Decide the shelf later" with its reasons and books in without a shelf', async () => {
+    const user = userEvent.setup();
+    renderConsole();
+    const bench = await waitFor(() => panel(/receive bench/i));
+
+    const mode = within(bench).getByRole('combobox', { name: /where it goes/i });
+    expect(within(mode).getByRole('option', { name: 'Decide the shelf later' })).toBeInTheDocument();
+    await user.selectOptions(mode, 'later');
+
+    const reason = within(bench).getByRole('combobox', { name: /why later/i });
+    const reasons = within(reason)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    expect(reasons).toEqual(['Shelf full', 'Oversized, needs a place', 'Waiting for grading', 'Other']);
+
+    await user.selectOptions(reason, 'other');
+    const submit = within(bench).getByRole('button', { name: /^intake$/i });
+    await user.type(within(bench).getByLabelText(/owner username/i), 'red');
+    await user.type(within(bench).getAllByLabelText(/description/i)[0]!, 'Rayquaza ex 97/97');
+    expect(submit).toBeDisabled();
+    await user.type(within(bench).getByLabelText(/say why/i), 'Needs a toploader');
+
+    post.mockResolvedValue([{ id: 'i1', barcode: 'SN-LATER-0001' }]);
+    await user.click(submit);
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const [path, body] = post.mock.calls[0]!;
+    expect(path).toBe('/intake/items/batch');
+    expect((body as { units: Record<string, unknown>[] }).units[0]).toMatchObject({
+      placement: 'later',
+      placementReason: 'Needs a toploader',
+      autoStow: false,
+      binId: undefined,
+    });
+  });
+});
+
+describe('the To shelve panel', () => {
+  const WAITING = {
+    itemId: 'it-1',
+    serialNumber: 'SN-WAIT-0001',
+    barcode: 'SN-WAIT-0001',
+    description: 'Rayquaza ex 97/97',
+    typeClass: 'trading_card',
+    oversized: false,
+    lifecycleState: 'stored',
+    parcelCode: 'PKG-AAAA1111',
+    ownerUsername: 'red',
+    reason: 'Shelf full',
+    placementUndecidedAt: '2026-09-01T10:00:00.000Z',
+    waitingSeconds: 3 * 3600,
+  };
+
+  it('lists what waits for a shelf and stows it through the relocate bench', async () => {
+    const user = userEvent.setup();
+    let waiting = [WAITING];
+    get.mockImplementation((path: string) =>
+      path === '/custody/to-shelve' ? Promise.resolve(waiting) : apiFor()(path),
+    );
+    post.mockImplementation(() => {
+      waiting = [];
+      return Promise.resolve({ status: 'relocated' });
+    });
+
+    renderConsole('#/warehouse/inventory');
+    const shelve = await waitFor(() => panel(/^to shelve$/i));
+    const row = (await within(shelve).findByText('SN-WAIT-0001')).closest('tr')!;
+    expect(within(row).getByText('PKG-AAAA1111')).toBeInTheDocument();
+    expect(within(row).getByText('@red')).toBeInTheDocument();
+    expect(within(row).getByText('Shelf full')).toBeInTheDocument();
+    expect(within(row).getByText('3 h')).toBeInTheDocument();
+
+    await user.click(within(row).getByRole('button', { name: /stow sn-wait-0001/i }));
+    expect(within(shelve).getByLabelText(/scan item/i)).toHaveValue('SN-WAIT-0001');
+    await user.type(within(shelve).getByLabelText(/scan shelf/i), 'BIN-QJLTDJH4');
+    await user.click(within(shelve).getByRole('button', { name: /relocate/i }));
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/custody/items/SN-WAIT-0001/relocate', { binId: 'BIN-QJLTDJH4' }),
+    );
+    await within(shelve).findByText(/everything booked in is on a shelf/i);
   });
 });

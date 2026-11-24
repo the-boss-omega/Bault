@@ -275,13 +275,15 @@ function serve(initial: Row[] = ROWS) {
     const [route, query = ''] = path.split('?');
     const q = new URLSearchParams(query);
     if (route === '/admin/wallet-requests') {
-      return list.filter(
+      const matching = list.filter(
         (r) =>
           (!q.get('type') || r.type === q.get('type')) &&
           (!q.get('status') || r.status === q.get('status')) &&
           (!q.get('from') || r.createdAt.slice(0, 10) >= q.get('from')!) &&
           (!q.get('to') || r.createdAt.slice(0, 10) <= q.get('to')!),
       );
+      const start = q.get('before') ? matching.findIndex((r) => r.id === q.get('before')) + 1 : 0;
+      return matching.slice(start, start + Number(q.get('limit') ?? 100));
     }
     const found = route.match(/^\/admin\/wallet-requests\/(.+)$/);
     if (found) {
@@ -335,6 +337,28 @@ async function desk(me?: string) {
   await waitFor(() => expect(groups().length).toBeGreaterThan(0));
   return view;
 }
+
+describe('a long queue, a page at a time', () => {
+  it('asks for a hundred, offers the older ones after the last, and stops offering at the end', async () => {
+    serve(Array.from({ length: 130 }, (_, i) => row(2000 + i, { status: 'completed', createdAt: at(1), updatedAt: at(1) })));
+    const user = userEvent.setup();
+    await desk();
+    expect(get).toHaveBeenCalledWith('/admin/wallet-requests?limit=100');
+    expect(screen.getAllByRole('button', { name: /^WR-2/ })).toHaveLength(100);
+
+    await user.click(screen.getByRole('button', { name: 'Show older requests' }));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^WR-2/ })).toHaveLength(130));
+    const [, query] = String(get.mock.calls.at(-1)![0]).split('?');
+    expect(new URLSearchParams(query).get('limit')).toBe('100');
+    expect(new URLSearchParams(query).get('before')).toMatch(/^req-2/);
+    expect(screen.queryByRole('button', { name: 'Show older requests' })).toBeNull();
+  });
+
+  it('offers nothing more when the first page is all there is', async () => {
+    await desk();
+    expect(screen.queryByRole('button', { name: 'Show older requests' })).toBeNull();
+  });
+});
 
 describe('the requests, a roll grouped by what each needs', () => {
   it('has what needs a decision first, then what is in progress, then what is closed, each with its count', async () => {
@@ -465,13 +489,13 @@ describe('the filters', () => {
     const user = userEvent.setup();
     await desk();
     await user.selectOptions(screen.getByLabelText('Type'), 'cash_in');
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/admin/wallet-requests?type=cash_in'));
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/admin/wallet-requests?type=cash_in&limit=100'));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'WR-1042' })).toBeNull());
     expect(screen.getByRole('button', { name: 'WR-1041' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '2020-01-01' } });
     await waitFor(() =>
-      expect(get).toHaveBeenCalledWith('/admin/wallet-requests?type=cash_in&from=2020-01-01'),
+      expect(get).toHaveBeenCalledWith('/admin/wallet-requests?type=cash_in&from=2020-01-01&limit=100'),
     );
 
     await user.click(screen.getByRole('button', { name: 'Clear filters' }));

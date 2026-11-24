@@ -90,7 +90,7 @@ const SECTIONS = [
   'vault',
   'inbound',
   'wallet',
-  'membership',
+  'tier',
   'marketplace',
   'shipping-services',
   'warehouse',

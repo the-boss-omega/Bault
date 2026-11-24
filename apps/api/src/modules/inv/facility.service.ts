@@ -20,6 +20,7 @@ export interface InboundAddress {
   country: string;
   salesTaxBps: number;
   forwardingDays: number | null;
+  placeholder: boolean;
 }
 
 @Injectable()
@@ -46,7 +47,7 @@ export class FacilityService {
     return row;
   }
 
-  async inboundAddressesFor(userId: string): Promise<InboundAddress[]> {
+  async inboundAddressesFor(userId: string, opts: { staff?: boolean } = {}): Promise<InboundAddress[]> {
     const [account] = await this.db
       .select({ username: userAccount.username })
       .from(userAccount)
@@ -56,7 +57,7 @@ export class FacilityService {
 
     const inProduction = loadEnv().NODE_ENV === 'production';
     const facilities = (await this.listActive()).filter(
-      (f) => !inProduction || !isPlaceholderAddress(f.line1),
+      (f) => opts.staff || !inProduction || !isPlaceholderAddress(f.line1),
     );
     return facilities.map((f) => ({
       code: f.code,
@@ -70,6 +71,7 @@ export class FacilityService {
       country: f.country,
       salesTaxBps: f.salesTaxBps,
       forwardingDays: f.forwardingDays,
+      placeholder: isPlaceholderAddress(f.line1),
     }));
   }
 }

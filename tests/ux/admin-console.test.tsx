@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { billableActions, coverage } from '../../apps/api/src/modules/prc/billable-actions';
-import { MEMBERSHIP_TIERS } from '../../apps/api/src/modules/mem/tiers';
 
 const get = vi.fn();
 const post = vi.fn();
@@ -30,18 +29,10 @@ function renderIn(ui: React.ReactElement) {
 
 const UNPRICED = JSON.parse(JSON.stringify(coverage(billableActions(), []))) as ReturnType<typeof coverage>;
 
-const TIERS = {
-  tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
-  uncovered: [],
-  cycleDays: 30,
-  currency: 'USD',
-};
-
 function consoleApi(overrides: Record<string, unknown> = {}) {
   get.mockImplementation(async (path: string) => {
     if (path in overrides) return overrides[path];
     if (path === '/admin/pricing/coverage') return UNPRICED;
-    if (path === '/membership/tiers') return TIERS;
     return [];
   });
 }
@@ -75,8 +66,9 @@ describe('the pricing form', () => {
 
     const missing = UNPRICED.actions.filter((a) => a.status === 'missing').map((a) => a.actionType);
     expect(missing).toEqual(
-      expect.arrayContaining(['parcel_processing', 'parcel_forwarding', 'membership:bronze', 'membership:gold']),
+      expect.arrayContaining(['parcel_processing', 'parcel_forwarding']),
     );
+    expect(missing.some((a) => a.startsWith('membership:'))).toBe(false);
 
     let offered: string[] = [];
     await waitFor(() => {
@@ -118,31 +110,6 @@ describe('the pricing form', () => {
         expect.objectContaining({ actionType: 'parcel_forwarding', model: 'fixed', value: 400 }),
       ),
     );
-  });
-
-  it("a membership price carries the tier's allowances, which the storage sweep reads off the rule", async () => {
-    const user = userEvent.setup();
-    consoleApi();
-    post.mockResolvedValue({});
-    window.location.hash = '#/admin/pricing';
-    renderIn(<AdminConsole currentUserId="me" />);
-
-    const bronze = MEMBERSHIP_TIERS.find((t) => t.key === 'bronze')!;
-    await addRule(user, bronze.feeActionType, '39.00');
-    await waitFor(() => expect(post).toHaveBeenCalled());
-    const [path, body] = post.mock.calls[0]!;
-    expect(path).toBe('/pricing/rules');
-    expect(body).toMatchObject({
-      actionType: 'membership:bronze',
-      value: 3900,
-      parameters: {
-        storedItems: bronze.storedItems,
-        insuredShipments: bronze.insuredShipments,
-        insuredValueCapMinor: bronze.insuredValueCapMinor,
-        postageCreditMinor: bronze.postageCreditMinor,
-        commissionWaivedOnMinor: bronze.commissionWaivedOnMinor,
-      },
-    });
   });
 
   it('sends no parameters for an action whose rule carries none', async () => {

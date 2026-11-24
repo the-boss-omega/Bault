@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../shared/api';
 import { useI18n } from '../../shared/i18n';
 import { DISPOSAL_CATEGORIES, DISPOSAL_OUTCOMES } from '../../shared/itemClasses';
@@ -7,10 +7,9 @@ import { isValidUsername, normalizeUsername } from '../../shared/names';
 import type { InboundAddress } from '../../shared/parcels';
 import { boxLabel } from '../../shared/carriers';
 import { Docket, type BenchOutcome } from '../../shared/ui/Docket';
-import { Button, ErrorState, ScanField, StatusBadge } from '../../shared/ui/primitives';
+import { Button, EmptyState, ErrorState, ScanField, SkeletonTable, StatusBadge } from '../../shared/ui/primitives';
 import { IconAlert, IconPlus, IconScan, IconShipping } from '../../shared/ui/icons';
 
-/** What a bench needs to know of a shelf to say where something is going: the console's own list of them. */
 export interface BenchShelf {
   id: string;
   serialNumber: string;
@@ -23,7 +22,6 @@ export interface BenchShelf {
   facilityCode: string | null;
 }
 
-/** A shelf as it was scanned or typed: its barcode, its serial or its number, whichever was read. */
 export function shelfFor(shelves: readonly BenchShelf[], scanned: string): BenchShelf | undefined {
   const code = scanned.trim().toUpperCase();
   if (!code) return undefined;
@@ -35,33 +33,28 @@ export function shelfFor(shelves: readonly BenchShelf[], scanned: string): Bench
   );
 }
 
-/** A code, read left to right whatever the page reads. */
 export const code = (value: string) => <bdi dir="ltr">{value}</bdi>;
 
-/** What has not been scanned or typed yet is a dash, never a value made up. */
 export const quiet = <span className="drawer-tag-quiet">—</span>;
 
-/** The result of the last press of a bench's button, with the time of day it came to. */
 export function stamped(detail: string, locale: string): string {
   const time = formatTime(new Date().toISOString(), locale);
   return detail ? `${detail} · ${time}` : time;
 }
 
-/**
- * Move one item to another shelf: scan the item, scan the shelf, and the shelf is read back (its zone, its kind, what is on it
- * now) before anything is moved. A scanner ends with Enter: the first goes to the shelf, the second does it.
- */
 export function RelocateBench({
   shelves,
   onLog,
   onDone,
+  initialItem = '',
 }: {
   shelves: readonly BenchShelf[];
   onLog: (line: string) => void;
   onDone: () => Promise<void>;
+  initialItem?: string;
 }) {
   const { t, locale } = useI18n();
-  const [item, setItem] = useState('');
+  const [item, setItem] = useState(initialItem);
   const [shelfCode, setShelfCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<BenchOutcome | null>(null);
@@ -70,6 +63,10 @@ export function RelocateBench({
 
   const shelf = useMemo(() => shelfFor(shelves, shelfCode), [shelves, shelfCode]);
   const ready = item.trim() !== '' && shelfCode.trim() !== '';
+
+  useEffect(() => {
+    if (initialItem) shelfRef.current?.focus();
+  }, [initialItem]);
 
   async function relocate() {
     if (!ready || busy) return;
@@ -151,7 +148,7 @@ export function RelocateBench({
                       : 'warehouse.bins.kind.standard',
                   ),
                 },
-                { label: t('bench.onItNow'), value: shelf.itemCount.toLocaleString() },
+                { label: t('bench.onItNow'), value: shelf.itemCount.toLocaleString('en-US') },
                 ...(shelf.active
                   ? []
                   : [
@@ -185,7 +182,6 @@ export function RelocateBench({
   );
 }
 
-/** Put an item on hold, or take it off: one scan and either button. Enter, from a scanner, places the hold. */
 export function HoldBench({
   onLog,
   onDone,
@@ -283,11 +279,6 @@ export function HoldBench({
   );
 }
 
-/**
- * An arrival that did not go into a vault: who it was for, why it was not taken, what became of it, and what it
- * was, written as the record will be kept. The collector is told the moment it is filed, so the slip says what
- * will be filed.
- */
 export function DisposalBench({ onLog }: { onLog: (line: string) => void }) {
   const { t, locale } = useI18n();
   const [ownerUsername, setOwnerUsername] = useState('');
@@ -346,8 +337,16 @@ export function DisposalBench({ onLog }: { onLog: (line: string) => void }) {
               value={ownerUsername}
               onChange={(e) => edit(setOwnerUsername)(e.target.value)}
               aria-invalid={ownerUsername.length > 0 && !ownerOk}
+              aria-describedby={ownerUsername.length > 0 && !ownerOk ? 'disposal-owner-error' : undefined}
+              autoComplete="off"
+              spellCheck={false}
               dir="ltr"
             />
+            {ownerUsername.length > 0 && !ownerOk && (
+              <span className="field-error" id="disposal-owner-error" role="alert">
+                {t('warehouse.intake.ownerUsernameInvalid')}
+              </span>
+            )}
           </label>
 
           <label className="field">
@@ -413,7 +412,17 @@ export function DisposalBench({ onLog }: { onLog: (line: string) => void }) {
       />
 
       <div className="row request-form-actions">
-        {!complete && <span className="field-hint">{t('warehouse.required')}</span>}
+        {!complete && (
+          <span className="field-hint">
+            {t('warehouse.missing', {
+              list: [
+                ...(!ownerOk ? [t('warehouse.intake.missingOwner')] : []),
+                ...(!description.trim() ? [t('warehouse.disposal.missingDescription')] : []),
+                ...(!notes.trim() ? [t('warehouse.disposal.missingNotes')] : []),
+              ].join('; '),
+            })}
+          </span>
+        )}
         <Button variant="danger" loading={busy} disabled={!complete} onClick={() => void record()}>
           {t('warehouse.disposal.submit')}
         </Button>
@@ -422,7 +431,6 @@ export function DisposalBench({ onLog }: { onLog: (line: string) => void }) {
   );
 }
 
-/** A new shelf: the zone it is in, what kind it is and where it stands; its serial is minted, so it is not asked for. */
 export function NewShelfBench({
   onLog,
   onCreated,
@@ -446,7 +454,6 @@ export function NewShelfBench({
         setFacilities(storing);
         if (storing[0]) setFacilityCode(storing[0].code);
       } catch {
-        // A bench with no list of buildings makes the shelf in the one it is in.
       }
     })();
   }, []);
@@ -571,30 +578,62 @@ interface ShipmentDetail {
   boxSize: string | null;
 }
 
+interface PackRow {
+  id: string;
+  code: string | null;
+  status: string;
+  username: string | null;
+  fulfilmentMethod: string | null;
+  carrier: string | null;
+  itemIds: string[];
+  rush?: boolean;
+}
+
+export const readyToPack = (rows: readonly PackRow[]) =>
+  (Array.isArray(rows) ? rows : []).filter(
+    (r) => r.fulfilmentMethod === 'carrier' && (r.status === 'rates_selected' || r.status === 'labeled'),
+  );
+
 const sameCode = (a: string | null | undefined, b: string) =>
   Boolean(a) && a!.trim().toUpperCase() === b.trim().toUpperCase();
 
-/**
- * Pack a shipment: load it, and the docket is its pick list. Each card that is scanned is ticked on it, a code that
- * is not in the shipment is shown on it as wrong with a way to take it back, and the figure is how many are done of
- * how many. The shipment goes only when every card has been scanned and nothing else has.
- */
 export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
   const { t, locale } = useI18n();
   const [shipmentId, setShipmentId] = useState('');
   const [detail, setDetail] = useState<ShipmentDetail | null>(null);
   const [scans, setScans] = useState<string[]>([]);
   const [scanInput, setScanInput] = useState('');
-  const [carrier, setCarrier] = useState('DHL');
-  const [weight, setWeight] = useState('500');
+  const [carrier, setCarrier] = useState('');
+  const [weight, setWeight] = useState('');
+  const [waiting, setWaiting] = useState<PackRow[] | null>(null);
+  const [waitingError, setWaitingError] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<BenchOutcome | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function load() {
+  const loadWaiting = useCallback(async () => {
     try {
-      const s = await api.get<ShipmentDetail>(`/shipping/shipments/${shipmentId}`);
+      setWaiting(readyToPack(await api.get<PackRow[]>('/shipping/shipments')));
+      setWaitingError(null);
+    } catch (e) {
+      setWaitingError((e as Error).message);
+      setWaiting((prev) => prev ?? []);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadWaiting();
+  }, [loadWaiting]);
+
+  async function load(given?: string) {
+    const typed = (given ?? shipmentId).trim();
+    if (!typed) return;
+    const known = waiting?.find((w) => w.id === typed || sameCode(w.code, typed));
+    const id = known?.id ?? typed;
+    if (given) setShipmentId(known?.code ?? given);
+    try {
+      const s = await api.get<ShipmentDetail>(`/shipping/shipments/${id}`);
       setDetail(s);
       setScans([]);
       setScanInput('');
@@ -602,7 +641,8 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
       setOutcome(null);
       if (s.carrier) setCarrier(s.carrier);
     } catch (e) {
-      setError((e as Error).message);
+      setDetail(null);
+      setError(known ? (e as Error).message : t('warehouse.pack.notFound', { code: typed }));
     }
   }
 
@@ -655,8 +695,6 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
   }
 
   async function completeShipment() {
-    // A second press (or a second Enter from a scanner) while the first is on its way would send it twice, and the
-    // refusal of the second would replace the docket's word that the first went.
     if (!detail || !complete || busy) return;
     setBusy(true);
     try {
@@ -679,7 +717,9 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
       setDetail(null);
       setShipmentId('');
       setNotes('');
+      setWeight('');
       setScans([]);
+      await loadWaiting();
     } catch (e) {
       const message = (e as Error).message;
       setError(message);
@@ -690,7 +730,6 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
     }
   }
 
-  // The pick list: a line for each thing to be scanned, and for anything scanned that should not have been.
   const pickLines: { label: ReactNode; value: ReactNode }[] = [];
   if (detail) {
     if (direct) {
@@ -748,8 +787,53 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
   return (
     <div className="request-form request-form--bench">
       <div className="stack stack--tight request-form-fields">
+        <section className="stack stack--tight" aria-labelledby="pack-waiting-title">
+          <h3 className="field-label" id="pack-waiting-title">
+            {t('warehouse.pack.waitingTitle', { count: waiting?.length ?? 0 })}
+          </h3>
+          {waitingError ? (
+            <ErrorState
+              title={t('warehouse.pack.loadFailed')}
+              message={waitingError}
+              onRetry={() => void loadWaiting()}
+              retryLabel={t('ui.retry')}
+            />
+          ) : waiting === null ? (
+            <SkeletonTable rows={2} columns={3} />
+          ) : waiting.length === 0 ? (
+            <EmptyState title={t('warehouse.pack.none')} text={t('warehouse.pack.noneText')} icon={<IconShipping />} />
+          ) : (
+            <ul className="check-list list-unbounded">
+              {waiting.map((w) => (
+                <li key={w.id}>
+                  <span>
+                    {code(w.code ?? w.id.slice(0, 8))}
+                    <span className="hint">
+                      {' '}
+                      {t(w.itemIds.length === 1 ? 'warehouse.pack.rowOne' : 'warehouse.pack.row', {
+                        owner: w.username ? `@${w.username}` : '—',
+                        count: w.itemIds.length,
+                      })}
+                      {w.rush ? ` · ${t('warehouse.pack.rush')}` : ''}
+                    </span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant={detail?.id === w.id ? 'primary' : 'secondary'}
+                    pressed={detail?.id === w.id}
+                    aria-label={t('warehouse.pack.packOne', { code: w.code ?? w.id })}
+                    onClick={() => void load(w.id)}
+                  >
+                    {t('warehouse.pack.pack')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
         <ScanField
           label={t('warehouse.dispatch.shipmentId')}
+          hint={t('warehouse.pack.scanHint')}
           value={shipmentId}
           onChange={setShipmentId}
           onScan={() => shipmentId && void load()}
@@ -816,7 +900,18 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
               </label>
             </div>
 
-            {!complete && <p className="field-hint">{t('warehouse.required')}</p>}
+            {!complete && (
+              <p className="field-hint">
+                {t('warehouse.missing', {
+                  list: [
+                    ...(!allScanned ? [t('warehouse.pack.missingScans')] : []),
+                    ...(carrier === '' ? [t('warehouse.carrier')] : []),
+                    ...(weight === '' ? [t('warehouse.packageWeight')] : []),
+                    ...(notes.trim() === '' ? [t('warehouse.notes')] : []),
+                  ].join('; '),
+                })}
+              </p>
+            )}
           </>
         )}
       </div>

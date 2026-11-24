@@ -65,6 +65,9 @@ const BaseSchema = z.object({
   COINBASE_COMMERCE_API_KEY: z.string().optional().default(''),
   COINBASE_COMMERCE_WEBHOOK_SECRET: z.string().optional().default(''),
 
+  OCR_ENABLED: booleanFromEnv(false),
+  OCR_PROVIDER: z.enum(['tesseract', 'sandbox']).default('sandbox'),
+
   CORS_ORIGINS: z.string().optional().default(''),
 
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
@@ -292,6 +295,16 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
         message:
           'CRYPTO_CHECKOUT_ENABLED=true needs CRYPTO_PROVIDER=coinbase_commerce in production. The sandbox ' +
           'processor confirms whatever it is told to, so it would credit wallets with money nobody paid.',
+      });
+    }
+
+    if (env.OCR_ENABLED && env.OCR_PROVIDER !== 'tesseract') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['OCR_PROVIDER'],
+        message:
+          'OCR_ENABLED=true needs OCR_PROVIDER=tesseract in production. The sandbox reader returns the same ' +
+          'made-up text for every photograph, so the bench would prefill fields nobody read.',
       });
     }
 

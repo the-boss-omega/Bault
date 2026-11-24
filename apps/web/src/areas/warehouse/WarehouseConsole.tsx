@@ -14,12 +14,14 @@ import {
   Panel,
   SkeletonTable,
   StatusBadge,
+  SuccessNote,
   TabPanel,
   ViewAllLink,
 } from '../../shared/ui/primitives';
 import { scrollBehavior } from '../../shared/ui/motionPreference';
 import { ShelfMap, type ShelfBin } from './ShelfMap';
 import { ShelfContents } from './ShelfContents';
+import { ToShelvePanel } from './ToShelve';
 import {
   IconAlert,
   IconBox,
@@ -43,6 +45,7 @@ import {
 } from './Benches';
 import { IntakeBench } from './IntakeBench';
 import { HouseOrdersPanel } from './HouseOrdersPanel';
+import { ListSearch, NoMatch, SectionJump, matchesQuery } from './ListTools';
 import { SupportQueue } from './SupportQueue';
 import type { ParcelWorkflow } from '../../shared/parcels';
 
@@ -169,7 +172,7 @@ export function WarehouseConsole() {
           <div className="metric-grid">
             <MetricCard
               label={t('warehouse.metric.itemsInStock')}
-              value={shelfRows === null ? '—' : stats.total.toLocaleString()}
+              value={shelfRows === null ? '—' : stats.total.toLocaleString('en-US')}
               icon={<IconBox />}
               tone="green"
               footer={t('warehouse.metric.itemsNote')}
@@ -180,13 +183,14 @@ export function WarehouseConsole() {
               icon={<IconAlert />}
               tone="amber"
               footer={
-                inbound?.oldestWaitingHours != null ? (
-                  <span className="hint">
-                    {t('warehouse.metric.oldestWaiting', { hours: inbound.oldestWaitingHours })}
-                  </span>
-                ) : (
+                <>
+                  {inbound?.oldestWaitingHours != null && (
+                    <span className="hint">
+                      {t('warehouse.metric.oldestWaiting', { hours: inbound.oldestWaitingHours })}
+                    </span>
+                  )}
                   <ViewAllLink onClick={() => goTab('receiving')}>{t('warehouse.viewParcels')}</ViewAllLink>
-                )
+                </>
               }
             />
             <MetricCard
@@ -216,7 +220,13 @@ export function WarehouseConsole() {
             footer={<ViewAllLink onClick={() => goTab('inventory')}>{t('warehouse.viewInventory')}</ViewAllLink>}
           >
             {bins.length > 0 && shelfRows !== null ? (
-              <ShelfMap bins={bins} counts={shelfRows} onOpen={setOpenShelf} t={t} />
+              <ShelfMap
+                bins={bins}
+                counts={shelfRows}
+                onOpen={setOpenShelf}
+                onOpenTray={() => goTab('inventory')}
+                t={t}
+              />
             ) : (
               <InventoryRows
                 rows={(shelfRows ?? []).slice(0, 6)}
@@ -244,7 +254,15 @@ export function WarehouseConsole() {
 
       {tab === 'receiving' && (
         <TabPanel tab="receiving">
-          <ReceiveParcels onReceived={receiveParcels} />
+          <SectionJump
+            sections={[
+              { id: 'receive-arrival', label: t('warehouse.jump.receive') },
+              { id: 'parcel-queue', label: t('warehouse.jump.parcels') },
+              { id: 'intake-bench', label: t('warehouse.jump.bench') },
+              { id: 'house-orders', label: t('warehouse.jump.storeSales') },
+            ]}
+          />
+          <ReceiveParcels onReceived={receiveParcels} onRead={() => setQueueVersion((v) => v + 1)} />
 
           <ParcelQueue
             key={queueVersion}
@@ -276,34 +294,36 @@ export function WarehouseConsole() {
           </Panel>
 
           <HouseOrdersPanel onLog={append} />
-
-          {log.length > 0 && (
-            <Panel title={t('warehouse.log.title')} flush>
-              <ul className="log">
-                {log.map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-              </ul>
-            </Panel>
-          )}
         </TabPanel>
       )}
 
       {tab === 'inventory' && (
         <TabPanel tab="inventory">
-          <Panel title={t('warehouse.relocate.legend')} subtitle={t('warehouse.relocate.subtitle')}>
+          <SectionJump
+            sections={[
+              { id: 'to-shelve', label: t('warehouse.jump.toShelve') },
+              { id: 'relocate', label: t('warehouse.jump.move') },
+              { id: 'hold', label: t('warehouse.jump.hold') },
+              { id: 'lots', label: t('warehouse.jump.lots') },
+              { id: 'disposal', label: t('warehouse.jump.disposal') },
+              { id: 'inventory-report', label: t('warehouse.jump.report') },
+            ]}
+          />
+          <ToShelvePanel shelves={bins} onLog={append} onDone={loadSummary} />
+
+          <Panel id="relocate" title={t('warehouse.relocate.legend')} subtitle={t('warehouse.relocate.subtitle')}>
             <RelocateBench shelves={bins} onLog={append} onDone={loadSummary} />
           </Panel>
 
-          <Panel title={t('warehouse.hold.legend')} subtitle={t('warehouse.hold.subtitle')}>
+          <Panel id="hold" title={t('warehouse.hold.legend')} subtitle={t('warehouse.hold.subtitle')}>
             <HoldBench onLog={append} onDone={loadSummary} />
           </Panel>
 
-          <Panel title={t('warehouse.lots.legend')} flush>
+          <Panel id="lots" title={t('warehouse.lots.legend')} flush>
             <LotsPanel onLog={append} onDone={loadSummary} />
           </Panel>
 
-          <Panel title={t('warehouse.disposal.legend')} subtitle={t('warehouse.disposal.subtitle')}>
+          <Panel id="disposal" title={t('warehouse.disposal.legend')} subtitle={t('warehouse.disposal.subtitle')}>
             <DisposalBench onLog={append} />
           </Panel>
 
@@ -338,6 +358,16 @@ export function WarehouseConsole() {
         </TabPanel>
       )}
 
+      {tab !== 'overview' && log.length > 0 && (
+        <Panel title={t('warehouse.log.title')} subtitle={t('warehouse.log.subtitle')} flush>
+          <ul className="log" aria-live="polite">
+            {log.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </Panel>
+      )}
+
       {openShelf && <ShelfContents bin={openShelf} onClose={() => setOpenShelf(null)} />}
     </div>
   );
@@ -347,6 +377,8 @@ function InventoryTab({ bins, t }: { bins: Bin[]; t: TranslateFn }) {
   const [cut, setCut] = useState('shelf');
   const [rows, setRows] = useState<ReportRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const shown = (rows ?? []).filter((r) => matchesQuery(q, r.label, r.key));
 
   const load = useCallback(async () => {
     setRows(null);
@@ -368,6 +400,7 @@ function InventoryTab({ bins, t }: { bins: Bin[]; t: TranslateFn }) {
 
   return (
     <Panel
+      id="inventory-report"
       title={t('warehouse.inventoryOverview')}
       subtitle={cutKey ? t(cutKey) : cut}
       flush
@@ -396,8 +429,31 @@ function InventoryTab({ bins, t }: { bins: Bin[]; t: TranslateFn }) {
         </>
       }
     >
-      {error && <div style={{ padding: 16 }}><ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} /></div>}
-      <InventoryRows rows={rows ?? []} loading={rows === null} cut={cut} bins={bins} t={t} />
+      {error && (
+        <div style={{ padding: 16 }}>
+          <ErrorState
+            title={t('warehouse.report.loadFailed')}
+            message={error}
+            onRetry={() => void load()}
+            retryLabel={t('ui.retry')}
+          />
+        </div>
+      )}
+      {rows !== null && rows.length > 0 && (
+        <ListSearch
+          value={q}
+          onChange={setQ}
+          label={t('warehouse.report.search')}
+          placeholder={t('warehouse.report.searchPlaceholder')}
+          shown={shown.length}
+          total={rows.length}
+        />
+      )}
+      {rows !== null && rows.length > 0 && shown.length === 0 ? (
+        <NoMatch onClear={() => setQ('')} />
+      ) : error && rows !== null && rows.length === 0 ? null : (
+        <InventoryRows rows={shown} loading={rows === null} cut={cut} bins={bins} t={t} />
+      )}
     </Panel>
   );
 }
@@ -451,7 +507,7 @@ function InventoryRows({
                 </td>
                 {isShelf && <td data-label={t('warehouse.bins.colZone')}>{bin?.zone ?? '—'}</td>}
                 <td data-label={t('warehouse.report.colCount')} className="td-end num">
-                  {used.toLocaleString()}
+                  {used.toLocaleString('en-US')}
                 </td>
                 {isShelf && (
                   <td data-label={t('warehouse.bins.kind')}>
@@ -493,15 +549,19 @@ function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: (
   const { t } = useI18n();
   const [lots, setLots] = useState<OpenLot[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [note, setNote] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
       setLots(await api.get<OpenLot[]>('/intake/lots'));
+      setLoadError(null);
     } catch (e) {
-      onLog((e as Error).message);
-      setLots([]);
+      setLoadError((e as Error).message);
+      setLots((prev) => prev ?? []);
     }
-  }, [onLog]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -511,23 +571,57 @@ function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: (
     setBusy(lot.id);
     try {
       const res = await api.post<{ producedCount: number }>(`/intake/items/${lot.id}/break-lot`);
-      onLog(t('warehouse.lots.broken', { lot: lot.serialNumber, count: res.producedCount }));
+      const said = t('warehouse.lots.broken', { lot: lot.serialNumber, count: res.producedCount });
+      onLog(said);
+      setNote({ tone: 'ok', text: `${said}. ${t('warehouse.lots.brokenNext')}` });
+      setConfirming(null);
       await load();
       await onDone();
     } catch (e) {
-      onLog(t('warehouse.lots.breakError', { message: (e as Error).message }));
+      const said = t('warehouse.lots.breakError', { message: (e as Error).message });
+      onLog(said);
+      setNote({ tone: 'error', text: said });
     } finally {
       setBusy(null);
     }
   }
 
+  const notice = (
+    <>
+      {loadError && (
+        <div style={{ padding: 'var(--sp-4) var(--sp-6) 0' }}>
+          <ErrorState
+            title={t('warehouse.lots.loadFailed')}
+            message={loadError}
+            onRetry={() => void load()}
+            retryLabel={t('ui.retry')}
+          />
+        </div>
+      )}
+      {note && (
+        <div style={{ padding: 'var(--sp-4) var(--sp-6) 0' }}>
+          {note.tone === 'ok' ? <SuccessNote>{note.text}</SuccessNote> : <ErrorState message={note.text} />}
+        </div>
+      )}
+    </>
+  );
+
   if (lots === null) return <SkeletonTable rows={3} columns={4} />;
   if (lots.length === 0) {
-    return <EmptyState title={t('warehouse.lots.empty')} text={t('warehouse.lots.emptyText')} icon={<IconLayers />} />;
+    return (
+      <>
+        {notice}
+        {!loadError && (
+          <EmptyState title={t('warehouse.lots.empty')} text={t('warehouse.lots.emptyText')} icon={<IconLayers />} />
+        )}
+      </>
+    );
   }
 
   return (
-    <div className="dt-wrap dt-wrap--stack">
+    <>
+      {notice}
+      <div className="dt-wrap dt-wrap--stack">
       <table className="data-table">
         <thead>
           <tr>
@@ -550,15 +644,38 @@ function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: (
                 {lot.lotSize}
               </td>
               <td className="td-tight">
-                <Button size="sm" variant="secondary" disabled={busy === lot.id} onClick={() => breakLot(lot)}>
-                  {t('intake.breakLot')}
-                </Button>
+                {confirming === lot.id ? (
+                  <div className="actions" role="group" aria-label={t('intake.breakLot')}>
+                    <span className="field-hint">
+                      {t('warehouse.lots.confirm', { lot: lot.serialNumber, count: lot.lotSize })}
+                    </span>
+                    <Button size="sm" variant="primary" loading={busy === lot.id} onClick={() => void breakLot(lot)}>
+                      {t('warehouse.lots.confirmYes')}
+                    </Button>
+                    <Button size="sm" variant="ghost" disabled={busy === lot.id} onClick={() => setConfirming(null)}>
+                      {t('warehouse.lots.confirmKeep')}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      setNote(null);
+                      setConfirming(lot.id);
+                    }}
+                  >
+                    {t('intake.breakLot')}
+                  </Button>
+                )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -574,19 +691,24 @@ function BinsPanel({
   t: TranslateFn;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [note, setNote] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const shown = bins.filter((b) => matchesQuery(q, b.serialNumber, b.barcode, b.zone, b.facilityCode));
 
   async function setActive(b: Bin, active: boolean) {
     setBusy(b.id);
     try {
       await api.patch(`/custody/bins/${b.id}`, { active });
-      onLog(
-        t(active ? 'warehouse.log.binReturned' : 'warehouse.log.binRetired', {
-          serial: b.serialNumber,
-        }),
-      );
+      const said = t(active ? 'warehouse.log.binReturned' : 'warehouse.log.binRetired', {
+        serial: b.serialNumber,
+      });
+      onLog(said);
+      setNote({ tone: 'ok', text: said });
       await reloadBins();
     } catch (e) {
-      onLog(t('warehouse.log.binCreateError', { message: (e as Error).message }));
+      const said = t('warehouse.bins.changeError', { message: (e as Error).message });
+      onLog(said);
+      setNote({ tone: 'error', text: said });
     } finally {
       setBusy(null);
     }
@@ -599,10 +721,27 @@ function BinsPanel({
       </Panel>
 
       <Panel title={t('warehouse.metric.locations')} subtitle={t('warehouse.bins.listSubtitle')} flush>
+        {note && (
+          <div style={{ padding: 'var(--sp-4) var(--sp-6) 0' }}>
+            {note.tone === 'ok' ? <SuccessNote>{note.text}</SuccessNote> : <ErrorState message={note.text} />}
+          </div>
+        )}
+        {bins.length > 0 && (
+          <ListSearch
+            value={q}
+            onChange={setQ}
+            label={t('warehouse.bins.search')}
+            placeholder={t('warehouse.bins.searchPlaceholder')}
+            shown={shown.length}
+            total={bins.length}
+          />
+        )}
         {bins.length === 0 ? (
           <EmptyState title={t('warehouse.bins.empty')} text={t('warehouse.bins.emptyText')} icon={<IconLocation />} />
+        ) : shown.length === 0 ? (
+          <NoMatch onClear={() => setQ('')} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
@@ -617,9 +756,9 @@ function BinsPanel({
                 </tr>
               </thead>
               <tbody>
-                {bins.map((b) => (
+                {shown.map((b) => (
                   <tr key={b.id}>
-                    <td>
+                    <td data-label={t('warehouse.bins.colSerial')} className="dt-primary">
                       <div className="barcode-label" dir="ltr">
                         <Barcode value={b.barcode} options={{ moduleWidth: 1, height: 34 }} />
                         <code>{b.serialNumber}</code>
@@ -634,7 +773,7 @@ function BinsPanel({
                       {t(b.oversized ? 'warehouse.bins.kind.oversized' : 'warehouse.bins.kind.standard')}
                     </td>
                     <td data-label={t('warehouse.bins.colItems')} className="td-end num">
-                      {b.itemCount.toLocaleString()}
+                      {b.itemCount.toLocaleString('en-US')}
                     </td>
                     <td data-label={t('admin.col.status')}>
                       {!b.active ? (
@@ -650,6 +789,9 @@ function BinsPanel({
                         size="sm"
                         variant="ghost"
                         disabled={busy === b.id}
+                        aria-label={t(b.active ? 'warehouse.bins.retireOne' : 'warehouse.bins.returnOne', {
+                          serial: b.serialNumber,
+                        })}
                         onClick={() => void setActive(b, !b.active)}
                       >
                         {t(b.active ? 'warehouse.bins.retire' : 'warehouse.bins.return')}

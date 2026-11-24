@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Pool } from 'pg';
-import { renewMemberships } from '../../apps/worker/src/jobs/membership-renewal';
 import { createMembership, createUser, testPool } from './helpers/db';
 
 const MIGRATIONS = join(__dirname, '../../apps/api/src/db/migrations');
@@ -25,7 +24,7 @@ async function applyRename(pool: Pool): Promise<void> {
 }
 
 describe('a membership stored under the old tier names (migration 0043)', () => {
-  it('is renamed with its periods, fees, rules and parcel cover, and still renews under the new name', async () => {
+  it('is renamed with its periods, fees, rules and parcel cover', async () => {
     const user = await createUser(pool);
     const m = await createMembership(pool, user, { tier: 'registry', endsInMinutes: -1 });
     await pool.query(`UPDATE membership SET scheduled_tier = 'folio' WHERE id = $1`, [m]);
@@ -91,19 +90,5 @@ describe('a membership stored under the old tier names (migration 0043)', () => 
             AS n`,
     );
     expect(Number(leftover.rows[0]!.n)).toBe(0);
-
-    await renewMemberships(pool);
-
-    const renewed = await pool.query(
-      `SELECT tier, scheduled_tier, current_period_end > now() AS live FROM membership WHERE id = $1`,
-      [m],
-    );
-    expect(renewed.rows[0]).toEqual({ tier: 'bronze', scheduled_tier: null, live: true });
-    const fees = await pool.query<{ action_type: string; amount: string }>(
-      `SELECT action_type, amount::text AS amount FROM charge
-        WHERE reference_id = $1 AND action_type = 'membership:bronze'`,
-      [m],
-    );
-    expect(fees.rows).toEqual([{ action_type: 'membership:bronze', amount: '3900' }]);
   });
 });

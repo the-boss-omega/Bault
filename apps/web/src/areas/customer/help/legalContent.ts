@@ -12,6 +12,7 @@ export interface LegalDocument {
   downloadPath: string | null;
   draft?: boolean;
   version?: string;
+  preformatted?: boolean;
   sections: LegalSection[];
 }
 
@@ -63,7 +64,8 @@ const TERMS_OF_SERVICE: LegalDocument = {
     section(
       'fees',
       '4. Fees and prices',
-      'Card Embassy charges fees for receiving parcels, booking items in, storing them after an included period, services, shipping, marketplace sales, consignment, escrow, cash-outs and memberships. Every fee is charged to your Card Embassy wallet.',
+      'Card Embassy charges fees for receiving parcels, booking items in, storing them after an included period, services, shipping, marketplace sales, consignment, escrow and cash-outs. Every fee is charged to your Card Embassy wallet.',
+      'Every account has a usage tier, Bronze, Silver or Gold, worked out from its settled charges over a recent period, as the FAQ describes. A tier is a price level and not a subscription: nothing is charged for it, and it cannot be bought. Prices that are pricing rules are reduced for Silver and Gold accounts by the discount shown on the price list, and the tier and discount applied are recorded with each charge, so a later change of tier never alters what you were already billed.',
       'Prices that are pricing rules are published on the price list (FAQ & Legal > Prices). Fixed fees — the cash-out fee schedule, the chargeback handling fee, the shipping restocking fee, the escrow fee — are shown under "Current figures" above these documents. The rule in force at the moment of a charge is recorded with that charge, so a later price change never alters what you were already billed.',
       'A fee already charged is not refunded because you changed your mind about the service it paid for. Where a service was not delivered, tell us through Support and it will be corrected with a compensating credit.',
       COUNSEL('whether prices include or exclude sales tax or VAT, and the tax treatment of each fee — to be decided with the accountant before launch'),
@@ -159,7 +161,7 @@ const PRIVACY_POLICY: LegalDocument = {
       'Money: every entry on your ledger; payments made through a provider, by the provider’s reference (never a card number); cash-in and cash-out requests, including the destination account and beneficiary name you give for a cash-out and any document you attach; and the history of each request.',
       'Your items and parcels: the items in your vault, their photographs and condition records, their custody history, the parcels addressed to you including photographs of them, and records of anything refused at intake.',
       'Shipping: shipments, their destinations and recipients, and the customs declarations you make.',
-      'Other activity: listings, offers, purchases, swaps, escrow deals, service requests, memberships, support tickets and their messages, notifications and your notification preferences, and an audit record of each change you or staff make (who, what, when).',
+      'Other activity: listings, offers, purchases, swaps, escrow deals, service requests, your usage tier and its history, support tickets and their messages, notifications and your notification preferences, and an audit record of each change you or staff make (who, what, when).',
       'People you name: for an escrow deal with somebody outside Card Embassy, the name and email address you give for them.',
     ),
     section(
@@ -319,6 +321,7 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
   },
   {
     "id": "ofl-1-1",
+    "preformatted": true,
     "title": "Font licence: SIL Open Font License, Version 1.1",
     "provenance": "legal.provenance.ofl",
     "lastUpdated": "2007-02-26",

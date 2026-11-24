@@ -4,6 +4,7 @@ import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { useI18n } from '../../../shared/i18n';
 import { tierLabel, type GradingTier } from '../../../shared/grading';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
+import { TierPrice } from '../../../shared/ui/TierPrice';
 import { Button, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 
 export function GradingForm({
@@ -86,7 +87,7 @@ export function GradingForm({
         <aside className="request-slip">
           <DrawerTag
             kicker={t('grade.slip.fee')}
-            amount={fee !== null ? formatUsd(fee) : '—'}
+            amount={fee !== null ? <TierPrice listMinor={fee} /> : '—'}
             lines={[
               { label: t('grade.tier'), value: tier ? tierLabel(t, tier) : quiet },
               {

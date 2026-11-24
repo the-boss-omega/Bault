@@ -38,7 +38,7 @@ const request = (id: string, status: string) => ({
 function renderOverview(items: unknown[], requests: unknown[], pending = false) {
   get.mockImplementation((path: string) => {
     if (pending) return new Promise(() => {});
-    if (path === '/vault/items') return Promise.resolve(items);
+    if (path.startsWith('/vault/items?')) return Promise.resolve(items);
     if (path === '/services/mine') return Promise.resolve(requests);
     return Promise.resolve([]);
   });
@@ -107,13 +107,17 @@ describe('shipping and services, the overview', () => {
     expect(window.location.hash).toBe('#/shipping-services/tracking');
   });
 
-  it('draws the tracking line with an icon, not a figure, because a lookup has no count', async () => {
-    const { container } = renderOverview([], []);
+  it('draws the tracking line with an icon until the shipments arrive, then counts those being packed or on the way', async () => {
+    const waiting = renderOverview([], [], true);
+    await screen.findAllByRole('listitem');
+    expect(waiting.container.querySelectorAll('.departure')[1]!.querySelector('.departure-icon')).toHaveAttribute('aria-hidden', 'true');
+    waiting.unmount();
 
+    const { container } = renderOverview([], []);
     await screen.findAllByRole('listitem');
     const tracking = container.querySelectorAll('.departure')[1]!;
-    expect(tracking.querySelector('.departure-number')).toBeNull();
-    expect(tracking.querySelector('.departure-icon')).toHaveAttribute('aria-hidden', 'true');
+    await waitFor(() => expect(tracking.querySelector('.departure-number')).toHaveTextContent('0'));
+    expect(tracking).toHaveTextContent('Being packed or on the way');
   });
 });
 

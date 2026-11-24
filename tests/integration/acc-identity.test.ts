@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { Client, SEED, SEED_USERNAME, fixtureEmail, signIn, usernameOf } from './helpers/http';
+import { closeDb, sql } from './helpers/db';
 import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
 async function register(client: Client, overrides: Record<string, unknown> = {}) {
@@ -117,6 +118,15 @@ describe('ACC name: first and last, never a display name', () => {
 });
 
 describe('ACC migrated accounts', () => {
+  beforeAll(async () => {
+    await sql(
+      `UPDATE user_account SET first_name = 'Ana Maria van der Berg', last_name = NULL, name_review_required = true
+        WHERE username = $1`,
+      [SEED_USERNAME.collector3],
+    );
+  });
+  afterAll(closeDb);
+
   it('keeps a flagged legacy account signed in and usable', async () => {
     const client = await signIn(SEED.collector3);
     const me = (await client.get('/me/profile')).body as Record<string, unknown>;

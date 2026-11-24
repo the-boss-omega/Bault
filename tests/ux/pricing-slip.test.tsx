@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { billableActions, coverage } from '../../apps/api/src/modules/prc/billable-actions';
-import { MEMBERSHIP_TIERS } from '../../apps/api/src/modules/mem/tiers';
+import { pricingActionName } from '../../apps/web/src/shared/pricingActions';
 
 const get = vi.fn();
 const post = vi.fn();
@@ -25,12 +25,6 @@ const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 const UNPRICED = JSON.parse(JSON.stringify(coverage(billableActions(), []))) as ReturnType<
   typeof coverage
 >;
-const TIERS = {
-  tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
-  uncovered: [],
-  cycleDays: 30,
-  currency: 'USD',
-};
 
 const rule = (
   id: string,
@@ -72,7 +66,6 @@ function api(rules: unknown[] = RULES) {
   get.mockImplementation(async (path: string) => {
     if (path === '/pricing/rules') return rules;
     if (path === '/admin/pricing/coverage') return UNPRICED;
-    if (path === '/membership/tiers') return TIERS;
     return [];
   });
 }
@@ -149,7 +142,7 @@ describe('a pricing rule, written on a slip as it is typed', () => {
     expect(slip().querySelector('.drawer-tag-title .drawer-tag-quiet')).toBeNull();
     expect(slip().querySelector('.drawer-tag-amount')).toHaveTextContent('$4.50');
     const line = (name: string) => within(slip()).getByText(name).nextElementSibling;
-    expect(line('Action')).toHaveTextContent('parcel_forwarding');
+    expect(line('Action')).toHaveTextContent('Parcel forwarding');
     expect(line('Class')).toHaveTextContent('trading_card');
     expect(line('Billing')).toHaveTextContent('Monthly');
   });
@@ -191,6 +184,29 @@ describe('a pricing rule, written on a slip as it is typed', () => {
   });
 });
 
+describe('the action list', () => {
+  it('names every billable action in words, never by its internal code', async () => {
+    api();
+    await pricing();
+    const picker = screen.getByRole('combobox', { name: /^action/i }) as HTMLSelectElement;
+    const options = Array.from(picker.querySelectorAll('option'));
+    expect(options.length).toBe(UNPRICED.actions.length);
+    for (const option of options) {
+      expect(option.textContent).not.toBe(option.value);
+      expect(option.textContent).not.toMatch(/_|:\S/);
+    }
+    const video = options.find((o) => o.value === 'service_fee:video_review')!;
+    expect(video.textContent).toBe('Service: Video review');
+    expect(options.find((o) => o.value === 'grading_fee:psa_value')!.textContent).toBe('Grading: PSA Value');
+  });
+
+  it('keeps the code for an action the web app has no word for', () => {
+    const t = (key: string) => key;
+    expect(pricingActionName(t as never, 'something_new')).toBeNull();
+    expect(pricingActionName(t as never, 'service_fee:something_new')).toBeNull();
+  });
+});
+
 describe('the rules in force, a rate card', () => {
   it('is a group to each action, in the order of the price list, and a line to each rule', async () => {
     api();
@@ -215,17 +231,16 @@ describe('the rules in force, a rate card', () => {
     expect(lines[1]).toHaveTextContent('$1.00');
   });
 
-  it('says a share as a percentage, an action with no word of its own as the code it is, and when a rule began', async () => {
+  it('says a share as a percentage, an action by its name, and when a rule began', async () => {
     api();
     await pricing();
     const share = document.querySelector('[data-action="marketplace_fee"]') as HTMLElement;
     expect(within(share).getByRole('heading', { level: 3 })).toHaveTextContent('Marketplace fee');
     expect(share).toHaveTextContent('5.00%');
-    // The product has no word for this action: the heading is its code, not a phrase the page made up from it.
     const forwarding = document.querySelector('[data-action="parcel_forwarding"]') as HTMLElement;
     const title = within(forwarding).getByRole('heading', { level: 3 });
-    expect(title).toHaveTextContent('parcel_forwarding');
-    expect(title.querySelector('.code-inline[dir="ltr"]')).not.toBeNull();
+    expect(title).toHaveTextContent('Parcel forwarding');
+    expect(title.querySelector('.code-inline')).toBeNull();
     expect(forwarding).toHaveTextContent(/Effective from Oct 2[67], 2026/);
     expect(
       (document.querySelector('[data-action="storage"]') as HTMLElement).textContent,

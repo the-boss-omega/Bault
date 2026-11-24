@@ -309,6 +309,48 @@
       "when": 1785075900000,
       "tag": "0043_bronze_silver_and_gold",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1785076000000,
+      "tag": "0044_a_shelf_can_be_decided_later",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1785076100000,
+      "tag": "0045_a_photo_is_read_at_intake",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1785076200000,
+      "tag": "0046_memberships_become_usage_tiers",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1785076300000,
+      "tag": "0047_a_tier_recompute_waits_for_the_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1785076400000,
+      "tag": "0048_moving_money_is_not_use",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1785076500000,
+      "tag": "0049_fees_that_are_not_use_and_ticket_assignees",
+      "breakpoints": true
     }
   ]
 }

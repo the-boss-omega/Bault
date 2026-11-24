@@ -1,6 +1,8 @@
+import { t } from './i18n';
+
 const BASE = '/api/v1';
 
-export const NETWORK_FAILURE = 'Card Embassy could not be reached. Check your connection and try again.';
+export const NETWORK_FAILURE = t('error.unreachable');
 
 export type ApiErrorKind =
   | 'unreachable'
@@ -62,6 +64,20 @@ function kindForStatus(status: number, code: string | undefined): ApiErrorKind {
   return 'client';
 }
 
+type SessionEndedHandler = () => void;
+
+let sessionEnded: SessionEndedHandler | null = null;
+
+export function onSessionEnded(handler: SessionEndedHandler | null): void {
+  sessionEnded = handler;
+}
+
+function plainMessage(kind: ApiErrorKind, status: number, statusText: string, fromServer: string | undefined): string {
+  if (kind === 'unreachable') return NETWORK_FAILURE;
+  if (kind === 'server') return t('error.server');
+  return fromServer || statusText || `HTTP ${status}`;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
@@ -79,8 +95,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const envelope = (body as { error?: { code?: string; message?: string } } | null)?.error;
     const code = envelope?.code;
     const kind = kindForStatus(res.status, code);
-    const message =
-      kind === 'unreachable' ? NETWORK_FAILURE : envelope?.message || res.statusText || `HTTP ${res.status}`;
+    const ended = kind === 'unauthenticated' && sessionEnded !== null && !path.startsWith('/auth/');
+    const message = ended ? t('error.sessionEnded') : plainMessage(kind, res.status, res.statusText, envelope?.message);
+    if (ended) sessionEnded?.();
     throw new ApiError(kind, res.status, message, code);
   }
   return body as T;

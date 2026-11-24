@@ -7,7 +7,15 @@ import { useI18n } from '../../shared/i18n';
 import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
 import { Serial } from '../../shared/ui/Serial';
-import { Button, EmptyState, Panel, ScanField, StatusBadge } from '../../shared/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Panel,
+  ScanField,
+  SkeletonTable,
+  StatusBadge,
+} from '../../shared/ui/primitives';
 import { IconBox } from '../../shared/ui/icons';
 
 interface HouseOrderRow {
@@ -26,17 +34,19 @@ interface HouseOrderRow {
 
 export function HouseOrdersPanel({ onLog }: { onLog: (line: string) => void }) {
   const { t, locale } = useI18n();
-  const [orders, setOrders] = useState<HouseOrderRow[]>([]);
+  const [orders, setOrders] = useState<HouseOrderRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setOrders(await api.get<HouseOrderRow[]>('/marketplace/house/orders/queue'));
-      setError(null);
+      setLoadError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setLoadError((e as Error).message);
     }
   }, []);
+  const list = orders ?? [];
 
   useEffect(() => {
     void load();
@@ -44,22 +54,33 @@ export function HouseOrdersPanel({ onLog }: { onLog: (line: string) => void }) {
 
   return (
     <Panel
-      title={t('house.queue.title', { count: orders.length })}
+      id="house-orders"
+      title={t('house.queue.title', { count: list.length })}
       subtitle={t('house.queue.subtitle')}
       tools={
         <BarcodePrintAllButton
-          labels={orders.map((o) => ({ value: o.barcode, caption: o.description || o.barcode }))}
+          labels={list.map((o) => ({ value: o.barcode, caption: o.description || o.barcode }))}
           variant="secondary"
           size="sm"
         />
       }
     >
-      {error && <p className="field-error">{error}</p>}
-      {orders.length === 0 ? (
-        <EmptyState title={t('house.queue.empty')} icon={<IconBox />} />
+      {loadError && (
+        <ErrorState
+          title={t('warehouse.houseOrders.loadFailed')}
+          message={loadError}
+          onRetry={() => void load()}
+          retryLabel={t('ui.retry')}
+        />
+      )}
+      {error && <ErrorState message={error} />}
+      {orders === null ? (
+        loadError ? null : <SkeletonTable rows={2} columns={3} />
+      ) : list.length === 0 ? (
+        <EmptyState title={t('house.queue.empty')} text={t('warehouse.houseOrders.emptyText')} icon={<IconBox />} />
       ) : (
         <ul className="tag-grid">
-          {orders.map((o) => (
+          {list.map((o) => (
             <HouseOrderRowView
               key={o.id}
               order={o}

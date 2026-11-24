@@ -19,7 +19,7 @@ export class RolesGuard implements CanActivate {
     const user = ctx.switchToHttp().getRequest<Request>().user;
     if (!user) throw AppError.unauthenticated();
     if (!required.includes(user.role)) {
-      throw AppError.forbidden(`Requires role: ${required.join(' | ')}`);
+      throw AppError.forbidden('This page is for Card Embassy staff.');
     }
     return true;
   }

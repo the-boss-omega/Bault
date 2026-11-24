@@ -18,7 +18,7 @@ import { parcel, parcelEvent } from '../inv/parcel.schema';
 import { item } from '../cst/cst.schema';
 import { newShipmentCode } from '../../shared/ids';
 import { fullName } from '../../shared/names';
-import { shipment } from './shp.schema';
+import { OPEN_SHIPMENT_STATUSES, shipment } from './shp.schema';
 import type { AuthUser } from '../sec/auth-context';
 import { ParcelProfileService, customsDeclarationFor, type CustomsLine } from './parcel-profile.service';
 import { SHIPPING_BOXES } from './boxes';
@@ -49,12 +49,13 @@ import {
   signatureForced,
   usdAmount,
 } from './shipping-options';
-import { UNLIMITED } from '../mem/tiers';
+import { UNLIMITED, isTierKey, type TierKey } from '../mem/tiers';
 import {
   MembershipService,
   type AppliedShippingCover,
   type ShippingCover,
 } from '../mem/membership.service';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
 
 export type ShipmentActor = Pick<AuthUser, 'id' | 'role'>;
 
@@ -96,6 +97,9 @@ export interface QuotedRate extends Rate {
   membershipCover: AppliedShippingCover | null;
   coveredMinor: number;
   totalMinor: number;
+  tier: TierKey;
+  discountBps: number;
+  listTotalMinor: number;
   recommended: boolean;
 }
 
@@ -120,6 +124,30 @@ const LABEL_REFUSAL_SENTENCES: readonly [RegExp, string][] = [
   [/customs/i, 'The carrier needs fuller customs details before it can print a label.'],
   [/no overnight service|offers no/i, 'The carrier offers no service of this kind for this parcel.'],
 ];
+
+interface TierSnapshot {
+  tier: TierKey;
+  discountBps: number;
+  listMinor: number;
+  chargedMinor: number;
+}
+
+function tierSnapshot(rate: Pick<QuotedRate, 'tier' | 'discountBps' | 'listTotalMinor' | 'totalMinor'>): TierSnapshot {
+  return { tier: rate.tier, discountBps: rate.discountBps, listMinor: rate.listTotalMinor, chargedMinor: rate.totalMinor };
+}
+
+function agreedTier(fulfillment: unknown, costMinor: number): TierSnapshot {
+  const stored = (fulfillment as { tierQuote?: Partial<TierSnapshot> } | null)?.tierQuote;
+  if (stored && isTierKey(stored.tier) && stored.chargedMinor === costMinor) {
+    return {
+      tier: stored.tier,
+      discountBps: Number(stored.discountBps ?? 0),
+      listMinor: Number(stored.listMinor ?? costMinor),
+      chargedMinor: costMinor,
+    };
+  }
+  return { tier: 'bronze', discountBps: 0, listMinor: costMinor, chargedMinor: costMinor };
+}
 
 export function labelRefusalSentence(raw: string | null): string {
   const match = LABEL_REFUSAL_SENTENCES.find(([pattern]) => pattern.test(raw ?? ''));
@@ -184,37 +212,10 @@ export class ShipmentService {
     private readonly memberships: MembershipService,
   ) {}
 
-  static readonly OPEN_STATUSES = [
-    'requested',
-    'awaiting_payment',
-    'rates_selected',
-    'picking',
-    'packed',
-    'labeled',
-  ] as const;
+  static readonly OPEN_STATUSES = OPEN_SHIPMENT_STATUSES;
 
-  async assertItemsFree(userId: string, itemIds: string[], exceptShipmentId?: string, tx?: Database) {
-    const open = await (tx ?? this.db)
-      .select({ id: shipment.id, code: shipment.code, itemIds: shipment.itemIds })
-      .from(shipment)
-      .where(
-        and(
-          eq(shipment.userId, userId),
-          inArray(shipment.status, [...ShipmentService.OPEN_STATUSES]),
-        ),
-      );
-
-    const claimed = new Map<string, string>();
-    for (const s of open) {
-      if (s.id === exceptShipmentId) continue;
-      for (const id of (s.itemIds as string[]) ?? []) claimed.set(id, s.code ?? s.id);
-    }
-    for (const id of itemIds) {
-      const owner = claimed.get(id);
-      if (owner) {
-        throw new AppError(ErrorCode.CONFLICT, `That item is already on shipment ${owner}`, 409);
-      }
-    }
+  async assertItemsFree(_userId: string, itemIds: string[], exceptShipmentId?: string, tx?: Database) {
+    await assertItemsUncommitted(tx ?? this.db, itemIds, 'shipped', { shipmentId: exceptShipmentId, shipToBuyer: true });
   }
 
   services() {
@@ -271,6 +272,7 @@ export class ShipmentService {
       : null;
 
     const rates = await this.priceServices(
+      userId,
       profile,
       addOns,
       input.rush ?? false,
@@ -295,17 +297,22 @@ export class ShipmentService {
   }
 
   private async priceServices(
+    userId: string,
     profile: ParcelProfile,
     addOnKeys: string[],
     rush: boolean,
     cover: ShippingCover | null = null,
     customsLines: readonly CustomsLine[] | null = null,
   ): Promise<QuotedRate[]> {
+    const tier = await this.pricing.tierOf(userId);
+    const atTier = (listMinor: number) => PricingService.atTier(tier, listMinor).chargedMinor;
     const { amount: baseHandling } = await this.pricing.price('shipping');
-    const rushMinor = rush ? ((await this.pricing.tryPrice('shipping_rush'))?.amount.amount ?? 0) : 0;
-    const handling = { amount: baseHandling.amount + rushMinor };
+    const rushListMinor = rush ? ((await this.pricing.tryPrice('shipping_rush'))?.amount.amount ?? 0) : 0;
+    const rushMinor = atTier(rushListMinor);
+    const handling = { amount: atTier(baseHandling.amount) + rushMinor };
     const premium = insurancePremiumMinor(profile.insuredValueMinor);
-    const addOnPrices = await this.priceAddOns(addOnKeys);
+    const addOnListPrices = await this.priceAddOns(addOnKeys);
+    const addOnPrices = Object.fromEntries(Object.entries(addOnListPrices).map(([k, v]) => [k, atTier(v)]));
     const addOnsMinor = Object.values(addOnPrices).reduce((a, b) => a + b, 0);
 
     const rushCovered = cover?.rushIncluded ? rushMinor : 0;
@@ -344,6 +351,14 @@ export class ShipmentService {
       const postageCovered = cover ? Math.min(cover.postageCreditLeftMinor, carrierCost) : 0;
       const addOnsCoveredMinor = Object.values(addOnsCovered).reduce((a, b) => a + b, 0);
       const coveredMinor = postageCovered + insuranceCovered + rushCovered + addOnsCoveredMinor;
+      const discountMinor =
+        baseHandling.amount -
+        atTier(baseHandling.amount) +
+        (rushCovered > 0 ? 0 : rushListMinor - rushMinor) +
+        Object.keys(addOnPrices)
+          .filter((action) => addOnsCovered[action] === undefined)
+          .reduce((sum, action) => sum + addOnListPrices[action]! - addOnPrices[action]!, 0);
+      const totalMinor = carrierCost + handling.amount + premium + addOnsMinor - coveredMinor;
       const membershipCover: AppliedShippingCover | null =
         cover && coveredMinor > 0
           ? {
@@ -372,7 +387,10 @@ export class ShipmentService {
         addOnsMinor,
         membershipCover,
         coveredMinor,
-        totalMinor: carrierCost + handling.amount + premium + addOnsMinor - coveredMinor,
+        totalMinor,
+        tier,
+        discountBps: PricingService.atTier(tier, 0).discountBps,
+        listTotalMinor: totalMinor + discountMinor,
         recommended: false,
       });
     }
@@ -383,12 +401,7 @@ export class ShipmentService {
       .sort((a, b) => Number(b.eligible) - Number(a.eligible) || a.totalMinor - b.totalMinor);
   }
 
-  /**
-   * Where a label says the parcel comes from: the named facility, or else the oldest active primary one that has a
-   * real address (a facility still carrying the seed's placeholder is passed over, and so the order is a fixed one
-   * now that an administrator can add more than the seed's two).
-   */
-  private async originAddress(code?: string) {
+  async originSite(code?: string) {
     const sites = await this.db
       .select()
       .from(facility)
@@ -396,7 +409,11 @@ export class ShipmentService {
         and(code ? eq(facility.code, code) : eq(facility.role, 'primary'), eq(facility.active, true)),
       )
       .orderBy(asc(facility.createdAt), asc(facility.code));
-    const site = sites.find((s) => !isPlaceholderAddress(s.line1));
+    return sites.find((s) => !isPlaceholderAddress(s.line1));
+  }
+
+  private async originAddress(code?: string) {
+    const site = await this.originSite(code);
     if (!site) return undefined;
     return {
       name: site.name,
@@ -698,6 +715,7 @@ export class ShipmentService {
     const { profile } = await this.profileOf(s);
     const addOnKeys = ((s.addOns as { key: string }[]) ?? []).map((a) => a.key);
     return this.priceServices(
+      s.userId,
       profile,
       addOnKeys,
       s.rushFlag,
@@ -734,7 +752,7 @@ export class ShipmentService {
 
     const quoted = await this.rates(shipmentId, actor);
     const rate = quoted.find((r) => r.serviceKey === service.key);
-    if (!rate) throw AppError.validation('Selected carrier/service not available');
+    if (!rate) throw AppError.validation('That carrier service is not offered for this parcel.');
     if (!rate.eligible) {
       throw AppError.validation(rate.problems[0]!.message, { problems: rate.problems });
     }
@@ -813,6 +831,11 @@ export class ShipmentService {
       const [cur] = await tx.select().from(shipment).where(eq(shipment.id, s.id)).for('update').limit(1);
       if (!cur) throw AppError.notFound('Shipment not found');
       ShipmentService.assertRateSelectable(cur);
+      const itemIds = (cur.itemIds as string[]) ?? [];
+      if (itemIds.length > 0) {
+        await this.profiles.loadShippableItems(cur.userId, itemIds, tx);
+        await this.assertItemsFree(cur.userId, itemIds, cur.id, tx);
+      }
       if (cur.status === 'rates_selected') return this.reRate(tx, cur, rate, common, estimatedDeliveryAt);
 
       const balance = await this.ledger.balanceOf(s.userId, tx);
@@ -820,7 +843,12 @@ export class ShipmentService {
         const paymentDueAt = cur.paymentDueAt ?? new Date(now.getTime() + PAYMENT_WINDOW_DAYS * 86_400_000);
         await tx
           .update(shipment)
-          .set({ ...common, status: 'awaiting_payment', paymentDueAt })
+          .set({
+            ...common,
+            status: 'awaiting_payment',
+            paymentDueAt,
+            fulfillment: { ...((cur.fulfillment as Record<string, unknown> | null) ?? {}), tierQuote: tierSnapshot(rate) },
+          })
           .where(eq(shipment.id, s.id));
         return {
           status: 'awaiting_payment' as const,
@@ -876,7 +904,7 @@ export class ShipmentService {
       if (balance.amount < differenceMinor) {
         throw new AppError(
           ErrorCode.INSUFFICIENT_BALANCE,
-          `That service costs ${usdAmount(differenceMinor)} more than the one already paid for, and the wallet holds ${usdAmount(balance.amount)}. Top up, or choose a cheaper service.`,
+          `That service costs ${usdAmount(differenceMinor)} more than the one already paid for, and the wallet holds ${usdAmount(balance.amount)}. Cash in to your wallet, or choose a cheaper service.`,
           409,
           { shortfallMinor: differenceMinor - balance.amount },
         );
@@ -897,6 +925,11 @@ export class ShipmentService {
             insurancePremium: rate.insurancePremiumMinor,
             addOns: rate.addOnsMinor,
             membershipCover: rate.membershipCover ?? null,
+            newListTotal: rate.listTotalMinor,
+            tier: rate.tier,
+            discountBps: rate.discountBps,
+            listMinor: differenceMinor,
+            chargedMinor: differenceMinor,
           },
           amount: differenceMinor,
           currency,
@@ -949,6 +982,7 @@ export class ShipmentService {
           service: rate.serviceKey,
           insuredValueMinor: s.insuredValueMinor,
           membershipCover: rate.membershipCover ?? null,
+          ...tierSnapshot(rate),
         },
         amount: rate.totalMinor,
         currency: rate.currency,
@@ -986,11 +1020,13 @@ export class ShipmentService {
         throw AppError.validation('This shipment has no agreed price');
       }
       await this.profiles.loadShippableItems(s.userId, (s.itemIds as string[]) ?? [], tx);
+      await this.assertItemsFree(s.userId, (s.itemIds as string[]) ?? [], s.id, tx);
+      await this.ledger.lockWallet(s.userId, tx);
       const balance = await this.ledger.balanceOf(s.userId, tx);
       if (balance.amount < s.cost) {
         throw new AppError(
-          ErrorCode.CONFLICT,
-          `Short by ${usdAmount(s.cost - balance.amount)}. Top up the wallet and try again.`,
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `Short by ${usdAmount(s.cost - balance.amount)}. Cash in to your wallet and try again.`,
           409,
         );
       }
@@ -998,6 +1034,7 @@ export class ShipmentService {
       const service = findService(s.carrier, s.serviceLevel);
       const storedCover = (s.membershipCover as AppliedShippingCover | null) ?? null;
       const spentCover = storedCover ? await this.memberships.spendShippingCover(tx, s.userId, storedCover) : null;
+      const agreed = agreedTier(s.fulfillment, s.cost);
       await this.chargeFor(tx, s, {
         carrier: s.carrier!,
         serviceLevel: s.serviceLevel!,
@@ -1016,6 +1053,9 @@ export class ShipmentService {
         membershipCover: storedCover,
         coveredMinor: 0,
         totalMinor: s.cost!,
+        tier: agreed.tier,
+        discountBps: agreed.discountBps,
+        listTotalMinor: agreed.listMinor,
         recommended: false,
       });
       await tx

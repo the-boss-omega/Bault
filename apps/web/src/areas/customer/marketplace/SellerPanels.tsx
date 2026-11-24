@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { LIST_TOOLS_FROM, ListTools, byNewest, byNumber, useListView, type SortOption } from './ListTools';
 import { api } from '../../../shared/api';
 import { dollarsToCents, formatDate, formatUsd, isolate } from '../../../shared/money';
 import { Amount, Code, Serial } from '../../../shared/ui/Serial';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
-import { useI18n, type TranslateFn } from '../../../shared/i18n';
+import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { itemName } from '../../../shared/itemClasses';
 import {
   LISTING_TONE,
@@ -16,18 +17,18 @@ import {
   type MyOffer,
   type MySwap,
 } from '../../../shared/market';
-import { Button, EmptyState, Panel, SkeletonTable, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, EmptyState, ErrorState, Field, MoneyField, Panel, SkeletonTable, StatusBadge } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
 import { IconMarketplace, IconTag } from '../../../shared/ui/icons';
 import { navigate } from '../../../shared/routing';
 import { SwapGlyph, TradeSide } from './TradeSides';
+import { SellerLink } from './ListingDeal';
 
 export function MyListingsPanel({
   onChanged,
-  onError,
 }: {
   onChanged: (message: string) => Promise<void> | void;
-  onError: (m: string) => void;
+  onError?: (m: string) => void;
 }) {
   const { t, locale } = useI18n();
   const [rows, setRows] = useState<MyListing[] | null>(null);
@@ -35,15 +36,20 @@ export function MyListingsPanel({
   const [price, setPrice] = useState('');
   const [removing, setRemoving] = useState<MyListing | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const view = useListView(rows, listingText(t), LISTING_SORTS);
 
   const load = useCallback(async () => {
     try {
       setRows(await api.get<MyListing[]>('/marketplace/listings/mine'));
+      setLoadError(null);
     } catch (e) {
-      onError((e as Error).message);
+      setLoadError((e as Error).message);
       setRows([]);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -51,15 +57,19 @@ export function MyListingsPanel({
 
   async function reprice(listing: MyListing) {
     const cents = dollarsToCents(price);
-    if (cents === null) return;
+    if (cents === null) {
+      setRowError(t('market.sell.priceBad'));
+      return;
+    }
     setBusy(true);
+    setRowError(null);
     try {
       await api.patch(`/marketplace/listings/${listing.id}`, { askingPrice: cents });
       setEditing(null);
       await load();
       await onChanged(t('market.mine.repriced', { amount: formatUsd(cents) }));
     } catch (e) {
-      onError((e as Error).message);
+      setRowError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -67,6 +77,7 @@ export function MyListingsPanel({
 
   async function remove(listing: MyListing) {
     setBusy(true);
+    setRemoveError(null);
     try {
       const challenge = await api.post<{ confirmationToken: string }>(
         `/marketplace/listings/${listing.id}/remove`,
@@ -78,8 +89,7 @@ export function MyListingsPanel({
       await load();
       await onChanged(t('market.mine.removed'));
     } catch (e) {
-      onError((e as Error).message);
-      setRemoving(null);
+      setRemoveError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -88,7 +98,17 @@ export function MyListingsPanel({
   return (
     <>
       <Panel title={t('market.mine.title')} subtitle={t('market.mine.subtitle')} flush>
-        {rows === null ? (
+        {loadError ? (
+          <ErrorState
+            title={t('market.loadFailed')}
+            message={loadError}
+            onRetry={() => {
+              setRows(null);
+              void load();
+            }}
+            retryLabel={t('ui.retry')}
+          />
+        ) : rows === null ? (
           <SkeletonTable rows={3} columns={5} />
         ) : rows.length === 0 ? (
           <EmptyState
@@ -106,8 +126,13 @@ export function MyListingsPanel({
             }
           />
         ) : (
+          <>
+          {rows.length > LIST_TOOLS_FROM && (
+            <ListTools label={t('market.mine.title')} view={view} sorts={LISTING_SORTS} total={rows.length} />
+          )}
+          {view.shown?.length === 0 && <EmptyState title={t('market.list.noMatch')} text={t('market.list.noMatchText')} />}
           <ul className="slips" aria-label={t('market.mine.title')}>
-            {rows.map((row) => (
+            {(view.shown ?? []).map((row) => (
               <li className="slip slip--listing" key={row.id}>
                 <div className="slip-item">
                   <span className="slip-thumb">
@@ -122,16 +147,40 @@ export function MyListingsPanel({
                 <div className="slip-money">
                   <span className="money-label">{t('market.mine.col.price')}</span>
                   {editing === row.id ? (
-                    <div className="money-input">
-                      <span aria-hidden="true">$</span>
-                      <input
-                        inputMode="decimal"
-                        aria-label={t('market.mine.col.price')}
-                        value={price}
-                        autoFocus
-                        onChange={(e) => setPrice(e.target.value)}
-                      />
-                    </div>
+                    <form
+                      id={`reprice-${row.id}`}
+                      noValidate
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void reprice(row);
+                      }}
+                    >
+                      <div className="money-input">
+                        <span aria-hidden="true">$</span>
+                        <input
+                          inputMode="decimal"
+                          dir="ltr"
+                          aria-label={t('market.mine.newPrice')}
+                          aria-invalid={rowError ? true : undefined}
+                          aria-describedby={rowError ? `reprice-${row.id}-error` : undefined}
+                          value={price}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                              e.stopPropagation();
+                              setEditing(null);
+                              setRowError(null);
+                            }
+                          }}
+                          onChange={(e) => setPrice(e.target.value)}
+                        />
+                      </div>
+                      {rowError && (
+                        <span className="field-error" id={`reprice-${row.id}-error`} role="alert">
+                          <bdi dir="auto">{rowError}</bdi>
+                        </span>
+                      )}
+                    </form>
                   ) : (
                     <Amount size="lead">{formatUsd(row.askingPrice)}</Amount>
                   )}
@@ -142,7 +191,22 @@ export function MyListingsPanel({
 
                 <div className="slip-side">
                   <span className="slip-label">{t('market.mine.col.offers')}</span>
-                  {row.pendingOffers > 0 ? (
+                  {row.pendingOffers > 0 && row.status === 'active' ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={
+                        row.pendingOffers === 1
+                          ? t('market.mine.seeOffersOne')
+                          : t('market.mine.seeOffers', { count: row.pendingOffers })
+                      }
+                      onClick={() =>
+                        navigate({ section: 'marketplace', tab: 'offers', params: { search: row.serialNumber } })
+                      }
+                    >
+                      <StatusBadge tone="warning">{row.pendingOffers}</StatusBadge>
+                    </Button>
+                  ) : row.pendingOffers > 0 ? (
                     <StatusBadge tone="warning">{row.pendingOffers}</StatusBadge>
                   ) : (
                     <span className="muted">—</span>
@@ -160,15 +224,17 @@ export function MyListingsPanel({
                     <div className="actions">
                       {editing === row.id ? (
                         <>
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            disabled={busy || dollarsToCents(price) === null}
-                            onClick={() => void reprice(row)}
-                          >
+                          <Button size="sm" variant="primary" type="submit" form={`reprice-${row.id}`} disabled={busy}>
                             {t('market.mine.save')}
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditing(null);
+                              setRowError(null);
+                            }}
+                          >
                             {t('ui.cancel')}
                           </Button>
                         </>
@@ -179,6 +245,7 @@ export function MyListingsPanel({
                             variant="secondary"
                             onClick={() => {
                               setEditing(row.id);
+                              setRowError(null);
                               setPrice((row.askingPrice / 100).toFixed(2));
                             }}
                           >
@@ -195,19 +262,33 @@ export function MyListingsPanel({
               </li>
             ))}
           </ul>
+          </>
         )}
       </Panel>
 
       {removing && (
         <ConfirmationModal
           title={t('market.mine.delistTitle')}
-          body={<p>{t('market.mine.delistBody', { item: isolate(itemName(t, removing)) })}</p>}
+          body={
+            <>
+              <p>{t('market.mine.delistBody', { item: isolate(itemName(t, removing)) })}</p>
+              {removing.pendingOffers > 0 && (
+                <p className="field-hint">{removing.pendingOffers === 1
+                    ? t('market.mine.delistOffersOne')
+                    : t('market.mine.delistOffers', { count: removing.pendingOffers })}</p>
+              )}
+              {removeError && <ErrorState message={removeError} />}
+            </>
+          }
           confirmLabel={t('market.mine.delist')}
           cancelLabel={t('ui.cancel')}
           tone="danger"
           busy={busy}
           onConfirm={() => void remove(removing)}
-          onCancel={() => setRemoving(null)}
+          onCancel={() => {
+            setRemoving(null);
+            setRemoveError(null);
+          }}
         />
       )}
     </>
@@ -216,41 +297,57 @@ export function MyListingsPanel({
 
 export function OffersPanel({
   onChanged,
-  onError,
+  initialQuery,
 }: {
   onChanged: (message: string) => Promise<void> | void;
-  onError: (m: string) => void;
+  initialQuery?: string;
+  onError?: (m: string) => void;
 }) {
   const { t, locale } = useI18n();
   const [rows, setRows] = useState<MyOffer[] | null>(null);
   const [countering, setCountering] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
+  const [confirming, setConfirming] = useState<{ offer: MyOffer; action: 'accept' | 'reject' } | null>(null);
+  const [direction, setDirection] = useState<'all' | 'incoming' | 'outgoing'>('all');
+  const scoped = useMemo(
+    () => (rows && direction !== 'all' ? rows.filter((r) => r.direction === direction) : rows),
+    [rows, direction],
+  );
+  const view = useListView(scoped, offerText(t), OFFER_SORTS, initialQuery);
 
   const load = useCallback(async () => {
     try {
       setRows(await api.get<MyOffer[]>('/marketplace/offers/mine'));
+      setLoadError(null);
     } catch (e) {
-      onError((e as Error).message);
+      setLoadError((e as Error).message);
       setRows([]);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   async function respond(offer: MyOffer, action: 'accept' | 'reject' | 'counter') {
-    setBusy(true);
-    try {
-      const body: Record<string, unknown> = { action };
-      if (action === 'counter') {
-        const cents = dollarsToCents(amount);
-        if (cents === null) return;
-        body.amount = cents;
+    const body: Record<string, unknown> = { action };
+    if (action === 'counter') {
+      const cents = dollarsToCents(amount);
+      if (cents === null) {
+        setRowError({ id: offer.id, message: t('market.offers.amountBad') });
+        return;
       }
+      body.amount = cents;
+    }
+    setBusy(true);
+    setRowError(null);
+    try {
       await api.post(`/marketplace/offers/${offer.id}/respond`, body);
       setCountering(null);
+      setConfirming(null);
       await load();
       await onChanged(
         t(
@@ -263,25 +360,57 @@ export function OffersPanel({
               : offer.yourTurn
                 ? 'market.offers.countered'
                 : 'market.offers.changed',
+          { amount: formatUsd(typeof body.amount === 'number' ? body.amount : offer.amount) },
         ),
       );
     } catch (e) {
-      onError((e as Error).message);
+      setConfirming(null);
+      setRowError({ id: offer.id, message: (e as Error).message });
     } finally {
       setBusy(false);
     }
   }
 
   return (
+    <>
     <Panel title={t('market.offers.title')} subtitle={t('market.offers.subtitle')} flush>
-      {rows === null ? (
+      {loadError ? (
+        <ErrorState
+          title={t('market.loadFailed')}
+          message={loadError}
+          onRetry={() => {
+            setRows(null);
+            void load();
+          }}
+          retryLabel={t('ui.retry')}
+        />
+      ) : rows === null ? (
         <SkeletonTable rows={3} columns={5} />
       ) : rows.length === 0 ? (
-        <EmptyState title={t('market.offers.empty')} text={t('market.offers.emptyText')} />
+        <EmptyState
+          title={t('market.offers.empty')}
+          text={t('market.offers.emptyText')}
+          action={
+            <Button size="sm" variant="primary" onClick={() => navigate({ section: 'marketplace', tab: 'browse' })}>
+              {t('market.offers.browse')}
+            </Button>
+          }
+        />
       ) : (
+        <>
+        <ListTools label={t('market.offers.title')} view={view} sorts={OFFER_SORTS} total={scoped?.length ?? 0}>
+          <Field label={t('market.offers.show')} className="field--compact">
+            <select value={direction} onChange={(e) => setDirection(e.target.value as typeof direction)}>
+              <option value="all">{t('market.offers.showAll')}</option>
+              <option value="incoming">{t('market.offers.incoming')}</option>
+              <option value="outgoing">{t('market.offers.outgoing')}</option>
+            </select>
+          </Field>
+        </ListTools>
+        {view.shown?.length === 0 && <EmptyState title={t('market.list.noMatch')} text={t('market.list.noMatchText')} />}
         <ul className="slips" aria-label={t('market.offers.title')}>
-          {rows.map((row) => {
-            const live = row.status === 'pending' && row.listingStatus === 'active';
+          {(view.shown ?? []).map((row) => {
+            const live = isLive(row);
             const against = row.askingPrice > 0 ? Math.min(1, row.amount / row.askingPrice) : 0;
             return (
               <li className="slip" key={row.id}>
@@ -301,7 +430,12 @@ export function OffersPanel({
                   </StatusBadge>
                   {row.direction === 'incoming' && row.buyerUsername && (
                     <span className="slip-turn">
-                      <Code value={`@${row.buyerUsername}`} />
+                      {t('market.offers.from')} <Code value={`@${row.buyerUsername}`} />
+                    </span>
+                  )}
+                  {row.direction === 'outgoing' && row.sellerUsername && (
+                    <span className="slip-turn">
+                      {t('market.offers.to')} <SellerLink t={t} username={row.sellerUsername} />
                     </span>
                   )}
                   {live && (
@@ -336,24 +470,73 @@ export function OffersPanel({
                       countering={countering === row.id}
                       amount={amount}
                       busy={busy}
+                      error={rowError?.id === row.id ? rowError.message : null}
                       t={t}
                       onCounterStart={() => {
                         setCountering(row.id);
+                        setRowError(null);
                         setAmount((row.amount / 100).toFixed(2));
                       }}
-                      onCounterCancel={() => setCountering(null)}
+                      onCounterCancel={() => {
+                        setCountering(null);
+                        setRowError(null);
+                      }}
                       onAmount={setAmount}
-                      onRespond={(action) => void respond(row, action)}
+                      onRespond={(action) =>
+                        action === 'counter' ? void respond(row, action) : setConfirming({ offer: row, action })
+                      }
                     />
                   )}
+                  {!live && rowError?.id === row.id && <ErrorState message={rowError.message} />}
                 </div>
               </li>
             );
           })}
         </ul>
+        </>
       )}
     </Panel>
+
+    {confirming && (
+      <ConfirmationModal
+        title={t(confirmTitle(confirming.offer, confirming.action))}
+        body={
+          <p>
+            {t(confirmBody(confirming.offer, confirming.action), {
+              item: isolate(itemName(t, confirming.offer).split(' · ')[0]!),
+              amount: formatUsd(confirming.offer.amount),
+              username:
+                (confirming.offer.side === 'seller' ? confirming.offer.buyerUsername : confirming.offer.sellerUsername) ??
+                '',
+            })}
+          </p>
+        }
+        confirmLabel={t(confirmLabel(confirming.offer, confirming.action))}
+        cancelLabel={t('ui.cancel')}
+        tone={confirming.action === 'reject' ? 'danger' : 'primary'}
+        busy={busy}
+        onConfirm={() => void respond(confirming.offer, confirming.action)}
+        onCancel={() => setConfirming(null)}
+      />
+    )}
+    </>
   );
+}
+
+function confirmTitle(offer: MyOffer, action: 'accept' | 'reject'): MessageKey {
+  if (action === 'accept') return offer.side === 'seller' ? 'market.offers.sellTitle' : 'market.offers.buyTitle';
+  return offer.yourTurn ? 'market.offers.rejectTitle' : 'market.offers.withdrawTitle';
+}
+
+function confirmBody(offer: MyOffer, action: 'accept' | 'reject'): MessageKey {
+  if (action === 'accept') return offer.side === 'seller' ? 'market.offers.sellBody' : 'market.offers.buyBody';
+  return offer.yourTurn ? 'market.offers.rejectBody' : 'market.offers.withdrawBody';
+}
+
+function confirmLabel(offer: MyOffer, action: 'accept' | 'reject'): MessageKey {
+  if (action === 'accept') return 'market.offers.accept';
+  if (!offer.yourTurn) return 'market.offers.withdraw';
+  return offer.side === 'seller' ? 'market.offers.reject' : 'market.offers.decline';
 }
 
 function OfferActions({
@@ -361,6 +544,7 @@ function OfferActions({
   countering,
   amount,
   busy,
+  error,
   t,
   onCounterStart,
   onCounterCancel,
@@ -371,43 +555,49 @@ function OfferActions({
   countering: boolean;
   amount: string;
   busy: boolean;
+  error: string | null;
   t: TranslateFn;
   onCounterStart: () => void;
   onCounterCancel: () => void;
   onAmount: (v: string) => void;
   onRespond: (action: 'accept' | 'reject' | 'counter') => void;
 }) {
+  const failure = error ? <ErrorState message={error} /> : null;
   if (countering) {
     return (
-      <div className="fulfill-form">
+      <form
+        className="fulfill-form"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          onRespond('counter');
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            onCounterCancel();
+          }
+        }}
+      >
         <div className="field-row">
-          <label className="field">
-            <span className="field-label">{t('market.offers.counterAmount')}</span>
-            <div className="money-input">
-              <span aria-hidden="true">$</span>
-              <input
-                inputMode="decimal"
-                value={amount}
-                autoFocus
-                onChange={(e) => onAmount(e.target.value)}
-              />
-            </div>
-          </label>
+          <MoneyField
+            label={t(offer.yourTurn ? 'market.offers.counterAmount' : 'market.offers.newAmount')}
+            value={amount}
+            autoFocus
+            onChange={onAmount}
+            error={error ?? undefined}
+            hint={t('market.offers.asking', { amount: formatUsd(offer.askingPrice) })}
+          />
         </div>
         <div className="actions">
-          <Button
-            size="sm"
-            variant="primary"
-            disabled={busy || dollarsToCents(amount) === null}
-            onClick={() => onRespond('counter')}
-          >
+          <Button size="sm" variant="primary" type="submit" disabled={busy}>
             {t(offer.yourTurn ? 'market.offers.counter' : 'market.offers.change')}
           </Button>
           <Button size="sm" variant="ghost" onClick={onCounterCancel}>
             {t('ui.cancel')}
           </Button>
         </div>
-      </div>
+      </form>
     );
   }
 
@@ -423,6 +613,7 @@ function OfferActions({
         <Button size="sm" variant="danger" disabled={busy} onClick={() => onRespond('reject')}>
           {t('market.offers.withdraw')}
         </Button>
+        {failure}
       </div>
     );
   }
@@ -438,29 +629,34 @@ function OfferActions({
       <Button size="sm" variant="danger" disabled={busy} onClick={() => onRespond('reject')}>
         {t(offer.side === 'seller' ? 'market.offers.reject' : 'market.offers.decline')}
       </Button>
+      {failure}
     </div>
   );
 }
 
 export function SwapsPanel({
   onChanged,
-  onError,
 }: {
   onChanged: (message: string) => Promise<void> | void;
-  onError: (m: string) => void;
+  onError?: (m: string) => void;
 }) {
   const { t, locale } = useI18n();
   const [rows, setRows] = useState<MySwap[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<{ swap: MySwap; action: 'approve' | 'reject' } | null>(null);
+  const [actError, setActError] = useState<string | null>(null);
+  const view = useListView(rows, swapText(t), SWAP_SORTS);
 
   const load = useCallback(async () => {
     try {
       setRows(await api.get<MySwap[]>('/marketplace/swaps'));
+      setLoadError(null);
     } catch (e) {
-      onError((e as Error).message);
+      setLoadError((e as Error).message);
       setRows([]);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -468,26 +664,52 @@ export function SwapsPanel({
 
   async function act(swap: MySwap, action: 'approve' | 'reject') {
     setBusy(true);
+    setActError(null);
     try {
       await api.post(`/marketplace/swaps/${swap.id}/${action}`);
+      setConfirming(null);
       await load();
-      await onChanged(t(action === 'approve' ? 'market.swaps.approved' : 'market.swaps.rejected'));
+      await onChanged(
+        t(
+          action === 'reject'
+            ? 'market.swaps.rejected'
+            : swap.kind === 'transfer'
+              ? 'market.swaps.giftAccepted'
+              : 'market.swaps.approvedDone',
+        ),
+      );
     } catch (e) {
-      onError((e as Error).message);
+      setActError((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   return (
+    <>
     <Panel title={t('market.swaps.title')} subtitle={t('market.swaps.subtitle')} flush>
-      {rows === null ? (
+      {loadError ? (
+        <ErrorState
+          title={t('market.loadFailed')}
+          message={loadError}
+          onRetry={() => {
+            setRows(null);
+            void load();
+          }}
+          retryLabel={t('ui.retry')}
+        />
+      ) : rows === null ? (
         <SkeletonTable rows={3} columns={4} />
       ) : rows.length === 0 ? (
         <EmptyState title={t('market.swaps.empty')} text={t('market.swaps.emptyText')} icon={<IconMarketplace />} />
       ) : (
+        <>
+        {rows.length > LIST_TOOLS_FROM && (
+          <ListTools label={t('market.swaps.title')} view={view} sorts={SWAP_SORTS} total={rows.length} />
+        )}
+        {view.shown?.length === 0 && <EmptyState title={t('market.list.noMatch')} text={t('market.list.noMatchText')} />}
         <ul className="slips" aria-label={t('market.swaps.title')}>
-          {rows.map((row) => {
+          {(view.shown ?? []).map((row) => {
             const incoming = row.direction === 'incoming';
             const gift = row.kind === 'transfer';
             const theyGet = incoming ? row.requestedItems : row.offeredItems;
@@ -527,11 +749,22 @@ export function SwapsPanel({
                         size="sm"
                         variant="primary"
                         disabled={busy}
-                        onClick={() => void act(row, 'approve')}
+                        onClick={() => {
+                          setActError(null);
+                          setConfirming({ swap: row, action: 'approve' });
+                        }}
                       >
-                        {t('market.swaps.approve')}
+                        {t(gift ? 'market.swaps.acceptGift' : 'market.swaps.approve')}
                       </Button>
-                      <Button size="sm" variant="danger" disabled={busy} onClick={() => void act(row, 'reject')}>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        disabled={busy}
+                        onClick={() => {
+                          setActError(null);
+                          setConfirming({ swap: row, action: 'reject' });
+                        }}
+                      >
                         {t('market.swaps.reject')}
                       </Button>
                     </div>
@@ -541,7 +774,98 @@ export function SwapsPanel({
             );
           })}
         </ul>
+        </>
       )}
     </Panel>
+
+    {confirming && (
+      <ConfirmationModal
+        title={t(
+          confirming.action === 'reject'
+            ? 'market.swaps.rejectTitle'
+            : confirming.swap.kind === 'transfer'
+              ? 'market.swaps.acceptGiftTitle'
+              : 'market.swaps.approveTitle',
+        )}
+        body={
+          <>
+            <p>
+              {t(
+                confirming.action === 'reject'
+                  ? 'market.swaps.rejectBody'
+                  : confirming.swap.kind === 'transfer'
+                    ? 'market.swaps.acceptGiftBody'
+                    : 'market.swaps.approveBody',
+                {
+                  username:
+                    (confirming.swap.direction === 'incoming'
+                      ? confirming.swap.proposerUsername
+                      : confirming.swap.responderUsername) ?? '',
+                },
+              )}
+            </p>
+            {actError && <ErrorState message={actError} />}
+          </>
+        }
+        confirmLabel={t(
+          confirming.action === 'reject'
+            ? 'market.swaps.reject'
+            : confirming.swap.kind === 'transfer'
+              ? 'market.swaps.acceptGift'
+              : 'market.swaps.approve',
+        )}
+        cancelLabel={t('ui.cancel')}
+        tone={confirming.action === 'reject' ? 'danger' : 'primary'}
+        busy={busy}
+        onConfirm={() => void act(confirming.swap, confirming.action)}
+        onCancel={() => setConfirming(null)}
+      />
+    )}
+    </>
   );
+}
+
+const LISTING_SORTS: readonly SortOption<MyListing>[] = [
+  { key: 'newest', label: 'market.sort.newest', compare: byNewest((r) => r.publishedAt) },
+  { key: 'price_desc', label: 'market.sort.priceDesc', compare: byNumber((r) => r.askingPrice, -1) },
+  { key: 'price_asc', label: 'market.sort.priceAsc', compare: byNumber((r) => r.askingPrice, 1) },
+  { key: 'offers', label: 'market.sort.mostOffers', compare: byNumber((r) => r.pendingOffers, -1) },
+];
+
+function listingText(t: TranslateFn) {
+  return (r: MyListing) => `${r.serialNumber} ${itemName(t, r)} ${listingStatusLabel(t, r.status)}`;
+}
+
+const OFFER_SORTS: readonly SortOption<MyOffer>[] = [
+  { key: 'newest', label: 'market.sort.newest', compare: byNewest((r) => r.createdAt) },
+  {
+    key: 'yours',
+    label: 'market.sort.yourMove',
+    compare: (a, b) => Number(isLive(b) && b.yourTurn) - Number(isLive(a) && a.yourTurn),
+  },
+  { key: 'amount_desc', label: 'market.sort.amountDesc', compare: byNumber((r) => r.amount, -1) },
+];
+
+function isLive(row: MyOffer) {
+  return row.status === 'pending' && row.listingStatus === 'active';
+}
+
+function offerText(t: TranslateFn) {
+  return (r: MyOffer) =>
+    `${r.serialNumber} ${itemName(t, r)} ${r.buyerUsername ?? ''} ${r.sellerUsername ?? ''} ${offerStatusLabel(t, r.status)}`;
+}
+
+const SWAP_SORTS: readonly SortOption<MySwap>[] = [
+  { key: 'newest', label: 'market.sort.newest', compare: byNewest((r) => r.createdAt) },
+  { key: 'yours', label: 'market.sort.yourMove', compare: (a, b) => Number(b.awaitingMe) - Number(a.awaitingMe) },
+];
+
+function swapText(t: TranslateFn) {
+  return (r: MySwap) =>
+    [
+      r.proposerUsername,
+      r.responderUsername,
+      swapStatusLabel(t, r.status),
+      ...[...r.offeredItems, ...r.requestedItems].map((i) => `${i.serialNumber ?? ''} ${i.description}`),
+    ].join(' ');
 }

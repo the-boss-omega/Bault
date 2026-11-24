@@ -119,3 +119,43 @@ export async function closeDb(): Promise<void> {
   pool = undefined;
   if (p) await p.end();
 }
+
+const HONOURED_STORED_ITEMS: Record<string, number> = { bronze: 60, silver: 200, gold: 750 };
+
+/**
+ * A paid membership as migration 0046 left it: a live period whose allowances are honoured until it ends.
+ * Memberships are no longer sold, so a test that needs the honoured allowances writes one here.
+ */
+export async function honouredMembership(
+  user: { id?: string; email?: string },
+  tier: 'bronze' | 'silver' | 'gold',
+): Promise<{ membershipId: string; periodId: string }> {
+  const [row] = await sql<{ id: string }>(
+    user.id ? `SELECT id FROM user_account WHERE id = $1` : `SELECT id FROM user_account WHERE email = $1`,
+    [user.id ?? user.email],
+  );
+  if (!row) throw new Error(`honouredMembership: no account ${user.id ?? user.email}`);
+  const [period] = await sql<{ membership_id: string; id: string }>(
+    `WITH m AS (
+       INSERT INTO membership (user_id, tier, status, current_period_start, current_period_end, honoured_until, honoured_stored_items)
+       VALUES ($1, $2, 'active',
+               date_trunc('milliseconds', now()) - interval '1 day',
+               date_trunc('milliseconds', now()) + interval '29 days',
+               date_trunc('milliseconds', now()) + interval '29 days',
+               $3)
+       ON CONFLICT ON CONSTRAINT membership_user_unique DO UPDATE
+         SET tier = EXCLUDED.tier, status = 'active', scheduled_tier = NULL, cancelled_at = NULL, ended_at = NULL,
+             current_period_start = EXCLUDED.current_period_start, current_period_end = EXCLUDED.current_period_end,
+             honoured_until = EXCLUDED.honoured_until, honoured_stored_items = EXCLUDED.honoured_stored_items,
+             updated_at = now()
+       RETURNING id, user_id, tier, current_period_start, current_period_end
+     )
+     INSERT INTO membership_period (membership_id, user_id, tier, period_start, period_end, fee, currency, consumed)
+     SELECT id, user_id, tier, current_period_start, current_period_end, 0, 'USD', '{}'::jsonb FROM m
+     ON CONFLICT DO NOTHING
+     RETURNING membership_id, id`,
+    [row.id, tier, HONOURED_STORED_ITEMS[tier]],
+  );
+  if (!period) throw new Error('honouredMembership: no period was opened');
+  return { membershipId: period.membership_id, periodId: period.id };
+}

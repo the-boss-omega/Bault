@@ -5,6 +5,7 @@ import { inDays } from '../../shared/days';
 import { useI18n } from '../../shared/i18n';
 import { Button, EmptyState, Panel, SkeletonTable } from '../../shared/ui/primitives';
 import { IconInbox } from '../../shared/ui/icons';
+import { LoadFailure } from './RollTools';
 
 export interface ParkedMessage {
   id: string;
@@ -29,17 +30,18 @@ export function OutboxSection({
   const { t, locale } = useI18n();
   const [rows, setRows] = useState<ParkedMessage[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       const list = await api.get<ParkedMessage[]>('/admin/outbox/parked');
       setRows(list);
       onCount?.(list.length);
     } catch (e) {
-      onError((e as Error).message);
-      setRows([]);
+      setLoadError((e as Error).message);
     }
-  }, [onError, onCount]);
+  }, [onCount]);
 
   useEffect(() => {
     void load();
@@ -51,7 +53,11 @@ export function OutboxSection({
       await api.post(`/admin/outbox/${m.id}/requeue`);
       onMsg(t('admin.outbox.requeued'));
     } catch (e) {
-      onError(e instanceof ApiError && e.code === 'outbox_not_parked' ? t('admin.outbox.notParked') : (e as Error).message);
+      onError(
+        e instanceof ApiError && e.code === 'outbox_not_parked'
+          ? t('admin.outbox.notParked')
+          : (e as Error).message,
+      );
     } finally {
       setBusy(null);
       await load();
@@ -72,7 +78,9 @@ export function OutboxSection({
       title={t('admin.outbox.title', { count: rows?.length ?? 0 })}
       subtitle={t('admin.outbox.subtitle')}
     >
-      {rows === null ? (
+      {loadError ? (
+        <LoadFailure message={loadError} onRetry={() => void load()} />
+      ) : rows === null ? (
         <SkeletonTable rows={3} columns={5} />
       ) : rows.length === 0 ? (
         <EmptyState title={t('admin.outbox.empty')} icon={<IconInbox />} />

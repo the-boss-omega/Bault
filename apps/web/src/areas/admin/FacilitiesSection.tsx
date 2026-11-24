@@ -18,6 +18,7 @@ import {
   SuccessNote,
 } from '../../shared/ui/primitives';
 import { IconLocation, IconPlus } from '../../shared/ui/icons';
+import { LoadFailure } from './RollTools';
 import { Code } from '../../shared/ui/Serial';
 import {
   CODE_PATTERN,
@@ -45,7 +46,7 @@ const ROLE_LABEL: Record<AdminFacility['role'], MessageKey> = {
  */
 export function FacilitiesSection({
   onMsg,
-  onError,
+  onError: _onError,
 }: {
   onMsg: (m: string) => void;
   onError: (m: string) => void;
@@ -54,15 +55,16 @@ export function FacilitiesSection({
   const route = useRoute();
   const { openRecord, closeRecord } = useNavigation(route);
   const [rows, setRows] = useState<AdminFacility[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       setRows(await api.get<AdminFacility[]>('/admin/facilities'));
     } catch (e) {
-      onError((e as Error).message);
-      setRows([]);
+      setLoadError((e as Error).message);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -71,6 +73,7 @@ export function FacilitiesSection({
   const openId = route.params.facility ?? null;
   const adding = openId === 'new';
   const open = rows?.find((f) => f.id === openId) ?? null;
+  const unset = (rows ?? []).filter((f) => f.placeholder);
 
   return (
     <>
@@ -89,7 +92,9 @@ export function FacilitiesSection({
         }
         flush
       >
-        {rows === null ? (
+        {loadError ? (
+          <LoadFailure message={loadError} onRetry={() => void load()} />
+        ) : rows === null ? (
           <SkeletonTable rows={3} columns={3} />
         ) : rows.length === 0 ? (
           <EmptyState
@@ -98,6 +103,23 @@ export function FacilitiesSection({
             icon={<IconLocation />}
           />
         ) : (
+          <>
+          {unset.length > 0 && (
+            <div className="stack stack--tight" style={{ padding: 'var(--sp-4) var(--sp-6) 0' }}>
+              <div className="drawer-note drawer-note--hold" role="note">
+                <span>
+                  {t('warehouse.facility.unsetBanner', {
+                    names: unset.map((f) => f.name).join(', '),
+                  })}
+                </span>
+              </div>
+              <div className="row">
+                <Button size="sm" variant="secondary" onClick={() => openRecord('facility', unset[0]!.id)}>
+                  {t('warehouse.facility.unsetFix', { name: unset[0]!.name })}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
@@ -128,6 +150,9 @@ export function FacilitiesSection({
                       <span className="dt-sub">
                         <Code value={f.code} /> · <bdi dir="auto">{placeOf(f)}</bdi>
                       </span>
+                      {f.placeholder && (
+                        <span className="dt-sub field-error">{t('warehouse.facility.noStreet')}</span>
+                      )}
                     </td>
                     <td data-label={t('facility.col.role')}>
                       {t(ROLE_LABEL[f.role])}
@@ -157,6 +182,7 @@ export function FacilitiesSection({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Panel>
 

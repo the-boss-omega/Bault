@@ -1,15 +1,31 @@
-import { Body, Controller, Get, Put } from '@nestjs/common';
+import { Body, Controller, Get, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
-import { NotificationService } from './notification.service';
+import { UUID_PATTERN } from '../../shared/uuid-param';
+import { FEED_PAGE_MAX, NotificationService } from './notification.service';
 import { NOTIFICATION_CHANNELS } from './event-types';
 
 class SetPreferenceDto {
   @IsString() eventType!: string;
   @IsIn([...NOTIFICATION_CHANNELS]) channel: string = 'in_app';
   @IsBoolean() enabled!: boolean;
+}
+
+class FeedPageDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'The page size has to be a whole number.' })
+  @Min(1, { message: `The page size has to be between 1 and ${FEED_PAGE_MAX}.` })
+  @Max(FEED_PAGE_MAX, { message: `The page size has to be between 1 and ${FEED_PAGE_MAX}.` })
+  limit?: number;
+
+  @IsOptional()
+  @IsString()
+  @Matches(UUID_PATTERN, { message: 'The page cursor is not in a valid format.' })
+  before?: string;
 }
 
 class SetChannelDto {
@@ -23,8 +39,8 @@ export class NotificationController {
   constructor(private readonly notifications: NotificationService) {}
 
   @Get()
-  list(@CurrentUser() user: AuthUser) {
-    return this.notifications.listMine(user.id);
+  list(@CurrentUser() user: AuthUser, @Query() page: FeedPageDto) {
+    return this.notifications.listMine(user.id, { limit: page.limit, before: page.before?.toLowerCase() });
   }
 
   @Get('preferences')

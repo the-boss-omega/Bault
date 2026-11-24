@@ -92,7 +92,7 @@ database and never over the live one.
 
 5. **Check it is whole.** Dump the restored cluster and verify the dump. `verify`
    restores it once more into a scratch database, counts rows, checks the ledger
-   and custody trail point at rows that exist and that all eleven append-only
+   and custody trail point at rows that exist and that all twelve append-only
    guard triggers are there, and exits 1 on any violation:
 
    ```

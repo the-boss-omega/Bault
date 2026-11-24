@@ -19,9 +19,9 @@ import { MFA_POLICY, type MfaPolicy } from './mfa-policy';
 import { generateRecoveryCodes, hashRecoveryCode, normalizeRecoveryCode } from './recovery-codes';
 import { UnreadableSecretError, deriveSubkey, keyFromBase64, openSecret, sealSecret } from './secret-box';
 import { base32Encode, generateTotpSecret, matchTotp, otpauthUri } from './totp';
+import { sameId } from '../../../shared/uuid-param';
 
 const CHALLENGE_TTL_MINUTES = 5;
-/** An emailed code can take a minute to arrive and a second one may be asked for, so the sign-in it finishes waits longer. */
 const EMAIL_CHALLENGE_TTL_MINUTES = 30;
 const CHALLENGE_MAX_FAILURES = 5;
 const ISSUER = 'Card Embassy';
@@ -31,7 +31,6 @@ export const EMAIL_CODE_RESEND_SECONDS = 60;
 export const EMAIL_CODES_PER_HOUR = 5;
 const EMAIL_CODE_RETENTION_HOURS = 24;
 
-/** The outbox event the worker turns into a code and a mail (apps/worker/src/jobs/mfa-email-code-mail.ts). */
 export const MFA_EMAIL_CODE_REQUESTED = 'mfa_email_code_requested';
 
 export type SecondFactorProof = { code: string } | { recoveryCode: string };
@@ -47,7 +46,6 @@ export type Challenge =
       resendAfterSeconds: number;
     };
 
-/** Why an emailed code was not taken. Only `wrong` means it was compared; every other reason refused it unread. */
 export type EmailCodeRefusal =
   | { reason: 'wrong'; attemptsLeft: number }
   | { reason: 'none' | 'not_sent' | 'expired' | 'exhausted' | 'address_changed' };
@@ -92,12 +90,10 @@ export class MfaService {
     return this.policy.requiredRoles.includes(role);
   }
 
-  /** The methods a role may choose, the one offered first first. A role that requires a second factor gets the app. */
   methodsFor(role: Role): MfaMethod[] {
     return this.requiredFor(role) ? ['totp'] : ['email', 'totp'];
   }
 
-  /** Whether this signed-in account still owes its role the authenticator app. */
   mustEnrol(user: { role: Role; mfaMethod?: MfaMethod | null }): boolean {
     return this.requiredFor(user.role) && user.mfaMethod !== 'totp';
   }
@@ -159,8 +155,6 @@ export class MfaService {
       .limit(1);
     if (!u) throw AppError.notFound('Account not found');
 
-    // An account with a second factor turns it off before it sets up another, so a stolen session cannot swap it.
-    // A role that requires the app is the exception: its emailed codes never counted, and stay on until the app does.
     const inForce = await this.enabledMethod(userId);
     if (inForce === 'totp' || (inForce === 'email' && !this.requiredFor(user.role))) throw alreadyEnabled();
 
@@ -215,7 +209,6 @@ export class MfaService {
     });
   }
 
-  /** Mails a code for the settings screen: to prove the address being set up, or to turn email codes off. */
   async sendSettingsCode(user: AuthUser) {
     await this.refuseWhileLocked(user.id);
     return this.db.transaction(async (tx) => {
@@ -237,7 +230,6 @@ export class MfaService {
     });
   }
 
-  /** Mails a new code for a sign-in that is waiting for one. The caller has checked the challenge and the lockout. */
   async resendSignInCode(userId: string): Promise<{ sentTo: string; resendAfterSeconds: number }> {
     return this.db.transaction(async (tx) => {
       await this.lockCodesOf(tx as Exec, userId);
@@ -292,7 +284,6 @@ export class MfaService {
         step = matchTotp(this.open(f), normalizeCode(code), Date.now());
         if (step === null) throw passwordOrCodeWrong();
       } else {
-        // The code proves the address it was mailed to, and that address, still the account's, is the factor.
         const spent = await this.spendEmailCode(tx as Exec, userId, 'settings', null, u.email, code);
         if (!spent.ok) return { refused: true as const };
         emailAddress = spent.sentTo;
@@ -366,8 +357,6 @@ export class MfaService {
     if (!u) throw AppError.notFound('Account not found');
     await this.enabledFactor(this.db, user.id);
 
-    // A wrong password is not followed by a look at the code, and every failure reads the same, so this route,
-    // open to whoever holds the session, says nothing about whether the password was right.
     const passwordRight = await argon2.verify(u.passwordHash, password);
     const done =
       passwordRight &&
@@ -394,7 +383,7 @@ export class MfaService {
   }
 
   async resetFor(actorId: string, targetId: string): Promise<{ sessionsEnded: number }> {
-    if (actorId === targetId) {
+    if (sameId(actorId, targetId)) {
       throw AppError.validation(
         'You cannot reset your own two-factor sign-in. Ask another administrator — the reset has to be somebody else’s decision.',
       );
@@ -454,8 +443,6 @@ export class MfaService {
     const expiresAt = row!.expiresAt;
     if (method === 'totp') return { challengeToken, expiresAt, method };
 
-    // The password was right, so a code is mailed, unless the account is locked out (it could not be used) or the
-    // limits say no; then the challenge still stands, and a recovery code still finishes it.
     const locked = await this.attempts.secondFactorLockedFor(userId);
     if (locked > 0) return { challengeToken, expiresAt, method, codeSent: false, sentTo: null, resendAfterSeconds: locked };
     const request = await this.db.transaction(async (tx) => {
@@ -531,8 +518,6 @@ export class MfaService {
       } else if (f.method === 'totp') {
         accepted = await this.spendTotp(tx as Exec, f, proof.code);
       } else {
-        // A wrong emailed code counts against the code, which burns after five, not against the challenge: a new
-        // code is what is needed, not a new password. Its count commits with this transaction.
         const spent = await this.spendEmailCode(tx as Exec, c.userId, 'sign_in', f.emailAddress, u.email, proof.code);
         if (!spent.ok) {
           const { ok: _ok, ...refusal } = spent;
@@ -559,14 +544,6 @@ export class MfaService {
     });
   }
 
-  /**
-   * Asks the worker for a new code: one live code per account and purpose, so the one before is replaced. Called
-   * under `lockCodesOf`, which puts two requests for one account one after the other. `reuse` (a sign-in, or the
-   * start of a setup) leaves a usable code asked for under a minute ago in place; `new` (the person asked) is
-   * refused then.
-   * Five codes an hour at most, whatever they were for. Never mails an address other than the one an email factor
-   * proved.
-   */
   private async requestCode(tx: Exec, userId: string, purpose: Purpose, mode: 'reuse' | 'new'): Promise<CodeRequest> {
     const [u] = await tx
       .select({ email: userAccount.email })
@@ -603,7 +580,6 @@ export class MfaService {
     if (newest && newest.secondsAgo < EMAIL_CODE_RESEND_SECONDS) {
       const wait = Math.max(1, Math.ceil(EMAIL_CODE_RESEND_SECONDS - newest.secondsAgo));
       if (mode === 'new') return { sent: false, error: tooSoon(wait), resendAfterSeconds: wait };
-      // A sign-in or a setup a moment after the last keeps its code; one that was used or burnt needs a new one.
       if (newest.usable) return { sent: true, sentTo: u.email, resendAfterSeconds: wait };
     }
 
@@ -633,16 +609,10 @@ export class MfaService {
     return { sent: true, sentTo: u.email, resendAfterSeconds: EMAIL_CODE_RESEND_SECONDS };
   }
 
-  /** Two requests for a code for one account, from any API process, take turns. */
   private async lockCodesOf(tx: Exec, userId: string): Promise<void> {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`mfa-email-code:${userId}`}, 0))`);
   }
 
-  /**
-   * Spends the account's newest live code for `purpose`, under its row lock. It must have been mailed, be under ten
-   * minutes old, have fewer than five wrong tries, and have gone to the address the factor proved (`boundTo`; at
-   * enrolment, none yet), which must still be the account's. A wrong guess adds one to its count.
-   */
   private async spendEmailCode(
     tx: Exec,
     userId: string,
@@ -689,7 +659,6 @@ export class MfaService {
     return { ok: true, sentTo: c.sentTo };
   }
 
-  /** A current code from the factor in force: the app's, or one mailed for the settings. */
   private async spendFactorCode(exec: Exec, f: Factor, code: string): Promise<FactorProof> {
     if (f.method === 'totp') return { ok: await this.spendTotp(exec, f, code) };
     const [u] = await exec
@@ -872,7 +841,6 @@ export function codeInvalid(status: HttpStatus.UNAUTHORIZED | HttpStatus.BAD_REQ
   return new AppError(ErrorCode.MFA_CODE_INVALID, 'That code is not right. Check the time on your phone and try the current one.', status);
 }
 
-/** What a person is told when an emailed code is not taken. Only a code that was compared counts its tries down. */
 export function emailCodeRefused(
   refusal: EmailCodeRefusal,
   status: HttpStatus.UNAUTHORIZED | HttpStatus.BAD_REQUEST,

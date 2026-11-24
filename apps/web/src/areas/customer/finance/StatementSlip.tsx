@@ -101,18 +101,22 @@ export function InTransit({
 }) {
   return (
     <section className="transit" aria-label={t('wallet.pendingNote')}>
-      <div className="transit-slip">
-        <span className="transit-label">{t('wallet.pendingIn')}</span>
-        <span className="transit-amount" dir="ltr">
-          {formatUsd(cashIn)}
-        </span>
-      </div>
-      <div className="transit-slip">
-        <span className="transit-label">{t('wallet.pendingOut')}</span>
-        <span className="transit-amount" dir="ltr">
-          {formatUsd(cashOut)}
-        </span>
-      </div>
+      {cashIn > 0 && (
+        <div className="transit-slip">
+          <span className="transit-label">{t('wallet.pendingIn')}</span>
+          <span className="transit-amount" dir="ltr">
+            {formatUsd(cashIn)}
+          </span>
+        </div>
+      )}
+      {cashOut > 0 && (
+        <div className="transit-slip">
+          <span className="transit-label">{t('wallet.pendingOut')}</span>
+          <span className="transit-amount" dir="ltr">
+            {formatUsd(cashOut)}
+          </span>
+        </div>
+      )}
       <p className="transit-note">{t('wallet.pendingNote')}</p>
     </section>
   );

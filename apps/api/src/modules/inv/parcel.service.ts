@@ -12,7 +12,9 @@ import { MediaService } from '../med/media.service';
 import { userAccount } from '../acc/acc.schema';
 import { item } from '../cst/cst.schema';
 import { facility } from './facility.schema';
-import { parcel, parcelEvent, parcelPhoto } from './parcel.schema';
+import { renderLabelsPdf } from './labels';
+import { OPEN_PARCEL_STATUSES, parcel, parcelEvent, parcelPhoto } from './parcel.schema';
+import { requestOcr } from './ocr.service';
 
 export type ParcelStatus =
   | 'expected'
@@ -31,13 +33,64 @@ const TRANSITIONS: Record<ParcelStatus, readonly ParcelStatus[]> = {
   disposed: [],
 };
 
+function refusalFor(from: ParcelStatus, to: ParcelStatus): string {
+  switch (from) {
+    case 'processed':
+      return 'This parcel has already been processed';
+    case 'disposed':
+      return 'This parcel has already been disposed of';
+    case 'expected':
+      return 'This parcel has not arrived yet';
+    case 'unclaimed':
+      return 'This parcel is unclaimed; attribute it to an account first';
+    case 'opened':
+      return to === 'opened' ? 'This parcel is already open' : 'This parcel is open; process it instead';
+    case 'received':
+      return to === 'processed'
+        ? 'Open this parcel and record what it holds before processing it'
+        : 'This parcel has already arrived';
+  }
+}
+
 function assertTransition(from: ParcelStatus, to: ParcelStatus): void {
   if (!TRANSITIONS[from].includes(to)) {
-    throw new AppError(ErrorCode.CONFLICT, `Illegal parcel transition ${from} → ${to}`, 409, {
-      from,
-      to,
-    });
+    throw new AppError(ErrorCode.CONFLICT, refusalFor(from, to), 409, { from, to });
   }
+}
+
+type ParcelRow = typeof parcel.$inferSelect;
+
+function collectorParcelView(row: ParcelRow, facilityName: string | null) {
+  return {
+    id: row.id,
+    code: row.code,
+    status: row.status,
+    carrier: row.carrier,
+    trackingNumber: row.trackingNumber,
+    declaredContents: row.declaredContents,
+    internationalOrigin: row.internationalOrigin,
+    expectedAt: row.expectedAt,
+    receivedAt: row.receivedAt,
+    openedAt: row.openedAt,
+    processedAt: row.processedAt,
+    forwardedAt: row.forwardedAt,
+    disposedAt: row.disposedAt,
+    condition: row.condition,
+    conditionNotes: row.conditionNotes,
+    facilityName,
+  };
+}
+
+function collectorEventView(e: typeof parcelEvent.$inferSelect) {
+  return { eventType: e.eventType, fromStatus: e.fromStatus, toStatus: e.toStatus, occurredAt: e.occurredAt };
+}
+
+function collectorPhotoView(p: typeof parcelPhoto.$inferSelect & { url: string }) {
+  return { id: p.id, kind: p.kind, url: p.url, createdAt: p.createdAt };
+}
+
+function trackingLock(tracking: string) {
+  return sql`select pg_advisory_xact_lock(hashtext(${`parcel-tracking:${tracking}`}))`;
 }
 
 export interface RegisterParcelInput {
@@ -99,6 +152,18 @@ export class ParcelService {
     });
   }
 
+  async labelPdf(idOrCode: string): Promise<Buffer> {
+    const needle = idOrCode.trim();
+    const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(needle);
+    const [row] = await this.db
+      .select({ code: parcel.code })
+      .from(parcel)
+      .where(byId ? eq(parcel.id, needle) : sql`upper(${parcel.code}) = upper(${needle})`)
+      .limit(1);
+    if (!row) throw AppError.notFound('Parcel not found');
+    return renderLabelsPdf([{ code: row.code, caption: row.code }]);
+  }
+
   private async load(parcelId: string) {
     const [row] = await this.db.select().from(parcel).where(eq(parcel.id, parcelId)).limit(1);
     if (!row) throw AppError.notFound('Parcel not found');
@@ -123,27 +188,30 @@ export class ParcelService {
     if (!account) throw AppError.notFound('Account not found');
 
     const tracking = input.trackingNumber?.trim() || null;
-    if (tracking) {
-      const [existing] = await this.db
-        .select({ id: parcel.id, code: parcel.code })
-        .from(parcel)
-        .where(
-          and(
-            eq(parcel.trackingNumber, tracking),
-            inArray(parcel.status, ['expected', 'received', 'opened']),
-          ),
-        )
-        .limit(1);
-      if (existing) {
-        throw new AppError(
-          ErrorCode.CONFLICT,
-          `Tracking number ${tracking} is already registered as ${existing.code}`,
-          409,
-        );
-      }
+    const expectedAt = input.expectedAt ? new Date(input.expectedAt) : null;
+    if (expectedAt && Number.isNaN(expectedAt.getTime())) {
+      throw AppError.validation('Give the expected date as a calendar date, for example 2026-12-01');
     }
 
     return this.db.transaction(async (tx) => {
+      if (tracking) {
+        await tx.execute(trackingLock(tracking));
+        const [existing] = await tx
+          .select({ id: parcel.id, code: parcel.code, ownerId: parcel.ownerId })
+          .from(parcel)
+          .where(and(eq(parcel.trackingNumber, tracking), inArray(parcel.status, [...OPEN_PARCEL_STATUSES])))
+          .limit(1);
+        if (existing) {
+          throw new AppError(
+            ErrorCode.CONFLICT,
+            existing.ownerId === userId
+              ? `Tracking number ${tracking} is already registered as ${existing.code}`
+              : 'That tracking number is already registered. If it is yours, contact support.',
+            409,
+          );
+        }
+      }
+
       const [row] = await tx
         .insert(parcel)
         .values({
@@ -156,7 +224,7 @@ export class ParcelService {
           trackingNumber: tracking,
           declaredContents: input.declaredContents?.trim() || null,
           internationalOrigin: input.internationalOrigin === true,
-          expectedAt: input.expectedAt ? new Date(input.expectedAt) : null,
+          expectedAt,
         })
         .returning();
       if (!row) throw AppError.validation('Failed to register the parcel');
@@ -168,7 +236,7 @@ export class ParcelService {
         actorId: null,
         facilityId: fac.id,
       });
-      return row;
+      return collectorParcelView(row, fac.name);
     });
   }
 
@@ -200,7 +268,11 @@ export class ParcelService {
   async detailFor(userId: string, parcelId: string, staff: boolean) {
     const row = await this.load(parcelId);
     if (!staff && row.ownerId !== userId) throw AppError.notFound('Parcel not found');
+    return this.detailOf(row, staff);
+  }
 
+  private async detailOf(row: ParcelRow, staff: boolean) {
+    const parcelId = row.id;
     const events = await this.db
       .select()
       .from(parcelEvent)
@@ -217,7 +289,24 @@ export class ParcelService {
       .from(item)
       .where(eq(item.sourceParcelId, parcelId));
 
-    return { parcel: row, events, items };
+    if (staff) return { parcel: row, events, items };
+    const [place] = await this.db
+      .select({ name: facility.name })
+      .from(facility)
+      .where(eq(facility.id, row.facilityId))
+      .limit(1);
+    return {
+      parcel: collectorParcelView(row, place?.name ?? null),
+      events: events.map(collectorEventView),
+      items,
+    };
+  }
+
+  async photosFor(userId: string, parcelId: string, staff: boolean) {
+    const row = await this.load(parcelId);
+    if (!staff && row.ownerId !== userId) throw AppError.notFound('Parcel not found');
+    const signed = await this.photos(parcelId);
+    return staff ? signed : signed.map(collectorPhotoView);
   }
 
   async cancelRegistration(userId: string, parcelId: string) {
@@ -264,6 +353,7 @@ export class ParcelService {
 
     let existing: typeof parcel.$inferSelect | undefined;
     if (tracking) {
+      await tx.execute(trackingLock(tracking));
       [existing] = await tx
         .select()
         .from(parcel)
@@ -273,80 +363,87 @@ export class ParcelService {
     }
 
     const now = new Date();
+    const labelDisagrees = Boolean(existing?.ownerId && ownerId && existing.ownerId !== ownerId);
+    if (labelDisagrees) {
+      existing = undefined;
+      ownerId = null;
+    }
     const nextStatus: ParcelStatus = ownerId || existing?.ownerId ? 'received' : 'unclaimed';
 
-    {
-      if (existing) {
-        assertTransition('expected', nextStatus);
-        const [adopted] = await tx
-          .update(parcel)
-          .set({
-            status: nextStatus,
-            facilityId: fac.id,
-            receivedAt: now,
-            receivedBy: operatorId,
-            carrier: input.carrier?.trim() || existing.carrier,
-            addressedTo: label || existing.addressedTo,
-            ownerId: ownerId ?? existing.ownerId,
-            internationalOrigin: input.internationalOrigin ?? existing.internationalOrigin,
-            unclaimedAt: nextStatus === 'unclaimed' ? now : null,
-            notes: input.notes?.trim() || existing.notes,
-            updatedAt: now,
-          })
-          .where(and(eq(parcel.id, existing.id), eq(parcel.status, 'expected')))
-          .returning({ id: parcel.id });
-        if (!adopted) throw new AppError(ErrorCode.CONFLICT, 'This parcel was booked in a moment ago.', 409);
-        await this.writeEvent(tx, {
-          parcelId: existing.id,
-          eventType: 'received',
-          fromStatus: 'expected',
-          toStatus: nextStatus,
-          actorId: operatorId,
-          facilityId: fac.id,
-          notes: 'Matched a registration by tracking number',
-        });
-        await this.attachPhotos(tx, existing.id, 'arrival', input.photoKeys, operatorId);
-        await this.notifyOwner(tx, existing.id, ownerId ?? existing.ownerId, 'parcel_received', {
-          parcelCode: existing.code,
-          facility: fac.name,
-        });
-        return { ...existing, status: nextStatus, facilityId: fac.id, receivedAt: now };
-      }
-
-      const [row] = await tx
-        .insert(parcel)
-        .values({
-          code: prefixedId(ID_PREFIX.parcel),
-          ownerId,
-          addressedTo: input.addressedTo?.trim() || null,
-          facilityId: fac.id,
+    if (existing) {
+      assertTransition('expected', nextStatus);
+      const [adopted] = await tx
+        .update(parcel)
+        .set({
           status: nextStatus,
-          carrier: input.carrier?.trim() || null,
-          trackingNumber: tracking,
-          internationalOrigin: input.internationalOrigin === true,
+          facilityId: fac.id,
           receivedAt: now,
           receivedBy: operatorId,
+          carrier: input.carrier?.trim() || existing.carrier,
+          addressedTo: label || existing.addressedTo,
+          ownerId: ownerId ?? existing.ownerId,
+          internationalOrigin: input.internationalOrigin ?? existing.internationalOrigin,
           unclaimedAt: nextStatus === 'unclaimed' ? now : null,
-          notes: input.notes?.trim() || null,
+          notes: input.notes?.trim() || existing.notes,
+          updatedAt: now,
         })
-        .returning();
-      if (!row) throw AppError.validation('Failed to record the arrival');
-
+        .where(and(eq(parcel.id, existing.id), eq(parcel.status, 'expected')))
+        .returning({ id: parcel.id });
+      if (!adopted) throw new AppError(ErrorCode.CONFLICT, 'This parcel was booked in a moment ago.', 409);
       await this.writeEvent(tx, {
-        parcelId: row.id,
+        parcelId: existing.id,
         eventType: 'received',
+        fromStatus: 'expected',
         toStatus: nextStatus,
         actorId: operatorId,
         facilityId: fac.id,
-        notes: nextStatus === 'unclaimed' ? `Label "${input.addressedTo ?? ''}" did not resolve` : null,
+        notes: 'Matched a registration by tracking number',
       });
-      await this.attachPhotos(tx, row.id, 'arrival', input.photoKeys, operatorId);
-      await this.notifyOwner(tx, row.id, ownerId, 'parcel_received', {
-        parcelCode: row.code,
+      await this.attachPhotos(tx, existing.id, 'arrival', input.photoKeys, operatorId);
+      await this.notifyOwner(tx, existing.id, ownerId ?? existing.ownerId, 'parcel_received', {
+        parcelCode: existing.code,
         facility: fac.name,
       });
-      return row;
+      return { ...existing, status: nextStatus, facilityId: fac.id, receivedAt: now };
     }
+
+    const [row] = await tx
+      .insert(parcel)
+      .values({
+        code: prefixedId(ID_PREFIX.parcel),
+        ownerId,
+        addressedTo: input.addressedTo?.trim() || null,
+        facilityId: fac.id,
+        status: nextStatus,
+        carrier: input.carrier?.trim() || null,
+        trackingNumber: tracking,
+        internationalOrigin: input.internationalOrigin === true,
+        receivedAt: now,
+        receivedBy: operatorId,
+        unclaimedAt: nextStatus === 'unclaimed' ? now : null,
+        notes: input.notes?.trim() || null,
+      })
+      .returning();
+    if (!row) throw AppError.validation('Failed to record the arrival');
+
+    await this.writeEvent(tx, {
+      parcelId: row.id,
+      eventType: 'received',
+      toStatus: nextStatus,
+      actorId: operatorId,
+      facilityId: fac.id,
+      notes: labelDisagrees
+        ? `Label "${input.addressedTo ?? ''}" names a different account from the one that registered this tracking number`
+        : nextStatus === 'unclaimed'
+          ? `Label "${input.addressedTo ?? ''}" did not resolve`
+          : null,
+    });
+    await this.attachPhotos(tx, row.id, 'arrival', input.photoKeys, operatorId);
+    await this.notifyOwner(tx, row.id, ownerId, 'parcel_received', {
+      parcelCode: row.code,
+      facility: fac.name,
+    });
+    return row;
   }
 
   async receiveMany(operatorId: string, inputs: readonly ReceiveParcelInput[]) {
@@ -356,8 +453,8 @@ export class ParcelService {
         try {
           created.push(await this.receiveIn(tx, operatorId, input));
         } catch (e) {
-          const reason = e instanceof Error ? e.message : 'could not be recorded';
-          throw AppError.validation(`Parcel ${index + 1} of ${inputs.length}: ${reason}`);
+          if (!(e instanceof AppError)) throw e;
+          throw AppError.validation(`Parcel ${index + 1} of ${inputs.length}: ${e.message}`, e.details);
         }
       }
       return created;
@@ -377,6 +474,7 @@ export class ParcelService {
     await tx.insert(parcelPhoto).values(
       clean.map((objectKey) => ({ parcelId, kind, objectKey, uploadedBy })),
     );
+    if (kind === 'arrival') await requestOcr(this.outbox, tx, { kind: 'parcel', id: parcelId }, clean[0]);
   }
 
   async photos(parcelId: string) {
@@ -426,6 +524,7 @@ export class ParcelService {
           facilityId: to.id,
           forwardedAt: now,
           forwardedFromFacilityId: from.id,
+          ...(row.ownerId ? { charges: { ...chargesOf(row), forwarding: true } } : {}),
           updatedAt: now,
         })
         .where(eq(parcel.id, parcelId));
@@ -534,7 +633,7 @@ export class ParcelService {
         .set({
           status: 'processed',
           processedAt: now,
-          charges: { processing: true, forwarding: Boolean(row.forwardedAt) },
+          charges: { ...chargesOf(row), processing: true },
           updatedAt: now,
         })
         .where(eq(parcel.id, parcelId));
@@ -576,6 +675,14 @@ export class ParcelService {
       if (!owner) throw AppError.notFound(`No account with username ${username}`);
 
       assertTransition('unclaimed', 'received');
+      const billForwarding = Boolean(row.forwardedAt) && !chargesOf(row).forwarding;
+      if (billForwarding) {
+        await this.billing.charge(tx, {
+          userId: owner.id,
+          actionType: 'parcel_forwarding',
+          itemId: row.id,
+        });
+      }
       await tx
         .update(parcel)
         .set({
@@ -583,6 +690,7 @@ export class ParcelService {
           addressedTo: username,
           status: 'received',
           unclaimedAt: null,
+          ...(billForwarding ? { charges: { ...chargesOf(row), forwarding: true } } : {}),
           updatedAt: new Date(),
         })
         .where(eq(parcel.id, parcelId));
@@ -611,6 +719,18 @@ export class ParcelService {
       const [row] = await tx.select().from(parcel).where(eq(parcel.id, parcelId)).for('update').limit(1);
       if (!row) throw AppError.notFound('Parcel not found');
       assertTransition(row.status as ParcelStatus, 'disposed');
+      const [booked] = await tx
+        .select({ id: item.id })
+        .from(item)
+        .where(eq(item.sourceParcelId, parcelId))
+        .limit(1);
+      if (booked) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          'Items have been booked in from this parcel; finish processing it instead',
+          409,
+        );
+      }
 
       const now = new Date();
       await tx
@@ -665,7 +785,7 @@ export class ParcelService {
       .leftJoin(userAccount, eq(userAccount.id, parcel.ownerId))
       .leftJoin(facility, eq(facility.id, parcel.facilityId))
       .leftJoin(contents, eq(contents.parcelId, parcel.id))
-      .where(inArray(parcel.status, ['expected', 'received', 'opened', 'unclaimed']))
+      .where(inArray(parcel.status, [...OPEN_PARCEL_STATUSES]))
       .orderBy(sql`${parcel.receivedAt} asc nulls last`, desc(parcel.createdAt));
   }
 
@@ -738,4 +858,9 @@ export class ParcelService {
       payload: { ...payload, ownerId },
     });
   }
+}
+
+function chargesOf(row: ParcelRow): Record<string, boolean> {
+  const value = row.charges;
+  return value && typeof value === 'object' && !Array.isArray(value) ? { ...(value as Record<string, boolean>) } : {};
 }

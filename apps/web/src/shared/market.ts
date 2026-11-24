@@ -1,3 +1,4 @@
+import { normalizeUsername } from './names';
 import type { MessageKey, TranslateFn } from './i18n';
 import type { StatusTone } from './ui/primitives';
 
@@ -86,6 +87,7 @@ export interface MyOffer {
   typeClass: string;
   description: string;
   buyerUsername: string | null;
+  sellerUsername?: string | null;
   direction: 'incoming' | 'outgoing';
   side: 'buyer' | 'seller';
   proposedBy: 'buyer' | 'seller';
@@ -132,4 +134,8 @@ export interface ConsignmentEvent {
   startsAt: string;
   endsAt: string | null;
   requestDeadline: string;
+}
+
+export function typedUsername(raw: string): string {
+  return normalizeUsername(raw.replace(/^\s*@/, ''));
 }

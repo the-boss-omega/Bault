@@ -3,7 +3,7 @@ import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
-import { makeBinBarcode, makeBinSerial } from '../inv/labels';
+import { makeBinBarcode, makeBinSerial, MAX_LABELS_PER_BATCH, renderLabelsPdf } from '../inv/labels';
 import { userAccount } from '../acc/acc.schema';
 import { listing, offer, transaction } from '../mkt/mkt.schema';
 import { shipment } from '../shp/shp.schema';
@@ -109,12 +109,33 @@ export class InventoryService {
   async reportPdf(cut: Cut): Promise<Buffer> {
     const report = await this.report(cut);
     return renderReportPdf({
-      title: 'Card Embassy — Inventory Report',
-      subtitle: `${report.label} · generated ${report.generatedAt.slice(0, 19).replace('T', ' ')} UTC`,
+      title: 'Card Embassy - Inventory Report',
+      subtitle: `${report.label} - generated ${report.generatedAt.slice(0, 19).replace('T', ' ')} UTC`,
       columns: [report.label, 'Items'],
       rows: report.rows.map((r) => ({ label: r.label, count: r.count })),
       total: report.total,
     });
+  }
+
+  async itemLabelsPdf(idsOrCodes: readonly string[]): Promise<Buffer> {
+    const wanted = [...new Set(idsOrCodes.map((s) => s.trim()).filter(Boolean))];
+    if (wanted.length === 0) throw AppError.validation('Name at least one item to label');
+    if (wanted.length > MAX_LABELS_PER_BATCH) {
+      throw AppError.validation(`At most ${MAX_LABELS_PER_BATCH} labels in one batch`);
+    }
+    const ids: string[] = [];
+    for (const needle of wanted) ids.push((await this.stow.resolveItem(needle)).id);
+    const rows = await this.db
+      .select({ id: item.id, serialNumber: item.serialNumber, barcode: item.barcode })
+      .from(item)
+      .where(inArray(item.id, ids));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return renderLabelsPdf(
+      [...new Set(ids)].map((id) => {
+        const row = byId.get(id)!;
+        return { code: row.barcode, caption: row.serialNumber };
+      }),
+    );
   }
 
   async itemTimeline(itemId: string): Promise<TimelineEvent[]> {
@@ -364,10 +385,6 @@ export class InventoryService {
     return this.stow.listWithCounts();
   }
 
-  /**
-   * What is on one shelf, read only: each item by the number it carries and what it is, and where it stands.
-   * The shelf's count (listBins) and this list are the same rows, counted and read.
-   */
   async binItems(binId: string) {
     const [shelf] = await this.db
       .select({
@@ -393,7 +410,6 @@ export class InventoryService {
         holdFlag: item.holdFlag,
       })
       .from(item)
-      // A lot that has been split is not on the shelf any more (its pieces are): the count leaves it out, and so does this.
       .where(and(eq(item.binId, binId), eq(item.lotBroken, false)))
       .orderBy(item.serialNumber);
     return { bin: shelf, items };

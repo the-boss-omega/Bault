@@ -92,6 +92,24 @@ export function notificationMessage(eventType: string, payload: Payload | null):
         ? `Your offer on ${what} was countered at ${usd(amount)}.`
         : `Your offer on ${what} was countered.`;
     }
+    case 'offer_accepted': {
+      const what = cardNamed(p, 'the card');
+      return amount != null
+        ? `The seller accepted your offer of ${usd(amount)} on ${what}. It is paid for and in your vault.`
+        : `The seller accepted your offer on ${what}. It is paid for and in your vault.`;
+    }
+    case 'offer_rejected': {
+      const what = cardNamed(p, 'the card');
+      const at = amount != null ? ` of ${usd(amount)}` : '';
+      if (str(p, 'rejectedBy') === 'buyer') {
+        return str(p, 'proposedBy') === 'seller'
+          ? `The buyer turned down your counter-offer${at} on ${what}. Your listing stays up.`
+          : `The buyer withdrew their offer${at} on ${what}. Your listing stays up.`;
+      }
+      return str(p, 'proposedBy') === 'seller'
+        ? `The seller withdrew their counter-offer${at} on ${what}. You can make a new offer.`
+        : `The seller turned down your offer${at} on ${what}. You can make a new offer.`;
+    }
     case 'shipment_out': {
       const tracking = str(p, 'trackingNumber');
       const shipment = named(p, 'Shipment', 'shipmentCode', 'Your shipment');
@@ -215,9 +233,11 @@ export function notificationMessage(eventType: string, payload: Payload | null):
       const amt = num(p, 'amountMinor');
       const fee = num(p, 'feeMinor') ?? 0;
       const tail = fee > 0 ? ` A ${usd(fee)} handling fee was also charged.` : '';
-      const what = str(p, 'kind') === 'bank_transfer' ? 'bank transfer' : 'payment';
+      const kind = str(p, 'kind');
+      const what = kind === 'bank_transfer' ? 'bank transfer' : kind === 'paypal' ? 'PayPal payment' : 'payment';
+      const by = kind === 'bank_transfer' ? ' by the paying bank' : kind === 'paypal' ? ' through PayPal' : '';
       return amt != null
-        ? `A ${what} of ${usd(amt)} into your wallet was reversed by the paying bank, so it has been taken back off your balance.${tail} If you think this is wrong, open a support ticket.`
+        ? `A ${what} of ${usd(amt)} into your wallet was reversed${by}, so it has been taken back off your balance.${tail} If you think this is wrong, open a support ticket.`
         : `A ${what} into your wallet was reversed.${tail}`;
     }
     case 'escrow_proposed': {
@@ -248,6 +268,8 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     }
     case 'escrow_returned':
       return `${cap(named(p, 'deal', 'dealCode', 'your deal'))} was returned — ${str(p, 'reason') ?? 'see the deal for the reason'}. Any held funds have gone back to the buyer.`;
+    case 'escrow_cancelled':
+      return `${cap(named(p, 'deal', 'dealCode', 'a deal'))} was called off before any money was held. ${str(p, 'reason') ? `The reason given: ${str(p, 'reason')}` : 'See the deal for the reason.'}`;
     case 'white_glove_requested': {
       const hours = num(p, 'quoteWithinHours');
       return hours != null
@@ -276,9 +298,20 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     case 'swap_proposed':
       return `Another collector proposed a swap with you — review it in the marketplace.`;
     case 'swap_completed':
-      return `Your swap was completed and ownership of the items has transferred.`;
+      return `Your swap${code(p, 'transactionCode') ? ` ${code(p, 'transactionCode')}` : ''} was completed and ownership of the items has transferred.`;
+    case 'swap_rejected': {
+      const gift = str(p, 'kind') === 'gift';
+      if (str(p, 'rejectedBy') === 'proposer') {
+        return gift
+          ? `A gift that was waiting for you was withdrawn by the collector who offered it.`
+          : `A swap proposed to you was withdrawn by the collector who proposed it.`;
+      }
+      return gift
+        ? `The collector you offered a gift to turned it down. The card stays in your vault.`
+        : `Your swap proposal was turned down. Your cards stay in your vault.`;
+    }
     case 'transfer_completed':
-      return `Your item transfer was completed and ownership has changed.`;
+      return `Your item transfer${code(p, 'transactionCode') ? ` ${code(p, 'transactionCode')}` : ''} was completed and ownership has changed.`;
     case 'buyout_quoted':
       return amount != null
         ? `Card Embassy offers ${usd(amount)} to buy your card outright on ${named(p, 'request', 'requestCode', 'your buyout request')}. Nothing changes hands until you accept it.`
@@ -312,12 +345,22 @@ export function notificationMessage(eventType: string, payload: Payload | null):
       const amt = num(p, 'amountMinor');
       const cashOut = str(p, 'type') === 'cash_out';
       if (amt == null) return `${cap(walletRequestNamed(p))} has been settled.`;
-      return cashOut
-        ? `${cap(walletRequestNamed(p))} has been paid: ${usd(amt)} has left your wallet for your account.`
-        : `${cap(walletRequestNamed(p))} has been settled: ${usd(amt)} is in your wallet.`;
+      if (!cashOut) return `${cap(walletRequestNamed(p))} has been settled: ${usd(amt)} is in your wallet.`;
+      const fee = num(p, 'feeMinor') ?? 0;
+      const net = num(p, 'netMinor');
+      if (fee > 0 && net != null) {
+        return `${cap(walletRequestNamed(p))} has been paid: ${usd(amt)} has left your wallet, and ${usd(net)} is on its way to your account after the ${usd(fee)} cash-out fee.`;
+      }
+      return `${cap(walletRequestNamed(p))} has been paid: ${usd(amt)} has left your wallet for your account.`;
     }
     case 'wallet_request_payout_failed': {
       const amt = num(p, 'amountMinor');
+      const returned = p.afterPaid === true;
+      if (returned) {
+        return amt != null
+          ? `${cap(walletRequestNamed(p))} was returned after it was sent, so the ${usd(amt)} is back in your wallet.`
+          : `${cap(walletRequestNamed(p))} was returned after it was sent, and the money is back in your wallet.`;
+      }
       return amt != null
         ? `${cap(walletRequestNamed(p))} could not be paid, so the ${usd(amt)} is back in your wallet.`
         : `${cap(walletRequestNamed(p))} could not be paid, and the money is back in your wallet.`;

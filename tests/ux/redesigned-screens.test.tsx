@@ -62,11 +62,19 @@ describe('the wallet statement', () => {
   });
 
   it('shows money that has been asked for and not moved as two slips and one sentence', () => {
+    renderT((t) => <InTransit cashIn={25_000} cashOut={4_000} t={t} />);
+
+    expect(screen.getByText('Cash in pending').nextElementSibling).toHaveTextContent('$250.00');
+    expect(screen.getByText('Cash out pending').nextElementSibling).toHaveTextContent('$40.00');
+    expect(screen.getByText(/requested but not yet approved/i)).toBeInTheDocument();
+  });
+
+  it('leaves out the slip for a direction where nothing is waiting, rather than a $0.00', () => {
     renderT((t) => <InTransit cashIn={25_000} cashOut={0} t={t} />);
 
     expect(screen.getByText('Cash in pending').nextElementSibling).toHaveTextContent('$250.00');
-    expect(screen.getByText('Cash out pending').nextElementSibling).toHaveTextContent('$0.00');
-    expect(screen.getByText(/requested but not yet approved/i)).toBeInTheDocument();
+    expect(screen.queryByText('Cash out pending')).toBeNull();
+    expect(screen.queryByText('$0.00')).toBeNull();
   });
 });
 

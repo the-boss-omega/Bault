@@ -298,45 +298,43 @@ export function ContactPanel() {
               variant="primary"
               size="sm"
               onClick={() => {
-                window.location.hash = '#/support/tickets';
+                window.location.hash = '#/support/new';
               }}
             >
               {t('contact.openHelpdesk')}
             </Button>
           </div>
 
-          <dl className="detail-list stack-top">
-            <div className="detail-row">
-              <dt className="detail-label">{t('contact.email')}</dt>
-              <dd className="detail-value">
-                {contact?.email ? (
-                  <a href={`mailto:${contact.email}`} dir="ltr">
-                    {contact.email}
-                  </a>
-                ) : (
-                  <span className="hint">{t('contact.notPublished')}</span>
-                )}
-              </dd>
-            </div>
-            <div className="detail-row">
-              <dt className="detail-label">{t('contact.phone')}</dt>
-              <dd className="detail-value">
-                {contact?.phone ? (
-                  <a href={`tel:${contact.phone.replace(/\s+/g, '')}`} dir="ltr">
-                    {contact.phone}
-                  </a>
-                ) : (
-                  <span className="hint">{t('contact.notPublished')}</span>
-                )}
-              </dd>
-            </div>
-            <div className="detail-row">
-              <dt className="detail-label">{t('contact.hours')}</dt>
-              <dd className="detail-value">
-                {contact?.hours ?? <span className="hint">{t('contact.notPublished')}</span>}
-              </dd>
-            </div>
-          </dl>
+          {(contact?.email || contact?.phone || contact?.hours) && (
+            <dl className="detail-list stack-top">
+              {contact.email && (
+                <div className="detail-row">
+                  <dt className="detail-label">{t('contact.email')}</dt>
+                  <dd className="detail-value">
+                    <a href={`mailto:${contact.email}`} dir="ltr">
+                      {contact.email}
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {contact.phone && (
+                <div className="detail-row">
+                  <dt className="detail-label">{t('contact.phone')}</dt>
+                  <dd className="detail-value">
+                    <a href={`tel:${contact.phone.replace(/\s+/g, '')}`} dir="ltr">
+                      {contact.phone}
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {contact.hours && (
+                <div className="detail-row">
+                  <dt className="detail-label">{t('contact.hours')}</dt>
+                  <dd className="detail-value">{contact.hours}</dd>
+                </div>
+              )}
+            </dl>
+          )}
 
           {(contact?.team.length ?? 0) > 0 && (
             <>

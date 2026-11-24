@@ -313,11 +313,11 @@ describe('PAY money in and out', () => {
   it('states a percentage rule as a percentage, not as dollars', async () => {
     const base = process.env.API_URL ?? 'http://localhost:3000/api/v1';
     const list = (await (await fetch(`${base}/pricing/list`)).json()) as {
-      groups: { entries: { actionType: string; model: string; value: number }[] }[];
+      groups: { entries: { actionType: string; itemClass: string | null; model: string; value: number }[] }[];
     };
     const marketplace = list.groups
       .flatMap((g) => g.entries)
-      .find((e) => e.actionType === 'marketplace_fee');
+      .find((e) => e.actionType === 'marketplace_fee' && e.itemClass === null);
     expect(marketplace!.model).toBe('percentage');
     expect(marketplace!.value).toBe(500);
   });

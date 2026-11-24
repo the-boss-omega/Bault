@@ -1,4 +1,3 @@
-import { Global, Module } from '@nestjs/common';
 import type { Database } from '../../db/client';
 
 export interface BillableAction {
@@ -27,18 +26,3 @@ export interface BillingPort {
 }
 
 export const BILLING_PORT = Symbol('BILLING_PORT');
-
-class NoopBillingAdapter implements BillingPort {
-  async charge(_tx: Database, action: BillableAction): Promise<ChargeOutcome> {
-    // eslint-disable-next-line no-console
-    console.log(`[billing:noop] would charge ${action.actionType} for user ${action.userId}`);
-    return { kind: 'free' };
-  }
-}
-
-@Global()
-@Module({
-  providers: [{ provide: BILLING_PORT, useFactory: () => new NoopBillingAdapter() }],
-  exports: [BILLING_PORT],
-})
-export class BillingModule {}

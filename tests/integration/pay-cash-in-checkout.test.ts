@@ -384,6 +384,24 @@ describe('PAY cash-in by PayPal checkout: what credits nothing', () => {
     const reversible = (await admin.get('/finance/chargebacks/reversible')).body as { id: string }[];
     expect(reversible.some((p) => p.id === started.paymentId)).toBe(true);
   });
+
+  it('takes a reversal quietly once an administrator has recorded the chargeback', async () => {
+    const collector = await signIn(SEED.collector);
+    const admin = await signIn(SEED.admin);
+    const started = await start(collector, 6_000);
+    expect((await capture(collector, started.paymentId)).body.status).toBe('succeeded');
+    const recorded = await admin.post(`/finance/chargebacks/${started.paymentId}`, { reason: 'PayPal dispute lost.', chargeFee: false });
+    expect(recorded.status, JSON.stringify(recorded.body)).toBe(201);
+    const after = await balanceOf(collector);
+
+    const reversed = await webhook(captureEvent('PAYMENT.CAPTURE.REVERSED', started));
+    expect(reversed.status).toBe(201);
+    expect(reversed.body?.outcome).toBe('duplicate');
+    const refunded = await webhook(captureEvent('PAYMENT.CAPTURE.REFUNDED', started));
+    expect(refunded.body?.outcome).toBe('duplicate');
+    expect(await balanceOf(collector)).toBe(after);
+    expect((await payment(started.paymentId)).status).toBe('reversed');
+  });
 });
 
 describe('PAY cash-in by PayPal checkout: the books', () => {

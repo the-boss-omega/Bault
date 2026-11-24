@@ -77,7 +77,7 @@ export class VerificationService {
         .where(eq(userAccount.id, tok.userId))
         .limit(1);
       if (u?.status === 'active') return;
-      throw AppError.accountSuspended();
+      throw AppError.accountSuspended(u?.status);
     });
   }
 

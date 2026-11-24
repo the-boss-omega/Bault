@@ -25,7 +25,7 @@ Contents:
 
 ## 1. What you are receiving
 
-**The product.** Card Embassy holds collectors' cards (and other collectibles) in a vault. Collectors mail their items to a Card Embassy receiving address. The warehouse receives each parcel, photographs and books in every item, and shelves it in a bin. From then on Card Embassy keeps the only record of who owns each item. From their account, collectors can sell items on a marketplace, swap or give them away, consign them, order services (grading, photographs, video, inspection), and have them shipped out. All of this is paid from a wallet held in US dollars. Money comes in by bank transfer (and, when it is switched on, by PayPal checkout) and goes out by PayPal payouts or by hand. Collectors can also buy a monthly membership (Folio, Registry, Trust) that includes allowances.
+**The product.** Card Embassy holds collectors' cards (and other collectibles) in a vault. Collectors mail their items to a Card Embassy receiving address. The warehouse receives each parcel, photographs and books in every item, and shelves it in a bin. From then on Card Embassy keeps the only record of who owns each item. From their account, collectors can sell items on a marketplace, swap or give them away, consign them, order services (grading, photographs, video, inspection), and have them shipped out. All of this is paid from a wallet held in US dollars. Money comes in by bank transfer (and, when each is switched on, by PayPal checkout or by crypto through Coinbase Commerce) and goes out by PayPal payouts or by hand. Every account has a usage tier, Bronze, Silver or Gold, worked out from its use in the last 90 days, with no fee to pay: Silver takes 10 percent and Gold 20 percent off every priced action.
 
 The ownership record (`custody_event`), the money record (`ledger_record`) and several other history tables are append-only. The database itself refuses to update or delete their rows, so a mistake is corrected by adding a new row, never by editing an old one. Keep this in mind whenever you think about "cleaning up" data.
 
@@ -34,7 +34,7 @@ The ownership record (`custody_event`), the money record (`ledger_record`) and s
 | Image | What it is | Source |
 |---|---|---|
 | `bault-api` | The NestJS API. Every request from the web app goes to it under `/api/v1`. The same image also runs the migrations (`node dist/db/migrate.js`) and creates the first administrator (`node dist/db/create-admin.js`). | `apps/api` |
-| `bault-worker` | The background worker (pg-boss). It sends email, dispatches notifications and runs the scheduled money jobs: the storage fee run at 02:00, interest accrual at 03:00, the wallet suspension sweep at 03:15, membership renewal hourly, the ledger invariant check hourly, shipment tracking refresh every 30 minutes, the expiry of unpaid shipments hourly, and session clean-up at 04:30 (all UTC, from `apps/worker/src/index.ts`). | `apps/worker` |
+| `bault-worker` | The background worker (pg-boss). It sends email, dispatches notifications and runs the scheduled money jobs: the storage fee run at 02:00, interest accrual at 03:00, the wallet suspension sweep at 03:15, the usage tier recompute at 01:30, the ledger invariant check hourly, shipment tracking refresh every 30 minutes, the expiry of unpaid shipments hourly at twenty past, and session clean-up at 04:30 (all UTC, from `apps/worker/src/index.ts`). With `OCR_ENABLED=true` it also reads intake photos every minute (2.10). | `apps/worker` |
 | `bault-web` | The React web app, served by nginx, which also forwards `/api/` to the API and sets the security headers. | `apps/web` |
 
 In front of them, on the same server, Caddy terminates TLS, obtains the certificate from Let's Encrypt and proxies to `bault-web` (`infra/production/Caddyfile`). All four run with Docker Compose from `infra/production/compose.yml`.
@@ -58,6 +58,8 @@ In front of them, on the same server, Caddy terminates TLS, obtains the certific
 | Google Cloud | The server, the database, the buckets, uptime monitoring | `infra/gcp` |
 | GitHub | The repository, CI, and the image registry (GHCR) | `.github/workflows` |
 | A domain registrar and Cloudflare | The public name, DNS, and an optional proxy in front of the server | `infra/production/README.md`, "Behind Cloudflare" |
+
+**Warehouse labels.** Items and parcels carry one label: Code 128 on a 50 by 25 mm direct-thermal label, printed at 203 dpi. The barcode sits in a 40 mm field, 10 mm tall, with at least 3 mm of blank on each side, and under it the code and then the item's serial number or the parcel code. The API serves the labels as PDFs sized exactly to one label a page, and the warehouse console opens them from the intake bench, a shelf and the parcel queue. Buy 50 x 25 mm rolls with gaps for whichever printer you choose (a Zebra ZD220 or ZD421, a Rollo or Munbyn, or a Brother TD-4 series all work), add a 50 x 25 mm paper size in its driver, and print at 100 percent scale (Actual size) with no fit to page and no margins. A label shrunk to fit a different paper size may not scan. The scanners are ordinary USB keyboard-wedge scanners set to send Enter after each code, which is how the console's scan fields expect them.
 
 **What talks to what:**
 
@@ -150,9 +152,24 @@ Section 7 explains whether to take over the owner's projects or to provision fre
 
 ---
 
+
+### 2.9 Coinbase Commerce (optional, for crypto cash-in)
+
+1. What to create: a Coinbase Commerce merchant account that settles in US dollars. Check in the provider's console that settlement is in USD, so a charge priced at a dollar amount credits that amount.
+2. Settings that matter: one API key, and one webhook subscription pointing at `https://<domain>/api/v1/webhooks/crypto` for the events `charge:confirmed`, `charge:failed`, `charge:delayed` and `charge:pending`. Copy the webhook's shared secret.
+3. Where it goes: on the server, `configure.sh --change crypto` asks whether to turn crypto cash-in on, then for the key and the secret as hidden input, and writes `CRYPTO_PROVIDER`, `CRYPTO_CHECKOUT_ENABLED` and the two secrets into `/etc/bault/production.env`. Answering no later turns the switch off while keeping the provider, so a charge already open is still credited when it confirms.
+4. Nothing is pasted into chat, tickets or the repository. Until the account exists, leave crypto off; the wallet screen then shows no crypto option.
+
+### 2.10 Reading photos at intake (no account needed)
+
+1. What to create: nothing. The default reader, Tesseract.js, runs inside the worker with its English language data shipped in the worker image (`tesseract.js` and `@tesseract.js-data/eng`, both pinned exactly in `apps/worker/package.json`), so it needs no account, no key, no bill and no outbound network. Photos never leave the server.
+2. Settings that matter: `OCR_PROVIDER=tesseract` and `OCR_ENABLED=true`, in `/etc/bault/production.env` so the API and the worker both read them, then restart both. The worker reads each photo within a few seconds; the bench waits 20 seconds for a reading and otherwise lets the operator type the details in. Nothing read is ever saved until the operator has ticked or corrected every field, and no collector screen shows what was read.
+3. A cloud provider instead (for example Google Cloud Vision, AWS Textract or Azure AI Vision) would need its own account in the business's name, a billing account, a service credential or API key kept like the other secrets in section 3, an outbound host allowed from the worker, a data-processing agreement because the photos of labels carry names and addresses, and a new `OcrProvider` in `packages/adapters/src/ocr.ts` with its own `OCR_PROVIDER` value. None of that exists today.
+4. Until the decision is made, leave `OCR_ENABLED=false`; the benches then look exactly as before.
+
 ## 3. Every setting
 
-`packages/config/src/env.ts` is the single source of truth: the API, the worker and the migrate container all validate their environment against it at start-up. With `NODE_ENV=production` it refuses to boot on a sandbox payment, storage, shipping or email provider, on `TRUST_PROXY=loopback` or `true`, on an `APP_BASE_URL` that is not `https://`, on an open API explorer without a password, on a missing or development `MFA_ENCRYPTION_KEY`, and on `MFA_REQUIRED_ROLES` without both staff roles. It names every problem at once, and `docker compose logs api` shows them.
+`packages/config/src/env.ts` is the single source of truth: the API, the worker and the migrate container all validate their environment against it at start-up. With `NODE_ENV=production` it refuses to boot on a sandbox payment, storage, shipping or email provider, on `TRUST_PROXY=loopback` or `true`, on an `APP_BASE_URL` that is not `https://`, on an open API explorer without a password, on a missing or development `MFA_ENCRYPTION_KEY`, on `MFA_REQUIRED_ROLES` without both staff roles, on `CRYPTO_CHECKOUT_ENABLED=true` without `CRYPTO_PROVIDER=coinbase_commerce`, and on `OCR_ENABLED=true` without `OCR_PROVIDER=tesseract`. It names every problem at once, and `docker compose logs api` shows them.
 
 On the server the files live in `/etc/bault` (directory mode 700, files mode 600, owner `deploy`). Compose reads `production.env` for every service, then the service's own database file after it.
 
@@ -239,6 +256,12 @@ On the server the files live in `/etc/bault` (directory mode 700, files mode 600
 | Name | What it does | Production | Where its value comes from | Today |
 |---|---|---|---|---|
 | `SENTRY_DSN` | Error reporting for the API and the worker. Empty means no reports. | Optional, but needed in practice | Sentry (2.4) | empty |
+| `CRYPTO_PROVIDER` | Which processor takes crypto cash-ins: `coinbase_commerce` or `sandbox` (the sandbox is never built in production). | Optional | Coinbase Commerce (2.9) | `sandbox` |
+| `CRYPTO_CHECKOUT_ENABLED` | Offers "Pay with crypto" on the wallet screen. Off means the routes answer 404. | Optional | Decision | `false` |
+| `COINBASE_COMMERCE_API_KEY` | The merchant API key. Required when the provider is `coinbase_commerce`. | With the provider | Coinbase Commerce (2.9) | empty |
+| `COINBASE_COMMERCE_WEBHOOK_SECRET` | The shared secret that signs webhook deliveries. Required when the provider is `coinbase_commerce`. | With the provider | Coinbase Commerce (2.9) | empty |
+| `OCR_ENABLED` | Reads the photo of a parcel label or an item at intake in the worker and prefills the bench, which the operator confirms field by field. Off means nothing is queued and the reading routes answer 404. Set it the same for the API and the worker. | Optional, default `false` | Decision (2.10) | `false` |
+| `OCR_PROVIDER` | Who reads the photo: `tesseract` (Tesseract.js inside the worker) or `sandbox` (canned text, refused in production when `OCR_ENABLED=true`). | Default `sandbox`; `tesseract` when OCR is on | Keep `tesseract` (2.10) | `sandbox` |
 | `LOG_LEVEL` | `debug`, `info`, `warn` or `error` | Default `info` | Keep | `info` |
 | `RATE_LIMIT_PER_MINUTE` | Requests per minute per client address, for the whole API | Default 300 | Keep. Raise it on staging only, for the load test. | `300` |
 | `AUTH_RATE_LIMIT_PER_MINUTE` | The same, for the sign-in, registration and reset routes | Default 30 | Keep | `30` |
@@ -357,7 +380,7 @@ On a fresh production database you should see `platform@bault.dev`, with role `u
 
 **Where:** `infra/production/prices.json`, which holds every price, with `"reviewed": false`. Its own `readme` says that these numbers are the development seed's placeholders. A fresh database has no prices at all.
 
-**How to change:** go through every rule with the customer and set real figures. Fixed prices are dollars (`"$5.00"`), percentages are of the amount they apply to (`"5%"`). Then set `"reviewed": true`. Three rules only publish a figure that the code itself charges, and CI fails if the file disagrees with the code: `cash_out_fee` (1%), `chargeback_fee` ($25.00, `CHARGEBACK_FEE_MINOR` in `apps/api/src/modules/pay/money-terms.ts`) and `escrow_fee` (1%, with a $25.00 minimum and a $500.00 minimum deal value, in `apps/api/src/modules/esc/escrow-terms.ts`). Changing those means changing the code. The membership prices ($39, $199, $699) must match `listPriceMinor` in `apps/api/src/modules/mem/tiers.ts`, and each tier's allowances (items stored, intakes a month, insured shipments, postage credit, commission waived) live only in that file.
+**How to change:** go through every rule with the customer and set real figures. Fixed prices are dollars (`"$5.00"`), percentages are of the amount they apply to (`"5%"`). Then set `"reviewed": true`. Three rules only publish a figure that the code itself charges, and CI fails if the file disagrees with the code: `cash_out_fee` (1%), `chargeback_fee` ($25.00, `CHARGEBACK_FEE_MINOR` in `apps/api/src/modules/pay/money-terms.ts`) and `escrow_fee` (1%, with a $25.00 minimum and a $500.00 minimum deal value, in `apps/api/src/modules/esc/escrow-terms.ts`). Changing those means changing the code. There are no membership prices any more. The tier thresholds and discounts (Silver at 10 charges or $500.00 in 90 days for 10 percent off, Gold at 30 or $2,000.00 for 20 percent off) are not in this file: they live in `TIER_RULES` in `apps/api/src/modules/mem/tiers.ts`, which the API copies into the database when it starts, and changing them is a code change.
 
 **Proof:** from your own checkout, after loading (section 6.1, step 21):
 
@@ -395,6 +418,8 @@ On production you should see `PAYPAL_ENVIRONMENT=live`, `EZAK`, and the customer
 
 **Where:** the web app's text is in `apps/web/src/shared/i18n.tsx`. Its `<title>` is "Card Embassy", the authenticator app label (the TOTP issuer in `apps/api/src/modules/acc/mfa/mfa.service.ts`) is "Card Embassy", and the payout email subject is "Your Card Embassy cash-out". A search of the web app, the API, the worker and the adapters for string literals with "Bault" found one place that people see: the administrator's ledger export downloads as `bault-ledger-<from>-to-<to>.csv` (`apps/api/src/modules/adm/accounting.controller.ts`). Only administrators see it. Browser storage keys such as `bault.theme` are not visible.
 
+The landing page's card slab and the statement's wordmark, drawn by CSS in `landing.css` and `screens.css`, say "CARD EMBASSY", and `tests/web/i18n-catalogue.test.ts` refuses "Bault" in the generated content of any style sheet.
+
 Other text to confirm with the customer:
 
 - `landing.foot`: "Card Embassy — collectibles vault and marketplace. Facilities in New Jersey and Delaware. Settled in USD."
@@ -417,7 +442,7 @@ Today the first command finds one line, a code comment in `apps/web/src/areas/ad
 
 On a production database, accounts with any history cannot be deleted. The ledger and the custody log are append-only, and `bault_app` may not delete an item. So:
 
-1. **Unused settings: fixed in pull request #77.** `SESSION_COOKIE_SECRET` and `EMAIL_API_KEY` are removed from `env.ts` and the examples (an old env file that still sets them still loads), and `PAYPAL_PAYOUT_NOTE` is sent to PayPal as the payout e-mail subject. Merge it; `.github/workflows/ci.yml` still exports the retired cookie secret, which is harmless.
+1. **Unused settings: fixed in pull request #77.** `SESSION_COOKIE_SECRET` and `EMAIL_API_KEY` are removed from `env.ts` and the examples (an old env file that still sets them still loads), and `PAYPAL_PAYOUT_NOTE` is sent to PayPal as the payout e-mail subject. It is merged, and `.github/workflows/ci.yml` no longer exports the retired cookie secret.
 2. **`configure.sh` asks for `SENTRY_DSN` and the `SUPPORT_*` settings: fixed in pull request #77.** It asks on the first run, and `--change sentry` and `--change support` ask again.
 
 **Proof:** 4.1's query. Every row that is not a real customer, a member of the customer's staff or `platform@bault.dev` should read `closed`.
@@ -516,29 +541,33 @@ All three should name the new owner. The last one lists `ghcr.io/<new-owner>/bau
 
 ### 5.1 Before handing over
 
-These are things this review found wrong, missing or stale in the code, the infrastructure or the documents. They were not fixed in this change. The owner decides with the customer which are fixed before the handover and which after.
+These are things the reviews found wrong, missing or stale in the code, the infrastructure or the documents. Items marked fixed name the pull request that fixed them; the rest are open. The owner decides with the customer which open ones are fixed before the handover and which after.
 
-1. **Unused settings.** `PAYPAL_PAYOUT_NOTE`, `SESSION_COOKIE_SECRET` and `EMAIL_API_KEY` are in `env.ts` and read by nothing. The payout email subject is the fixed text "Your Card Embassy cash-out" in `packages/adapters/src/payment.ts`. Either wire `PAYPAL_PAYOUT_NOTE` in or remove all three.
-2. **`configure.sh` does not ask for `SENTRY_DSN` or the `SUPPORT_*` settings.** They are added to `production.env` by hand. Add them to the script, or keep the manual step (section 6.1, step 17).
-3. **No error reporting from the web app.** Only the API and the worker report to Sentry, so an exception in a collector's browser reaches nobody. The API also never calls `flushErrorReporting` on shutdown (stage 3, "After launch").
+1. **Unused settings: fixed in pull request #77.** `SESSION_COOKIE_SECRET` and `EMAIL_API_KEY` are gone from `env.ts` and the examples, and `PAYPAL_PAYOUT_NOTE` is sent to PayPal as the payout email subject (4.5).
+2. **`configure.sh` asks for `SENTRY_DSN` and the `SUPPORT_*` settings: fixed in pull request #77.** It asks on the first run, and `--change sentry` and `--change support` ask again (section 6.1, steps 10 and 17).
+3. **Error reporting from the web app: fixed in pull request #80.** The web app reports browser errors to Sentry when the image was built with `VITE_SENTRY_DSN`, with the same scrubbing as the API, and the API and worker flush pending reports within two seconds on shutdown. Set the repository variable `VITE_SENTRY_DSN` (Settings, Secrets and variables, Actions, Variables) before publishing a release; an image keeps the DSN it was built with.
 4. **Silent backup failures: fixed in pull request #77.** `backup.sh` leaves a `BACKUP-FAILED` marker on any failure and the watchdog logs it until the next good dump; `MAILTO` is a `CHANGE_ME` placeholder that must still be set, or replaced by the dead-man's-switch line.
 5. **The repository URL in `infra/gcp/README.md`: fixed in pull request #77.** The clone commands use `<GITHUB_OWNER>/<REPO>`.
 6. **ePacket and ePost: fixed in pull request #76.** The two keys now map to USPS First-Class Package International and USPS Priority Mail International and are shown under those names; limits and prices are unchanged. The owner may pick other services; the catalogue test now refuses any service without a carrier mapping.
 7. **Tracking after `exception`: fixed in pull request #76.** The refresh keeps polling shipments in `exception` and announces only a change of status. There is still no EasyPost webhook, which is fine at the 30-minute cadence.
-8. **Addresses have no second line or phone** (the FF19 leftovers). `shipping_address` has `line1`, `city`, `region`, `country` and `postal_code`, and nothing for an apartment, a suite or a phone, although the EasyPost adapter can send `street2`. Some carriers need a phone for international labels.
+8. **Addresses have an apartment line and a phone: fixed in pull request #81** (migration `0041`). Both reach the carrier; the phone is never shown to another collector. A hand delivery also carries a phone for the courier (pull request #89), shown to staff and to the requester only.
 9. **No suggested insurance** from a card's value when shipping (the other FF19 leftover). Nothing on master suggests it.
 10. **The legal text is a draft** with 19 counsel blanks (4.6), and the product does not ask existing accounts to accept a new version of the terms.
 11. **Prices are unreviewed** (`"reviewed": false`, 4.2). This is a business decision, and nothing can be loaded into production until it is made.
-12. **Compliance gaps** from `docs/production-readiness.md` that are still open on master: no KYC or AML checks, sanctions screening or transaction limits before PayPal payouts (C1); no data export, account deletion or anonymisation (C2); no declared or insured value per stored item (C3). These need the customer's lawyer and policy before code.
-13. **Few foreign keys.** The migrations still have six `REFERENCES` clauses (S2), so referential integrity rests on application code.
+12. **Compliance gaps** from the earlier readiness audit that are still open on master: no KYC or AML checks, sanctions screening or transaction limits before PayPal payouts (C1); no data export, account deletion or anonymisation (C2); no declared or insured value per stored item (C3). These need the customer's lawyer and policy before code.
+13. **Foreign keys: fixed in pull request #82** (migration `0042`, 101 keys, 82 id columns changed from text to uuid). The migration rewrites those tables under a lock: seconds on the beta, a quiet window on a large database. The bin columns, which can hold an external location, and the polymorphic reference columns stay without keys, as the pull request lists.
 14. **Rate limiting is in memory, per process** (S8). This is correct for the one API container `compose.yml` runs. Before running a second replica it needs a shared store.
 15. **The stage 3 document: fixed in pull request #75.** P1, P2, P6, P7, P8, P14 and P15 are marked Done with their tests, and the PayPal bullet says checkout is built behind its flag. P3 and P4 (the cash-out decisions) are being done separately.
-16. **Open Dependabot pull requests.** Fifteen are open, #56 among them (17 npm minor and patch updates). Several are major upgrades that need their own testing: pg-boss 10 to 12 (#37), vitest 3 to 5 (#35), eslint 9 to 10 (#33), `@nestjs/platform-express` 11 to 12 (#32), `@sentry/node` 10 to 11 (#31), and the GitHub Actions bumps (#25, #27, #28, #49). Merge or close each before the transfer, so that the customer starts from a clean list.
+16. **Open Dependabot pull requests.** Fifteen are open, among them #104 (18 npm minor and patch updates), #91 (Actions minor and patch), #26 (Docker minor and patch) and #48 (Caddy). Several are major upgrades that need their own testing: pg-boss 10 to 12 (#37), vitest 3 to 5 (#35), eslint 9 to 10 (#33), `@nestjs/platform-express` 11 to 12 (#32), `@nestjs/cli` and `@nestjs/schematics` 11 to 12 (#30, #36), `@vitejs/plugin-react` 4 to 6 (#34), `@sentry/node` 10 to 11 (#31), and the GitHub Actions bumps (#25, #27, #28). Merge or close each before the transfer, so that the customer starts from a clean list.
 17. **No restore drill has been logged for production.** `infra/ops/RESTORE.md` says that "launch waits for one successful run of each drill", and its log holds only a local proof on development data.
 18. **Backups made before the handover are encrypted to the owner's age key.** The customer cannot read them (section 7, step 14).
 19. **No licence file.** The repository has no `LICENSE`. Who owns the code and on what terms is for the written agreement between the owner and the customer.
 20. **Staging.** `infra/production/README.md`, sections 8 and 9, assume a staging server with sandbox credentials, and the load test refuses anything else. No staging server is described as existing besides the beta. Decide whether the beta becomes the customer's staging or a second server is provisioned.
-21. **Test accounts on production: fixed in pull request #77.** `scripts/remove-test-users.mjs --production-i-know --apply` lists the accounts, covers the staging check's `chk…` ones, and deletes only when `delete` is typed back (4.5). Accounts with activity are still closed by hand.
+21. **Test accounts on production: fixed in pull requests #77 and #88.** `scripts/remove-test-users.mjs --production-i-know --apply` lists the accounts, covers the staging check's `chk…` ones, deletes only when `delete` is typed back, and closes rather than deletes any account that a foreign key still protects (money, custody, audit records, login attempts, support messages), naming the table.
+22. **No separate review of the worker, the adapters, the config package or the infrastructure.** The FF41 review read the API modules and the web app, one reviewer per area, and its fixes are pull requests #105 to #112. `apps/worker`, `packages/adapters`, `packages/config` and `infra` were not read that way; their tests are green, which is not the same thing. Next step: run one reviewer per module group in the FF41 pattern (read the code against its tests and this guide, list the findings with a failing test for each, and fix them in one pull request per group).
+23. **Changing the account email and a receipt upload with a bank cash-in are not built.** Both are in 5.2 with what each needs, and this was confirmed on `origin/master` at 35fc048: no route changes an account's email, and `POST /media/uploads` is still for staff only. Next step: the owner and the customer decide each flow, then build it as 5.2 describes.
+24. **Two wording passes are unfinished.** The grading batches screen's `grade.subs.*` strings in `apps/web/src/shared/i18n.tsx` have not had the plain-words pass the other warehouse screens had, and the escrow and store screens still mix the older `esc.*` and `house.*` sentences with the newer `escrow.*` and `market.*` ones (`docs/ux-review/warehouse.md`, `docs/ux-review/marketplace.md`). Next step: one web pull request that rewrites `grade.subs.*` in the plain style and folds the collector-facing `esc.*` and `house.*` sentences into `escrow.*` and `store.*`, with `pnpm test:ux` green.
+25. **The seed's facility addresses are stand-ins.** `apps/api/src/db/seed.ts` gives "Card Embassy New Jersey" and "Card Embassy Delaware" the line `SET REAL ADDRESS — placeholder`, because the real receiving addresses are the owner's data and are not in the repository. Next step: the owner gives the customer the real addresses, which are entered in Management, Facilities on production (4.7); the seed never runs there, so it can keep its stand-ins.
 
 ### 5.2 What is not built yet, and what each part needs
 
@@ -546,15 +575,17 @@ Each of these was checked against `origin/master` on the day this guide was writ
 
 | Work | State on master | What it needs |
 |---|---|---|
-| **FF20, real price data** | Not built. The only value estimate is the vault's break-even view, which uses the median of Card Embassy's own sold comparables or the collector's asking price (`apps/api/src/modules/vlt/break-even.service.ts`). No eBay or Alt integration exists. | eBay Marketplace Insights API approval from eBay, and a data partnership with Alt. Both are applications by the customer's business. Then code. |
+| **FF20, real price data** | Not built. Nothing on master estimates a card's value; the earlier break-even view was removed (pull request #78). | eBay Marketplace Insights approval for sold prices, or an Alt partnership, then an adapter, a job and a place on the card. |
 | **FF21, PayPal Checkout cash-in** | Built (PR #60): `apps/api/src/modules/pay/paypal-checkout.service.ts`, migration `0040_a_cash_in_paypal_confirms.sql`, and behind `PAYPAL_CHECKOUT_ENABLED=false`. | A live PayPal Business account with the webhook events in 2.1. A lawyer's view on holding customer money in a wallet (stored value and money transmission rules in each state served; the business operates in Delaware and New Jersey). Then `infra/gcp/configure.sh --change checkout`, restart the API, and run the by-hand checkout checks in `infra/production/README.md`, section 8. |
-| **FF22, crypto cash-in** | Not built. `crypto` exists only as a funding-source label that a collector can choose on a manual cash-in request, which staff review and complete by hand (`FUNDING_SOURCES` in `apps/api/src/modules/pay/wallet-request.rules.ts`). | A crypto payment processor account, the same legal view as FF21, then an adapter and a webhook. |
-| **FF23, eBay listing** | Not built. The consignment channels are `card_show`, `auction_house` and `ebay_partner` ("eBay, through a partner seller"), in `apps/api/src/modules/dis/consignment-channels.ts`. All three are handled by people: the item goes to the partner, who sells it and remits. Alt and Fanatics Collect are not named in the code. | eBay Sell API access for direct listing. To add Alt or Fanatics Collect as manual channels: an entry in `CONSIGNMENT_CHANNELS`, its label in `i18n.tsx` and `apps/web/src/shared/market.ts`, and a `consignment_fee:<key>` price rule in `prices.json`. |
+| **FF22, crypto cash-in** | Built (pull requests #86 and #87): `apps/api/src/modules/pay/crypto-checkout.service.ts`, `packages/adapters/src/crypto.ts`, behind `CRYPTO_CHECKOUT_ENABLED=false`. A confirmed Coinbase Commerce charge credits the wallet once through the same ledger path as PayPal checkout. | A Coinbase Commerce merchant account settling in USD, its API key, and a webhook at `https://<domain>/api/v1/webhooks/crypto` for `charge:confirmed`, `charge:failed`, `charge:delayed` and `charge:pending` with its shared secret; then `configure.sh --change crypto` on the server (2.9). |
+| **FF23, more places to sell** | Alt and Fanatics Collect are consignment channels since pull request #79, handled by people like the other three: staff list the card on the partner's site and record the sale. Listing on eBay through its Sell APIs is not built. | An eBay developer account with Sell API access, then an adapter and a listing flow. |
 | **FF24, escrow rework** | Escrow exists as it is (`apps/api/src/modules/esc`: fee 1%, a $25 minimum, deals of $500 or more, with an inspection gate). The rework waits. | The customer's own specification of how escrow should work. |
-| **FF19 leftovers** | Not built: an apartment or suite line and a phone on addresses, and insurance suggested from a card's value. | A migration adding the columns, the address form, and passing `street2` and the phone to EasyPost. A value source for the suggestion (see FF20). |
-| **Dependabot #56 and the others** | Open (5.1, item 16). | Review, test, then merge or close. |
-| **Stage 3 tasks without "Done"** | P3, P4, P6, P7, P8, P14, P15 (5.1, item 15). | Each is a task in `docs/dive3/stage-3-practice.md`, with its failing test first. |
+| **FF19 leftovers** | The apartment line and phone are done (pull request #81). Insurance suggested from a card's value is not built, because cards carry no value. | A declared or market value per card, then a default for the insurance field. |
+| **Dependabot #104 and the others** | Open (5.1, item 16). | Review, test, then merge or close. |
+| **Stage 3 tasks** | P1 to P15 are all marked Done (pull requests #75 and #84). Its "After launch" list is the known backlog. | Nothing for P1 to P15; the After launch list as the customer prioritises it. |
 | **Compliance** | Open (5.1, item 12). | The customer's lawyer and policy, then code. |
+| **Changing the account email** | Not built. No route changes the email address on an account, for the collector or for an administrator. | A decision on the flow, then `POST /me/email` that mails a link to the new address and changes it only once that link is opened, a notice to the old address, sessions revoked on the change, and a field on the profile page. |
+| **A receipt with a bank cash-in** | Not built. `POST /media/uploads` is for staff only, so the cash-in form has no document field and a reviewer sees no receipt. | A decision on whether reviewers need it, then a collector upload route limited to that one purpose and to images and PDFs, the key saved as the request's `documentKey`, and the field back on the cash-in form. |
 
 ---
 
@@ -645,7 +676,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
 
 **The first release**
 
-7. In GitHub, publish a release: Releases, Draft a new release, with a new tag such as `v1.0.0`. `release.yml` first waits up to 70 minutes for CI (`ci.yml`) to pass on that commit, then builds `bault-api`, `bault-worker` and `bault-web` and pushes them to `ghcr.io/<owner>` with the tag and the commit SHA. In the Actions tab, the "Release" run shows the jobs `ci-passed` and then `images` (three of them), all green. If CI has not passed on the tagged commit, the run fails with "CI has not passed": fix master and tag a commit CI passed.
+7. Before the first release, decide whether the web app reports browser errors: if so, set the repository variable `VITE_SENTRY_DSN` (Settings, Secrets and variables, Actions, Variables) to the web project's DSN; an image keeps the DSN it was built with, so a later change needs a new release. Then publish a release: Releases, Draft a new release, with a new tag such as `v1.0.0`. `release.yml` first waits up to 70 minutes for CI (`ci.yml`) to pass on that commit, then builds `bault-api`, `bault-worker` and `bault-web` and pushes them to `ghcr.io/<owner>` with the tag and the commit SHA. In the Actions tab, the "Release" run shows the jobs `ci-passed` and then `images` (three of them), all green. If CI has not passed on the tagged commit, the run fails with "CI has not passed": fix master and tag a commit CI passed.
 
 8. Make the three packages public (each package's page, Package settings, Change visibility), or log the server in with a token that may only read packages:
 
@@ -670,7 +701,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
     infra/gcp/configure.sh
     ```
 
-    It asks for: the host name (press Enter for the free `<ip-with-dashes>.sslip.io` until the domain is ready); PayPal (`live`, the client ID, the secret, the webhook ID); the EasyPost key; SMTP (587 or 465); the bank details (Enter leaves one out); and the age public key. Secrets are read without echo. It generates `MFA_ENCRYPTION_KEY`. When it worked, it ends with `ready: every value production needs is set` and offers to delete `~/bault-gcp.env`. Say yes once its copy is in the password manager.
+    It asks for: the host name (press Enter for the free `<ip-with-dashes>.sslip.io` until the domain is ready); PayPal (`live`, the client ID, the secret, the webhook ID); whether to take crypto cash-ins (answer no until 2.9 is done); the EasyPost key; SMTP (587 or 465); the bank details and the support details (Enter leaves one out); the Sentry DSN; and the age public key. PayPal checkout stays off until you run `--change checkout`. Secrets are read without echo. It generates `MFA_ENCRYPTION_KEY`. When it worked, it ends with `ready: every value production needs is set` and offers to delete `~/bault-gcp.env`. Say yes once its copy is in the password manager.
 
 11. Back in Cloud Shell, keep `~/bault-gcp.env` in the password manager (⋮, Download), then `shred -u ~/bault-gcp.env`. Also store a copy of `/etc/bault/production.env` in the password manager: losing `MFA_ENCRYPTION_KEY` locks every authenticator out.
 
@@ -820,6 +851,8 @@ cd /opt/bault && git checkout "$(cat PREVIOUS_TAG)"
 
 This puts back the previous images and configuration. It does **not** undo the newer release's migrations. Migrations only ever add (they are append-only, and there are no down migrations), so every release must leave a schema that the previous release's code still runs on. Whoever writes a migration must keep to this. For example, a column is added in one release and only removed several releases later, once no running code reads it.
 
+**Migrations and merge order.** Migrations live in `apps/api/src/db/migrations`, with their journal in `meta/_journal.json`, and the last one today is `0049_fees_that_are_not_use_and_ticket_assignees`. The six added since the first version of this guide are `0044_a_shelf_can_be_decided_later` (FF35, pull request #93), `0045_a_photo_is_read_at_intake` (FF36, #96), `0046_memberships_become_usage_tiers` (FF37, #94), `0047_a_tier_recompute_waits_for_the_account` (FF40, #103), `0048_moving_money_is_not_use` (the money review fixes, #106) and `0049_fees_that_are_not_use_and_ticket_assignees` (the final pass, #112), with journal `when` values from 1785076000000 to 1785076500000, 100000 apart. `node dist/db/migrate.js` uses Drizzle's migrator, which reads the timestamp of the newest migration already applied and runs only the journal entries with a later `when`. A migration whose `when` is older than the last one applied is skipped without an error, so a branch cut before another migration merged must be renumbered above master's last migration and given a later `when` before it merges, or its migration never runs on a database that already has the newer one. When two branches each add a migration, merge them one at a time, renumber the second against the first, and run `pnpm --filter @bault/api db:migrate` on a database migrated from master to see it applied.
+
 If a migration itself did the damage, stop the application and restore the dump that `deploy.sh` took just before migrating (it printed the path):
 
 ```sh
@@ -883,7 +916,7 @@ When the domain is ready (from `infra/gcp/README.md`, "When the domain arrives")
 
 1. Point the domain's A record at the server's static IP (`STATIC_IP` from `provision.sh`).
 2. On the server, run `infra/gcp/configure.sh --change domain`, which sets `BAULT_DOMAIN` and `APP_BASE_URL`.
-3. In the PayPal app, change the webhook's URL to `https://<domain>/api/v1/webhooks/payment`.
+3. In the PayPal app, change the webhook's URL to `https://<domain>/api/v1/webhooks/payment`, and, if crypto cash-in is on, change the Coinbase Commerce webhook's to `https://<domain>/api/v1/webhooks/crypto`.
 4. Deploy again (6.2, step 5), and point the uptime check at the new host.
 
 Behind Cloudflare (from `infra/production/README.md`, "Behind Cloudflare"):
@@ -926,6 +959,27 @@ Behind Cloudflare (from `infra/production/README.md`, "Behind Cloudflare"):
 | Every 6 to 12 months, and whenever someone with access leaves | Rotate keys | Section 7, step 12, which lists each secret and how to rotate it |
 | When Cloudflare announces new ranges | Update `BAULT_TRUSTED_PROXIES` and both firewalls | 6.6 |
 
+### 6.8 Load test
+
+These are the figures from `scripts/ops/load-test.mjs`, run with its documented mix (`MIX`: listings 30, listing detail 20, vault 15, wallet 15, price list 10, tiers 5, ledger 5, plus 6 sign-ins a minute) for 3 minutes, against a local stack on 23 November 2026. Treat them as a floor for the code, not a forecast for production. The machine was a shared container: 4 virtual CPUs of an Intel Xeon at 2.1 GHz and 15 GB of memory, with Postgres 16, MinIO, the built API as one Node process, the load generator and other people's test suites all running on it at the same time. There was no TLS, no Caddy, no PgBouncer and no network between the parts, the database held only the seed and what the test suites had added, and `RATE_LIMIT_PER_MINUTE` was raised to 20000 so the limiter would not answer instead of the server.
+
+At 100 requests a second (18,001 requests, the load average rose to 3.6 on 4 CPUs):
+
+| Request | Count | p50 ms | p95 ms | Error rate |
+|---|---|---|---|---|
+| Browse listings | 5,421 | 6 | 13 | 0% |
+| Listing detail | 3,648 | 3 | 8 | 0% |
+| Price list | 1,777 | 3 | 7 | 0% |
+| Usage tiers | 914 | 1 | 4 | 0% |
+| Vault items | 2,695 | 4 | 9 | 0% |
+| Wallet | 2,638 | 3 | 8 | 0% |
+| Ledger | 908 | 5 | 9 | 0% |
+| Sign in | 18 | 193 | 276 | 0% |
+| Sign out | 18 | 8 | 15 | 0% |
+| All | 18,037 | 4 | 10 | 0% |
+
+At 20 requests a second (3,601 requests) every route had the same shape: p95 of 11 ms or less on the reads, 233 ms on a sign-in, the overall p50 6 ms and p95 10 ms, and no errors. A sign-in is slow by design, because the password hash is argon2id. Run the test again on staging, as step 22 of 6.1 says, before launch: the figures that decide the launch are the ones taken through Cloudflare, Caddy and PgBouncer on the production machine size.
+
 ---
 
 ## 7. The transfer itself
@@ -954,13 +1008,14 @@ First decide on the Google Cloud route:
 | 13 | **Remove the owner's access.** SSH keys from `/home/deploy/.ssh/authorized_keys`, `/home/bault-admin/.ssh/authorized_keys` and `/root/.ssh/authorized_keys`, and the VM's `ssh-keys` metadata (Compute Engine, VM instances, `bault-vm`, Edit, SSH keys). The owner's IAM bindings on both projects. The owner's GitHub membership, collaborator access and deploy keys. The owner's administrator account in the app (Management, Users, status `closed`). Any registry token the owner logged the server in with (`docker logout ghcr.io` as `deploy`, then log in with the customer's, 6.1, step 8). | Hands over, then removes themselves where they can | Removes the rest and checks | Each `authorized_keys` holds only the customer's keys; `gcloud projects get-iam-policy` names no owner account; GitHub, Settings, Collaborators and teams names no owner account; 4.1's query shows the owner's administrator `closed` |
 | 14 | **Old backups.** Dumps in the backup bucket from before step 10 are encrypted to the owner's age key. Either the owner decrypts the latest one on a restore machine and re-encrypts it to the customer's key (`age -r <customer age1…> -o out.dump.age in.dump`), or both agree that the customer starts from the first dump after step 10. The bucket deletes old dumps after 120 days. | Re-encrypts, or agrees | Verifies with `backup.sh verify` | — |
 | 15 | **The final smoke test, run by the customer** (below). | Watches | Runs it | Every line passes |
-| 16 | **Support after the handover.** The owner supports the customer for ____________ (the agreed period), by ____________ (the agreed channel), covering ____________. Questions after that go to ____________. | Signs | Signs | — |
+| 16 | **Delete the old branch `ff/ff22-crypto-cash-in`.** A commit on it trips the history scan, so the `secret-scan` job in `ci.yml` is red on every branch until the branch is gone. The work that merged is in pull request #86, from `ff/ff22-crypto-cash-in-clean`. Delete the old branch (Code, Branches, or `git push origin --delete ff/ff22-crypto-cash-in`) before the transfer. | Deletes the branch | Confirms | The next CI run's `secret-scan` job is green |
+| 17 | **Support after the handover.** The owner supports the customer for ____________ (the agreed period), by ____________ (the agreed channel), covering ____________. Questions after that go to ____________. | Signs | Signs | — |
 
 **Step 12, rotating every secret.** This follows the list in `infra/production/README.md`, "If you think the server was broken into", step 3. Do it after the owner's access is removed, so that the owner never sees the new values.
 
 1. **Database passwords.** For `bault_owner`, on Google Cloud: `gcloud sql users set-password bault_owner --instance=bault-db --project=<project> --prompt-for-password`. Then put the new password into the URLs in `migrate.env` and `backup.env`. For `bault_app` and `bault_worker`: generate two passwords (`openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | cut -c1-32`, the way `provision.sh` does), put them into `api.env` and `worker.env`, then run `roles.sql` with them, as in 6.1, step 12, and `bault up -d api worker`. Write the three new passwords into your password manager's copy of `bault-gcp.env` too (`BAULT_OWNER_PASSWORD`, `BAULT_APP_PASSWORD`, `BAULT_WORKER_PASSWORD` and the URLs under each section), or a later run of `provision.sh` and `configure.sh` would write the old ones back.
 2. **The images bucket's HMAC key,** as `infra/production/README.md` describes it: deactivate and delete the old key (`gcloud storage hmac list`, then `update --deactivate` and `delete`), remove `STORAGE_ACCESS_KEY` and `STORAGE_SECRET_KEY` from your copy of `bault-gcp.env` (restored from the password manager into Cloud Shell), and run `provision.sh` again with the same options and `--out` pointing at that file. It makes a new key, which needs the org-policy exception from 6.1, step 3 again. Then copy the file to the server, run `infra/gcp/configure.sh`, which takes the new key into `production.env`, restart with `bault up -d api worker`, and shred the file again. Photographs cannot be loaded between the delete and the restart, so do this at a quiet time. With option B and a fresh provision, the key is already new.
-3. **PayPal, EasyPost, SMTP and Sentry:** these are new accounts from step 9, so the owner's values are gone with step 11.
+3. **PayPal, EasyPost, SMTP, Sentry and, when crypto cash-in is on, Coinbase Commerce:** these are new accounts from step 9, so the owner's values are gone with step 11. For Coinbase Commerce, make a new API key and a new webhook subscription in the customer's merchant account, run `configure.sh --change crypto` with them, and delete the old key and subscription.
 4. **`API_DOCS_PASSWORD`,** if set.
 5. **`MFA_ENCRYPTION_KEY`:** the owner knew it. Changing it means every staff member enrols two-factor again (an administrator resets each one in Management, Users), and `configure.sh` never replaces it. Edit the file by hand with a new `openssl rand -base64 32`, restart, and reset each staff account's two-factor.
 6. **The age key:** step 10.
@@ -984,4 +1039,4 @@ First decide on the Google Cloud route:
 
 ## 8. Where to learn the code
 
-Start with `docs/dive3/README.md`, which takes about 19 hours. Stage 1 (`docs/dive3/stage-1-theory.md`) explains the business, the vocabulary and every design choice without code. Stage 2 (`docs/dive3/stage-2/`, ten files from `01-foundation.md` to `10-infra-ci-tests.md`) is the code tour: read each entry next to the file it names. Stage 3 (`docs/dive3/stage-3-practice.md`) is practice: each task is a change production needs, done with a failing test first, and its "After launch" list is the known backlog. The test suites are the most precise map of what the system promises. `vitest.workspace.ts` lists the ten projects (`integration`, `core`, `concurrency`, `property`, `worker`, `contract`, `core-contract`, `ux`, `web`, `config`), `scripts/test.mjs` runs them in CI's order, and `.github/workflows/ci.yml` shows exactly what CI runs before a release can be built. The production runbooks are `infra/production/README.md`, `infra/gcp/README.md` and `infra/ops/RESTORE.md`. `docs/production-readiness.md` is the earlier audit of what production needed, with dated status sections.
+Start with `docs/dive3/README.md`, which takes about 19 hours. Stage 1 (`docs/dive3/stage-1-theory.md`) explains the business, the vocabulary and every design choice without code. Stage 2 (`docs/dive3/stage-2/`, ten files from `01-foundation.md` to `10-infra-ci-tests.md`) is the code tour: read each entry next to the file it names. Stage 3 (`docs/dive3/stage-3-practice.md`) is practice: each task is a change production needs, done with a failing test first, and its "After launch" list is the known backlog. The test suites are the most precise map of what the system promises. `vitest.workspace.ts` lists eleven projects (`integration`, `core`, `concurrency`, `property`, `worker`, `contract`, `core-contract`, `ux`, `web`, `config` and the browser `journeys`), `scripts/test.mjs` runs the first ten in CI's order (CI runs `pnpm test:journeys` after them), and `.github/workflows/ci.yml` shows exactly what CI runs before a release can be built. The production runbooks are `infra/production/README.md`, `infra/gcp/README.md` and `infra/ops/RESTORE.md`.

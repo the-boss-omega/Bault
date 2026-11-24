@@ -21,6 +21,7 @@ vi.mock('../../apps/web/src/shared/api', () => ({
     }
   },
   apiErrorKey: () => null,
+  onSessionEnded: () => undefined,
 }));
 
 vi.mock('../../apps/web/src/shared/Barcode', () => ({

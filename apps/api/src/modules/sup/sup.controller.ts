@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
+import { IdParam } from '../../shared/uuid-param';
 import { ApiTags } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Roles } from '../sec/roles.decorator';
@@ -46,13 +47,13 @@ export class SupController {
 
   @AllowSuspended()
   @Get('tickets/:id')
-  thread(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  thread(@IdParam() id: string, @CurrentUser() user: AuthUser) {
     return this.support.thread(id, { id: user.id, role: user.role, status: user.status });
   }
 
   @AllowSuspended()
   @Post('tickets/:id/messages')
-  reply(@Param('id') id: string, @Body() dto: ReplyDto, @CurrentUser() user: AuthUser) {
+  reply(@IdParam() id: string, @Body() dto: ReplyDto, @CurrentUser() user: AuthUser) {
     return this.support.reply(id, { id: user.id, role: user.role, status: user.status }, dto.body);
   }
 
@@ -70,13 +71,13 @@ export class SupController {
 
   @Roles('warehouse_operator', 'admin')
   @Post('tickets/:id/assign')
-  assign(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  assign(@IdParam() id: string, @CurrentUser() user: AuthUser) {
     return this.support.assign(id, { id: user.id, role: user.role, status: user.status });
   }
 
   @Roles('warehouse_operator', 'admin')
   @Post('tickets/:id/resolve')
-  resolve(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  resolve(@IdParam() id: string, @CurrentUser() user: AuthUser) {
     return this.support.resolve(id, { id: user.id, role: user.role, status: user.status });
   }
 }

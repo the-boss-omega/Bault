@@ -9,11 +9,17 @@ import {
   disposalOutcomeLabel,
   type ArrivalDisposal,
 } from '../../../shared/itemClasses';
-import { useNavigation, useRoute } from '../../../shared/routing';
+import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
   SHIPMENT_TONE,
+  PREPARING_STATUSES,
+  isInTransit,
   matchesShipmentSearch,
+  needsCollector,
+  shipmentNextKey,
   shipmentStatusLabel,
+  sortShipments,
+  type ShipmentSort,
   type ShipmentSummary,
 } from '../../../shared/shipments';
 import {
@@ -30,8 +36,8 @@ import {
   type StatusTone,
 } from '../../../shared/ui/primitives';
 import { CountUp } from '../../../shared/ui/CountUp';
-import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import { serviceLabel, shipmentServiceLabel, type QuotedRate } from '../../../shared/carriers';
+import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { serviceLabel, shipmentServiceLabel, trackingUrl, type QuotedRate } from '../../../shared/carriers';
 import { ShipmentComposer } from './ShipmentComposer';
 import { SharedParcelsTab } from './SharedParcelsTab';
 import { ShowPickupPanel, WhiteGlovePanel, WhiteGloveQuotes } from './HumanFulfilmentPanels';
@@ -51,6 +57,7 @@ const OPEN_STATUSES = new Set(['requested', 'in_progress']);
 
 interface MyRequest {
   id: string;
+  code?: string | null;
   type: string;
   status: string;
   itemId: string | null;
@@ -76,10 +83,15 @@ export function formatAddress(a: Address): string {
 export function ShippingServicesPage() {
   const { t } = useI18n();
   const route = useRoute();
-  const { goTab, openRecord, closeRecord } = useNavigation(route);
+  const { goTab, openRecord, closeRecord, setParams } = useNavigation(route);
+  const way = route.params.way === 'hand' ? 'hand' : 'show';
 
-  const { items, error: itemsError, loaded: itemsLoaded, reload } = useVaultItems(true);
+  const { items: vaultItems, error: itemsError, loaded: itemsLoaded, reload } = useVaultItems(false);
+  const items = useMemo(() => vaultItems.filter((i) => i.lifecycleState === 'stored'), [vaultItems]);
+  const serials = useMemo(() => new Map(vaultItems.map((i) => [i.id, i.serialNumber])), [vaultItems]);
   const [requests, setRequests] = useState<MyRequest[] | null>(null);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
+  const [underWay, setUnderWay] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [shipmentsVersion, setShipmentsVersion] = useState(0);
@@ -88,18 +100,38 @@ export function ShippingServicesPage() {
     ? (route.tab as SsTab)
     : 'overview';
 
+  useEffect(() => {
+    setStatus(null);
+    setError(null);
+  }, [tab]);
+
   const loadRequests = useCallback(async () => {
     try {
       setRequests(await api.get<MyRequest[]>('/services/mine'));
+      setRequestsError(null);
     } catch (e) {
-      setError((e as Error).message);
-      setRequests([]);
+      setRequestsError((e as Error).message);
     }
   }, []);
 
   useEffect(() => {
     void loadRequests();
   }, [loadRequests]);
+
+  useEffect(() => {
+    if (tab !== 'overview') return;
+    let live = true;
+    void api
+      .get<ShipmentSummary[]>('/shipping/shipments')
+      .then((rows) => {
+        if (!live || !Array.isArray(rows)) return;
+        setUnderWay(rows.filter((s) => PREPARING_STATUSES.includes(s.status) || isInTransit(s.status)).length);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [tab, shipmentsVersion]);
 
   const open = (requests ?? []).filter((r) => OPEN_STATUSES.has(r.status));
   const past = (requests ?? []).filter((r) => !OPEN_STATUSES.has(r.status));
@@ -137,12 +169,21 @@ export function ShippingServicesPage() {
               <li className="departure">
                 <div className="departure-text">
                   <h3 className="departure-title">{t('ss.tab.tracking')}</h3>
-                  <p className="departure-desc">{t('ss.overview.trackingDesc')}</p>
+                  <p className="departure-desc">{t('ship.overview.trackingDesc')}</p>
                 </div>
                 <p className="departure-figure">
-                  <span className="departure-icon" aria-hidden="true">
-                    <IconScan />
-                  </span>
+                  {underWay === null ? (
+                    <span className="departure-icon" aria-hidden="true">
+                      <IconScan />
+                    </span>
+                  ) : (
+                    <>
+                      <span className="departure-number">
+                        <CountUp value={String(underWay)} />
+                      </span>
+                      <span className="slip-label">{t('ship.overview.underWay')}</span>
+                    </>
+                  )}
                 </p>
                 <div className="departure-action">
                   <Button variant="secondary" onClick={() => goTab('tracking')}>
@@ -191,32 +232,51 @@ export function ShippingServicesPage() {
 
       {tab === 'in-person' && (
         <TabPanel tab="in-person">
-          <ShowPickupPanel
-            items={items}
-            reloadToken={shipmentsVersion}
-            onError={setError}
-            onStatus={setStatus}
-            onCreated={() => {
-              setShipmentsVersion((v) => v + 1);
-              void reload();
-            }}
-          />
           <WhiteGloveQuotes
             reloadToken={shipmentsVersion}
             onError={setError}
             onStatus={setStatus}
             onChanged={() => setShipmentsVersion((v) => v + 1)}
           />
-          <WhiteGlovePanel
-            items={items}
-            reloadToken={shipmentsVersion}
-            onError={setError}
-            onStatus={setStatus}
-            onCreated={() => {
-              setShipmentsVersion((v) => v + 1);
-              void reload();
-            }}
-          />
+          <div className="row" role="group" aria-label={t('ship.inPerson.choose')}>
+            <Button
+              variant={way === 'show' ? 'primary' : 'secondary'}
+              pressed={way === 'show'}
+              onClick={() => setParams({ way: null })}
+            >
+              {t('ship.inPerson.show')}
+            </Button>
+            <Button
+              variant={way === 'hand' ? 'primary' : 'secondary'}
+              pressed={way === 'hand'}
+              onClick={() => setParams({ way: 'hand' })}
+            >
+              {t('ship.inPerson.hand')}
+            </Button>
+          </div>
+          {way === 'show' ? (
+            <ShowPickupPanel
+              items={items}
+              reloadToken={shipmentsVersion}
+              onError={setError}
+              onStatus={setStatus}
+              onCreated={() => {
+                setShipmentsVersion((v) => v + 1);
+                void reload();
+              }}
+            />
+          ) : (
+            <WhiteGlovePanel
+              items={items}
+              reloadToken={shipmentsVersion}
+              onError={setError}
+              onStatus={setStatus}
+              onCreated={() => {
+                setShipmentsVersion((v) => v + 1);
+                void reload();
+              }}
+            />
+          )}
         </TabPanel>
       )}
 
@@ -228,7 +288,7 @@ export function ShippingServicesPage() {
             onOpen={(id) => openRecord('shipment', id)}
             onClose={() => closeRecord('shipment')}
             onStatus={setStatus}
-            onPageError={setError}
+            onCreate={() => goTab('shipping')}
           />
         </TabPanel>
       )}
@@ -248,6 +308,9 @@ export function ShippingServicesPage() {
         <TabPanel tab="requests">
           <RequestTable
             requests={requests === null ? null : open}
+            error={requestsError}
+            onRetry={() => void loadRequests()}
+            serials={serials}
             title={t('ss.requests.openTitle')}
             subtitle={t('ss.requests.openSubtitle')}
             emptyTitle={t('ss.requests.noneOpen')}
@@ -265,6 +328,9 @@ export function ShippingServicesPage() {
         <TabPanel tab="history">
           <RequestTable
             requests={requests === null ? null : past}
+            error={requestsError}
+            onRetry={() => void loadRequests()}
+            serials={serials}
             title={t('ss.history.title')}
             subtitle={t('ss.history.subtitle')}
             emptyTitle={t('ss.history.none')}
@@ -293,7 +359,6 @@ function NotAcceptedTable() {
       setError(null);
     } catch (e) {
       setError((e as Error).message);
-      setRows([]);
     }
   }, []);
 
@@ -306,7 +371,9 @@ function NotAcceptedTable() {
       {error && <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
 
       {rows === null ? (
-        <SkeletonTable rows={3} columns={4} />
+        error ? null : (
+          <SkeletonTable rows={3} columns={4} />
+        )
       ) : rows.length === 0 ? (
         <EmptyState
           title={t('ss.notAccepted.empty')}
@@ -362,19 +429,20 @@ function TrackingTab({
   onOpen,
   onClose,
   onStatus,
-  onPageError,
+  onCreate,
 }: {
   reloadToken: number;
   openId: string | null;
   onOpen: (id: string) => void;
   onClose: () => void;
   onStatus: (m: string | null) => void;
-  onPageError: (m: string | null) => void;
+  onCreate: () => void;
 }) {
   const { t, locale } = useI18n();
   const [shipments, setShipments] = useState<ShipmentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<ShipmentSort>('newest');
 
   const load = useCallback(async () => {
     try {
@@ -382,7 +450,6 @@ function TrackingTab({
       setError(null);
     } catch (e) {
       setError((e as Error).message);
-      setShipments([]);
     }
   }, []);
 
@@ -391,14 +458,22 @@ function TrackingTab({
   }, [load, reloadToken]);
 
   const rows = useMemo(
-    () => (shipments ?? []).filter((shipment) => matchesShipmentSearch(shipment, query)),
-    [shipments, query],
+    () =>
+      sortShipments(
+        (shipments ?? []).filter((shipment) =>
+          matchesShipmentSearch(shipment, query, shipmentStatusLabel(t, shipment.status)),
+        ),
+        sort,
+      ),
+    [shipments, query, sort, t],
   );
 
   const selected = useMemo(
-    () => (shipments ?? []).find((shipment) => shipment.id === openId) ?? null,
+    () => (shipments ?? []).find((shipment) => shipment.id === openId || shipment.code === openId) ?? null,
     [shipments, openId],
   );
+  const missing = Boolean(openId && shipments !== null && !selected);
+  const hasAny = (shipments ?? []).length > 0;
 
   return (
     <>
@@ -407,31 +482,66 @@ function TrackingTab({
         subtitle={t('ss.tracking.subtitle')}
         flush
         tools={
-          <div className="search search--wide">
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t('ss.tracking.searchPlaceholder')}
-              aria-label={t('ss.tracking.searchLabel')}
-            />
-          </div>
+          hasAny ? (
+            <div className="row">
+              <div className="search search--wide">
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t('ship.tracking.searchPlaceholder')}
+                  aria-label={t('ss.tracking.searchLabel')}
+                />
+              </div>
+              <select
+                className="vault-sort"
+                value={sort}
+                aria-label={t('ship.sort.label')}
+                onChange={(e) => setSort(e.target.value as ShipmentSort)}
+              >
+                <option value="newest">{t('ship.sort.newest')}</option>
+                <option value="oldest">{t('ship.sort.oldest')}</option>
+                <option value="needsYou">{t('ship.sort.needsYou')}</option>
+              </select>
+            </div>
+          ) : undefined
         }
       >
-        {error && <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
+        {error && (
+          <ErrorState
+            title={t('ship.tracking.failed')}
+            message={error}
+            onRetry={() => void load()}
+            retryLabel={t('ui.retry')}
+          />
+        )}
+        {missing && <SuccessNote tone="warning">{t('ship.tracking.notFound')}</SuccessNote>}
 
         {shipments === null ? (
-          <SkeletonTable rows={4} columns={6} />
+          error ? null : (
+            <SkeletonTable rows={4} columns={6} />
+          )
         ) : rows.length === 0 ? (
           <EmptyState
             title={query ? t('ss.tracking.noMatches') : t('ss.tracking.empty')}
             text={query ? t('ss.tracking.noMatchesText') : t('ss.tracking.emptyText')}
             icon={<IconScan />}
+            action={
+              query ? (
+                <Button variant="secondary" onClick={() => setQuery('')}>
+                  {t('ship.search.clear')}
+                </Button>
+              ) : (
+                <Button variant="primary" onClick={onCreate}>
+                  {t('ss.overview.goShipping')}
+                </Button>
+              )
+            }
           />
         ) : (
           <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
-              <caption>{t('ss.tracking.title')}</caption>
+              <caption className="sr-only">{t('ss.tracking.title')}</caption>
               <thead>
                 <tr>
                   <th scope="col">{t('ss.tracking.col.recipient')}</th>
@@ -448,15 +558,8 @@ function TrackingTab({
                 {rows.map((shipment) => (
                   <tr
                     key={shipment.id}
-                    className={'is-clickable' + (shipment.id === openId ? ' is-selected' : '')}
-                    tabIndex={0}
+                    className={'is-clickable' + (shipment.id === selected?.id ? ' is-selected' : '')}
                     onClick={() => onOpen(shipment.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onOpen(shipment.id);
-                      }
-                    }}
                   >
                     <td data-label={t('ss.tracking.col.recipient')} className="dt-primary">
                       {shipment.recipientName || '—'}
@@ -483,6 +586,9 @@ function TrackingTab({
                       <StatusBadge tone={SHIPMENT_TONE[shipment.status] ?? 'neutral'}>
                         {shipmentStatusLabel(t, shipment.status)}
                       </StatusBadge>
+                      {needsCollector(shipment) && (
+                        <span className="dt-sub">{t('ship.requests.waitingOnYou')}</span>
+                      )}
                     </td>
                     <td data-label={t('ss.tracking.col.eta')}>
                       {shipment.estimatedDeliveryAt ? (
@@ -500,6 +606,7 @@ function TrackingTab({
                       <Button
                         size="sm"
                         variant="secondary"
+                        aria-label={`${t('ss.tracking.details')} ${shipment.code ?? ''}`.trim()}
                         onClick={(e) => {
                           e.stopPropagation();
                           onOpen(shipment.id);
@@ -523,7 +630,6 @@ function TrackingTab({
           t={t}
           onClose={onClose}
           onChanged={() => void load()}
-          onError={onPageError}
           onStatus={onStatus}
         />
       )}
@@ -537,7 +643,6 @@ export function ShipmentDrawer({
   t,
   onClose,
   onChanged,
-  onError,
   onStatus,
 }: {
   shipment: ShipmentSummary;
@@ -545,9 +650,10 @@ export function ShipmentDrawer({
   t: TranslateFn;
   onClose: () => void;
   onChanged: () => void;
-  onError: (m: string | null) => void;
   onStatus: (m: string | null) => void;
 }) {
+  const [error, setError] = useState<string | null>(null);
+  const [short, setShort] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -570,11 +676,13 @@ export function ShipmentDrawer({
     try {
       await fn();
       onStatus(ok);
-      onError(null);
+      setError(null);
+      setShort(false);
       onChanged();
       onClose();
     } catch (e) {
-      onError((e as Error).message);
+      setError((e as Error).message);
+      setShort((e as { code?: string }).code === 'insufficient_balance');
     } finally {
       setBusy(false);
       setConfirming(false);
@@ -592,6 +700,21 @@ export function ShipmentDrawer({
         </Button>
       }
     >
+      {error && <ErrorState message={error} />}
+      {error && short && (
+        <p className="field-hint">
+          <Button variant="link" onClick={() => navigate({ section: 'wallet', tab: 'cash-in' })}>
+            {t('ship.cashInLink')}
+          </Button>
+        </p>
+      )}
+
+      <p className="drawer-note drawer-note--archive" role="note">
+        <span>
+          <strong>{t('ship.next.label')}</strong> {t(shipmentNextKey(shipment.status))}
+        </span>
+      </p>
+
       <dl className="detail-list">
         <DetailRow label={t('ss.tracking.status')}>
           <StatusBadge tone={SHIPMENT_TONE[shipment.status] ?? 'neutral'}>
@@ -603,7 +726,21 @@ export function ShipmentDrawer({
         </DetailRow>
         <DetailRow label={t('ss.tracking.trackingNumber')}>
           {shipment.trackingNumber ? (
-            <code dir="ltr">{shipment.trackingNumber}</code>
+            <>
+              <code dir="ltr">{shipment.trackingNumber}</code>
+              {trackingUrl(shipment.carrier, shipment.trackingNumber) && (
+                <>
+                  {' '}
+                  <a
+                    href={trackingUrl(shipment.carrier, shipment.trackingNumber)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t('ss.tracking.trackOn', { carrier: shipment.carrier ?? '' })}
+                  </a>
+                </>
+              )}
+            </>
           ) : (
             <span className="hint">{t('ss.tracking.noTrackingYet')}</span>
           )}
@@ -622,6 +759,18 @@ export function ShipmentDrawer({
           {shipment.cost === null ? '—' : <span dir="ltr">{formatUsd(shipment.cost)}</span>}
         </DetailRow>
         <DetailRow label={t('ss.tracking.itemCount')}>{shipment.itemIds.length}</DetailRow>
+        {(shipment.items ?? []).length > 0 && (
+          <DetailRow label={t('ship.tracking.contents')}>
+            <ul className="list-unbounded">
+              {shipment.items.map((item) => (
+                <li key={item.id}>
+                  <span dir="ltr">{item.serialNumber ?? '—'}</span>
+                  {item.description && <span className="detail-value-sub">{item.description}</span>}
+                </li>
+              ))}
+            </ul>
+          </DetailRow>
+        )}
         <DetailRow label={t('ss.tracking.destination')}>{shipment.destinationAddress}</DetailRow>
         {shipment.contactPhone && (
           <DetailRow label={t('ff.wg.courierPhone')}>
@@ -717,7 +866,7 @@ export function ShipmentDrawer({
         <div className="stack stack--tight" style={{ marginBlockStart: 'var(--sp-3)' }}>
           <label className="field">
             <span className="field-label">{t('ship.cancelReasonLabel')}</span>
-            <input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
+            <input value={reason} maxLength={300} autoFocus onChange={(e) => setReason(e.target.value)} />
           </label>
           <span className="field-hint">
             {shipment.status !== 'rates_selected'
@@ -818,8 +967,21 @@ export function RechooseService({
   );
 }
 
+type RequestSort = 'newest' | 'oldest' | 'needsYou';
+
+function awaitingAnswer(request: MyRequest): boolean {
+  return (
+    request.status === 'in_progress' &&
+    (request.type === 'custom' || request.type === 'buyout') &&
+    (request.typeFields as { stage?: string } | null)?.stage === 'quoted'
+  );
+}
+
 function RequestTable({
   requests,
+  error,
+  onRetry,
+  serials,
   title,
   subtitle,
   emptyTitle,
@@ -828,6 +990,9 @@ function RequestTable({
   onError,
 }: {
   requests: MyRequest[] | null;
+  error: string | null;
+  onRetry: () => void;
+  serials: ReadonlyMap<string, string>;
   title: string;
   subtitle: string;
   emptyTitle: string;
@@ -837,6 +1002,33 @@ function RequestTable({
 }) {
   const { t, locale } = useI18n();
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<RequestSort>('newest');
+  const [confirming, setConfirming] = useState<MyRequest | null>(null);
+
+  const rows = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const hits = (requests ?? []).filter((request) =>
+      !needle
+        ? true
+        : [
+            request.code ?? '',
+            serviceTypeLabel(t, request.type),
+            serviceStatusLabel(t, request.status, request.type),
+            request.itemId ? (serials.get(request.itemId) ?? '') : '',
+            String((request.typeFields as { summary?: string } | null)?.summary ?? ''),
+          ]
+            .join(' ')
+            .toLowerCase()
+            .includes(needle),
+    );
+    const byDate = (a: MyRequest, b: MyRequest) => b.createdAt.localeCompare(a.createdAt);
+    if (sort === 'oldest') return hits.sort((a, b) => byDate(b, a));
+    if (sort === 'needsYou') {
+      return hits.sort((a, b) => Number(awaitingAnswer(b)) - Number(awaitingAnswer(a)) || byDate(a, b));
+    }
+    return hits.sort(byDate);
+  }, [requests, query, sort, serials, t]);
 
   async function answerQuote(request: MyRequest, action: 'accept' | 'decline') {
     setBusy(true);
@@ -869,14 +1061,69 @@ function RequestTable({
   }
 
   return (
-    <Panel title={title} subtitle={subtitle} flush>
+    <Panel
+      title={title}
+      subtitle={subtitle}
+      flush
+      tools={
+        (requests ?? []).length > 0 ? (
+          <div className="row">
+            <div className="search search--wide">
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t('ship.requests.searchPlaceholder')}
+                aria-label={t('ship.requests.search')}
+              />
+            </div>
+            <select
+              className="vault-sort"
+              value={sort}
+              aria-label={t('ship.sort.label')}
+              onChange={(e) => setSort(e.target.value as RequestSort)}
+            >
+              <option value="newest">{t('ship.sort.newest')}</option>
+              <option value="oldest">{t('ship.sort.oldest')}</option>
+              <option value="needsYou">{t('ship.sort.needsYou')}</option>
+            </select>
+          </div>
+        ) : undefined
+      }
+    >
+      {error && (
+        <ErrorState title={t('ship.requests.failed')} message={error} onRetry={onRetry} retryLabel={t('ui.retry')} />
+      )}
       {requests === null ? (
-        <SkeletonTable rows={4} columns={3} />
-      ) : requests.length === 0 ? (
-        <EmptyState title={emptyTitle} text={emptyText} />
+        error ? null : (
+          <SkeletonTable rows={4} columns={3} />
+        )
+      ) : rows.length === 0 ? (
+        query.trim() ? (
+          <EmptyState
+            title={t('ship.requests.noMatches')}
+            text={t('ship.requests.noMatchesText')}
+            action={
+              <Button variant="secondary" onClick={() => setQuery('')}>
+                {t('ship.search.clear')}
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            title={emptyTitle}
+            text={emptyText}
+            action={
+              <Button variant="secondary" onClick={() => navigate({ section: 'vault' })}>
+                {t('ship.requests.toVault')}
+              </Button>
+            }
+          />
+        )
       ) : (
         <div className="dt-wrap dt-wrap--stack">
           <table className="data-table">
+            <caption className="sr-only">{title}</caption>
             <thead>
               <tr>
                 <th scope="col">{t('services.colService')}</th>
@@ -886,15 +1133,21 @@ function RequestTable({
               </tr>
             </thead>
             <tbody>
-              {requests.map((request) => (
+              {rows.map((request) => (
                 <tr key={request.id}>
                   <td data-label={t('services.colService')} className="dt-primary">
                     {serviceTypeLabel(t, request.type)}
+                    {(request.code || (request.itemId && serials.get(request.itemId))) && (
+                      <span className="dt-sub" dir="ltr">
+                        {[request.code, request.itemId ? serials.get(request.itemId) : null].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
                   </td>
                   <td data-label={t('services.colStatus')}>
                     <StatusBadge tone={STATUS_TONE[request.status] ?? 'neutral'}>
-                      {serviceStatusLabel(t, request.status)}
+                      {serviceStatusLabel(t, request.status, request.type)}
                     </StatusBadge>
+                    {awaitingAnswer(request) && <span className="dt-sub">{t('ship.requests.waitingOnYou')}</span>}
                   </td>
                   <td data-label={t('services.colDate')} className="td-tight">
                     <span className="date">{formatDate(request.createdAt, locale)}</span>
@@ -910,7 +1163,7 @@ function RequestTable({
                             size="sm"
                             variant="primary"
                             disabled={busy}
-                            onClick={() => void answerCustomQuote(request, 'accept')}
+                            onClick={() => setConfirming(request)}
                           >
                             {t('custom.acceptQuoteAmount', {
                               amount: formatUsd(
@@ -943,9 +1196,13 @@ function RequestTable({
                             size="sm"
                             variant="primary"
                             disabled={busy}
-                            onClick={() => void answerQuote(request, 'accept')}
+                            onClick={() => setConfirming(request)}
                           >
-                            {t('services.buyout.accept')}
+                            {t('services.buyout.acceptAmount', {
+                              amount: formatUsd(
+                                Number((request.typeFields as { offerMinor?: number })?.offerMinor ?? 0),
+                              ),
+                            })}
                           </Button>
                           <Button
                             size="sm"
@@ -964,7 +1221,65 @@ function RequestTable({
           </table>
         </div>
       )}
+      {confirming && (
+        <QuoteConfirmation
+          request={confirming}
+          serial={confirming.itemId ? serials.get(confirming.itemId) : undefined}
+          busy={busy}
+          onCancel={() => setConfirming(null)}
+          onConfirm={async () => {
+            const request = confirming;
+            if (request.type === 'buyout') await answerQuote(request, 'accept');
+            else await answerCustomQuote(request, 'accept');
+            setConfirming(null);
+          }}
+        />
+      )}
     </Panel>
+  );
+}
+
+function QuoteConfirmation({
+  request,
+  serial,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  request: MyRequest;
+  serial: string | undefined;
+  busy: boolean;
+  onConfirm: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  const { t } = useI18n();
+  const fields = (request.typeFields ?? {}) as { offerMinor?: number; priceMinor?: number };
+  const card = serial ?? request.code ?? '';
+  if (request.type === 'buyout') {
+    const amount = formatUsd(Number(fields.offerMinor ?? 0));
+    return (
+      <ConfirmationModal
+        title={t('services.buyout.confirmTitle', { amount })}
+        body={<p>{t('services.buyout.confirmBody', { amount, item: card })}</p>}
+        confirmLabel={t('services.buyout.acceptAmount', { amount })}
+        cancelLabel={t('ui.cancel')}
+        busy={busy}
+        onConfirm={() => void onConfirm()}
+        onCancel={onCancel}
+      />
+    );
+  }
+  const amount = formatUsd(Number(fields.priceMinor ?? 0));
+  return (
+    <ConfirmationModal
+      title={t('custom.confirmTitle', { amount })}
+      body={<p>{t('custom.confirmBody', { amount, code: request.code ?? '' })}</p>}
+      confirmLabel={t('custom.acceptQuoteAmount', { amount })}
+      cancelLabel={t('ui.cancel')}
+      busy={busy}
+      onConfirm={() => void onConfirm()}
+      onCancel={onCancel}
+    />
   );
 }
 

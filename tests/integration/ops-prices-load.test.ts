@@ -1,14 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { MEMBERSHIP_TIERS } from '../../apps/api/src/modules/mem/tiers';
 import { BASE, SEED, SEED_PASSWORD, signIn } from './helpers/http';
 import { sql } from './helpers/db';
 import { activeAccount, codeAt, enrol, MFA_PASSWORD, passwordOnly } from './helpers/mfa';
 
 const SCRIPT = join(__dirname, '..', '..', 'scripts', 'ops', 'prices.mjs');
 const SITE = new URL(BASE).origin;
-const ENDED = ['storage', 'membership:bronze', 'grading_fee:psa_value', 'shipping_rush'];
+const ENDED = ['storage', 'grading_fee:psa_value', 'shipping_rush'];
 
 function run(args: string[], env: Record<string, string> = {}) {
   const r = spawnSync(process.execPath, [SCRIPT, '--url', SITE, ...args], {
@@ -73,11 +72,7 @@ describe('pnpm prices:load', () => {
       periodDays: 90,
       percentOfIntakeBps: 1000,
     });
-    const bronze = MEMBERSHIP_TIERS.find((t) => t.key === 'bronze')!;
-    expect((await newestCatchAll('membership:bronze'))!.parameters).toMatchObject({
-      storedItems: bronze.storedItems,
-      commissionWaivedOnMinor: bronze.commissionWaivedOnMinor,
-    });
+    expect(await newestCatchAll('membership:bronze')).toBeUndefined();
 
     const again = run(['--allow-unreviewed']);
     expect(again.status, again.out).toBe(0);

@@ -1,4 +1,4 @@
-import { useId, useRef, type ReactNode } from 'react';
+import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 import { Button, IconButton } from './primitives';
 import { IconClose } from './icons';
 import { useT } from '../i18n';
@@ -24,11 +24,6 @@ export function DetailDrawer({
   lead?: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
-  /**
-   * What the last thing done in the drawer came to (a note that it was saved, or why it was refused), above the
-   * buttons, where it is in view whatever the body has scrolled to, and inside the dialog, where it is read out.
-   * A message the page shows is behind the drawer's backdrop.
-   */
   notice?: ReactNode;
   dirty?: boolean;
   flush?: boolean;
@@ -40,8 +35,14 @@ export function DetailDrawer({
   const panelRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  useOverlay(panelRef, requestClose);
-  // A body that scrolls and has nothing in it to stop on (a request that is settled) is a stop itself.
+  const dirtyRef = useRef(Boolean(dirty));
+  dirtyRef.current = Boolean(dirty);
+  const [askingToDiscard, setAskingToDiscard] = useState(false);
+  const onEscape = useCallback(() => {
+    if (dirtyRef.current) setAskingToDiscard(true);
+    else requestClose();
+  }, [requestClose]);
+  useOverlay(panelRef, onEscape);
   useKeyboardScroll(bodyRef, titleId);
 
   return inBody(
@@ -83,6 +84,20 @@ export function DetailDrawer({
           </footer>
         )}
       </aside>
+      {askingToDiscard && (
+        <ConfirmationModal
+          title={t('ui.discardTitle')}
+          body={<p>{t('ui.discardBody')}</p>}
+          confirmLabel={t('ui.discard')}
+          cancelLabel={t('ui.keepEditing')}
+          tone="danger"
+          onConfirm={() => {
+            setAskingToDiscard(false);
+            requestClose();
+          }}
+          onCancel={() => setAskingToDiscard(false)}
+        />
+      )}
     </>,
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
-import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
+import { bpsToPercent, dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import {
   ESCROW_TONE,
   escrowEventLabel,
@@ -10,8 +10,22 @@ import {
   type EscrowDeal,
   type EscrowEvent,
 } from '../../../shared/escrow';
-import { Button, EmptyState, ErrorState, Field, MoneyField, Panel, StatusBadge, SuccessNote } from '../../../shared/ui/primitives';
-import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Field,
+  MoneyField,
+  Panel,
+  SkeletonBlock,
+  SkeletonTable,
+  StatusBadge,
+  SuccessNote,
+} from '../../../shared/ui/primitives';
+import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { isValidUsername } from '../../../shared/names';
+import { typedUsername } from '../../../shared/market';
+import { ListTools, LIST_TOOLS_FROM, byNewest, byNumber, useListView, type SortOption } from './ListTools';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { Amount } from '../../../shared/ui/Serial';
 import { IconAlert, IconShield, IconUsers } from '../../../shared/ui/icons';
@@ -34,8 +48,12 @@ export function EscrowTab() {
   const [held, setHeld] = useState<{ heldMinor: number } | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [raiseError, setRaiseError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const touch = (name: string) => setTouched((prev) => (prev[name] ? prev : { ...prev, [name]: true }));
+  const view = useListView(deals, dealText, DEAL_SORTS);
 
   const [role, setRole] = useState<'buyer' | 'seller'>('seller');
   const [username, setUsername] = useState('');
@@ -74,14 +92,31 @@ export function EscrowTab() {
       : null;
   const belowFloor = terms !== null && cents !== null && cents > 0 && cents < terms.minimumValueMinor;
 
+  const emailBad = outsideEmail.trim() !== '' && !EMAIL.test(outsideEmail.trim());
+  const usernameBad = username.trim() !== '' && !isValidUsername(typedUsername(username));
+  const valueBad = value.trim() !== '' && cents === null;
+  const missing =
+    external && outsideName.trim() === ''
+      ? t('escrow.need.name')
+      : external && (outsideEmail.trim() === '' || emailBad)
+        ? t('escrow.need.email')
+        : !external && (username.trim() === '' || usernameBad)
+          ? t('escrow.need.username')
+          : description.trim() === ''
+            ? t('escrow.need.what')
+            : cents === null || belowFloor
+              ? t('escrow.need.value')
+              : null;
+
   const ready =
+    !emailBad &&
+    !usernameBad &&
     description.trim() !== '' &&
     cents !== null &&
     cents > 0 &&
     !belowFloor &&
     (external ? outsideName.trim() !== '' && outsideEmail.trim() !== '' : username.trim() !== '');
 
-  // What has not been typed yet is a dash, never a value made up.
   const quiet = <span className="drawer-tag-quiet">—</span>;
   const otherSide = external ? (
     outsideName.trim() || outsideEmail.trim() ? (
@@ -100,23 +135,30 @@ export function EscrowTab() {
 
   async function raise() {
     setBusy(true);
+    setRaiseError(null);
     try {
       const deal = await api.post<EscrowDeal>('/escrow', {
         raiserRole: role,
-        counterpartyUsername: external ? undefined : username.trim(),
+        counterpartyUsername: external ? undefined : typedUsername(username),
         counterpartyName: external ? outsideName.trim() : undefined,
         counterpartyEmail: external ? outsideEmail.trim() : undefined,
         description: description.trim(),
         valueMinor: cents,
         settlement,
       });
-      setStatus(t('esc.raised', { code: deal.code }));
+      setStatus(
+        t(external ? 'escrow.raisedExternal' : 'escrow.raised', {
+          code: deal.code,
+          who: external ? outsideEmail.trim() : `@${typedUsername(username)}`,
+        }),
+      );
       setError(null);
       setDescription('');
       setValue('');
+      setTouched({});
       await load();
     } catch (e) {
-      setError((e as Error).message);
+      setRaiseError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -125,14 +167,13 @@ export function EscrowTab() {
   return (
     <>
       {status && <SuccessNote>{status}</SuccessNote>}
-      {error && <ErrorState message={error} />}
 
       <Panel title={t('esc.title')} subtitle={t('esc.subtitle')}>
         <p className="field-hint">{t('esc.how')}</p>
         {terms && (
           <p className="field-hint">
             {t('esc.terms', {
-              percent: (terms.feeBps / 100).toFixed(2),
+              percent: bpsToPercent(terms.feeBps),
               min: formatUsd(terms.minimumFeeMinor),
               floor: formatUsd(terms.minimumValueMinor),
             })}
@@ -149,13 +190,12 @@ export function EscrowTab() {
       <Panel title={t('esc.raise')} subtitle={t('esc.raiseSubtitle')}>
         <div className="request-form">
           <div className="stack stack--tight request-form-fields">
-            <label className="field">
-              <span className="field-label">{t('esc.yourSide')}</span>
+            <Field label={t('esc.yourSide')}>
               <select value={role} onChange={(e) => setRole(e.target.value as 'buyer' | 'seller')}>
                 <option value="seller">{t('esc.side.seller')}</option>
                 <option value="buyer">{t('esc.side.buyer')}</option>
               </select>
-            </label>
+            </Field>
 
             <label className="check">
               <input
@@ -168,27 +208,47 @@ export function EscrowTab() {
 
             {external ? (
               <>
-                <label className="field">
-                  <span className="field-label">{t('esc.theirName')}</span>
+                <Field label={t('esc.theirName')}>
                   <input
                     value={outsideName}
                     dir="auto"
+                    autoComplete="off"
                     onChange={(e) => setOutsideName(e.target.value)}
                   />
-                </label>
-                <Field label={t('esc.theirEmail')} hint={t('esc.externalHint')}>
+                </Field>
+                <Field
+                  label={t('esc.theirEmail')}
+                  hint={t('esc.externalHint')}
+                  error={touched.email && emailBad ? t('escrow.emailBad') : undefined}
+                >
                   <input
+                    type="email"
                     value={outsideEmail}
                     dir="ltr"
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-invalid={(touched.email && emailBad) || undefined}
+                    onBlur={() => touch('email')}
                     onChange={(e) => setOutsideEmail(e.target.value)}
                   />
                 </Field>
               </>
             ) : (
-              <label className="field">
-                <span className="field-label">{t('esc.theirUsername')}</span>
-                <input value={username} dir="ltr" onChange={(e) => setUsername(e.target.value)} />
-              </label>
+              <Field
+                label={t('esc.theirUsername')}
+                hint={t('escrow.usernameHint')}
+                error={touched.username && usernameBad ? t('market.propose.usernameBad') : undefined}
+              >
+                <input
+                  value={username}
+                  dir="ltr"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-invalid={(touched.username && usernameBad) || undefined}
+                  onBlur={() => touch('username')}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              </Field>
             )}
 
             <Field label={t('esc.what')} hint={t('esc.whatHint')}>
@@ -204,6 +264,8 @@ export function EscrowTab() {
               label={t('esc.value')}
               value={value}
               onChange={setValue}
+              onBlur={() => touch('value')}
+              error={touched.value && valueBad ? t('market.sell.priceBad') : undefined}
               hint={
                 belowFloor && terms
                   ? t('esc.belowFloor', { floor: formatUsd(terms.minimumValueMinor) })
@@ -224,7 +286,6 @@ export function EscrowTab() {
             </Field>
           </div>
 
-          {/* The deal as the other side will read it: the price, who is who, what it is for, what it costs and how it ends. */}
           <aside className="request-slip">
             <DrawerTag
               kicker={t('esc.value')}
@@ -254,27 +315,48 @@ export function EscrowTab() {
             />
           </aside>
 
-          <div className="row request-form-actions">
-            <Button
-              variant="primary"
-              icon={<IconUsers />}
-              disabled={busy || !ready}
-              onClick={() => void raise()}
-            >
-              {t('esc.raiseAction')}
-            </Button>
+          <div className="stack stack--tight request-form-actions">
+            {raiseError && <ErrorState message={raiseError} />}
+            <div className="row">
+              <Button
+                variant="primary"
+                icon={<IconUsers />}
+                disabled={busy || !ready}
+                aria-describedby={missing ? 'escrow-missing' : undefined}
+                onClick={() => void raise()}
+              >
+                {t('esc.raiseAction')}
+              </Button>
+            </div>
+            <p className="field-hint" id="escrow-missing">
+              {missing ?? t('escrow.raiseNext')}
+            </p>
           </div>
         </div>
       </Panel>
 
       <Panel title={t('esc.mine')} subtitle={t('esc.mineSubtitle')} flush>
-        {deals === null ? (
-          <p className="hint" style={{ padding: 'var(--sp-4) var(--sp-6)' }}>
-            {t('grp.loading')}
-          </p>
+        {error ? (
+          <ErrorState
+            title={t('escrow.loadFailed')}
+            message={error}
+            onRetry={() => {
+              setDeals(null);
+              setError(null);
+              void load();
+            }}
+            retryLabel={t('ui.retry')}
+          />
+        ) : deals === null ? (
+          <SkeletonTable rows={3} columns={5} />
         ) : deals.length === 0 ? (
-          <EmptyState title={t('esc.none')} text={t('esc.noneText')} icon={<IconShield />} />
+          <EmptyState title={t('esc.none')} text={t('escrow.noneNext')} icon={<IconShield />} />
         ) : (
+          <>
+          {deals.length > LIST_TOOLS_FROM && (
+            <ListTools label={t('esc.mine')} view={view} sorts={DEAL_SORTS} total={deals.length} />
+          )}
+          {view.shown?.length === 0 && <EmptyState title={t('market.list.noMatch')} text={t('market.list.noMatchText')} />}
           <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
@@ -289,11 +371,12 @@ export function EscrowTab() {
                 </tr>
               </thead>
               <tbody>
-                {deals.map((d) => (
+                {(view.shown ?? []).map((d) => (
                   <tr
                     key={d.id}
                     className="is-clickable"
                     tabIndex={0}
+                    aria-label={t('escrow.openDeal', { code: d.code })}
                     onClick={() => setOpenId(d.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
@@ -322,6 +405,7 @@ export function EscrowTab() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Panel>
 
@@ -332,7 +416,6 @@ export function EscrowTab() {
           onClose={() => setOpenId(null)}
           onChanged={() => void load()}
           onStatus={setStatus}
-          onError={setError}
         />
       )}
     </>
@@ -345,27 +428,30 @@ function DealDrawer({
   onClose,
   onChanged,
   onStatus,
-  onError,
 }: {
   dealId: string;
   locale: string;
   onClose: () => void;
   onChanged: () => void;
   onStatus: (m: string | null) => void;
-  onError: (m: string | null) => void;
 }) {
   const { t } = useI18n();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<'fund' | 'release' | 'return' | null>(null);
 
   const load = useCallback(async () => {
     try {
       setDetail(await api.get<Detail>(`/escrow/${dealId}`));
+      setLoadError(null);
     } catch (e) {
-      onError((e as Error).message);
+      setLoadError((e as Error).message);
     }
-  }, [dealId, onError]);
+  }, [dealId]);
 
   useEffect(() => {
     void load();
@@ -373,30 +459,56 @@ function DealDrawer({
 
   async function act(fn: () => Promise<unknown>, ok: string) {
     setBusy(true);
+    setFailure(null);
+    setDone(null);
     try {
       await fn();
       onStatus(ok);
-      onError(null);
+      setDone(ok);
+      setConfirming(null);
       await load();
       onChanged();
     } catch (e) {
-      onError((e as Error).message);
+      setFailure((e as Error).message);
+      setConfirming(null);
     } finally {
       setBusy(false);
     }
   }
 
-  if (!detail) return null;
+  if (!detail) {
+    return (
+      <DetailDrawer
+        title={t('esc.col.deal')}
+        onClose={onClose}
+        footer={
+          <Button variant="ghost" onClick={onClose}>
+            {t('ui.close')}
+          </Button>
+        }
+      >
+        {loadError ? (
+          <ErrorState message={loadError} onRetry={() => void load()} retryLabel={t('ui.retry')} />
+        ) : (
+          <SkeletonBlock className="skel-metric" />
+        )}
+      </DetailDrawer>
+    );
+  }
   const { deal, events } = detail;
   const iAmBuyer = deal.myRole === 'buyer';
   const iAmSeller = deal.myRole === 'seller';
+  const fundMinor = deal.valueMinor + (deal.raiserRole === 'buyer' ? deal.feeMinor : 0);
   const mismatch = deal.inspectionMatches === 'no';
   const myRelease = iAmBuyer ? deal.buyerReleasedAt : deal.sellerReleasedAt;
 
   return (
+    <>
     <DetailDrawer
       title={deal.code}
       onClose={onClose}
+      dirty={reason.trim() !== ''}
+      notice={failure ? <ErrorState message={failure} /> : done ? <SuccessNote>{done}</SuccessNote> : undefined}
       footer={
         <Button variant="ghost" onClick={onClose}>
           {t('ui.close')}
@@ -474,9 +586,9 @@ function DealDrawer({
             variant="primary"
             size="sm"
             disabled={busy}
-            onClick={() => void act(() => api.post(`/escrow/${dealId}/fund`, {}), t('esc.funded'))}
+            onClick={() => setConfirming('fund')}
           >
-            {t('esc.fund', { amount: formatUsd(deal.valueMinor) })}
+            {t('esc.fund', { amount: formatUsd(fundMinor) })}
           </Button>
           <span className="field-hint">{t('esc.fundHint')}</span>
         </div>
@@ -492,7 +604,7 @@ function DealDrawer({
                 variant="primary"
                 size="sm"
                 disabled={busy}
-                onClick={() => void act(() => api.post(`/escrow/${dealId}/release`, {}), t('esc.released'))}
+                onClick={() => setConfirming('release')}
               >
                 {t('esc.release')}
               </Button>
@@ -504,18 +616,15 @@ function DealDrawer({
 
       {['funded', 'inspecting', 'awaiting_release'].includes(deal.status) && (iAmBuyer || iAmSeller) && (
         <div className="stack stack--tight stack-top">
-          <label className="field">
-            <span className="field-label">{t('esc.returnReason')}</span>
-            <input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
-          </label>
+          <Field label={t('esc.returnReason')} hint={t('escrow.returnReasonHint')}>
+            <input value={reason} maxLength={500} dir="auto" onChange={(e) => setReason(e.target.value)} />
+          </Field>
           <div className="row">
             <Button
               variant="danger"
               size="sm"
               disabled={busy || reason.trim() === ''}
-              onClick={() =>
-                void act(() => api.post(`/escrow/${dealId}/return`, { reason }), t('esc.returned'))
-              }
+              onClick={() => setConfirming('return')}
             >
               {t('esc.returnAction')}
             </Button>
@@ -541,5 +650,59 @@ function DealDrawer({
         ))}
       </ul>
     </DetailDrawer>
+
+    {confirming && (
+      <ConfirmationModal
+        title={t(
+          confirming === 'fund'
+            ? 'escrow.confirm.fundTitle'
+            : confirming === 'release'
+              ? 'escrow.confirm.releaseTitle'
+              : 'escrow.confirm.returnTitle',
+        )}
+        body={
+          <p>
+            {t(
+              confirming === 'fund'
+                ? 'escrow.confirm.fundBody'
+                : confirming === 'release'
+                  ? 'escrow.confirm.releaseBody'
+                  : 'escrow.confirm.returnBody',
+              { amount: formatUsd(confirming === 'release' ? deal.valueMinor : fundMinor), code: deal.code },
+            )}
+          </p>
+        }
+        confirmLabel={t(
+          confirming === 'fund'
+            ? 'escrow.confirm.fund'
+            : confirming === 'release'
+              ? 'esc.release'
+              : 'esc.returnAction',
+        )}
+        cancelLabel={t('ui.cancel')}
+        tone={confirming === 'return' ? 'danger' : 'primary'}
+        busy={busy}
+        onConfirm={() =>
+          void act(
+            () =>
+              confirming === 'return'
+                ? api.post(`/escrow/${dealId}/return`, { reason })
+                : api.post(`/escrow/${dealId}/${confirming}`, {}),
+            t(confirming === 'fund' ? 'esc.funded' : confirming === 'release' ? 'esc.released' : 'esc.returned'),
+          )
+        }
+        onCancel={() => setConfirming(null)}
+      />
+    )}
+    </>
   );
 }
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const DEAL_SORTS: readonly SortOption<EscrowDeal>[] = [
+  { key: 'newest', label: 'market.sort.newest', compare: byNewest((d) => d.createdAt) },
+  { key: 'value_desc', label: 'market.sort.amountDesc', compare: byNumber((d) => d.valueMinor, -1) },
+];
+
+const dealText = (d: EscrowDeal) => `${d.code} ${d.description} ${d.status} ${d.counterpartyName ?? ''} ${d.counterpartyEmail ?? ''}`;

@@ -34,7 +34,6 @@ const { ProfilePage } = await import('../../apps/web/src/areas/customer/profile/
 const { api } = await import('../../apps/web/src/shared/api');
 const { billableActions, coverage } =
   await import('../../apps/api/src/modules/prc/billable-actions');
-const { MEMBERSHIP_TIERS } = await import('../../apps/api/src/modules/mem/tiers');
 const { revealField } = await import('../../apps/web/src/shared/ui/revealField');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
@@ -724,9 +723,9 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       effectiveFrom: '2026-10-27T12:00:00.000Z',
     });
     const RULES = [
-      RULE('r1', 'service_fee:condition_inspection', 'Per-area condition report against a fixed severity scale'),
-      RULE('r2', 'consignment_fee:auction_house', 'Commission on an auction-house consignment sale'),
-      RULE('r3', 'shipping_addon:gps_tracker', 'A tracker placed in the parcel'),
+      RULE('r1', 'service_fee:surface_condition_rescan', 'Per-area condition report against a fixed severity scale'),
+      RULE('r2', 'consignment_fee:regional_auction_house', 'Commission on an auction-house consignment sale'),
+      RULE('r3', 'shipping_addon:temperature_logger', 'A tracker placed in the parcel'),
     ];
 
     it('breaks the name of an action that has none of its own where it is made of parts, never inside a word', async () => {
@@ -737,14 +736,7 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
             ? RULES
             : path === '/admin/pricing/coverage'
               ? JSON.parse(JSON.stringify(coverage(billableActions(), [])))
-              : path === '/membership/tiers'
-                ? {
-                    tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
-                    uncovered: [],
-                    cycleDays: 30,
-                    currency: 'USD',
-                  }
-                : [],
+              : [],
         )) as never);
       render(
         <I18nProvider>
@@ -1137,12 +1129,6 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
     // What the two management forms are given to show: the price list's actions, and a transaction to open a dispute on.
     const PRICING = {
       '/admin/pricing/coverage': JSON.parse(JSON.stringify(coverage(billableActions(), []))),
-      '/membership/tiers': {
-        tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
-        uncovered: [],
-        cycleDays: 30,
-        currency: 'USD',
-      },
     };
     const DISPUTES = {
       '/admin/transactions': [

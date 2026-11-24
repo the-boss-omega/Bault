@@ -13,6 +13,8 @@ export type LifecycleState =
   | 'at_grader'
   | 'discarded';
 
+export const IN_THE_BUILDING = ['received', 'stored', 'listed', 'on-hold', 'sold'] as const;
+
 const TRANSITIONS: Record<LifecycleState, LifecycleState[]> = {
   received: ['stored'],
   stored: ['listed', 'on-hold', 'sold', 'shipped', 'donated', 'consigned', 'at_grader', 'discarded'],
@@ -26,12 +28,25 @@ const TRANSITIONS: Record<LifecycleState, LifecycleState[]> = {
   discarded: [],
 };
 
+const STATE_WORDS: Record<LifecycleState, string> = {
+  received: 'received',
+  stored: 'stored',
+  listed: 'listed',
+  'on-hold': 'on hold',
+  sold: 'sold',
+  shipped: 'shipped',
+  donated: 'donated',
+  consigned: 'consigned',
+  at_grader: 'at the grader',
+  discarded: 'discarded',
+};
+
 export function assertTransition(from: LifecycleState, to: LifecycleState): void {
   if (from === to) return;
   if (!TRANSITIONS[from].includes(to)) {
     throw new AppError(
       ErrorCode.CONFLICT,
-      `Illegal item transition ${from} → ${to}`,
+      `This item is ${STATE_WORDS[from] ?? from}, so it cannot be ${STATE_WORDS[to] ?? to} now`,
       409,
       { from, to },
     );

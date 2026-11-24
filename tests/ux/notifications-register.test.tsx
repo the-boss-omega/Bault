@@ -130,3 +130,30 @@ describe('the notifications, a register', () => {
     expect(screen.getByText('No notifications yet.')).toBeInTheDocument();
   });
 });
+
+describe('a notification leads to what it is about', () => {
+  it('opens the parcel, the shipment, the offers or the trades it names, by code and never by a raw id', async () => {
+    await renderFeed([
+      note('p', 'parcel_received', { parcelCode: 'PKG-AAAA1111', message: 'Parcel PKG-AAAA1111 arrived.' }, '2026-10-27T12:00:00.000Z'),
+      note('s', 'shipment_out', { shipmentCode: 'SHP-BBBB2222', message: 'Shipment SHP-BBBB2222 left.' }, '2026-10-27T12:01:00.000Z'),
+      note('o', 'offer_countered', { message: 'The seller countered.' }, '2026-10-27T12:02:00.000Z'),
+      note('w', 'swap_completed', { transactionCode: 'TXN-CCCC3333', message: 'Your swap TXN-CCCC3333 was completed.' }, '2026-10-27T12:03:00.000Z'),
+      note('x', 'shipment_out', { message: 'A shipment left.' }, '2026-10-27T12:04:00.000Z'),
+    ]);
+    const entry = (text: string) => screen.getByText(text).closest('li') as HTMLElement;
+
+    within(entry('Parcel PKG-AAAA1111 arrived.')).getByRole('button', { name: 'Open the parcel' }).click();
+    expect(window.location.hash).toBe('#/inbound/parcels?parcel=PKG-AAAA1111');
+
+    within(entry('Shipment SHP-BBBB2222 left.')).getByRole('button', { name: 'Open the shipment' }).click();
+    expect(window.location.hash).toBe('#/shipping-services/tracking?shipment=SHP-BBBB2222');
+
+    within(entry('The seller countered.')).getByRole('button', { name: 'Go to my offers' }).click();
+    expect(window.location.hash).toBe('#/marketplace/offers');
+
+    within(entry('Your swap TXN-CCCC3333 was completed.')).getByRole('button', { name: 'Go to my trades' }).click();
+    expect(window.location.hash).toBe('#/marketplace/trade');
+
+    expect(within(entry('A shipment left.')).queryByRole('button', { name: 'Open the shipment' })).toBeNull();
+  });
+});

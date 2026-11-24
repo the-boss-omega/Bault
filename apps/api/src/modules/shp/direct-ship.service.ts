@@ -7,6 +7,7 @@ import { ErrorCode } from '../../shared/errors/error-codes';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { WalletService } from '../pay/wallet.service';
 import { OutboxService } from '../not/outbox/outbox.service';
+import { PricingService } from '../prc/pricing.service';
 import { charge } from '../pay/pay.schema';
 import { parcel, parcelEvent } from '../inv/parcel.schema';
 import { facility } from '../inv/facility.schema';
@@ -24,6 +25,7 @@ export class DirectShipService {
     private readonly wallet: WalletService,
     private readonly profiles: ParcelProfileService,
     private readonly outbox: OutboxService,
+    private readonly pricing: PricingService,
   ) {}
 
   terms() {
@@ -106,7 +108,11 @@ export class DirectShipService {
       throw AppError.validation('Direct overnight is domestic only.');
     }
 
-    const insuredValueMinor = Math.min(Math.max(0, input.insuredValueMinor ?? 0), MAX_INSURED_VALUE_MINOR);
+    const insuredValueMinor = Math.max(0, input.insuredValueMinor ?? 0);
+    if (insuredValueMinor > MAX_INSURED_VALUE_MINOR) {
+      const message = `Cover stops at ${usdAmount(MAX_INSURED_VALUE_MINOR)} on one parcel. Split it across two.`;
+      throw AppError.validation(message, { problems: [{ field: 'insuredValueMinor', message }] });
+    }
     const premium = insurancePremiumMinor(insuredValueMinor);
     const total = service.flatCostMinor! + premium;
 
@@ -120,8 +126,8 @@ export class DirectShipService {
       const balance = await this.ledger.balanceOf(userId, tx);
       if (balance.amount < total) {
         throw new AppError(
-          ErrorCode.CONFLICT,
-          `Direct overnight is ${usdAmount(total)} and your balance is ${usdAmount(balance.amount)}. Top up first — this one cannot wait, the parcel is sitting at the dock.`,
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `Direct overnight is ${usdAmount(total)} and your balance is ${usdAmount(balance.amount)}. Cash in to your wallet first, this one cannot wait while the parcel is at the dock.`,
           409,
         );
       }
@@ -168,6 +174,10 @@ export class DirectShipService {
             insurancePremium: premium,
             fromFacility: DIRECT_OVERNIGHT_FACILITY,
             cardCount: input.cardCount,
+            tier: await this.pricing.tierOf(userId, tx as Database),
+            discountBps: 0,
+            listMinor: total,
+            chargedMinor: total,
           },
           amount: total,
           currency: DEFAULT_CURRENCY,

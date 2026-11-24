@@ -11,6 +11,8 @@ export const accountStatus = pgEnum('account_status', [
 
 export const userRole = pgEnum('user_role', ['user', 'warehouse_operator', 'admin']);
 
+export const usageTier = pgEnum('usage_tier', ['bronze', 'silver', 'gold']);
+
 export const userAccount = pgTable(
   'user_account',
   {
@@ -28,6 +30,8 @@ export const userAccount = pgTable(
     autoSuspendedAt: timestamp('auto_suspended_at', { withTimezone: true }),
     termsVersion: text('terms_version'),
     termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
+    usageTier: usageTier('usage_tier').notNull().default('bronze'),
+    usageTierComputedAt: timestamp('usage_tier_computed_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => ({

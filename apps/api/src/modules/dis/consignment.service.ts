@@ -14,6 +14,8 @@ import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { ServiceRequestService } from './service.service';
 import { serviceRequest } from './dis.schema';
 import { consignmentEvent } from './consignment-event.schema';
+import { assertItemsUncommitted } from '../../shared/commitments/item-commitments';
+import { usdAmount } from '../shp/shipping-options';
 import { channelFeeAction, checkEligibility, consignmentChannel } from './consignment-channels';
 
 export interface ConsignmentFulfillment {
@@ -93,7 +95,7 @@ export class ConsignmentService {
           .for('update')
           .limit(1);
         if (!event || !event.active) throw AppError.validation('That show is not accepting consignments');
-        if (event.requestDeadline.getTime() < Date.now()) {
+        if (event.requestDeadline.getTime() <= Date.now()) {
           throw new AppError(ErrorCode.CONFLICT, `The deadline for ${event.name} has passed`, 409);
         }
         if (event.capacity > 0) {
@@ -117,6 +119,7 @@ export class ConsignmentService {
         type: 'consignment',
         requesterId: ownerId,
         itemId,
+        commits: 'consigned',
         typeFields: {
           channel: channel.key,
           askingMinor,
@@ -159,12 +162,26 @@ export class ConsignmentService {
       if (!req.itemId) throw AppError.validation('Request has no item');
       const ownerId = req.requesterId;
       const currency = DEFAULT_CURRENCY;
+      const fields = (req.typeFields as Record<string, unknown>) ?? {};
 
-      const channelKey = String((req.typeFields as Record<string, unknown>)?.channel ?? '');
+      const channelKey = String(fields.channel ?? '');
+      const askingMinor = Number(fields.askingMinor ?? 0);
+      if (!Number.isInteger(saleAmountMinor) || saleAmountMinor <= 0) {
+        throw AppError.validation('Record what the card sold for.');
+      }
+      if (askingMinor > 0 && saleAmountMinor < askingMinor) {
+        throw AppError.validation(
+          `It sold for ${usdAmount(saleAmountMinor)}, below the ${usdAmount(askingMinor)} the owner asked for. Get the owner's agreement and record it with support first.`,
+        );
+      }
+
+      await this.custody.lockExpecting(tx, req.itemId, { ownerId });
+      await assertItemsUncommitted(tx, [req.itemId], 'consigned', { serviceRequestId: req.id });
+      await this.ledger.lockWallet(ownerId, tx);
       const base = money(saleAmountMinor, currency);
       const priced =
-        (channelKey ? await this.pricing.tryPrice(channelFeeAction(channelKey), { base }, tx) : null) ??
-        (await this.pricing.price('marketplace_fee', { base }, tx));
+        (channelKey ? await this.pricing.tryPrice(channelFeeAction(channelKey), { base, userId: ownerId }, tx) : null) ??
+        (await this.pricing.price('marketplace_fee', { base, userId: ownerId }, tx));
       const { amount: fee, snapshot } = priced;
 
       await this.ledger.record(
@@ -199,6 +216,7 @@ export class ConsignmentService {
 
       await this.requests.completeWithFulfillment(tx, req.id, operatorId, { ...form }, CONSIGNMENT_REQUIRED, {
         saleAmount: saleAmountMinor,
+        feeChannel: channelKey || null,
         fee: fee.amount,
         transactionId: txn?.id,
       });
@@ -209,14 +227,24 @@ export class ConsignmentService {
 
   async warehouseTransfer(actorId: string, itemId: string, form: TransferFulfillment) {
     return this.custody.run(async (tx) => {
+      const [current] = await tx.select().from(item).where(eq(item.id, itemId)).for('update').limit(1);
+      if (!current) throw AppError.notFound('Item not found');
+      await this.custody.lockExpecting(tx, itemId, { ownerId: current.ownerId });
+      const destination = `EXT:${form.destinationWarehouse}/${form.destinationBin}`;
+      if (current.binId === destination) {
+        throw new AppError(ErrorCode.CONFLICT, 'This card is already recorded at that warehouse and bin.', 409);
+      }
+      await assertItemsUncommitted(tx, [itemId], 'moved to another warehouse');
       const req = await this.requests.create(tx, {
         type: 'warehouse_transfer',
         requesterId: actorId,
         itemId,
+        free: true,
+        allowDuplicate: true,
         typeFields: { destinationWarehouse: form.destinationWarehouse },
       });
       if (!req) throw AppError.validation('Failed to create warehouse-transfer request');
-      await this.custody.relocate(tx, itemId, `EXT:${form.destinationWarehouse}/${form.destinationBin}`, actorId);
+      await this.custody.relocate(tx, itemId, destination, actorId);
       await this.requests.completeWithFulfillment(tx, req.id, actorId, { ...form }, TRANSFER_REQUIRED, {
         destinationWarehouse: form.destinationWarehouse,
         destinationBin: form.destinationBin,

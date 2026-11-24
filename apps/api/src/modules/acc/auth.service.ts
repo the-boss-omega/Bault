@@ -144,7 +144,9 @@ export class AuthService {
     const verified = await argon2.verify(u?.passwordHash ?? (await this.dummyHash), password);
     if (!u || !verified) {
       await this.attempts.record(normalized, u?.id ?? null, 'bad_credentials', origin);
-      throw AppError.unauthenticated('Invalid credentials');
+      throw AppError.unauthenticated(
+        'That email or username and password do not match. Check both, or reset your password.',
+      );
     }
     if (u.status === 'pending') {
       await this.attempts.record(normalized, u.id, 'unverified', origin);
@@ -154,7 +156,7 @@ export class AuthService {
     }
     if (u.status !== 'active' && u.status !== 'suspended') {
       await this.attempts.record(normalized, u.id, 'refused', origin);
-      throw AppError.accountSuspended();
+      throw AppError.accountSuspended(u.status);
     }
 
     const method = await this.mfa.enabledMethod(u.id);
@@ -202,14 +204,13 @@ export class AuthService {
           throw emailCodeRefused(result.refusal, HttpStatus.UNAUTHORIZED);
         case 'refused':
           await this.attempts.record(challenge.identifier, challenge.userId, 'refused', origin);
-          throw AppError.accountSuspended();
+          throw AppError.accountSuspended('closed');
         default:
           throw challengeExpired();
       }
     });
   }
 
-  /** Mails a new code for a sign-in still waiting for one, unless the sign-in lockout is on. */
   async resendSignInCode(challengeToken: string): Promise<{ sentTo: string; resendAfterSeconds: number }> {
     const challenge = await this.mfa.findChallenge(challengeToken);
     if (!challenge) throw challengeExpired();

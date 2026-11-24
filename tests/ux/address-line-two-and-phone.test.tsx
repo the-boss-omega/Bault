@@ -169,7 +169,7 @@ describe('an address has an apartment line and a phone for the carrier', () => {
     const saved = await screen.findByRole('article', { name: 'Flat' });
     expect(lines(saved)).toEqual(['1200 Market St', 'Apt 4B', 'San Francisco, CA 94102', 'United States', '+1 415-555-0134']);
 
-    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await user.click(screen.getByRole('button', { name: 'Edit address Flat' }));
     const item = document.querySelector('.tag-item.is-editing') as HTMLElement;
     const apartment = within(item).getByLabelText(/^Apartment, suite, unit/);
     await user.clear(apartment);

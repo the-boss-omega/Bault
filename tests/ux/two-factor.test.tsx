@@ -28,6 +28,7 @@ vi.mock('../../apps/web/src/shared/api', () => ({
   ApiError: MockApiError,
   apiErrorKey: () => null,
   isUnreachable: () => false,
+  onSessionEnded: () => undefined,
 }));
 
 const { SignInPage } = await import('../../apps/web/src/areas/customer/auth/SignInPage');
@@ -556,7 +557,7 @@ describe('the sign-in log', () => {
       ],
     });
     renderIn(<SignInsSection onError={() => {}} />);
-    expect(await screen.findByText('Wrong code')).toBeInTheDocument();
-    expect(screen.getByText(/password right — code asked for/i)).toBeInTheDocument();
+    expect(await screen.findByText('Wrong code', { ignore: 'option' })).toBeInTheDocument();
+    expect(screen.getByText(/password right — code asked for/i, { ignore: 'option' })).toBeInTheDocument();
   });
 });

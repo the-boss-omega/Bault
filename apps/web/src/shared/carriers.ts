@@ -1,3 +1,4 @@
+import type { TierKey } from './tiers';
 import type { MessageKey, TranslateFn } from './i18n';
 
 export interface CarrierServiceInfo {
@@ -71,6 +72,9 @@ export interface QuotedRate {
   } | null;
   coveredMinor?: number;
   totalMinor: number;
+  tier?: TierKey;
+  discountBps?: number;
+  listTotalMinor?: number;
   recommended: boolean;
 }
 
@@ -163,4 +167,18 @@ export function ruleLabel(t: TranslateFn, problem: RateProblem): string {
 export function formatWeight(grams: number): string {
   if (grams < 1000) return `${grams} g`;
   return `${(grams / 1000).toFixed(grams < 10_000 ? 2 : 1)} kg`;
+}
+
+const TRACKING_PAGES: Record<string, (number: string) => string> = {
+  usps: (n) => `https://tools.usps.com/go/TrackConfirmAction?tLabels=${n}`,
+  ups: (n) => `https://www.ups.com/track?tracknum=${n}`,
+  fedex: (n) => `https://www.fedex.com/fedextrack/?trknbr=${n}`,
+  dhl: (n) => `https://www.dhl.com/global-en/home/tracking/tracking-express.html?submit=1&tracking-id=${n}`,
+};
+
+export function trackingUrl(carrier: string | null | undefined, trackingNumber: string | null | undefined): string | null {
+  const number = trackingNumber?.trim();
+  if (!carrier || !number) return null;
+  const page = TRACKING_PAGES[carrier.trim().toLowerCase()];
+  return page ? page(encodeURIComponent(number)) : null;
 }

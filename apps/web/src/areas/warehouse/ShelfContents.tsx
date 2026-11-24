@@ -7,6 +7,8 @@ import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { EmptyState, ErrorState, SkeletonTable, StatusBadge } from '../../shared/ui/primitives';
 import { Code } from '../../shared/ui/Serial';
 import { IconBox } from '../../shared/ui/icons';
+import { LabelSheet } from './LabelSheet';
+import { ListSearch, NoMatch, matchesQuery } from './ListTools';
 import type { ShelfBin } from './ShelfMap';
 
 interface ShelfItem {
@@ -25,20 +27,14 @@ interface ShelfResponse {
   items: ShelfItem[];
 }
 
-/** The name of a card: what the catalogue line says up to its first " · " (year, set, card). */
 const nameOf = (item: ShelfItem) =>
   (item.description.split(' · ')[0] ?? item.description).trim() || item.typeClass;
 
-/**
- * What is on one shelf, read only: the shelf's label and zone in the drawer's head, how many are on it as the figure
- * of a tag (with what kind of shelf it is and whether it is in use), and under it each item by the number it
- * carries, what it is and where it stands. Nothing here changes anything; a card is moved from the bench that
- * moves cards.
- */
 export function ShelfContents({ bin, onClose }: { bin: ShelfBin; onClose: () => void }) {
   const { t } = useI18n();
   const [shelf, setShelf] = useState<ShelfResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState('');
 
   const load = useCallback(async () => {
     setError(null);
@@ -54,6 +50,9 @@ export function ShelfContents({ bin, onClose }: { bin: ShelfBin; onClose: () => 
   }, [load]);
 
   const count = shelf?.items.length ?? bin.itemCount;
+  const shown = (shelf?.items ?? []).filter((item) =>
+    matchesQuery(q, item.serialNumber, item.barcode, item.description, item.conditionGrade),
+  );
   const state = !bin.active ? 'out' : count === 0 ? 'empty' : 'stocked';
   const stateKey =
     state === 'out'
@@ -70,7 +69,7 @@ export function ShelfContents({ bin, onClose }: { bin: ShelfBin; onClose: () => 
     >
       <DrawerTag
         kicker={t('warehouse.shelf.items')}
-        amount={count.toLocaleString()}
+        amount={count.toLocaleString('en-US')}
         status={
           <StatusBadge
             tone={state === 'stocked' ? 'success' : state === 'out' ? 'error' : 'neutral'}
@@ -94,14 +93,32 @@ export function ShelfContents({ bin, onClose }: { bin: ShelfBin; onClose: () => 
           {t('warehouse.shelf.contents')}
         </h3>
         {error ? (
-          <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />
+          <ErrorState
+            title={t('warehouse.shelf.loadFailed')}
+            message={error}
+            onRetry={() => void load()}
+            retryLabel={t('ui.retry')}
+          />
         ) : shelf === null ? (
           <SkeletonTable rows={Math.min(Math.max(bin.itemCount, 2), 5)} columns={2} />
         ) : shelf.items.length === 0 ? (
-          <EmptyState title={t('warehouse.shelf.empty')} icon={<IconBox />} />
+          <EmptyState title={t('warehouse.shelf.empty')} text={t('warehouse.shelf.emptyText')} icon={<IconBox />} />
         ) : (
+          <>
+          {shelf.items.length > 5 && (
+            <ListSearch
+              inset={false}
+              value={q}
+              onChange={setQ}
+              label={t('warehouse.shelf.search')}
+              placeholder={t('warehouse.shelf.searchPlaceholder')}
+              shown={shown.length}
+              total={shelf.items.length}
+            />
+          )}
+          {shown.length === 0 && <NoMatch onClear={() => setQ('')} />}
           <ul className="shelf-items">
-            {shelf.items.map((item) => (
+            {shown.map((item) => (
               <li className="shelf-item" key={item.id}>
                 <span className="shelf-item-serial">
                   <Code value={item.serialNumber} />
@@ -121,8 +138,19 @@ export function ShelfContents({ bin, onClose }: { bin: ShelfBin; onClose: () => 
               </li>
             ))}
           </ul>
+          </>
         )}
       </section>
+
+      {shelf && shelf.items.length > 0 && (
+        <LabelSheet
+          showCodes={false}
+          targets={{
+            kind: 'items',
+            items: shelf.items.map((item) => ({ id: item.id, code: item.barcode })),
+          }}
+        />
+      )}
     </DetailDrawer>
   );
 }
