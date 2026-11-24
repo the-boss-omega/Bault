@@ -38,7 +38,7 @@ const CREDENTIAL_HEADERS = new Set([
   'x-api-key',
 ]);
 
-const SECRET_BODY_ROUTES = [/(^|\/)auth(\/|$)/, /(^|\/)me\/password/];
+const SECRET_BODY_ROUTES = [/(^|\/)auth(\/|$)/, /(^|\/)me\/password/, /(^|\/)me\/email(\/|$)/];
 
 function pathOf(url: string | undefined): string {
   if (!url) return '';

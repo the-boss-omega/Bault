@@ -13,6 +13,7 @@ import { MfaService } from './mfa/mfa.service';
 export interface ProfileView {
   id: string;
   email: string;
+  pendingEmail: string | null;
   username: string;
   role: string;
   status: string;
@@ -77,6 +78,7 @@ export class ProfileService {
     return {
       id: u.id,
       email: u.email,
+      pendingEmail: u.pendingEmail,
       username: u.username,
       role: u.role,
       status: u.status,

@@ -150,6 +150,40 @@ export function renderEmail(template: string, variables: Record<string, string>)
         },
         link,
       );
+    case 'email_change':
+      return actionEmail(
+        {
+          kicker: 'CONFIRM YOUR NEW ADDRESS',
+          heading: 'Confirm your new email address',
+          body: 'Somebody signed in to a Card Embassy account asked to use this address for it from now on. Follow the link below to confirm it. Until you do, the account keeps its old address.',
+          action: 'Confirm new address',
+          footer: 'The link is valid for 24 hours and can be used once. Opening it signs the account out everywhere else. If you did not ask for this, ignore this message and nothing will change.',
+        },
+        link,
+      );
+    case 'email_change_notice': {
+      const to = variables.newAddress ?? 'a new address';
+      const support = variables.support ? ` at ${variables.support}` : '';
+      const action = variables.support ? 'Write to support' : 'Contact support';
+      return actionEmail(
+        variables.stage === 'changed'
+          ? {
+              kicker: 'EMAIL ADDRESS CHANGED',
+              heading: 'Your email address was changed',
+              body: `The email address on your Card Embassy account is now ${to}. Mail about the account goes there from now on, and the account was signed out everywhere else.`,
+              action,
+              footer: `If this was not you, contact Card Embassy support at once${support}: this address no longer signs in to the account.`,
+            }
+          : {
+              kicker: 'EMAIL CHANGE REQUESTED',
+              heading: 'A change of email address was asked for',
+              body: `Somebody asked to change the email address on your Card Embassy account to ${to}. Nothing changes until the link sent to the new address is opened, and that link stops working after 24 hours.`,
+              action,
+              footer: `If this was not you, sign in and cancel it under Profile → Details, change your password, and contact Card Embassy support${support}. If it was you, there is nothing to do here.`,
+            },
+        link,
+      );
+    }
     case 'mfa_email_code': {
       const minutes = variables.minutes ?? '10';
       const settings = variables.purpose === 'settings';

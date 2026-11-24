@@ -5,7 +5,7 @@ import { notificationMessage } from '../../apps/worker/src/jobs/notification-mes
 const LINK = 'https://app.example.test/#/verify-email?token=abc123';
 
 describe('the account emails a collector receives first', () => {
-  for (const template of ['email_verification', 'password_reset']) {
+  for (const template of ['email_verification', 'password_reset', 'email_change', 'email_change_notice']) {
     it(`${template} is one message, in English`, () => {
       const { html, text } = renderEmail(template, { link: LINK });
       expect(html.split('lang="en"').length - 1).toBe(1);

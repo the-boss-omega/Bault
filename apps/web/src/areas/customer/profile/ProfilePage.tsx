@@ -41,6 +41,7 @@ import { IconLocation, IconPlus, IconUser } from '../../../shared/ui/icons';
 interface Profile {
   id: string;
   email: string;
+  pendingEmail?: string | null;
   username: string;
   role: string;
   status: string;
@@ -48,7 +49,11 @@ interface Profile {
   lastName: string | null;
   fullName: string;
   nameReviewRequired: boolean;
+  mfaMethod?: 'totp' | 'email' | null;
+  mfaRequired?: boolean;
 }
+
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 
 const ROLE_LABEL: Record<string, MessageKey> = {
@@ -239,6 +244,10 @@ export function ProfilePage() {
               </div>
             </div>
           </Panel>
+
+          {profile && (
+            <EmailPanel profile={profile} onChanged={load} onStatus={setStatus} onError={setError} />
+          )}
         </TabPanel>
       )}
 
@@ -439,6 +448,135 @@ function PasswordPanel({
         <div className="row request-form-actions">
           <Button variant="primary" loading={busy} disabled={!ready} onClick={() => void save()}>
             {t('profile.password.submit')}
+          </Button>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function EmailPanel({
+  profile,
+  onChanged,
+  onStatus,
+  onError,
+}: {
+  profile: Profile;
+  onChanged: () => Promise<void>;
+  onStatus: (message: string) => void;
+  onError: (message: string) => void;
+}) {
+  const { t } = useI18n();
+  const [next, setNext] = useState('');
+  const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState<'send' | 'resend' | 'cancel' | null>(null);
+
+  const needsCode = profile.mfaMethod === 'totp' || profile.mfaRequired === true;
+  const address = next.trim();
+  const digits = code.replace(/\s/g, '');
+  const same = address.toLowerCase() === profile.email.toLowerCase();
+  const shaped = EMAIL_SHAPE.test(address);
+  const fieldError =
+    address === '' ? undefined : same ? t('profile.email.same') : !shaped ? t('profile.email.invalid') : undefined;
+  const ready = shaped && !same && password.length > 0 && (!needsCode || digits.length > 0);
+
+  async function run(kind: 'send' | 'resend' | 'cancel', work: () => Promise<string>) {
+    setBusy(kind);
+    try {
+      const message = await work();
+      await onChanged();
+      onStatus(message);
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const send = () =>
+    run('send', async () => {
+      const result = await api.post<{ pendingEmail: string }>('/me/email', {
+        email: address,
+        currentPassword: password,
+        ...(needsCode ? { code: digits } : {}),
+      });
+      setNext('');
+      setPassword('');
+      setCode('');
+      return t('profile.email.sent', { address: result.pendingEmail });
+    });
+
+  const resend = () =>
+    run('resend', async () => {
+      const result = await api.post<{ pendingEmail: string }>('/me/email/resend', {});
+      return t('profile.email.resent', { address: result.pendingEmail });
+    });
+
+  const cancel = () =>
+    run('cancel', async () => {
+      await api.del('/me/email');
+      return t('profile.email.cancelled');
+    });
+
+  return (
+    <Panel title={t('profile.email.heading')} subtitle={t('profile.email.subtitle')}>
+      <div className="stack stack--tight">
+        {profile.pendingEmail && (
+          <div className="stack stack--tight">
+            <StatusBadge tone="warning">{t('profile.email.pending')}</StatusBadge>
+            <p className="field-hint">
+              {t('profile.email.pendingText', { address: profile.pendingEmail, current: profile.email })}
+            </p>
+            <div className="row">
+              <Button size="sm" variant="secondary" loading={busy === 'resend'} disabled={busy !== null} onClick={() => void resend()}>
+                {t('profile.email.resend')}
+              </Button>
+              <Button size="sm" variant="ghost" loading={busy === 'cancel'} disabled={busy !== null} onClick={() => void cancel()}>
+                {t('profile.email.cancel')}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="form-grid">
+          <Field label={t('profile.email.new')} error={fieldError}>
+            <input
+              type="email"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              autoComplete="email"
+              aria-invalid={fieldError !== undefined}
+              dir="ltr"
+            />
+          </Field>
+
+          <Field label={t('profile.password.current')}>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              dir="ltr"
+            />
+          </Field>
+
+          {needsCode && (
+            <Field label={t('profile.email.code')}>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                dir="ltr"
+              />
+            </Field>
+          )}
+        </div>
+
+        <div className="row">
+          <Button variant="primary" loading={busy === 'send'} disabled={!ready || busy !== null} onClick={() => void send()}>
+            {t('profile.email.submit')}
           </Button>
         </div>
       </div>

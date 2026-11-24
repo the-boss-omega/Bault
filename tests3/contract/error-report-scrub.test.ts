@@ -166,6 +166,16 @@ describe('a crash on a credential route', () => {
     }
   });
 
+  it('drops the body of an email change, which carries the current password and a code', () => {
+    for (const url of ['/api/v1/me/email', '/api/v1/me/email/resend']) {
+      const out = scrubErrorEvent(
+        crashDuring('POST', url, { email: 'next@example.test', currentPassword: 'old-secret-pw', code: '123456' }),
+      );
+      expect(leaks(out, 'old-secret-pw', 'next@example.test', '123456'), url).toEqual([]);
+      expect(out?.request?.data, url).toBeUndefined();
+    }
+  });
+
   it('does not mistake a route that merely mentions the word for one of them', () => {
     const out = scrubErrorEvent(crashDuring('POST', '/api/v1/admin/authors-note', { note: 'typed by the customer' }));
     expect(out?.request?.data).toEqual(['note']);
