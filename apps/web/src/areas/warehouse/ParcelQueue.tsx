@@ -187,7 +187,7 @@ export function ParcelQueue({
                       </span>
                     </td>
                     <td data-label={t('parcelQueue.col.units')} className="td-end num">
-                      {row.itemCount.toLocaleString()}
+                      {row.itemCount.toLocaleString('en-US')}
                     </td>
                     <td data-label={t('parcelQueue.col.status')}>
                       <StatusBadge tone={PARCEL_TONE[row.status] ?? 'neutral'}>

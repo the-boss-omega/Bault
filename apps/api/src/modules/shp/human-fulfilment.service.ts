@@ -202,8 +202,8 @@ export class HumanFulfilmentService {
       const balance = await this.ledger.balanceOf(s.userId, tx);
       if (balance.amount < s.quoteMinor) {
         throw new AppError(
-          ErrorCode.CONFLICT,
-          `Short by ${usdAmount(s.quoteMinor - balance.amount)}. Top up the wallet and accept again.`,
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `Short by ${usdAmount(s.quoteMinor - balance.amount)}. Cash in to your wallet and accept again.`,
           409,
         );
       }

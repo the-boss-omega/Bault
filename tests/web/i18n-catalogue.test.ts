@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { DEFAULT_LOCALE, LOCALES, MESSAGE_KEYS, hasMessage, t } from '../../apps/web/src/shared/i18n';
 
 describe('message catalogues', () => {
@@ -59,7 +61,7 @@ describe('retired keys are really gone', () => {
   it('replaced the tracking-by-id strings with list strings', () => {
     expect(hasMessage('ss.tracking.idLabel')).toBe(false);
     expect(hasMessage('ss.tracking.idPlaceholder')).toBe(false);
-    expect(hasMessage('ss.tracking.searchPlaceholder')).toBe(true);
+    expect(hasMessage('ss.tracking.searchPlaceholder')).toBe(false);
     expect(hasMessage('ss.tracking.col.username')).toBe(false);
   });
 });
@@ -83,5 +85,45 @@ describe('brand', () => {
   it('names Card Embassy in the strings that carry the product name', () => {
     expect(t('app.title')).toContain('Card Embassy');
     expect(t('error.unreachable')).toContain('Card Embassy');
+  });
+});
+
+describe('every catalogued string is used', () => {
+  const root = resolve(__dirname, '../../apps/web/src');
+
+  function sources(dir: string): string[] {
+    return readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) return sources(path);
+      return /\.(ts|tsx)$/.test(name) ? [path] : [];
+    });
+  }
+
+  it('has no key that no screen asks for, counting a key built from a literal prefix as used', () => {
+    const catalogue = readFileSync(join(root, 'shared/i18n.tsx'), 'utf8');
+    const start = catalogue.indexOf('const en = {');
+    const end = catalogue.indexOf('} as const;', start);
+    expect(start).toBeGreaterThan(-1);
+    const code = sources(root)
+      .map((path) => {
+        const text = readFileSync(path, 'utf8');
+        return path.endsWith(join('shared', 'i18n.tsx')) ? text.slice(0, start) + text.slice(end) : text;
+      })
+      .join('\n');
+
+    const literals = new Set<string>();
+    for (const m of code.matchAll(/'([^'\\\n]*)'|"([^"\\\n]*)"/g)) literals.add(m[1] ?? m[2] ?? '');
+    for (const m of code.matchAll(/`([a-zA-Z][\w.-]*)`/g)) literals.add(m[1]!);
+    const prefixes = new Set<string>();
+    for (const m of code.matchAll(/`([^`$]*)\$\{/g)) if (m[1]!.includes('.')) prefixes.add(m[1]!);
+    for (const literal of literals) if (/^[a-zA-Z][\w-]*(\.[\w-]+)*\.$/.test(literal)) prefixes.add(literal);
+    for (const m of code.matchAll(/`\$\{([^}]*)\}\./g)) {
+      for (const stem of m[1]!.matchAll(/'([^'\\\n]+)'|"([^"\\\n]+)"/g)) prefixes.add(`${stem[1] ?? stem[2]}.`);
+    }
+
+    const unused = MESSAGE_KEYS.filter(
+      (key) => !literals.has(key) && ![...prefixes].some((prefix) => key.startsWith(prefix)),
+    );
+    expect(unused).toEqual([]);
   });
 });

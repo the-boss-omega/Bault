@@ -108,7 +108,7 @@ export class CheckoutService {
     if (!this.instantAvailable()) {
       throw AppError.conflict(
         ErrorCode.CONFLICT,
-        `${route.label} top-ups are not available yet. Raise a cash-in request by bank transfer or PayPal Friends & Family and it will be reviewed.`,
+        `Cashing in by ${route.label} is not available yet. Raise a cash-in request by bank transfer or PayPal Friends & Family and it will be reviewed.`,
       );
     }
 

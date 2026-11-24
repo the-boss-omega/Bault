@@ -19,6 +19,13 @@ export interface BrowseFilters {
   minPrice?: number;
   maxPrice?: number;
   sort?: BrowseSort;
+  cursor?: string;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function badCursor(): AppError {
+  return AppError.validation('cursor has to be the id of the last listing of the page before.', { field: 'cursor' });
 }
 
 @Injectable()
@@ -29,7 +36,7 @@ export class BrowseService {
   ) {}
 
   async list(limit = 50, filters: BrowseFilters = {}) {
-    const { q, type, condition, minPrice, maxPrice, sort = 'newest' } = filters;
+    const { q, type, condition, minPrice, maxPrice, sort = 'newest', cursor } = filters;
     const conditions = [eq(listing.status, 'active')];
     if (q && q.trim() !== '') {
       const pattern = `%${q.trim()}%`;
@@ -42,12 +49,26 @@ export class BrowseService {
     if (Number.isFinite(minPrice)) conditions.push(gte(listing.askingPrice, minPrice as number));
     if (Number.isFinite(maxPrice)) conditions.push(lte(listing.askingPrice, maxPrice as number));
 
+    if (cursor !== undefined) {
+      if (!UUID.test(cursor)) throw badCursor();
+      const [after] = await this.db.select({ id: listing.id }).from(listing).where(eq(listing.id, cursor)).limit(1);
+      if (!after) throw badCursor();
+      const at = sql`(SELECT c.asking_price, c.published_at, c.id FROM listing c WHERE c.id = ${after.id}::uuid)`;
+      conditions.push(
+        sort === 'price_asc'
+          ? sql`(${listing.askingPrice}, ${listing.publishedAt}, ${listing.id}) > ${at}`
+          : sort === 'price_desc'
+            ? sql`(${listing.askingPrice}, ${listing.publishedAt}, ${listing.id}) < ${at}`
+            : sql`(${listing.publishedAt}, ${listing.id}) < (SELECT c.published_at, c.id FROM listing c WHERE c.id = ${after.id}::uuid)`,
+      );
+    }
+
     const order =
       sort === 'price_asc'
-        ? sql`${listing.askingPrice} asc`
+        ? [sql`${listing.askingPrice} asc`, sql`${listing.publishedAt} asc`, sql`${listing.id} asc`]
         : sort === 'price_desc'
-          ? sql`${listing.askingPrice} desc`
-          : sql`${listing.publishedAt} desc`;
+          ? [sql`${listing.askingPrice} desc`, sql`${listing.publishedAt} desc`, sql`${listing.id} desc`]
+          : [sql`${listing.publishedAt} desc`, sql`${listing.id} desc`];
 
     const rows = await this.db
       .select({
@@ -65,7 +86,7 @@ export class BrowseService {
       .innerJoin(item, sql`${item.id}::text = ${listing.itemId}`)
       .leftJoin(userAccount, sql`${userAccount.id}::text = ${listing.sellerId}`)
       .where(and(...conditions))
-      .orderBy(order)
+      .orderBy(...order)
       .limit(clampLimit(limit, { max: 200, fallback: 50 }));
 
     return Promise.all(

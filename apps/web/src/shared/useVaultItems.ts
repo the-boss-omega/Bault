@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from './api';
+import { getAllPages } from './paging';
 
 export interface VaultItem {
   id: string;
@@ -17,7 +17,7 @@ export function useVaultItems(storedOnly = false) {
 
   const reload = useCallback(async () => {
     try {
-      const all = await api.get<VaultItem[]>('/vault/items');
+      const all = await getAllPages<VaultItem>('/vault/items');
       setItems(storedOnly ? all.filter((i) => i.lifecycleState === 'stored') : all);
       setError(null);
     } catch (e) {

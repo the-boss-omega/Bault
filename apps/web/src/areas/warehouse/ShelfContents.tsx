@@ -27,16 +27,9 @@ interface ShelfResponse {
   items: ShelfItem[];
 }
 
-/** The name of a card: what the catalogue line says up to its first " · " (year, set, card). */
 const nameOf = (item: ShelfItem) =>
   (item.description.split(' · ')[0] ?? item.description).trim() || item.typeClass;
 
-/**
- * What is on one shelf, read only: the shelf's label and zone in the drawer's head, how many are on it as the figure
- * of a tag (with what kind of shelf it is and whether it is in use), and under it each item by the number it
- * carries, what it is and where it stands. Nothing here changes anything; a card is moved from the bench that
- * moves cards.
- */
 export function ShelfContents({ bin, onClose }: { bin: ShelfBin; onClose: () => void }) {
   const { t } = useI18n();
   const [shelf, setShelf] = useState<ShelfResponse | null>(null);
@@ -76,7 +69,7 @@ export function ShelfContents({ bin, onClose }: { bin: ShelfBin; onClose: () => 
     >
       <DrawerTag
         kicker={t('warehouse.shelf.items')}
-        amount={count.toLocaleString()}
+        amount={count.toLocaleString('en-US')}
         status={
           <StatusBadge
             tone={state === 'stocked' ? 'success' : state === 'out' ? 'error' : 'neutral'}

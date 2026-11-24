@@ -333,7 +333,7 @@ export class ShipmentEditService {
         if (balance.amount < feeMinor) {
           throw new AppError(
             ErrorCode.INSUFFICIENT_BALANCE,
-            `Cancelling now costs the ${usdAmount(feeMinor)} restocking fee, and after the refund the wallet would hold ${usdAmount(balance.amount)}. Top up first, or let the shipment go.`,
+            `Cancelling now costs the ${usdAmount(feeMinor)} restocking fee, and after the refund the wallet would hold ${usdAmount(balance.amount)}. Cash in to your wallet first, or let the shipment go.`,
             409,
             { shortfallMinor: feeMinor - balance.amount },
           );

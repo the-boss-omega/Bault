@@ -42,6 +42,15 @@ interface Listing {
   imageUrl?: string;
 }
 
+const BROWSE_PAGE = 50;
+
+function browsePage(search: string, cursor?: string): string {
+  const params = new URLSearchParams(search);
+  params.set('limit', String(BROWSE_PAGE));
+  if (cursor) params.set('cursor', cursor);
+  return params.toString();
+}
+
 const TABS = ['browse', 'sell', 'listings', 'offers', 'trade', 'store'] as const;
 type MarketTab = (typeof TABS)[number];
 
@@ -51,6 +60,9 @@ export function MarketplacePage() {
   const { goTab, setParams } = useNavigation(route);
 
   const [listings, setListings] = useState<Listing[] | null>(null);
+  const [moreListings, setMoreListings] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,13 +124,33 @@ export function MarketplacePage() {
 
   const loadListings = useCallback(async (search: string) => {
     try {
-      setListings(await api.get<Listing[]>(`/marketplace/listings?${search}`));
+      const page = await api.get<Listing[]>(`/marketplace/listings?${browsePage(search)}`);
+      setListings(page);
+      setMoreListings(page.length === BROWSE_PAGE);
+      setMoreError(null);
       setLoadError(null);
     } catch (e) {
       setLoadError((e as Error).message);
       setListings([]);
+      setMoreListings(false);
     }
   }, []);
+
+  async function showMoreListings() {
+    const last = listings?.[listings.length - 1];
+    if (!last) return;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const page = await api.get<Listing[]>(`/marketplace/listings?${browsePage(query, last.id)}`);
+      setListings((prev) => [...(prev ?? []), ...page.filter((l) => !(prev ?? []).some((p) => p.id === l.id))]);
+      setMoreListings(page.length === BROWSE_PAGE);
+    } catch (e) {
+      setMoreError((e as Error).message);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     const handle = setTimeout(() => void loadListings(query), 250);
@@ -233,9 +265,11 @@ export function MarketplacePage() {
 
               {listings !== null && (
                 <span className="vault-count" role="status">
-                  {listings.length === 1
-                    ? t('market.listingsCountOne')
-                    : t('market.listingsCount', { count: listings.length })}
+                  {moreListings
+                    ? t('market.listingsCountMore', { count: listings.length })
+                    : listings.length === 1
+                      ? t('market.listingsCountOne')
+                      : t('market.listingsCount', { count: listings.length })}
                 </span>
               )}
             </div>
@@ -332,6 +366,14 @@ export function MarketplacePage() {
                 ))}
               </ul>
             )}
+            {!loadError && listings !== null && moreListings && (
+              <div className="actions">
+                {moreError && <ErrorState message={moreError} />}
+                <Button variant="secondary" disabled={loadingMore} onClick={() => void showMoreListings()}>
+                  {loadingMore ? t('market.showingMore') : t('market.showMore')}
+                </Button>
+              </div>
+            )}
           </Panel>
         </TabPanel>
       )}
@@ -364,6 +406,7 @@ export function MarketplacePage() {
       {tab === 'offers' && (
         <TabPanel tab="offers">
           <OffersPanel
+            initialQuery={route.params.search ?? ''}
             onChanged={async (m) => {
               setStatus(m);
               await loadListings(query);

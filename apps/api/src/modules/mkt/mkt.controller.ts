@@ -46,6 +46,7 @@ export class MktController {
     @Query('minPrice') minPrice?: string,
     @Query('maxPrice') maxPrice?: string,
     @Query('sort') sort?: string,
+    @Query('cursor') cursor?: string,
   ) {
     const price = (raw: string | undefined) => {
       const n = Number(raw);
@@ -58,6 +59,7 @@ export class MktController {
       minPrice: price(minPrice),
       maxPrice: price(maxPrice),
       sort: BROWSE_SORTS.includes(sort as BrowseSort) ? (sort as BrowseSort) : 'newest',
+      cursor: cursor === undefined || cursor === '' ? undefined : cursor,
     });
   }
 

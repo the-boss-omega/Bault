@@ -12,6 +12,7 @@ export interface LegalDocument {
   downloadPath: string | null;
   draft?: boolean;
   version?: string;
+  preformatted?: boolean;
   sections: LegalSection[];
 }
 
@@ -320,6 +321,7 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
   },
   {
     "id": "ofl-1-1",
+    "preformatted": true,
     "title": "Font licence: SIL Open Font License, Version 1.1",
     "provenance": "legal.provenance.ofl",
     "lastUpdated": "2007-02-26",

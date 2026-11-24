@@ -209,6 +209,27 @@ describe('the transactions list', () => {
     );
   });
 
+  it('names an interest charge in words, not by the raw reference type', async () => {
+    window.location.hash = '#/wallet/transactions';
+    const interest = {
+      id: 'l9',
+      type: 'interest',
+      amount: 37,
+      direction: 'debit',
+      currency: 'USD',
+      referenceType: 'interest',
+      referenceId: 'i9',
+      chargeAction: null,
+      chargeItemClass: null,
+      occurredAt: '2026-11-22T12:00:00.000Z',
+    };
+    const base = walletApi();
+    get.mockImplementation((path: string) => (path === '/finance/ledger' ? Promise.resolve([...LEDGER, interest]) : base(path)));
+    renderIn(<WalletPage />);
+    await waitFor(() => expect(screen.getAllByText('Interest on a negative balance').length).toBeGreaterThan(0));
+    expect(screen.queryByText('interest')).toBeNull();
+  });
+
   it('is searched by what a movement was for and by its amount', async () => {
     window.location.hash = '#/wallet/transactions';
     get.mockImplementation(walletApi());
