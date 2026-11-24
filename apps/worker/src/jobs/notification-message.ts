@@ -92,6 +92,24 @@ export function notificationMessage(eventType: string, payload: Payload | null):
         ? `Your offer on ${what} was countered at ${usd(amount)}.`
         : `Your offer on ${what} was countered.`;
     }
+    case 'offer_accepted': {
+      const what = cardNamed(p, 'the card');
+      return amount != null
+        ? `The seller accepted your offer of ${usd(amount)} on ${what}. It is paid for and in your vault.`
+        : `The seller accepted your offer on ${what}. It is paid for and in your vault.`;
+    }
+    case 'offer_rejected': {
+      const what = cardNamed(p, 'the card');
+      const at = amount != null ? ` of ${usd(amount)}` : '';
+      if (str(p, 'rejectedBy') === 'buyer') {
+        return str(p, 'proposedBy') === 'seller'
+          ? `The buyer turned down your counter-offer${at} on ${what}. Your listing stays up.`
+          : `The buyer withdrew their offer${at} on ${what}. Your listing stays up.`;
+      }
+      return str(p, 'proposedBy') === 'seller'
+        ? `The seller withdrew their counter-offer${at} on ${what}. You can make a new offer.`
+        : `The seller turned down your offer${at} on ${what}. You can make a new offer.`;
+    }
     case 'shipment_out': {
       const tracking = str(p, 'trackingNumber');
       const shipment = named(p, 'Shipment', 'shipmentCode', 'Your shipment');
@@ -250,6 +268,8 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     }
     case 'escrow_returned':
       return `${cap(named(p, 'deal', 'dealCode', 'your deal'))} was returned — ${str(p, 'reason') ?? 'see the deal for the reason'}. Any held funds have gone back to the buyer.`;
+    case 'escrow_cancelled':
+      return `${cap(named(p, 'deal', 'dealCode', 'a deal'))} was called off before any money was held. ${str(p, 'reason') ? `The reason given: ${str(p, 'reason')}` : 'See the deal for the reason.'}`;
     case 'white_glove_requested': {
       const hours = num(p, 'quoteWithinHours');
       return hours != null
@@ -279,6 +299,17 @@ export function notificationMessage(eventType: string, payload: Payload | null):
       return `Another collector proposed a swap with you — review it in the marketplace.`;
     case 'swap_completed':
       return `Your swap${code(p, 'transactionCode') ? ` ${code(p, 'transactionCode')}` : ''} was completed and ownership of the items has transferred.`;
+    case 'swap_rejected': {
+      const gift = str(p, 'kind') === 'gift';
+      if (str(p, 'rejectedBy') === 'proposer') {
+        return gift
+          ? `A gift that was waiting for you was withdrawn by the collector who offered it.`
+          : `A swap proposed to you was withdrawn by the collector who proposed it.`;
+      }
+      return gift
+        ? `The collector you offered a gift to turned it down. The card stays in your vault.`
+        : `Your swap proposal was turned down. Your cards stay in your vault.`;
+    }
     case 'transfer_completed':
       return `Your item transfer${code(p, 'transactionCode') ? ` ${code(p, 'transactionCode')}` : ''} was completed and ownership has changed.`;
     case 'buyout_quoted':

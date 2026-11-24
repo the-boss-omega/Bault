@@ -44,6 +44,19 @@ export const ADDRESS_LINE2_MAX = 100;
 
 const PHONE = /^(?=(?:.*\d){6})[0-9+\- ]{6,20}$/;
 
+// eslint-disable-next-line no-control-regex -- control characters are exactly what this rejects
+const MARKUP_OR_CONTROL = /[<>\u0000-\u001f\u007f]/;
+
+const ADDRESS_TEXT = {
+  label: { name: 'label', max: 60 },
+  recipient: { name: 'recipient', max: 120 },
+  line1: { name: 'street address', max: 120 },
+  city: { name: 'city', max: 80 },
+  postalCode: { name: 'postal code', max: 16 },
+} as const;
+
+type AddressTextField = keyof typeof ADDRESS_TEXT;
+
 export type AddressPatch = Partial<AddressInput>;
 
 @Injectable()
@@ -112,14 +125,14 @@ export class ProfileService {
         .insert(shippingAddress)
         .values({
           userId,
-          label: dto.label,
-          recipient: dto.recipient,
-          line1: dto.line1,
+          label: addressText('label', dto.label),
+          recipient: addressText('recipient', dto.recipient),
+          line1: addressText('line1', dto.line1),
           line2: line2Of(dto.line2),
-          city: dto.city,
+          city: addressText('city', dto.city),
           region,
           country,
-          postalCode: dto.postalCode,
+          postalCode: addressText('postalCode', dto.postalCode),
           phone: phoneOf(dto.phone),
           isDefault: dto.isDefault ?? false,
         })
@@ -139,10 +152,11 @@ export class ProfileService {
       if (!existing) throw AppError.notFound('Address not found');
 
       const set: Record<string, unknown> = {};
-      for (const f of ['label', 'recipient', 'line1', 'city', 'country', 'postalCode'] as const) {
+      for (const f of ['label', 'recipient', 'line1', 'city', 'postalCode'] as const) {
         if (patch[f] === undefined) continue;
-        set[f] = f === 'country' ? (toCountryCode(patch[f]!) ?? patch[f]) : patch[f];
+        set[f] = addressText(f, patch[f]);
       }
+      if (patch.country !== undefined) set.country = toCountryCode(patch.country) ?? patch.country;
       if (patch.country !== undefined || patch.region !== undefined) {
         const country = (set.country as string | undefined) ?? existing.country;
         set.region = regionFor(country, patch.region !== undefined ? patch.region : existing.region);
@@ -196,10 +210,24 @@ function regionFor(country: string, value: string | null | undefined): string | 
   return result.region;
 }
 
+function addressText(field: AddressTextField, value: string): string {
+  const { name, max } = ADDRESS_TEXT[field];
+  const text = value.trim().replace(/\s+/g, ' ');
+  if (text === '') throw AppError.validation(`The ${name} is required.`);
+  if (text.length > max) throw AppError.validation(`The ${name} can be at most ${max} characters.`);
+  if (MARKUP_OR_CONTROL.test(value.trim())) {
+    throw AppError.validation(`The ${name} cannot contain < or > or control characters.`);
+  }
+  return text;
+}
+
 function line2Of(value: string | null | undefined): string | null {
   const line = (value ?? '').trim();
   if (line.length > ADDRESS_LINE2_MAX) {
     throw AppError.validation(`The apartment, suite or unit line is at most ${ADDRESS_LINE2_MAX} characters`);
+  }
+  if (MARKUP_OR_CONTROL.test(line)) {
+    throw AppError.validation('The apartment, suite or unit line cannot contain < or > or control characters.');
   }
   return line || null;
 }

@@ -5,6 +5,7 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
+import { formatMinor } from '../../shared/money';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { IdempotencyService } from '../../shared/idempotency/idempotency.service';
 import { CustodyService } from '../cst/custody.service';
@@ -35,9 +36,7 @@ export interface HousePurchaseResult {
   orderCode: string;
   itemId: string;
   serialNumber: string;
-  barcode: string;
   price: number;
-  transactionId: string;
   replayed?: boolean;
 }
 
@@ -161,7 +160,11 @@ export class HouseStoreService {
       const currency = product.currency;
       const balance = await this.ledger.balanceOf(buyerId, tx);
       if (balance.amount < price) {
-        throw new AppError(ErrorCode.INSUFFICIENT_BALANCE, 'Insufficient wallet balance', 409);
+        throw new AppError(
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `Your balance is ${formatMinor(balance.amount)} and this card costs ${formatMinor(price)}. Add money first, then buy it.`,
+          409,
+        );
       }
 
       const serialNumber = makeItemSerial();
@@ -228,9 +231,7 @@ export class HouseStoreService {
         orderCode,
         itemId: created.id,
         serialNumber: created.serialNumber,
-        barcode: created.barcode,
         price,
-        transactionId: txn.id,
       };
       await this.idempotency.complete(tx as Database, key, endpoint, 201, result);
       return result;

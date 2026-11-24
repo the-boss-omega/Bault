@@ -43,9 +43,12 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
 
   { key: 'offer_received', category: 'marketplace', label: 'You receive an offer', emailByDefault: true },
   { key: 'offer_countered', category: 'marketplace', label: 'Your offer is countered', emailByDefault: true },
+  { key: 'offer_accepted', category: 'marketplace', label: 'The seller accepts your offer', emailByDefault: true },
+  { key: 'offer_rejected', category: 'marketplace', label: 'An offer is turned down or withdrawn', emailByDefault: true },
   { key: 'item_sold', category: 'marketplace', label: 'One of your items sells', emailByDefault: true },
   { key: 'swap_proposed', category: 'marketplace', label: 'Somebody proposes a swap', emailByDefault: true },
   { key: 'swap_completed', category: 'marketplace', label: 'A swap completes', emailByDefault: true },
+  { key: 'swap_rejected', category: 'marketplace', label: 'A swap or gift is turned down or withdrawn', emailByDefault: true },
   { key: 'transfer_completed', category: 'marketplace', label: 'A gift transfer completes', emailByDefault: true },
   { key: 'buyout_quoted', category: 'marketplace', label: 'Card Embassy quotes you for a buyout', emailByDefault: true },
   { key: 'custom_request_raised', category: 'custody', label: 'We have your custom request', emailByDefault: false },
@@ -76,6 +79,7 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
   { key: 'escrow_inspected', category: 'marketplace', label: 'A deal card has been inspected', emailByDefault: true },
   { key: 'escrow_settled', category: 'marketplace', label: 'A deal settles', emailByDefault: true },
   { key: 'escrow_returned', category: 'marketplace', label: 'A deal is returned', emailByDefault: true },
+  { key: 'escrow_cancelled', category: 'marketplace', label: 'A deal is called off before it is funded', emailByDefault: true },
 
   { key: 'white_glove_requested', category: 'shipping', label: 'We have your hand-delivery request', emailByDefault: false },
   { key: 'white_glove_quoted', category: 'shipping', label: 'Your hand delivery is quoted', emailByDefault: true },

@@ -9,10 +9,6 @@ import { Public } from './public.decorator';
 import { AllowAnyStatus } from './allow-any-status.decorator';
 import { AllowWithoutMfa } from './mfa/allow-without-mfa.decorator';
 import { MfaService } from './mfa/mfa.service';
-
-export const CREDENTIAL_ROUTE = loadEnv().AUTH_RATE_LIMIT_PER_MINUTE;
-
-const MAIL_ROUTE = 5;
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { AuthService } from './auth.service';
@@ -29,6 +25,10 @@ import {
   ResetPasswordDto,
   TokenDto,
 } from './acc.dto';
+
+export const CREDENTIAL_ROUTE = loadEnv().AUTH_RATE_LIMIT_PER_MINUTE;
+
+const MAIL_ROUTE = 5;
 
 const env = loadEnv();
 

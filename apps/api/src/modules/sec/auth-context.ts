@@ -7,7 +7,6 @@ export interface AuthUser {
   role: Role;
   status: AccountStatus;
   mfaEnabled?: boolean;
-  /** The second factor in force, when there is one. A role that requires two-factor sign-in accepts only `totp`. */
   mfaMethod?: MfaMethod | null;
 }
 
