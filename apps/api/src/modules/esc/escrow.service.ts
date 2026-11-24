@@ -68,6 +68,10 @@ export function collectorDealView(deal: Deal, userId: string) {
   };
 }
 
+function heldMinorOf(deal: Pick<Deal, 'valueMinor' | 'feeMinor' | 'raiserRole'>): number {
+  return deal.valueMinor + (deal.raiserRole === 'buyer' ? deal.feeMinor : 0);
+}
+
 function collectorDealEventView(event: typeof escrowEvent.$inferSelect, deal: Deal) {
   const { buyerId, sellerId } = dealSides(deal);
   return {
@@ -132,10 +136,6 @@ export class EscrowService {
     });
   }
 
-  private sides(deal: Deal): { buyerId: string | null; sellerId: string | null } {
-    return dealSides(deal);
-  }
-
   private async load(dealId: string, tx?: Database): Promise<Deal> {
     const exec = tx ?? this.db;
     const [row] = await exec.select().from(escrowDeal).where(eq(escrowDeal.id, dealId)).limit(1);
@@ -146,7 +146,7 @@ export class EscrowService {
   private async loadFor(dealId: string, actor: EscrowActor): Promise<Deal> {
     const deal = await this.load(dealId);
     if (isStaff(actor)) return deal;
-    const { buyerId, sellerId } = this.sides(deal);
+    const { buyerId, sellerId } = dealSides(deal);
     if (actor.id !== buyerId && actor.id !== sellerId) throw AppError.notFound('Deal not found');
     return deal;
   }
@@ -183,12 +183,15 @@ export class EscrowService {
     let counterpartyUserId: string | null = null;
     if (input.counterpartyUsername?.trim()) {
       const [row] = await this.db
-        .select({ id: userAccount.id })
+        .select({ id: userAccount.id, status: userAccount.status, role: userAccount.role })
         .from(userAccount)
         .where(eq(userAccount.username, input.counterpartyUsername.trim().toLowerCase()))
         .limit(1);
       if (!row) throw AppError.validation('No Card Embassy account with that username');
       if (row.id === raiserId) throw AppError.validation('You cannot be both sides of a deal');
+      if (row.status !== 'active' || row.role !== 'user') {
+        throw AppError.validation('That collector cannot trade right now');
+      }
       counterpartyUserId = row.id;
     }
 
@@ -288,10 +291,10 @@ export class EscrowService {
     const deal = await this.loadFor(dealId, actor);
     this.assertStatus(deal, ['agreed']);
 
-    const { buyerId } = this.sides(deal);
-    const total = deal.valueMinor;
+    const { buyerId } = dealSides(deal);
 
     if (buyerId === null) {
+      const total = deal.valueMinor;
       if (!isStaff(actor)) {
         throw AppError.forbidden('The buyer is not a Card Embassy account — we record receipt of the funds.');
       }
@@ -329,12 +332,15 @@ export class EscrowService {
     }
 
     return this.db.transaction(async (tx) => {
-      await this.lockDeal(tx, dealId, ['agreed']);
+      const cur = await this.lockDeal(tx, dealId, ['agreed']);
+      const total = heldMinorOf(cur);
       const balance = await this.ledger.balanceOf(buyerId, tx);
       if (balance.amount < total) {
         throw new AppError(
-          ErrorCode.CONFLICT,
-          `Short by ${formatMinor(total - balance.amount)}. The full amount has to be held before it is sent.`,
+          ErrorCode.INSUFFICIENT_BALANCE,
+          cur.raiserRole === 'buyer'
+            ? `Short by ${formatMinor(total - balance.amount)}. The deal value and your ${formatMinor(cur.feeMinor)} fee have to be held before it is sent.`
+            : `Short by ${formatMinor(total - balance.amount)}. The full amount has to be held before it is sent.`,
           409,
         );
       }
@@ -366,10 +372,10 @@ export class EscrowService {
         fromStatus: 'agreed',
         toStatus: 'funded',
         actorId: actor.id,
-        metadata: { amountMinor: total, source: 'wallet' },
+        metadata: { amountMinor: total, feeHeldMinor: total - cur.valueMinor, source: 'wallet' },
       });
 
-      const { sellerId } = this.sides(deal);
+      const { sellerId } = dealSides(deal);
       if (sellerId) {
         await this.outbox.emit(tx, {
           aggregateType: 'escrow_deal',
@@ -394,7 +400,7 @@ export class EscrowService {
         throw new AppError(ErrorCode.CONFLICT, `That item is ${it.lifecycleState}, not stored`, 409);
       }
       if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'That item is on hold', 409);
-      const { sellerId } = this.sides(deal);
+      const { sellerId } = dealSides(deal);
       if (sellerId && it.ownerId !== sellerId) {
         throw new AppError(ErrorCode.CONFLICT, "That item is not the seller's", 409);
       }
@@ -460,7 +466,7 @@ export class EscrowService {
         metadata: { matches: form.matches },
       });
 
-      const { buyerId, sellerId } = this.sides(deal);
+      const { buyerId, sellerId } = dealSides(deal);
       const recipients = [buyerId, sellerId].filter((id): id is string => Boolean(id));
       if (recipients.length > 0) {
         await this.outbox.emit(tx, {
@@ -477,7 +483,7 @@ export class EscrowService {
   async release(dealId: string, actor: EscrowActor, side?: 'buyer' | 'seller') {
     const deal = await this.loadFor(dealId, actor);
     this.assertStatus(deal, ['awaiting_release']);
-    const { buyerId, sellerId } = this.sides(deal);
+    const { buyerId, sellerId } = dealSides(deal);
 
     let releasing: 'buyer' | 'seller';
     let attested = false;
@@ -505,6 +511,9 @@ export class EscrowService {
 
     return this.custody.run(async (tx) => {
       const cur = await this.lockDeal(tx, dealId, ['awaiting_release']);
+      if ((releasing === 'buyer' ? cur.buyerReleasedAt : cur.sellerReleasedAt) !== null) {
+        throw new AppError(ErrorCode.CONFLICT, 'You have already released this deal. It is waiting for the other side.', 409);
+      }
       const buyerDone = releasing === 'buyer' || cur.buyerReleasedAt !== null;
       const sellerDone = releasing === 'seller' || cur.sellerReleasedAt !== null;
 
@@ -525,7 +534,7 @@ export class EscrowService {
 
   private async settle(tx: Database, deal: Deal, actorId: string) {
     const dealId = deal.id;
-    const { buyerId, sellerId } = this.sides(deal);
+    const { buyerId, sellerId } = dealSides(deal);
     const now = new Date();
 
     if (buyerId === null && deal.settlement === 'ship_to_buyer') {
@@ -538,6 +547,23 @@ export class EscrowService {
           userId: sellerId,
           type: 'escrow_release',
           amount: deal.valueMinor,
+          direction: 'credit',
+          currency: deal.currency,
+          referenceType: 'escrow_deal',
+          referenceId: dealId,
+        },
+        tx,
+      );
+    }
+
+    await this.ledger.lockWallet(deal.raisedBy, tx);
+    const feeHeld = deal.fundingSource === 'wallet' ? heldMinorOf(deal) - deal.valueMinor : 0;
+    if (feeHeld > 0) {
+      await this.ledger.record(
+        {
+          userId: deal.raisedBy,
+          type: 'escrow_refund',
+          amount: feeHeld,
           direction: 'credit',
           currency: deal.currency,
           referenceType: 'escrow_deal',
@@ -664,17 +690,18 @@ export class EscrowService {
     const deal = await this.loadFor(dealId, actor);
     this.assertStatus(deal, ['funded', 'inspecting', 'awaiting_release']);
 
-    const { buyerId } = this.sides(deal);
+    const { buyerId } = dealSides(deal);
     const now = new Date();
 
     return this.db.transaction(async (tx) => {
       const cur = await this.lockDeal(tx, dealId, ['funded', 'inspecting', 'awaiting_release']);
-      if (cur.fundingSource === 'wallet' && buyerId) {
+      const refundedMinor = cur.fundingSource === 'wallet' && buyerId ? heldMinorOf(cur) : 0;
+      if (refundedMinor > 0 && buyerId) {
         await this.ledger.record(
           {
             userId: buyerId,
             type: 'escrow_refund',
-            amount: deal.valueMinor,
+            amount: refundedMinor,
             direction: 'credit',
             currency: deal.currency,
             referenceType: 'escrow_deal',
@@ -694,10 +721,10 @@ export class EscrowService {
         toStatus: 'returned',
         actorId: actor.id,
         notes: reason.trim(),
-        metadata: { refundedMinor: cur.fundingSource === 'wallet' ? cur.valueMinor : 0 },
+        metadata: { refundedMinor },
       });
 
-      const { sellerId } = this.sides(deal);
+      const { sellerId } = dealSides(deal);
       const recipients = [buyerId, sellerId].filter((id): id is string => Boolean(id));
       if (recipients.length > 0) {
         await this.outbox.emit(tx, {
@@ -707,7 +734,7 @@ export class EscrowService {
           payload: { recipientIds: recipients, dealCode: deal.code, reason: reason.trim() },
         });
       }
-      return { status: 'returned' as const, refundedMinor: cur.fundingSource === 'wallet' ? cur.valueMinor : 0 };
+      return { status: 'returned' as const, refundedMinor };
     });
   }
 
@@ -730,6 +757,16 @@ export class EscrowService {
         actorId: actor.id,
         notes: reason.trim(),
       });
+      const { buyerId, sellerId } = dealSides(cur);
+      const others = [buyerId, sellerId].filter((id): id is string => Boolean(id) && id !== actor.id);
+      if (others.length > 0) {
+        await this.outbox.emit(tx, {
+          aggregateType: 'escrow_deal',
+          aggregateId: dealId,
+          eventType: 'escrow_cancelled',
+          payload: { recipientIds: others, dealCode: cur.code, reason: reason.trim() },
+        });
+      }
       return { status: 'cancelled' as const };
     });
   }
@@ -765,13 +802,13 @@ export class EscrowService {
     if (!isStaff(actor)) {
       return { deal: collectorDealView(deal, actor.id), events: events.map((e) => collectorDealEventView(e, deal)) };
     }
-    const { buyerId, sellerId } = this.sides(deal);
+    const { buyerId, sellerId } = dealSides(deal);
     return { deal, events, buyerId, sellerId };
   }
 
   async heldFor(userId: string) {
     const rows = await this.db
-      .select({ valueMinor: escrowDeal.valueMinor })
+      .select({ valueMinor: escrowDeal.valueMinor, feeMinor: escrowDeal.feeMinor, raiserRole: escrowDeal.raiserRole })
       .from(escrowDeal)
       .where(
         and(
@@ -783,6 +820,6 @@ export class EscrowService {
           ),
         ),
       );
-    return { heldMinor: rows.reduce((sum, r) => sum + r.valueMinor, 0) };
+    return { heldMinor: rows.reduce((sum, r) => sum + heldMinorOf(r), 0) };
   }
 }

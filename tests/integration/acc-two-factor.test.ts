@@ -415,6 +415,11 @@ describe("an administrator resetting somebody else's second factor", () => {
     const [adminRow] = await sql<{ id: string }>(`SELECT id FROM user_account WHERE email = $1`, [SEED.admin]);
     const own = await admin.post(`/admin/users/${adminRow!.id}/mfa/reset`);
     expect(own.status).toBe(400);
+    const shouted = await admin.post(`/admin/users/${adminRow!.id.toUpperCase()}/mfa/reset`);
+    expect(shouted.status, JSON.stringify(shouted.body)).toBe(400);
+    expect(shouted.body.error.message).toBe(own.body.error.message);
+    const notAnId = await admin.post(`/admin/users/not-a-uuid/mfa/reset`);
+    expect(notAnId.status).toBe(400);
 
     const plain = await activeAccount('mfanone');
     const none = await admin.post(`/admin/users/${plain.id}/mfa/reset`);

@@ -1,14 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, gte, ilike, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { STORAGE_ADAPTER } from '../../shared/adapters/adapters.module';
-import { clampLimit } from '../../shared/query';
 import type { StorageAdapter } from '@bault/adapters';
 import { listing } from './mkt.schema';
 import { item, itemImage } from '../cst/cst.schema';
 import { userAccount } from '../acc/acc.schema';
+
+function likeLiteral(text: string): string {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
 
 export type BrowseSort = 'newest' | 'price_asc' | 'price_desc';
 
@@ -39,13 +42,13 @@ export class BrowseService {
     const { q, type, condition, minPrice, maxPrice, sort = 'newest', cursor } = filters;
     const conditions = [eq(listing.status, 'active')];
     if (q && q.trim() !== '') {
-      const pattern = `%${q.trim()}%`;
+      const pattern = `%${likeLiteral(q.trim())}%`;
       conditions.push(
         or(ilike(item.description, pattern), ilike(item.typeClass, pattern)) ?? sql`true`,
       );
     }
     if (type && type.trim() !== '') conditions.push(eq(item.typeClass, type.trim()));
-    if (condition && condition.trim() !== '') conditions.push(ilike(item.conditionGrade, condition.trim()));
+    if (condition && condition.trim() !== '') conditions.push(ilike(item.conditionGrade, likeLiteral(condition.trim())));
     if (Number.isFinite(minPrice)) conditions.push(gte(listing.askingPrice, minPrice as number));
     if (Number.isFinite(maxPrice)) conditions.push(lte(listing.askingPrice, maxPrice as number));
 
@@ -87,10 +90,14 @@ export class BrowseService {
       .leftJoin(userAccount, sql`${userAccount.id}::text = ${listing.sellerId}`)
       .where(and(...conditions))
       .orderBy(...order)
-      .limit(clampLimit(limit, { max: 200, fallback: 50 }));
+      .limit(limit);
 
+    const newest = await this.newestImageKeys(rows.map((r) => r.itemId));
     return Promise.all(
-      rows.map(async ({ itemId, ...row }) => ({ ...row, imageUrl: await this.newestImageUrl(itemId) })),
+      rows.map(async ({ itemId, ...row }) => {
+        const key = newest.get(itemId);
+        return { ...row, imageUrl: key ? await this.storage.getSignedUrl(key) : null };
+      }),
     );
   }
 
@@ -128,13 +135,13 @@ export class BrowseService {
     return { ...shown, imageUrl: signedImages[0]?.url ?? null, images: signedImages };
   }
 
-  private async newestImageUrl(itemId: string): Promise<string | null> {
-    const [img] = await this.db
-      .select()
+  private async newestImageKeys(itemIds: string[]): Promise<Map<string, string>> {
+    if (itemIds.length === 0) return new Map();
+    const images = await this.db
+      .selectDistinctOn([itemImage.itemId], { itemId: itemImage.itemId, objectKey: itemImage.objectKey })
       .from(itemImage)
-      .where(eq(itemImage.itemId, itemId))
-      .orderBy(sql`${itemImage.version} desc`)
-      .limit(1);
-    return img ? this.storage.getSignedUrl(img.objectKey) : null;
+      .where(inArray(itemImage.itemId, itemIds))
+      .orderBy(itemImage.itemId, desc(itemImage.version));
+    return new Map(images.map((img) => [String(img.itemId), img.objectKey]));
   }
 }

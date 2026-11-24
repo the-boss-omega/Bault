@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Patch, Post } from '@nestjs/common';
+import { IdParam } from '../../shared/uuid-param';
 import { ApiTags } from '@nestjs/swagger';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { CurrentUser } from '../sec/current-user.decorator';
@@ -63,12 +64,12 @@ export class ProfileController {
   }
 
   @Patch('addresses/:id')
-  updateAddress(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateAddressDto) {
+  updateAddress(@CurrentUser() user: AuthUser, @IdParam() id: string, @Body() dto: UpdateAddressDto) {
     return this.profiles.updateAddress(user.id, id, dto);
   }
 
   @Delete('addresses/:id')
-  deleteAddress(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+  deleteAddress(@CurrentUser() user: AuthUser, @IdParam() id: string) {
     return this.profiles.deleteAddress(user.id, id);
   }
 }
