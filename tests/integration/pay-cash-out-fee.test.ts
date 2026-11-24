@@ -147,6 +147,11 @@ describe('PAY a chargeback fee is its own action and is not use of the platform'
     const { account, collector } = await freshCollector('cbfee');
     const requestId = await cashIn(collector, admin, 10_000);
     const before = await usage(account.id);
+    const month = new Date().toISOString().slice(0, 7);
+    const chargebackRevenue = async () =>
+      ((await admin.get(`/admin/accounting/summary?month=${month}`)).body as { revenue: { lines: { key: string; totalMinor: number }[] } })
+        .revenue.lines.find((l) => l.key === 'chargeback_fee')!.totalMinor;
+    const revenueBefore = await chargebackRevenue();
 
     const res = await admin.post(`/finance/chargebacks/wallet-requests/${requestId}`, { reason: 'The bank recalled it.' });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
@@ -161,11 +166,7 @@ describe('PAY a chargeback fee is its own action and is not use of the platform'
     expect(rows.find((r) => r.type === 'fee' && r.referenceType === 'charge')?.chargeAction).toBe('chargeback_fee');
     expect(await usage(account.id)).toEqual(before);
 
-    const month = new Date().toISOString().slice(0, 7);
-    const summary = (await admin.get(`/admin/accounting/summary?month=${month}`)).body as {
-      revenue: { lines: { key: string; totalMinor: number }[] };
-    };
-    expect(summary.revenue.lines.find((l) => l.key === 'chargeback_fee')!.totalMinor).toBeGreaterThanOrEqual(res.body.feeMinor);
+    expect((await chargebackRevenue()) - revenueBefore).toBe(res.body.feeMinor);
   }, 30_000);
 });
 
