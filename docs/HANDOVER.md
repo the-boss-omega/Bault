@@ -564,7 +564,7 @@ These are things the reviews found wrong, missing or stale in the code, the infr
 19. **No licence file.** The repository has no `LICENSE`. Who owns the code and on what terms is for the written agreement between the owner and the customer.
 20. **Staging.** `infra/production/README.md`, sections 8 and 9, assume a staging server with sandbox credentials, and the load test refuses anything else. No staging server is described as existing besides the beta. Decide whether the beta becomes the customer's staging or a second server is provisioned.
 21. **Test accounts on production: fixed in pull requests #77 and #88.** `scripts/remove-test-users.mjs --production-i-know --apply` lists the accounts, covers the staging check's `chk…` ones, deletes only when `delete` is typed back, and closes rather than deletes any account that a foreign key still protects (money, custody, audit records, login attempts, support messages), naming the table.
-22. **No separate review of the worker, the adapters, the config package or the infrastructure.** The FF41 review read the API modules and the web app, one reviewer per area, and its fixes are pull requests #105 to #112. `apps/worker`, `packages/adapters`, `packages/config` and `infra` were not read that way; their tests are green, which is not the same thing. Next step: run one reviewer per module group in the FF41 pattern (read the code against its tests and this guide, list the findings with a failing test for each, and fix them in one pull request per group).
+22. **The worker, the adapters, the config package and the infrastructure: reviewed and fixed in pull request #117.** One reviewer read `apps/worker`, `packages/adapters`, `packages/config` and `infra` against their tests and this guide in the FF41 pattern and found 20 things (2 bugs, 13 gaps, 5 nits); the pull request fixes both bugs (the worker could die in a loop on a slow mail or photo read while holding a transaction past the role's idle limit, and a PayPal payout batch marked `SUCCESS` was recorded as paid before its item was), 12 of the gaps (provider time-outs, a retried password-reset mail, a tracking queue that no longer sticks on one failure, one shutdown budget, `backup.sh` leaving no plain dump or password behind, a single-transaction restore, the images key created last in `provision.sh`, live PayPal refused outside production, Coinbase replies scrubbed from error reports) and one nit, and names the five it rejected and why. The runbooks were read line by line separately: `infra/production/README.md`, `infra/gcp/README.md` and sections 6.1 to 6.6 of this guide were checked against the scripts, the workflows and `env.ts` in pull request #118, which corrected the documents and changed no script.
 23. **Changing the account email and a receipt with a bank cash-in: built in pull requests #116 and #115.** A collector changes the address from the profile's Details tab with the current password (and the authenticator code where one is enrolled); the change happens only when the link mailed to the new address is opened within 24 hours, the old address is told twice, other sessions end, and an audit row is written. A collector attaches an image or PDF receipt (5 MB at most, typed by its bytes) to a cash-in request while it is under review, and the wallet-request desk opens it through a signed link that expires.
 24. **Two wording passes are unfinished.** The grading batches screen's `grade.subs.*` strings in `apps/web/src/shared/i18n.tsx` have not had the plain-words pass the other warehouse screens had, and the escrow and store screens still mix the older `esc.*` and `house.*` sentences with the newer `escrow.*` and `market.*` ones (`docs/ux-review/warehouse.md`, `docs/ux-review/marketplace.md`). Next step: one web pull request that rewrites `grade.subs.*` in the plain style and folds the collector-facing `esc.*` and `house.*` sentences into `escrow.*` and `store.*`, with `pnpm test:ux` green.
 25. **The seed's facility addresses are stand-ins.** `apps/api/src/db/seed.ts` gives "Card Embassy New Jersey" and "Card Embassy Delaware" the line `SET REAL ADDRESS — placeholder`, because the real receiving addresses are the owner's data and are not in the repository. Next step: the owner gives the customer the real addresses, which are entered in Management, Facilities on production (4.7); the seed never runs there, so it can keep its stand-ins.
@@ -595,7 +595,7 @@ Everything runs in **Cloud Shell** (the `>_` button at the top right of the Goog
 
 ### 6.1 A fresh production, from zero
 
-Before you start, have these ready: the PayPal live app's client ID, secret and webhook ID (2.1); the EasyPost `EZAK` key (2.2); the SMTP host, user and password (2.3); the Sentry DSN (2.4); the bank details collectors transfer to; and the age public key (2.8). You also need the two projects with billing, the budget alert and 2-Step Verification (2.5).
+Before you start, have these ready: the PayPal live app's client ID, secret and webhook ID (2.1); the EasyPost `EZAK` key (2.2); the SMTP host, user, password and sender address (2.3); the Sentry DSN (2.4); the bank details collectors transfer to; and the age public key (2.8). You also need the two projects with billing, the budget alert and 2-Step Verification (2.5).
 
 **Create everything (20 to 30 minutes, mostly waiting for Cloud SQL)**
 
@@ -641,7 +641,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
 
 **Connect to the server through IAP (once)**
 
-5. Add the SSH configuration. The zone is `us-east4-a` unless you gave another region:
+5. Add the SSH configuration. The zone is `us-east4-a` unless you gave another region or zone (`GCP_ZONE` in `~/bault-gcp.env`):
 
    ```sh
    cat >> ~/.ssh/config <<EOF
@@ -699,7 +699,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
     infra/gcp/configure.sh
     ```
 
-    It asks for: the host name (press Enter for the free `<ip-with-dashes>.sslip.io` until the domain is ready); PayPal (`live`, the client ID, the secret, the webhook ID); whether to take crypto cash-ins (answer no until 2.9 is done); the EasyPost key; SMTP (587 or 465); the bank details and the support details (Enter leaves one out); the Sentry DSN; and the age public key. PayPal checkout stays off until you run `--change checkout`. Secrets are read without echo. It generates `MFA_ENCRYPTION_KEY`. When it worked, it ends with `ready: every value production needs is set` and offers to delete `~/bault-gcp.env`. Say yes once its copy is in the password manager.
+    It asks for: the host name (press Enter for the free `<ip-with-dashes>.sslip.io` until the domain is ready); PayPal (the environment, where you type `live` because Enter takes `sandbox`, then the client ID, the secret and the webhook ID); whether to take crypto cash-ins (answer no until 2.9 is done); the EasyPost key; SMTP (the host, the port 587 or 465, the user, the password and the sender address); the bank details and the support details (Enter leaves one out); the Sentry DSN (Enter leaves it off); and the age public key. PayPal checkout stays off until you run `--change checkout`. Secrets are read without echo. It generates `MFA_ENCRYPTION_KEY`. When it worked, it ends with `ready: every value production needs is set` and offers to delete `~/bault-gcp.env`. Say yes once its copy is in the password manager.
 
 11. Back in Cloud Shell, keep `~/bault-gcp.env` in the password manager (⋮, Download), then `shred -u ~/bault-gcp.env`. Also store a copy of `/etc/bault/production.env` in the password manager: losing `MFA_ENCRYPTION_KEY` locks every authenticator out.
 
@@ -722,7 +722,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
       -c 'show statement_timeout'      # 30s
     ```
 
-    `claim-database.sql` prints the database `bault` with owner `bault_owner`. `roles.sql` ends with a table of the three roles and their settings. The last line prints `30s`.
+    `claim-database.sql` prints the database `bault` with owner `bault_owner`. `roles.sql` ends with a table of the three roles and their settings, then `worker_db_create`, which is `t` until the worker has started once and pg-boss has installed itself (the second `roles.sql` run in `deploy.sh` turns it off). The last line prints `30s`.
 
 13. Check that the migration created the platform custodian (stage 3's P1):
 
@@ -765,7 +765,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
 
 **The one setting `configure.sh` does not ask for**
 
-17. On the server, edit `/etc/bault/production.env` with an editor (`nano /etc/bault/production.env`, not `echo`, so that nothing goes into the shell history) and decide `PAYOUT_MODE` (`manual` or `provider`). `SENTRY_DSN` and the `SUPPORT_*` details were asked for in step 10; `configure.sh --change sentry` or `--change support` changes them later. Then:
+17. On the server, edit `/etc/bault/production.env` with an editor (`nano /etc/bault/production.env`, not `echo`, so that nothing goes into the shell history) and decide `PAYOUT_MODE` (`manual` or `provider`); `configure.sh` leaves it at `manual`. `SENTRY_DSN` and the `SUPPORT_*` details were asked for in step 10; `configure.sh --change sentry` or `--change support` changes them later. Then:
 
     ```sh
     BAULT_TAG=$(cat /opt/bault/CURRENT_TAG) bault up -d api worker
@@ -780,7 +780,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
     (set -a && . /etc/bault/backup.env && set +a && ./infra/ops/backup.sh dump)
     ```
 
-    The dump prints `==> dumping to …`, `==> encrypting for 1 recipient(s)`, `==> uploading to backup:…/nightly/bault-….dump.age`, and finally the file's path. From Cloud Shell, `gcloud storage ls gs://<backups-project>-bault-backups/nightly/` lists it.
+    The dump prints `==> dumping to …`, `==> encrypting for 1 recipient(s)`, `==> … (<size>), checksum written`, `==> uploading to backup:…/nightly/bault-….dump.age`, `==> pruning local backups older than 14 days`, and finally the file's path. From Cloud Shell, `gcloud storage ls gs://<backups-project>-bault-backups/nightly/` lists it.
 
 **An alert when the site is down**
 
@@ -796,10 +796,10 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
     pnpm install
     pnpm prices:load --url https://<domain> --dry-run   # what would change
     pnpm prices:load --url https://<domain>             # load what the server lacks
-    pnpm prices:load --url https://<domain> --check     # exit 0 only when the server matches the file
+    pnpm prices:load --url https://<domain> --check     # exit 0 only when the server matches the file and coverage is ready
     ```
 
-    It asks for the administrator's password and authenticator code and stores neither.
+    It asks for the administrator's e-mail or username, password and authenticator code (or reads `BAULT_ADMIN_IDENTIFIER`, `BAULT_ADMIN_PASSWORD` and `BAULT_ADMIN_TOTP`) and stores none of them.
 
 **Checks before launch**
 
@@ -810,7 +810,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
     pnpm ops:load-test --url https://<staging domain> --target staging --rps <three times your busiest second>
     ```
 
-    `ops:security-check` exits 0 only when HTTPS redirects, the certificate, TLS versions, the SSL Labs grade, the security headers, the closed API docs, the open ports (80 and 443 only) and the administrator's two-factor all pass.
+    `ops:security-check` exits 0 only when none of these fails: HTTPS redirects, the certificate, TLS versions, the SSL Labs grade, the security headers, the closed API docs, the open ports (80 and 443 only) and the administrator's two-factor. A check skipped with `--skip-ssllabs` or `--skip-admin` prints SKIP and does not fail it.
 
 23. Run each restore drill once (6.4) and write it in the log in `infra/ops/RESTORE.md`. Launch waits for both.
 
@@ -836,7 +836,7 @@ Before you start, have these ready: the PayPal live app's client ID, secret and 
 
 6. Check from outside as in 6.1, step 15.
 
-`.github/workflows/deploy.yml` can run step 5 for you, but GitHub's own runners cannot reach port 22, which admits IAP only. It checks that first and stops with an explanation. To use it, register a self-hosted runner that the firewall admits, set the job's `runs-on` to its label, and create `DEPLOY_HOST`, `DEPLOY_SSH_KEY` and `DEPLOY_KNOWN_HOSTS` on each GitHub environment. Do not widen the SSH rule for it.
+`.github/workflows/deploy.yml` can run the second line of step 5 for you (it does not check out the tag), but GitHub's own runners cannot reach port 22, which admits IAP only. It checks that first and stops with an explanation. On Google Cloud no runner gets further: the workflow connects to `DEPLOY_HOST` directly, not through an IAP tunnel, and the VPC firewall admits port 22 from the IAP range only, so deploy by hand as above. On another host whose SSH rule admits a self-hosted runner, set the job's `runs-on` to its label, and create the variable `DEPLOY_HOST` and the secrets `DEPLOY_SSH_KEY` and `DEPLOY_KNOWN_HOSTS` on each GitHub environment. Do not widen the SSH rule for it.
 
 ### 6.3 Rolling back
 
@@ -858,7 +858,7 @@ bault stop worker api
 ./infra/ops/backup.sh restore <dump file> <database-url>
 ```
 
-Read "In a real incident" in `infra/ops/RESTORE.md` first. It restores into a new database, never over the live one, and it lists what to reconcile with PayPal and EasyPost afterwards.
+`backup.sh restore` checks the dump's checksum and asks you to type the target database's name before it changes anything. The dumps on Google Cloud are encrypted (`.age`) and need `--age-identity <keyfile>`, and the age private key is never on the server, so run the restore from a restore machine as in `infra/ops/RESTORE.md`, Drill 2. Read "In a real incident" in `infra/ops/RESTORE.md` first. It restores into a new database, never over the live one, and it lists what to reconcile with PayPal and EasyPost afterwards.
 
 ### 6.4 Backups and a tested restore
 
@@ -867,7 +867,7 @@ There are two ways back, and both must be drilled (`infra/ops/RESTORE.md`):
 | | Cloud SQL point-in-time recovery | Nightly dump (`backup.sh`) |
 |---|---|---|
 | Recovery point | Any second in the last 7 days | The last 01:17 UTC dump, so up to 24 hours lost |
-| Kept | 7 days of transaction logs and 14 daily backups | At least 30 days (retention lock) and deleted after 120 (lifecycle), in the backups project |
+| Kept | 7 days of transaction logs and 14 daily backups | At least 30 days (the bucket's retention policy) and deleted after 120 (lifecycle), in the backups project; 14 days on the server's disk |
 | Who holds the key | Google | The customer: the age private key in the password manager |
 
 The nightly job runs at 01:17 UTC from `deploy`'s crontab. It encrypts the dump to `BACKUP_AGE_RECIPIENT` and uploads it with rclone, as the server's own service account, which may add files and nothing else. `deploy.sh` also takes a dump before every migration. Its log is `/var/log/bault/backup.log`.
@@ -877,7 +877,7 @@ The nightly job runs at 01:17 UTC from `deploy`'s crontab. It encrypts the dump 
 - Drill 1 clones Cloud SQL to a chosen minute T (`gcloud sql instances clone bault-db bault-pitr-drill --project=<project> --point-in-time='<T>'`), checks a witness row either side of T, verifies with `backup.sh verify`, starts the API image against it and asks `readyz`, and then deletes the clone.
 - Drill 2 fetches the latest dump with your own login (`gcloud storage cp 'gs://<backup-bucket>/nightly/bault-<stamp>.dump.age*' ./drill/`), verifies it with the age key (`backup.sh verify … --age-identity ./bault-backup.key`), restores it into a new database owned by a non-superuser `bault_owner`, runs the migrations and `roles.sql`, and asks `readyz`.
 
-`backup.sh verify` exits 0 only when the checksum, the decryption, a full restore, the row counts and the invariants (no orphaned items, custody or ledger rows, and every append-only trigger present) all pass. Write every drill in the log at the bottom of `RESTORE.md`, with the timings.
+`backup.sh verify` exits 0 only when the checksum matches, the decryption and a full restore into a scratch database succeed, and the invariants hold (no orphaned items, custody or ledger rows, no item in a bin that does not exist, and every append-only trigger and the item delete guard present). It prints the row counts of the main tables along the way, and drops the scratch database at the end. Write every drill in the log at the bottom of `RESTORE.md`, with the timings.
 
 ### 6.5 Monitoring and alerts
 
@@ -906,7 +906,7 @@ The nightly job runs at 01:17 UTC from `deploy`'s crontab. It encrypts the dump 
     --paypal-receiver <sandbox personal account>@personal.example.com --manual
   ```
 
-  It prints PASS, FAIL, SKIP or BY HAND per check, and exits 1 if anything failed. It refuses production, `BAULT_PRODUCTION_HOST` and its `www.`. The by-hand list it prints (emails not in spam, the forged webhook in Sentry, a refused label, a delivered parcel, the requeue drill, and checkout if it is enabled) is part of the check.
+  It prints PASS, FAIL, SKIP or BY HAND per check, and exits 1 if anything failed. It refuses to run, and exits 2, without `--target staging` and `BAULT_PRODUCTION_HOST`, against that host or its `www.`, or with a PayPal receiver outside `.example.com`. The by-hand list it prints at the end (emails not in spam, the forged webhook in Sentry, a refused label, a delivered parcel, the requeue drill) is part of the check, and so are the PayPal checkout cash-in, when it is enabled, and the browser error in Sentry, which `infra/production/README.md`, section 8, lists and the script does not print.
 
 ### 6.6 The domain and Cloudflare
 

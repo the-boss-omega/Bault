@@ -9,9 +9,9 @@ Run every command as written; `<…>` is yours to fill in.
 | `Caddyfile` | TLS, HSTS, the client address, reverse proxy to `web` |
 | `production.env.example` | every setting, documented; becomes `/etc/bault/production.env` |
 | `api.env.example`, `worker.env.example`, `migrate.env.example` | each service's database role |
-| `roles.sql` | the three database roles (from the DB-roles package) |
+| `roles.sql` | run as `bault_owner`: creates `bault_app` and `bault_worker`, their settings and their grants |
 | `bootstrap.sh` | prepares the host: Docker, firewall, SSH, `deploy` user |
-| `deploy.sh` | pull, back up, migrate, roles, start, smoke-test |
+| `deploy.sh` | pull, back up, migrate, roles, start, smoke-test, roles again |
 | `prices.json` | every price, loaded with `pnpm prices:load` (section 7) |
 
 On Google Cloud (Compute Engine, Cloud SQL, Cloud Storage), follow
@@ -20,8 +20,9 @@ assumes with one script, then maps each step below to it.
 
 ## Before you start
 
-- A Postgres 16 database, with the admin role able to create `bault_owner`
-  (with CREATEROLE) as `roles.sql` describes. Its CA certificate.
+- A Postgres 16 database owned by a `bault_owner` role with CREATEROLE, which
+  `roles.sql` needs to create the other two roles and grant them the
+  database. Its CA certificate.
 - A container registry holding `bault-api`, `bault-worker`, `bault-web` for the
   tag you deploy (`.github/workflows/release.yml` publishes them to GHCR).
 - A DNS name for the site. Its A/AAAA records point at the server **before** the
@@ -55,7 +56,7 @@ not filter. Never add `ports:` to any service but `caddy`.
 ssh deploy@<server>
 git clone https://github.com/<owner>/<repo>.git /opt/bault
 cd /opt/bault && git checkout <tag>
-echo <registry-token> | docker login ghcr.io -u <user> --password-stdin   # private images only
+read -rs GHCR_TOKEN && printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u <user> --password-stdin; unset GHCR_TOKEN   # private images only
 ```
 
 ## 3. Configuration (as deploy)
@@ -149,19 +150,26 @@ cd /opt/bault && git fetch --tags && git checkout <tag>
 ```
 
 `.github/workflows/deploy.yml` runs the second line over SSH, and is optional.
-The firewall admits SSH from `ADMIN_IP` only, and GitHub-hosted runners connect
-from addresses that change, so from them the workflow cannot reach the host; it
-checks that first and stops with this explanation. Do not widen the SSH rule
-for it. To use the workflow, register a self-hosted runner on a machine at
-`ADMIN_IP` (or behind the VPN it names) and set the job's `runs-on` to its
-label.
+It runs only `cd /opt/bault && ./infra/production/deploy.sh <tag>`, so the
+checkout must already be on the tag. The firewall admits SSH from `ADMIN_IP`
+only, and GitHub-hosted runners connect from addresses that change, so from
+them the workflow cannot reach the host; it checks that first and stops with
+this explanation. Do not widen the SSH rule for it. To use the workflow,
+register a self-hosted runner on a machine at `ADMIN_IP` and set the job's
+`runs-on` to its label, and give each GitHub environment it deploys to
+(`staging`, `production`) the variable `DEPLOY_HOST` and the secrets
+`DEPLOY_SSH_KEY` and `DEPLOY_KNOWN_HOSTS`.
 
-Either way, keep the checkout on the same tag. The script pulls the images,
-dumps the database (as the owner, into `/var/backups/bault`, or as
-`/etc/bault/backup.env` says), migrates, re-applies `roles.sql`, starts the
-stack, and exits 0 only when `/api/v1/readyz` answers through Caddy and the
-new worker has dispatched the outbox (`/api/v1/readyz/worker`). It prints how
-to roll back, success or not.
+Either way, keep the checkout on the same tag; the script warns when it is
+not. The script pulls the images (and starts the database connector that
+`BAULT_DB_SIDECAR` names, if any), dumps the database (as the owner, into
+`/var/backups/bault`, or as `/etc/bault/backup.env` says), migrates,
+re-applies `roles.sql`, starts the stack, waits for `/api/v1/readyz` to answer
+through Caddy and for the new worker to dispatch the outbox
+(`/api/v1/readyz/worker`), and applies `roles.sql` once more. It prints its
+seven steps as `==> 1/7` to `==> 7/7`, exits 0 only when all of them worked,
+and then prints `deployed <tag> (backup: <file>)`. A failure prints
+`deploy of <tag> FAILED (exit <n>)`. Either way it prints how to roll back.
 
 Check from outside:
 
@@ -226,12 +234,13 @@ price. Load it from your own checkout, not the server:
 ```sh
 pnpm prices:load --url https://<domain> --dry-run   # what would change
 pnpm prices:load --url https://<domain>             # load what the server lacks
-pnpm prices:load --url https://<domain> --check     # exit 0 only when the server matches the file
+pnpm prices:load --url https://<domain> --check     # exit 0 only when the server matches the file and coverage is ready
 ```
 
-It signs in as an administrator, asking for the password and the code from
-your authenticator app (or reading `BAULT_ADMIN_IDENTIFIER`,
-`BAULT_ADMIN_PASSWORD` and `BAULT_ADMIN_TOTP`), and stores neither. Each price
+It signs in as an administrator, asking for the e-mail or username, the
+password and the code from your authenticator app (or reading
+`BAULT_ADMIN_IDENTIFIER`, `BAULT_ADMIN_PASSWORD` and `BAULT_ADMIN_TOTP`), and
+stores none of them. Each price
 becomes a rule through the admin API, with the storage terms the console's form
 cannot send. A run
 loads only what is missing; `--update` also replaces rules that differ from the
@@ -262,9 +271,10 @@ with `--allow-unreviewed` on staging), and the facility has a bin. It asks you
 to type the host, the admin password (never shown), the code from your phone,
 and the verify and reset links from your inbox. It creates three collectors named
 `chk…`, moves test money between them, and prints PASS, FAIL, SKIP or BY HAND
-per check; it exits 1 if anything failed. It refuses to run without
-`--target staging`, against `BAULT_PRODUCTION_HOST` or its `www.`, or with a
-PayPal receiver outside `.example.com`.
+per check; it exits 1 if anything failed. It refuses to run, and exits 2,
+without `--target staging`, without `BAULT_PRODUCTION_HOST` (or
+`--production-host`), against that host or its `www.`, with a PayPal receiver
+outside `.example.com`, or when the host name you type does not match.
 
 What it checks, in order:
 - the API, its database, and the worker's outbox heartbeat;
@@ -304,7 +314,9 @@ With it, the journeys take about 30 minutes, not 2 hours, and the provider
 checks about 2 hours, not 4.
 
 The `chk…` collectors stay behind. `pnpm users:remove-test --production-i-know`
-lists them, and with `--apply` as well it asks you to type `delete` and then
+connects to the database that `DATABASE_URL` names (from the environment, or
+the checkout's `.env`), so run it from a checkout that can reach staging's
+database. It lists them, and with `--apply` as well it asks you to type `delete` and then
 handles each account in its own transaction. An account with nothing kept is
 deleted, together with its sessions, tokens, two-factor rows, notifications,
 notification settings, idempotency keys and support tickets that hold no
@@ -323,20 +335,24 @@ pnpm ops:security-check --url https://<domain>
 pnpm ops:load-test --url https://<staging domain> --target staging --rps <three times your busiest second>
 ```
 
-`ops:security-check` exits 0 only when all of these pass: HTTP redirects to
+`ops:security-check` exits 0 only when none of these fails (a skipped one does
+not count): HTTP redirects to
 HTTPS; the certificate is trusted and has 14 days or more left; TLS 1.0 and
 1.1 are refused; SSL Labs grades every address A or A+ (a few minutes;
 `--skip-ssllabs` skips it, and `SSLLABS_EMAIL` selects its v4 API); the page, a
 script and the API carry security headers that grade A; the API docs are not
 served without a password; only 80 and 443 answer; and an administrator's
-password alone opens no session (it asks for that password and never sends a
-code). From `ADMIN_IP` port 22 answers too: pass `--from-admin-ip`, then run it
+password alone opens no session (it asks for the administrator's e-mail or
+username and password, or reads `BAULT_ADMIN_IDENTIFIER` and
+`BAULT_ADMIN_PASSWORD`, and never sends a code; `--skip-admin` skips it). From
+`ADMIN_IP` port 22 answers too: pass `--from-admin-ip`, then run it
 once from another network, such as a phone hotspot, to see 22 closed.
 
 `ops:load-test` refuses anything but `--target staging`. It reads public
 listings, the price list and the tiers, a collector's vault, wallet and ledger,
-and signs in and out 6 times a minute, then prints p50, p95 and p99 per request
-and fails past `--max-p95` (1000 ms) or `--max-error-rate` (1%). It signs in as
+and signs in and out 6 times a minute for 60 seconds (`--duration`), then
+prints p50, p95 and p99 per request and fails past `--max-p95` (1000 ms) or
+`--max-error-rate` (a fraction, 0.01 for 1%). It signs in as
 `BAULT_LOADTEST_IDENTIFIER` and `BAULT_LOADTEST_PASSWORD` (or asks): a collector
 on staging without two-factor. The API allows each address
 `RATE_LIMIT_PER_MINUTE` requests (300, five a second), so from one machine most
@@ -391,6 +407,8 @@ not delete. Replace it instead.
 
 1. Stop it, after a disk snapshot if you want to investigate later. On Google
    Cloud: `gcloud compute disks snapshot bault-vm --zone <zone>`, then
+   `gcloud compute instances update bault-vm --zone <zone> --no-deletion-protection`
+   (`provision.sh` creates the VM with deletion protection on) and
    `gcloud compute instances delete bault-vm --zone <zone>`. The static IP is a
    separate resource and stays.
 2. Create a fresh server (`infra/gcp/provision.sh` again creates only the
@@ -404,7 +422,8 @@ not delete. Replace it instead.
      (`gcloud storage hmac list`, `update --deactivate`, `delete`), remove it
      from `bault-gcp.env`, and run `provision.sh` again, which makes a new one
      (in an organisation that forbids keys, lift that for the project first,
-     as `infra/gcp/README.md` step 1 shows). The backups have no key to
+     as `infra/gcp/README.md` step 1 shows), then `configure.sh` on the server
+     with the new file, which writes it into `production.env`. The backups have no key to
      rotate on Google Cloud: the server's own service account writes them,
      and a token taken from the old server expires within the hour;
    - the PayPal client secret, the EasyPost key, the SMTP password,
