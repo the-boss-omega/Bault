@@ -27,7 +27,7 @@ const EXEMPT = [
   join('tests', 'web', 'rayquaza-only.test.ts'),
 ];
 
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.claude', 'coverage', 'assets1']);
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', 'assets1']);
 const EXTENSIONS = ['.ts', '.tsx', '.md', '.css', '.sql'];
 
 function walk(dir: string, root: string, out: string[] = []): string[] {
